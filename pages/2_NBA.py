@@ -744,7 +744,7 @@ if games:
     for i, (k, g) in enumerate(games.items()):
         with cols[i % 4]:
             st.write(f"**{g['away_team']}** {g['away_score']}")
-            st.write(f"**{g['home_team']}** {g['home_score']}")
+            st.write(f"🏠 **{g['home_team']}** {g['home_score']}")
             status = "FINAL" if g['status_type'] == "STATUS_FINAL" else f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "SCHEDULED"
             st.caption(f"{status} | {g['total']} pts")
 else:
@@ -764,4 +764,4 @@ st.markdown("""
 📧 Feedback: **aipublishingpro@gmail.com**
 """)
 
-st.caption("⚠️ For entertainment only. Not financial advice. v15.54")
+st.caption("⚠️ For entertainment only. Not financial advice. v15.55")
