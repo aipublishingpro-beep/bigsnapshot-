@@ -32,6 +32,16 @@ if "last_ball_positions" not in st.session_state:
 eastern = pytz.timezone("US/Eastern")
 today_str = datetime.now(eastern).strftime("%Y-%m-%d")
 
+# ========== HIDE STREAMLIT STUFF ==========
+st.markdown("""
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+.stDeployButton {display: none;}
+</style>
+""", unsafe_allow_html=True)
+
 # ========== GA4 TRACKING ==========
 st.markdown("""
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
@@ -164,7 +174,7 @@ def draw_football_field(yard_line, possession_abbr, home_abbr, away_abbr, is_red
 
 # ========== TITLE ==========
 st.title("🏈 NFL Edge Finder")
-st.caption("v2.1.9 — Conference Championships Preview")
+st.caption("v2.2.0 — Conference Championships Preview")
 
 # ========== SIDEBAR ==========
 with st.sidebar:
@@ -448,4 +458,4 @@ st.markdown("""
 **Questions?** aipublishingpro@gmail.com
 """)
 
-st.caption("⚠️ Educational analysis only. Not financial advice. v2.1.9")
+st.caption("⚠️ Educational analysis only. Not financial advice. v2.2.0")
