@@ -89,7 +89,7 @@ KALSHI_CODES = {
     "Carolina": "CAR", "Chicago": "CHI", "Cincinnati": "CIN", "Cleveland": "CLE",
     "Dallas": "DAL", "Denver": "DEN", "Detroit": "DET", "Green Bay": "GB",
     "Houston": "HOU", "Indianapolis": "IND", "Jacksonville": "JAX", "Kansas City": "KC",
-    "Las Vegas": "LV", "LA Chargers": "LAC", "LA Rams": "LA", "Miami": "MIA",
+    "Las Vegas": "LV", "LA Chargers": "LAC", "LA Rams": "LAR", "Miami": "MIA",
     "Minnesota": "MIN", "New England": "NE", "New Orleans": "NO", "NY Giants": "NYG",
     "NY Jets": "NYJ", "Philadelphia": "PHI", "Pittsburgh": "PIT", "San Francisco": "SF",
     "Seattle": "SEA", "Tampa Bay": "TB", "Tennessee": "TEN", "Washington": "WAS"
@@ -184,14 +184,14 @@ STAR_PLAYERS = {
 }
 
 def build_kalshi_ml_url(away_team, home_team, game_date=None):
-    away_code = KALSHI_CODES.get(away_team, "XXX")
-    home_code = KALSHI_CODES.get(home_team, "XXX")
+    away_code = KALSHI_CODES.get(away_team, "xxx").lower()
+    home_code = KALSHI_CODES.get(home_team, "xxx").lower()
     if game_date:
-        date_str = game_date.strftime("%y%b%d").upper()
+        date_str = game_date.strftime("%y%b%d").lower()
     else:
-        date_str = datetime.now(eastern).strftime("%y%b%d").upper()
-    ticker = f"KXNFLGAME-{date_str}{away_code}{home_code}"
-    return f"https://kalshi.com/markets/KXNFLGAME/{ticker}"
+        date_str = datetime.now(eastern).strftime("%y%b%d").lower()
+    ticker = f"kxnflgame-{date_str}{away_code}{home_code}"
+    return f"https://kalshi.com/markets/kxnflgame/{ticker}"
 
 @st.cache_data(ttl=1800)
 def fetch_weather(lat, lon):
@@ -761,8 +761,8 @@ if not scheduled_games:
     for game in upcoming_playoffs:
         away, home = game["away"], game["home"]
         away_code, home_code = KALSHI_CODES.get(away, "XXX"), KALSHI_CODES.get(home, "XXX")
-        ticker = f"KXNFLGAME-26JAN26{away_code}{home_code}"
-        kalshi_url = f"https://kalshi.com/markets/KXNFLGAME/{ticker}"
+        ticker = f"kxnflgame-26jan26{away_code.lower()}{home_code.lower()}"
+        kalshi_url = f"https://kalshi.com/markets/kxnflgame/{ticker}"
         home_stats, away_stats = TEAM_STATS.get(home, {}), TEAM_STATS.get(away, {})
         home_dvoa, away_dvoa = home_stats.get('dvoa', 0), away_stats.get('dvoa', 0)
         home_def, away_def = home_stats.get('def_rank', 16), away_stats.get('def_rank', 16)
