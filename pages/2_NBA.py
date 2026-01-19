@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 from datetime import datetime, timedelta
 import pytz
-import time
+import math
 
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🎯", layout="wide")
 
@@ -59,8 +59,6 @@ with st.sidebar:
     🔵 **BUY** → 6.5-7.9
     
     🟡 **LEAN** → 5.5-6.4
-    
-    ⚪ **TOSS-UP** → Below 5.5
     """)
     
     st.divider()
@@ -90,7 +88,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v15.52")
+    st.caption("v15.53 | 8-Factor ML")
 
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
@@ -137,37 +135,38 @@ KALSHI_CODES = {
     "Utah": "UTA", "Washington": "WAS"
 }
 
+# ========== TEAM STATS (8-FACTOR ML DATA) ==========
 TEAM_STATS = {
-    "Atlanta": {"net_rtg": -3.2, "off_rtg": 115.8, "def_rtg": 119.0, "pace": 101.2},
-    "Boston": {"net_rtg": 9.8, "off_rtg": 120.5, "def_rtg": 110.7, "pace": 99.8},
-    "Brooklyn": {"net_rtg": -7.5, "off_rtg": 108.2, "def_rtg": 115.7, "pace": 96.3},
-    "Charlotte": {"net_rtg": -8.1, "off_rtg": 107.5, "def_rtg": 115.6, "pace": 100.5},
-    "Chicago": {"net_rtg": -4.2, "off_rtg": 112.3, "def_rtg": 116.5, "pace": 99.1},
-    "Cleveland": {"net_rtg": 7.2, "off_rtg": 117.8, "def_rtg": 110.6, "pace": 97.5},
-    "Dallas": {"net_rtg": -1.5, "off_rtg": 114.2, "def_rtg": 115.7, "pace": 98.8},
-    "Denver": {"net_rtg": 3.8, "off_rtg": 116.2, "def_rtg": 112.4, "pace": 98.2},
-    "Detroit": {"net_rtg": -5.8, "off_rtg": 110.5, "def_rtg": 116.3, "pace": 99.8},
-    "Golden State": {"net_rtg": 2.1, "off_rtg": 114.8, "def_rtg": 112.7, "pace": 100.2},
-    "Houston": {"net_rtg": 4.5, "off_rtg": 115.5, "def_rtg": 111.0, "pace": 98.5},
-    "Indiana": {"net_rtg": 1.2, "off_rtg": 118.5, "def_rtg": 117.3, "pace": 103.8},
-    "LA Clippers": {"net_rtg": -0.8, "off_rtg": 112.5, "def_rtg": 113.3, "pace": 97.2},
-    "LA Lakers": {"net_rtg": 1.5, "off_rtg": 114.2, "def_rtg": 112.7, "pace": 99.5},
-    "Memphis": {"net_rtg": 4.2, "off_rtg": 117.2, "def_rtg": 113.0, "pace": 101.5},
-    "Miami": {"net_rtg": 0.5, "off_rtg": 111.8, "def_rtg": 111.3, "pace": 96.8},
-    "Milwaukee": {"net_rtg": 2.8, "off_rtg": 116.5, "def_rtg": 113.7, "pace": 99.2},
-    "Minnesota": {"net_rtg": 3.5, "off_rtg": 112.8, "def_rtg": 109.3, "pace": 97.8},
-    "New Orleans": {"net_rtg": -9.2, "off_rtg": 107.5, "def_rtg": 116.7, "pace": 98.5},
-    "New York": {"net_rtg": 6.5, "off_rtg": 118.4, "def_rtg": 111.9, "pace": 99.5},
-    "Oklahoma City": {"net_rtg": 11.2, "off_rtg": 118.5, "def_rtg": 107.3, "pace": 99.8},
-    "Orlando": {"net_rtg": 2.2, "off_rtg": 109.5, "def_rtg": 107.3, "pace": 96.2},
-    "Philadelphia": {"net_rtg": -2.5, "off_rtg": 111.2, "def_rtg": 113.7, "pace": 98.2},
-    "Phoenix": {"net_rtg": 0.8, "off_rtg": 113.5, "def_rtg": 112.7, "pace": 98.5},
-    "Portland": {"net_rtg": -7.8, "off_rtg": 108.2, "def_rtg": 116.0, "pace": 99.8},
-    "Sacramento": {"net_rtg": -1.2, "off_rtg": 114.8, "def_rtg": 116.0, "pace": 100.5},
-    "San Antonio": {"net_rtg": 5.5, "off_rtg": 117.8, "def_rtg": 112.3, "pace": 100.8},
-    "Toronto": {"net_rtg": -6.5, "off_rtg": 109.5, "def_rtg": 116.0, "pace": 98.2},
-    "Utah": {"net_rtg": -5.2, "off_rtg": 119.4, "def_rtg": 124.6, "pace": 102.5},
-    "Washington": {"net_rtg": -10.5, "off_rtg": 112.7, "def_rtg": 123.2, "pace": 101.2}
+    "Atlanta": {"net_rtg": -3.2, "def_rank": 26, "home_win_pct": 0.52, "lat": 33.757, "lon": -84.396},
+    "Boston": {"net_rtg": 9.8, "def_rank": 4, "home_win_pct": 0.76, "lat": 42.366, "lon": -71.062},
+    "Brooklyn": {"net_rtg": -7.5, "def_rank": 22, "home_win_pct": 0.45, "lat": 40.683, "lon": -73.975},
+    "Charlotte": {"net_rtg": -8.1, "def_rank": 23, "home_win_pct": 0.38, "lat": 35.225, "lon": -80.839},
+    "Chicago": {"net_rtg": -4.2, "def_rank": 24, "home_win_pct": 0.48, "lat": 41.881, "lon": -87.674},
+    "Cleveland": {"net_rtg": 7.2, "def_rank": 3, "home_win_pct": 0.78, "lat": 41.496, "lon": -81.688},
+    "Dallas": {"net_rtg": -1.5, "def_rank": 18, "home_win_pct": 0.55, "lat": 32.790, "lon": -96.810},
+    "Denver": {"net_rtg": 3.8, "def_rank": 12, "home_win_pct": 0.68, "lat": 39.749, "lon": -104.999},
+    "Detroit": {"net_rtg": -5.8, "def_rank": 21, "home_win_pct": 0.42, "lat": 42.341, "lon": -83.055},
+    "Golden State": {"net_rtg": 2.1, "def_rank": 10, "home_win_pct": 0.62, "lat": 37.768, "lon": -122.388},
+    "Houston": {"net_rtg": 4.5, "def_rank": 8, "home_win_pct": 0.65, "lat": 29.751, "lon": -95.362},
+    "Indiana": {"net_rtg": 1.2, "def_rank": 25, "home_win_pct": 0.58, "lat": 39.764, "lon": -86.156},
+    "LA Clippers": {"net_rtg": -0.8, "def_rank": 14, "home_win_pct": 0.52, "lat": 34.043, "lon": -118.267},
+    "LA Lakers": {"net_rtg": 1.5, "def_rank": 15, "home_win_pct": 0.60, "lat": 34.043, "lon": -118.267},
+    "Memphis": {"net_rtg": 4.2, "def_rank": 9, "home_win_pct": 0.66, "lat": 35.138, "lon": -90.051},
+    "Miami": {"net_rtg": 0.5, "def_rank": 11, "home_win_pct": 0.58, "lat": 25.781, "lon": -80.188},
+    "Milwaukee": {"net_rtg": 2.8, "def_rank": 13, "home_win_pct": 0.62, "lat": 43.045, "lon": -87.917},
+    "Minnesota": {"net_rtg": 3.5, "def_rank": 5, "home_win_pct": 0.64, "lat": 44.980, "lon": -93.276},
+    "New Orleans": {"net_rtg": -9.2, "def_rank": 27, "home_win_pct": 0.40, "lat": 29.949, "lon": -90.082},
+    "New York": {"net_rtg": 6.5, "def_rank": 6, "home_win_pct": 0.72, "lat": 40.751, "lon": -73.994},
+    "Oklahoma City": {"net_rtg": 11.2, "def_rank": 1, "home_win_pct": 0.82, "lat": 35.463, "lon": -97.515},
+    "Orlando": {"net_rtg": 2.2, "def_rank": 2, "home_win_pct": 0.60, "lat": 28.539, "lon": -81.384},
+    "Philadelphia": {"net_rtg": -2.5, "def_rank": 16, "home_win_pct": 0.50, "lat": 39.901, "lon": -75.172},
+    "Phoenix": {"net_rtg": 0.8, "def_rank": 17, "home_win_pct": 0.55, "lat": 33.446, "lon": -112.071},
+    "Portland": {"net_rtg": -7.8, "def_rank": 28, "home_win_pct": 0.38, "lat": 45.532, "lon": -122.667},
+    "Sacramento": {"net_rtg": -1.2, "def_rank": 20, "home_win_pct": 0.52, "lat": 38.580, "lon": -121.500},
+    "San Antonio": {"net_rtg": -5.5, "def_rank": 19, "home_win_pct": 0.55, "lat": 29.427, "lon": -98.438},
+    "Toronto": {"net_rtg": -6.5, "def_rank": 29, "home_win_pct": 0.42, "lat": 43.643, "lon": -79.379},
+    "Utah": {"net_rtg": -5.2, "def_rank": 30, "home_win_pct": 0.35, "lat": 40.768, "lon": -111.901},
+    "Washington": {"net_rtg": -10.5, "def_rank": 31, "home_win_pct": 0.28, "lat": 38.898, "lon": -77.021}
 }
 
 STAR_PLAYERS = {
@@ -212,6 +211,17 @@ def get_minutes_played(period, clock, status_type):
     except:
         return (period - 1) * 12 if period <= 4 else 48
 
+def calc_distance_miles(lat1, lon1, lat2, lon2):
+    """Calculate distance between two points in miles"""
+    R = 3959  # Earth radius in miles
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+    a = math.sin(delta_lat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
+
 # ========== KALSHI MARKET CHECK ==========
 @st.cache_data(ttl=300)
 def check_kalshi_market_exists(ticker):
@@ -225,7 +235,7 @@ def check_kalshi_market_exists(ticker):
     except:
         return False
 
-# ========== FETCH ESPN GAMES - FIXED ==========
+# ========== FETCH ESPN GAMES ==========
 @st.cache_data(ttl=60)
 def fetch_espn_scores(date_key=None):
     games = {}
@@ -310,60 +320,126 @@ def fetch_espn_injuries():
         pass
     return injuries
 
-# ========== ML SCORING (10-FACTOR) ==========
+# ========== 8-FACTOR ML SCORING (AUTHORITATIVE) ==========
 def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
+    """
+    AUTHORITATIVE 8-FACTOR ML ENGINE
+    DO NOT MODIFY WITHOUT EXPLICIT INSTRUCTION
+    """
     away_stats = TEAM_STATS.get(away_team, {})
     home_stats = TEAM_STATS.get(home_team, {})
-    if not away_stats or not home_stats:
-        return None, 5.0, []
     
-    score = 5.0
+    if not away_stats or not home_stats:
+        return None, 0, []
+    
+    score_home = 0.0
+    score_away = 0.0
     reasons = []
     
-    net_diff = home_stats.get("net_rtg", 0) - away_stats.get("net_rtg", 0)
-    score += min(1.5, max(-1.5, net_diff * 0.1))
-    if abs(net_diff) >= 5:
-        reasons.append(f"Net Rtg: {'+' if net_diff > 0 else ''}{net_diff:.1f}")
-    
-    score += 0.8
-    reasons.append("Home +0.8")
-    
+    # ========== FACTOR 1: BACK-TO-BACK FATIGUE ==========
+    # +1.0 if opponent played yesterday and we didn't
     away_b2b = away_team in yesterday_teams
     home_b2b = home_team in yesterday_teams
+    
     if away_b2b and not home_b2b:
-        score += 0.7
-        reasons.append("Away B2B")
+        score_home += 1.0
+        reasons.append("Away B2B +1")
     elif home_b2b and not away_b2b:
-        score -= 0.7
-        reasons.append("Home B2B")
+        score_away += 1.0
+        reasons.append("Home B2B +1")
     
-    away_stars = STAR_PLAYERS.get(away_team, [])
-    home_stars = STAR_PLAYERS.get(home_team, [])
-    away_inj = injuries.get(away_team, [])
-    home_inj = injuries.get(home_team, [])
+    # ========== FACTOR 2: NET RATING DIFFERENTIAL ==========
+    # +1.0 if diff > +5 (home) or < -5 (away)
+    net_diff = home_stats.get("net_rtg", 0) - away_stats.get("net_rtg", 0)
     
-    away_out = sum(1 for i in away_inj if any(s.lower() in i.get("name", "").lower() for s in away_stars) and "out" in i.get("status", "").lower())
-    home_out = sum(1 for i in home_inj if any(s.lower() in i.get("name", "").lower() for s in home_stars) and "out" in i.get("status", "").lower())
+    if net_diff > 5:
+        score_home += 1.0
+        reasons.append(f"Net +{net_diff:.1f} → Home +1")
+    elif net_diff < -5:
+        score_away += 1.0
+        reasons.append(f"Net {net_diff:.1f} → Away +1")
     
-    inj_impact = (away_out - home_out) * 0.5
-    score += max(-1.5, min(1.5, inj_impact))
-    if away_out > 0:
-        reasons.append(f"Away {away_out}⭐ out")
-    if home_out > 0:
-        reasons.append(f"Home {home_out}⭐ out")
+    # ========== FACTOR 3: ELITE DEFENSE BONUS ==========
+    # +1.0 if DEF rank ≤ 5
+    home_def_rank = home_stats.get("def_rank", 15)
+    away_def_rank = away_stats.get("def_rank", 15)
     
-    def_diff = away_stats.get("def_rtg", 110) - home_stats.get("def_rtg", 110)
-    score += min(0.5, max(-0.5, def_diff * 0.05))
+    if home_def_rank <= 5:
+        score_home += 1.0
+        reasons.append(f"Home DEF #{home_def_rank} +1")
+    if away_def_rank <= 5:
+        score_away += 1.0
+        reasons.append(f"Away DEF #{away_def_rank} +1")
     
-    score = max(0, min(10, score))
+    # ========== FACTOR 4: HOME COURT (ALWAYS ON) ==========
+    # +1.0 to home ALWAYS
+    score_home += 1.0
+    reasons.append("Home Court +1")
     
-    if score >= 5.5:
-        pick = home_team
+    # ========== FACTOR 5: INJURY DIFFERENTIAL (STAR-WEIGHTED) ==========
+    # Star OUT = +4.0, Star GTD = +2.5, Non-star OUT = +1.0, Non-star GTD = +0.5
+    def calc_injury_score(team, team_injuries):
+        stars = STAR_PLAYERS.get(team, [])
+        total = 0.0
+        for inj in team_injuries:
+            name = inj.get("name", "").lower()
+            status = inj.get("status", "").lower()
+            is_star = any(s.lower() in name for s in stars)
+            
+            if "out" in status:
+                total += 4.0 if is_star else 1.0
+            elif "gtd" in status or "questionable" in status or "doubtful" in status:
+                total += 2.5 if is_star else 0.5
+        return total
+    
+    away_inj_score = calc_injury_score(away_team, injuries.get(away_team, []))
+    home_inj_score = calc_injury_score(home_team, injuries.get(home_team, []))
+    inj_diff = away_inj_score - home_inj_score
+    
+    if inj_diff > 3:
+        score_home += 1.0
+        reasons.append(f"Inj diff +{inj_diff:.1f} → Home +1")
+    elif inj_diff < -3:
+        score_away += 1.0
+        reasons.append(f"Inj diff {inj_diff:.1f} → Away +1")
+    
+    # ========== FACTOR 6: TRAVEL FATIGUE (AWAY ONLY) ==========
+    # +1.0 home if away traveled > 2000 miles
+    away_lat = away_stats.get("lat", 0)
+    away_lon = away_stats.get("lon", 0)
+    home_lat = home_stats.get("lat", 0)
+    home_lon = home_stats.get("lon", 0)
+    
+    distance = calc_distance_miles(away_lat, away_lon, home_lat, home_lon)
+    if distance > 2000:
+        score_home += 1.0
+        reasons.append(f"Travel {distance:.0f}mi +1")
+    
+    # ========== FACTOR 7: HOME WIN PERCENTAGE ==========
+    # +0.8 if home win % > 65%
+    home_win_pct = home_stats.get("home_win_pct", 0.5)
+    if home_win_pct > 0.65:
+        score_home += 0.8
+        reasons.append(f"Home {home_win_pct*100:.0f}% +0.8")
+    
+    # ========== FACTOR 8: DENVER ALTITUDE ==========
+    # +1.0 if home = Denver
+    if home_team == "Denver":
+        score_home += 1.0
+        reasons.append("Denver Alt +1")
+    
+    # ========== FINAL SCORING ==========
+    total = score_home + score_away
+    if total == 0:
+        return None, 0, []
+    
+    home_final = (score_home / total) * 10
+    away_final = (score_away / total) * 10
+    
+    if home_final >= away_final:
+        return home_team, round(home_final, 1), reasons
     else:
-        pick = away_team
-        score = 10 - score
-    
-    return pick, round(score, 1), reasons
+        return away_team, round(away_final, 1), reasons
 
 def get_signal_tier(score):
     if score >= 8.0:
@@ -373,7 +449,7 @@ def get_signal_tier(score):
     elif score >= 5.5:
         return "🟡 LEAN", "#ffff00"
     else:
-        return "⚪ TOSS-UP", "#888888"
+        return "⚪ HIDDEN", "#888888"
 
 # ========== FETCH DATA ==========
 games = fetch_espn_scores(date_key=today_str)
@@ -391,7 +467,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # ========== HEADER ==========
 st.title("🎯 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.52")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.53")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -401,7 +477,7 @@ if hdr3.button("🔄 Refresh", use_container_width=True):
 
 st.divider()
 
-# ========== ML PICKS ==========
+# ========== ML PICKS (SHOWS FOR SCHEDULED GAMES) ==========
 st.subheader("🎯 ML PICKS")
 
 ml_results = []
@@ -409,6 +485,8 @@ for gk in game_list:
     g = games[gk]
     away, home = g['away_team'], g['home_team']
     pick, score, reasons = calc_ml_score(away, home, injuries, yesterday_teams)
+    
+    # Show picks with score >= 5.5
     if pick and score >= 5.5:
         ml_results.append({
             "game": gk, "pick": pick, "score": score, "reasons": reasons,
@@ -437,7 +515,6 @@ if ml_results:
                 ticker = f"KXNBAGAME-{date_code}{away_code}{home_code}"
                 kalshi_url = f"https://kalshi.com/markets/{ticker.lower()}"
                 
-                # Check if market exists
                 market_exists = check_kalshi_market_exists(ticker)
                 if market_exists:
                     st.link_button(f"🎯 BUY {pick_code}", kalshi_url, use_container_width=True)
@@ -446,7 +523,10 @@ if ml_results:
                     st.warning(f"⏳ {pick_code} — Not live yet")
                     st.caption(ticker)
 else:
-    st.info("No strong ML picks right now")
+    if game_list:
+        st.info("No games with score ≥ 5.5 — all matchups are toss-ups today")
+    else:
+        st.info("No games scheduled for today")
 
 st.divider()
 
@@ -618,7 +698,7 @@ st.divider()
 # ========== HOW TO USE ==========
 st.subheader("📖 How to Use")
 st.markdown("""
-**ML PICKS** — Moneyline recommendations based on 10-factor model  
+**ML PICKS** — Moneyline recommendations based on 8-factor model  
 **CUSHION SCANNER** — Find live totals with big cushion to bet line  
 **PACE SCANNER** — Track scoring pace to project final totals  
 **INJURY REPORT** — Star player injuries affecting today's games  
@@ -627,4 +707,4 @@ st.markdown("""
 📧 Feedback: **aipublishingpro@gmail.com**
 """)
 
-st.caption("⚠️ For entertainment only. Not financial advice. v15.52")
+st.caption("⚠️ For entertainment only. Not financial advice. v15.53")
