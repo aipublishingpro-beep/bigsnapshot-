@@ -13,7 +13,7 @@ try:
 except ImportError:
     HAS_AUTOREFRESH = False
 
-st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
+st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide")
 
 # ========== GATE CHECK ==========
 if "gate_passed" not in st.session_state or not st.session_state.gate_passed:
@@ -26,8 +26,8 @@ if "gate_passed" not in st.session_state or not st.session_state.gate_passed:
 # ========== INIT ==========
 if "sid" not in st.session_state:
     st.session_state["sid"] = str(uuid.uuid4())
-if "positions" not in st.session_state:
-    st.session_state.positions = []
+if "last_ball_positions" not in st.session_state:
+    st.session_state.last_ball_positions = {}
 
 eastern = pytz.timezone("US/Eastern")
 today_str = datetime.now(eastern).strftime("%Y-%m-%d")
@@ -38,24 +38,24 @@ st.markdown("""
 <script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
 """, unsafe_allow_html=True)
 
-# ========== KALSHI TEAM CODES ==========
+# ========== NFL TEAM CODES ==========
 KALSHI_CODES = {
-    "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN",
-    "Charlotte Hornets": "CHA", "Chicago Bulls": "CHI", "Cleveland Cavaliers": "CLE",
-    "Dallas Mavericks": "DAL", "Denver Nuggets": "DEN", "Detroit Pistons": "DET",
-    "Golden State Warriors": "GSW", "Houston Rockets": "HOU", "Indiana Pacers": "IND",
-    "LA Clippers": "LAC", "Los Angeles Lakers": "LAL", "Memphis Grizzlies": "MEM",
-    "Miami Heat": "MIA", "Milwaukee Bucks": "MIL", "Minnesota Timberwolves": "MIN",
-    "New Orleans Pelicans": "NOP", "New York Knicks": "NYK", "Oklahoma City Thunder": "OKC",
-    "Orlando Magic": "ORL", "Philadelphia 76ers": "PHI", "Phoenix Suns": "PHX",
-    "Portland Trail Blazers": "POR", "Sacramento Kings": "SAC", "San Antonio Spurs": "SAS",
-    "Toronto Raptors": "TOR", "Utah Jazz": "UTA", "Washington Wizards": "WAS"
+    "Kansas City Chiefs": "KC", "Buffalo Bills": "BUF", "Baltimore Ravens": "BAL",
+    "Philadelphia Eagles": "PHI", "Detroit Lions": "DET", "San Francisco 49ers": "SF",
+    "Dallas Cowboys": "DAL", "Miami Dolphins": "MIA", "Green Bay Packers": "GB",
+    "Houston Texans": "HOU", "Cleveland Browns": "CLE", "Los Angeles Rams": "LA",
+    "Tampa Bay Buccaneers": "TB", "Pittsburgh Steelers": "PIT", "Los Angeles Chargers": "LAC",
+    "Seattle Seahawks": "SEA", "Cincinnati Bengals": "CIN", "Jacksonville Jaguars": "JAX",
+    "Minnesota Vikings": "MIN", "New York Jets": "NYJ", "New York Giants": "NYG",
+    "Indianapolis Colts": "IND", "Denver Broncos": "DEN", "Las Vegas Raiders": "LV",
+    "New Orleans Saints": "NO", "Atlanta Falcons": "ATL", "Chicago Bears": "CHI",
+    "Arizona Cardinals": "ARI", "Tennessee Titans": "TEN", "Carolina Panthers": "CAR",
+    "New England Patriots": "NE", "Washington Commanders": "WAS"
 }
 
 # ========== KALSHI MARKET CHECK ==========
 @st.cache_data(ttl=300)
 def check_kalshi_market_exists(ticker):
-    """Check if a Kalshi market exists - returns True/False"""
     try:
         url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker.upper()}"
         resp = requests.get(url, timeout=5)
@@ -66,11 +66,11 @@ def check_kalshi_market_exists(ticker):
     except:
         return False
 
-# ========== ESPN DATA FETCH ==========
-@st.cache_data(ttl=30)
-def fetch_nba_games():
+# ========== ESPN NFL DATA ==========
+@st.cache_data(ttl=60)
+def fetch_nfl_games():
     try:
-        url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+        url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
         resp = requests.get(url, timeout=10)
         data = resp.json()
         games = {}
@@ -86,40 +86,24 @@ def fetch_nba_games():
                     game_date = datetime.fromisoformat(game_date_str.replace("Z", "+00:00")).astimezone(eastern)
                 except:
                     pass
-            
-            period = status.get("period", 0)
-            clock = status.get("displayClock", "0:00")
-            away_score = int(away.get("score", 0))
-            home_score = int(home.get("score", 0))
-            total = away_score + home_score
-            
-            elapsed_min = 0
-            if period > 0:
-                try:
-                    clock_parts = clock.split(":")
-                    mins_left = int(clock_parts[0])
-                    secs_left = int(clock_parts[1]) if len(clock_parts) > 1 else 0
-                    elapsed_in_q = 12 - mins_left - (secs_left / 60)
-                    elapsed_min = (period - 1) * 12 + elapsed_in_q
-                except:
-                    elapsed_min = (period - 1) * 12
-            
-            pace = round(total / elapsed_min, 2) if elapsed_min > 0 else 0
-            
+            situation = comp.get("situation", {})
             games[event["id"]] = {
                 "away_team": away["team"]["displayName"],
                 "home_team": home["team"]["displayName"],
                 "away_abbr": away["team"]["abbreviation"],
                 "home_abbr": home["team"]["abbreviation"],
-                "away_score": away_score,
-                "home_score": home_score,
-                "period": period,
-                "clock": clock,
+                "away_score": int(away.get("score", 0)),
+                "home_score": int(home.get("score", 0)),
+                "period": status.get("period", 0),
+                "clock": status.get("displayClock", ""),
                 "status_type": status.get("type", {}).get("name", ""),
                 "status_detail": status.get("type", {}).get("shortDetail", ""),
-                "total": total,
-                "pace": pace,
-                "elapsed_min": round(elapsed_min, 1),
+                "total": int(away.get("score", 0)) + int(home.get("score", 0)),
+                "possession": situation.get("possession", ""),
+                "down": situation.get("down", 0),
+                "distance": situation.get("distance", 0),
+                "yard_line": situation.get("yardLine", 50),
+                "is_red_zone": situation.get("isRedZone", False),
                 "game_date": game_date
             }
         return games
@@ -128,9 +112,9 @@ def fetch_nba_games():
         return {}
 
 @st.cache_data(ttl=300)
-def fetch_nba_injuries():
+def fetch_nfl_injuries():
     try:
-        url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
+        url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
         resp = requests.get(url, timeout=10)
         data = resp.json()
         injuries = {}
@@ -150,127 +134,151 @@ def fetch_nba_injuries():
     except:
         return {}
 
-# ========== SIGNAL LOGIC ==========
-def get_signal_recommendation(pace, total, period, clock, cushion=0):
-    """Returns signal recommendation based on pace and game state"""
-    if period == 0:
-        return None, "PREGAME"
-    
+@st.cache_data(ttl=1800)
+def get_weather(city):
     try:
-        mins_left = int(clock.split(":")[0])
+        url = f"https://wttr.in/{city}?format=%t|%w"
+        resp = requests.get(url, timeout=5)
+        if resp.ok:
+            parts = resp.text.strip().split("|")
+            return {"temp": parts[0], "wind": parts[1] if len(parts) > 1 else "N/A"}
     except:
-        mins_left = 12
-    
-    total_mins_left = (4 - period) * 12 + mins_left
-    
-    if pace < 4.5:
-        return "🔴 STRONG NO", f"Ultra-slow pace ({pace} pts/min)"
-    elif pace < 4.7:
-        return "🟠 LEAN NO", f"Slow pace ({pace} pts/min)"
-    elif pace > 5.3:
-        return "🟢 STRONG YES", f"High pace ({pace} pts/min)"
-    elif pace > 5.0:
-        return "🔵 LEAN YES", f"Above-avg pace ({pace} pts/min)"
+        pass
+    return {"temp": "N/A", "wind": "N/A"}
+
+# ========== FOOTBALL FIELD ==========
+def draw_football_field(yard_line, possession_abbr, home_abbr, away_abbr, is_red_zone=False):
+    if possession_abbr == home_abbr:
+        ball_pos = 100 - yard_line
     else:
-        return "⚪ NEUTRAL", f"Normal pace ({pace} pts/min)"
-
-# ========== POSITION PERSISTENCE ==========
-def load_positions():
-    try:
-        if os.path.exists("nba_positions.json"):
-            with open("nba_positions.json", "r") as f:
-                return json.load(f)
-    except:
-        pass
-    return []
-
-def save_positions(positions):
-    try:
-        with open("nba_positions.json", "w") as f:
-            json.dump(positions, f)
-    except:
-        pass
-
-if not st.session_state.positions:
-    st.session_state.positions = load_positions()
+        ball_pos = yard_line
+    ball_pct = ball_pos
+    ball_color = "#ff4444" if is_red_zone else "#ffcc00"
+    return f"""
+    <div style="background:linear-gradient(90deg,#1a472a,#2d5a3d,#1a472a);border-radius:8px;padding:10px;margin:10px 0;position:relative;height:60px">
+        <div style="position:absolute;left:10%;top:50%;transform:translateY(-50%);color:#fff;font-weight:bold;font-size:0.8em">{away_abbr}</div>
+        <div style="position:absolute;right:10%;top:50%;transform:translateY(-50%);color:#fff;font-weight:bold;font-size:0.8em">{home_abbr}</div>
+        <div style="position:absolute;left:10%;right:10%;top:50%;height:4px;background:#fff;transform:translateY(-50%);border-radius:2px"></div>
+        <div style="position:absolute;left:calc(10% + {ball_pct * 0.8}%);top:50%;transform:translate(-50%,-50%);width:16px;height:16px;background:{ball_color};border-radius:50%;border:2px solid #fff;box-shadow:0 0 10px {ball_color}"></div>
+    </div>
+    """
 
 # ========== TITLE ==========
-st.title("🏀 NBA Edge Finder")
-st.caption("v15.48 — Market Check Fix")
+st.title("🏈 NFL Edge Finder")
+st.caption("v2.1.8 — Market Check Fix")
 
 # ========== SIDEBAR ==========
 with st.sidebar:
     st.header("⚙️ Settings")
-    auto_refresh = st.checkbox("Auto-refresh (30s)", value=False, key="nba_auto")
+    auto_refresh = st.checkbox("Auto-refresh (30s)", value=False, key="nfl_auto")
     if auto_refresh and HAS_AUTOREFRESH:
-        st_autorefresh(interval=30000, key="nba_refresh")
+        st_autorefresh(interval=30000, key="nfl_refresh")
     st.divider()
-    st.markdown("### 📊 12-Factor Model")
-    st.caption("1. Home court (+1)")
-    st.caption("2. Back-to-back fatigue (+1.5)")
-    st.caption("3. Rest days (+1)")
-    st.caption("4. Net rating diff (+1)")
-    st.caption("5. Defensive rating (+1)")
-    st.caption("6. Star injuries (+1.5)")
-    st.caption("7. Head-to-head (+0.5)")
-    st.caption("8. Travel distance (+0.5)")
-    st.caption("9. Timezone (+0.5)")
-    st.caption("10. Hot/cold streak (+1)")
-    st.caption("11. Pace mismatch (+0.5)")
-    st.caption("12. Playoff implications (+0.5)")
+    st.markdown("### 📊 10-Factor Model")
+    st.caption("1. Home field (+1)")
+    st.caption("2. Rest advantage (+1)")
+    st.caption("3. Timezone travel (+1)")
+    st.caption("4. Division game (+0.5)")
+    st.caption("5. Injuries (+1)")
+    st.caption("6. Weather (+0.5)")
+    st.caption("7. Streak (+1)")
+    st.caption("8. Playoffs (+1)")
+    st.caption("9. Primetime (+0.5)")
+    st.caption("10. Revenge (+0.5)")
 
-games = fetch_nba_games()
-injuries = fetch_nba_injuries()
+games = fetch_nfl_games()
+injuries = fetch_nfl_injuries()
 
-# ========== LIVE SIGNAL FEED ==========
+# ========== UPCOMING PLAYOFF GAMES ==========
 st.divider()
-st.subheader("📡 LIVE SIGNAL FEED")
+st.subheader("📅 CONFERENCE CHAMPIONSHIPS")
+st.caption("Sunday, January 26, 2026")
+
+playoff_games = [
+    {"away": "Philadelphia Eagles", "home": "Washington Commanders", "time": "3:00 PM ET", "tv": "FOX", "city": "Washington"},
+    {"away": "Buffalo Bills", "home": "Kansas City Chiefs", "time": "6:30 PM ET", "tv": "CBS", "city": "Kansas City"}
+]
+
+for game in playoff_games:
+    weather = get_weather(game["city"])
+    weather_str = f"🌡️ {weather['temp']} | 💨 {weather['wind']}"
+    
+    away_code = KALSHI_CODES.get(game["away"], "")
+    home_code = KALSHI_CODES.get(game["home"], "")
+    
+    ticker = f"KXNFLGAME-26JAN26{away_code}{home_code}"
+    
+    # Check if market exists
+    market_exists = check_kalshi_market_exists(ticker)
+    
+    col1, col2, col3 = st.columns([3, 2, 2])
+    with col1:
+        st.markdown(f"**{game['away']}** @ **{game['home']}**")
+        st.caption(f"{game['time']} | {game['tv']} | {weather_str}")
+    
+    with col2:
+        if market_exists:
+            kalshi_url = f"https://kalshi.com/markets/{ticker.lower()}"
+            st.link_button(f"🎯 BUY {away_code}", kalshi_url, use_container_width=True)
+            st.caption(f"✅ {ticker}")
+        else:
+            st.warning(f"⏳ {away_code} — Not live yet")
+            st.caption(ticker)
+    
+    with col3:
+        if market_exists:
+            kalshi_url = f"https://kalshi.com/markets/{ticker.lower()}"
+            st.link_button(f"🎯 BUY {home_code}", kalshi_url, use_container_width=True)
+            st.caption(f"✅ {ticker}")
+        else:
+            st.warning(f"⏳ {home_code} — Not live yet")
+            st.caption(ticker)
+    
+    st.divider()
+
+st.info("💡 Full 10-factor ML picks appear once ESPN lists these games (usually 2-3 days before kickoff)")
+
+# ========== LIVESTATE TRACKER ==========
+st.divider()
+st.subheader("📡 LIVESTATE TRACKER")
 
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
+today = datetime.now(eastern).date()
+yesterday = today - timedelta(days=1)
+final_games = {k: v for k, v in games.items() 
+               if v['status_type'] == "STATUS_FINAL" 
+               and v.get('game_date') 
+               and v['game_date'].date() >= yesterday}
 
 if live_games:
     st.success(f"🔴 {len(live_games)} LIVE GAME(S)")
     for gid, g in live_games.items():
-        signal, reason = get_signal_recommendation(g['pace'], g['total'], g['period'], g['clock'])
-        
-        col1, col2, col3 = st.columns([3, 1, 1])
-        with col1:
-            st.markdown(f"**{g['away_team']}** {g['away_score']} @ **{g['home_team']}** {g['home_score']}")
-            st.caption(f"Q{g['period']} {g['clock']} | Total: {g['total']} | Pace: {g['pace']} pts/min")
-        with col2:
-            if signal:
-                st.markdown(f"**{signal}**")
-                st.caption(reason)
-        with col3:
-            cushion = abs(g['away_score'] - g['home_score'])
-            leader = g['away_abbr'] if g['away_score'] > g['home_score'] else g['home_abbr']
-            st.metric("Cushion", f"{leader} +{cushion}")
-        st.divider()
+        with st.container():
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.markdown(f"**{g['away_team']}** {g['away_score']} @ **{g['home_team']}** {g['home_score']}")
+                st.caption(f"Q{g['period']} {g['clock']} | Total: {g['total']} pts")
+                if g['down'] > 0:
+                    st.caption(f"📍 {g['down']} & {g['distance']} at {g['yard_line']} yd line")
+            with col2:
+                if g['is_red_zone']:
+                    st.error("🔴 RED ZONE")
+            
+            poss_abbr = g.get('possession', g['home_abbr'])
+            st.markdown(draw_football_field(g['yard_line'], poss_abbr, g['home_abbr'], g['away_abbr'], g['is_red_zone']), unsafe_allow_html=True)
+            st.divider()
 else:
-    st.info("No live games right now")
+    st.info("No live NFL games right now")
 
-# ========== CUSHION SCANNER ==========
-st.subheader("🎯 CUSHION SCANNER")
-if live_games:
-    for gid, g in live_games.items():
-        cushion = abs(g['away_score'] - g['home_score'])
-        leader = g['away_team'] if g['away_score'] > g['home_score'] else g['home_team']
-        trailer = g['home_team'] if g['away_score'] > g['home_score'] else g['away_team']
-        
-        if cushion >= 15:
-            st.success(f"🟢 **{leader}** +{cushion} vs {trailer} — BLOWOUT CUSHION")
-        elif cushion >= 10:
-            st.info(f"🔵 **{leader}** +{cushion} vs {trailer} — SOLID CUSHION")
-        elif cushion >= 5:
-            st.warning(f"🟡 **{leader}** +{cushion} vs {trailer} — THIN CUSHION")
-        else:
-            st.error(f"🔴 TIGHT GAME: {cushion} pt margin")
-else:
-    st.info("No live games for cushion analysis")
+if final_games:
+    st.subheader("✅ RECENT FINALS")
+    for gid, g in final_games.items():
+        winner = g['away_team'] if g['away_score'] > g['home_score'] else g['home_team']
+        st.markdown(f"**{g['away_team']}** {g['away_score']} @ **{g['home_team']}** {g['home_score']} — **{winner} WIN**")
 
-# ========== ML PICKS ==========
+# ========== PRE-GAME ML PICKS ==========
 st.divider()
-st.subheader("🎯 ML PICKS")
+st.subheader("🎯 PRE-GAME NFL MONEYLINE PICKS")
 
 scheduled_games = {k: v for k, v in games.items() if v['status_type'] == "STATUS_SCHEDULED"}
 if scheduled_games:
@@ -279,14 +287,14 @@ if scheduled_games:
         home_inj = injuries.get(g['home_team'], [])
         
         away_score = 0
-        home_score = 1  # Home court
+        home_score = 1  # Home field
         
         away_out = len([i for i in away_inj if i['status'].lower() == 'out'])
         home_out = len([i for i in home_inj if i['status'].lower() == 'out'])
         if away_out > home_out:
-            home_score += 1.5
+            home_score += 1
         elif home_out > away_out:
-            away_score += 1.5
+            away_score += 1
         
         pick = g['home_team'] if home_score >= away_score else g['away_team']
         pick_code = KALSHI_CODES.get(pick, pick[:3].upper())
@@ -300,114 +308,39 @@ if scheduled_games:
         
         away_code = KALSHI_CODES.get(g['away_team'], g['away_team'][:3].upper())
         home_code = KALSHI_CODES.get(g['home_team'], g['home_team'][:3].upper())
-        ticker = f"KXNBAGAME-{date_str}{away_code}{home_code}"
-        kalshi_url = f"https://kalshi.com/markets/{ticker.lower()}"
+        ticker = f"KXNFLGAME-{date_str}{away_code}{home_code}"
         
         if score >= 8:
-            signal = "🟢 STRONG BUY"
+            signal = "🟢 STRONG"
         elif score >= 6.5:
             signal = "🔵 BUY"
         else:
             signal = "🟡 LEAN"
+        
+        market_exists = check_kalshi_market_exists(ticker)
         
         col1, col2, col3 = st.columns([3, 1, 1])
         with col1:
             st.markdown(f"**{g['away_team']}** @ **{g['home_team']}**")
             st.caption(f"{signal} {pick} | Score: {score}/10")
         with col2:
-            # Check if market exists before showing BUY button
-            market_exists = check_kalshi_market_exists(ticker)
             if market_exists:
+                kalshi_url = f"https://kalshi.com/markets/{ticker.lower()}"
                 st.link_button(f"BUY {pick_code}", kalshi_url, use_container_width=True)
                 st.caption(f"✅ {ticker}")
             else:
-                st.warning(f"⏳ Market not live")
+                st.warning(f"⏳ Not live yet")
                 st.caption(ticker)
         with col3:
             if away_inj or home_inj:
-                with st.expander("🚑 Injuries"):
+                with st.expander("🚑"):
                     for i in away_inj[:3]:
-                        st.caption(f"{g['away_team']}: {i['name']} ({i['position']}) - {i['status']}")
+                        st.caption(f"{i['name']} - {i['status']}")
                     for i in home_inj[:3]:
-                        st.caption(f"{g['home_team']}: {i['name']} ({i['position']}) - {i['status']}")
+                        st.caption(f"{i['name']} - {i['status']}")
         st.divider()
 else:
-    st.info("No scheduled games to analyze")
-
-# ========== ACTIVE POSITIONS ==========
-st.divider()
-st.subheader("📊 ACTIVE POSITIONS")
-
-if st.session_state.positions:
-    total_cost = sum(p.get('cost', 0) for p in st.session_state.positions)
-    st.metric("Total Invested", f"${total_cost:.2f}")
-    
-    for idx, pos in enumerate(st.session_state.positions):
-        col1, col2, col3 = st.columns([3, 1, 1])
-        with col1:
-            st.markdown(f"**{pos['game']}** — {pos['pick']}")
-            st.caption(f"Entry: {pos['price']}¢ x {pos['contracts']} = ${pos['cost']:.2f}")
-        with col2:
-            current_game = None
-            for g in games.values():
-                game_key = f"{g['away_team']} @ {g['home_team']}"
-                if game_key == pos['game'] or pos['game'] in game_key:
-                    current_game = g
-                    break
-            
-            if current_game:
-                if current_game['status_type'] == "STATUS_FINAL":
-                    winner = current_game['away_team'] if current_game['away_score'] > current_game['home_score'] else current_game['home_team']
-                    if pos['pick'] in winner or winner in pos['pick']:
-                        pnl = (100 - pos['price']) * pos['contracts'] / 100
-                        st.success(f"✅ WIN +${pnl:.2f}")
-                    else:
-                        pnl = -pos['cost']
-                        st.error(f"❌ LOSS ${pnl:.2f}")
-                else:
-                    st.info(f"🔄 Q{current_game['period']} {current_game['clock']}")
-            else:
-                st.caption("Pending")
-        with col3:
-            if st.button("❌", key=f"del_{idx}"):
-                st.session_state.positions.pop(idx)
-                save_positions(st.session_state.positions)
-                st.rerun()
-    
-    if st.button("Clear All Positions", type="secondary"):
-        st.session_state.positions = []
-        save_positions([])
-        st.rerun()
-else:
-    st.info("No active positions")
-
-# ========== ADD POSITION ==========
-st.divider()
-st.subheader("➕ ADD POSITION")
-
-with st.form("add_position"):
-    col1, col2 = st.columns(2)
-    with col1:
-        game_options = [f"{g['away_team']} @ {g['home_team']}" for g in games.values() if g['status_type'] != "STATUS_FINAL"]
-        selected_game = st.selectbox("Game", game_options if game_options else ["No games available"])
-        pick = st.text_input("Pick (team name)", placeholder="e.g., Boston Celtics")
-    with col2:
-        price = st.number_input("Entry Price (cents)", min_value=1, max_value=99, value=50)
-        contracts = st.number_input("Contracts", min_value=1, max_value=100, value=10)
-    
-    submitted = st.form_submit_button("Add Position", use_container_width=True)
-    if submitted and selected_game and pick:
-        st.session_state.positions.append({
-            "game": selected_game,
-            "pick": pick,
-            "price": price,
-            "contracts": contracts,
-            "cost": round(price * contracts / 100, 2),
-            "added_at": datetime.now(eastern).strftime("%a %I:%M %p")
-        })
-        save_positions(st.session_state.positions)
-        st.success(f"Added: {pick} @ {price}¢ x {contracts}")
-        st.rerun()
+    st.info("No scheduled NFL games — check back closer to game day")
 
 # ========== INJURY REPORT ==========
 st.divider()
@@ -420,32 +353,21 @@ if injury_teams:
             st.markdown(f"**{team}**")
             for inj in injuries[team][:3]:
                 status_color = "🔴" if inj['status'].lower() == 'out' else "🟡"
-                st.caption(f"{status_color} {inj['name']} ({inj['position']}) - {inj['status']}")
+                st.caption(f"{status_color} {inj['name']} ({inj['position']})")
 else:
     st.info("No major injuries reported")
 
-# ========== HOW TO USE ==========
+# ========== FOOTER ==========
 st.divider()
-st.subheader("📖 How to Use This App")
+st.subheader("📖 How to Use")
 st.markdown("""
-**NBA Edge Finder** helps you identify potential edges in NBA prediction markets on Kalshi.
-
-**Live Signal Feed:** Real-time pace analysis during games. Pace = total points / elapsed minutes.
-- 🔴 STRONG NO — Ultra-slow pace (<4.5 pts/min), likely to stay under
-- 🟠 LEAN NO — Slow pace (4.5-4.7 pts/min)
-- 🟢 STRONG YES — High pace (>5.3 pts/min), likely to go over
-- 🔵 LEAN YES — Above-avg pace (5.0-5.3 pts/min)
-
-**Cushion Scanner:** Shows point differentials for live games. Bigger cushion = safer ML position.
-
-**ML Picks:** Pre-game moneyline recommendations based on 12-factor model.
-
 **Market Status:**
-- ✅ Green checkmark = Market is LIVE on Kalshi, click to trade
-- ⏳ Yellow warning = Market not open yet, check back closer to game time
+- ✅ Market is LIVE — click to trade on Kalshi
+- ⏳ Market not live yet — check back closer to game time
 
-**Questions or feedback?** Contact aipublishingpro@gmail.com
+**Signals:** 🟢 STRONG (8+) | 🔵 BUY (6.5-7.9) | 🟡 LEAN (5.5-6.4)
+
+**Questions?** aipublishingpro@gmail.com
 """)
 
-st.divider()
-st.caption("⚠️ Educational analysis only. Not financial advice. v15.48")
+st.caption("⚠️ Educational analysis only. Not financial advice. v2.1.8")
