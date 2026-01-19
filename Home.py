@@ -29,15 +29,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================
-# GATE CHECK
+# GATE CHECK (5 CHECKBOXES)
 # ============================================
 st.title("📊 Big Snapshot")
 
 cb1 = st.checkbox("I understand this is not financial advice and I am responsible for my own trades.")
-cb2 = st.checkbox("I understand this free beta may end or change at any time.")
-cb3 = st.checkbox("I confirm that I am 18 years or older.")
+cb2 = st.checkbox("I understand past performance does not guarantee future results.")
+cb3 = st.checkbox("I will use this tool responsibly.")
+cb4 = st.checkbox("I am of legal age to participate in prediction markets in my jurisdiction.")
+cb5 = st.checkbox("I have read and accept the terms of use.")
 
-if cb1 and cb2 and cb3:
+if cb1 and cb2 and cb3 and cb4 and cb5:
+    # Set shared gate for all apps
+    st.session_state.gate_passed = True
+    st.session_state.nfl_gate_passed = True
+    st.session_state.nba_gate_passed = True
+    st.session_state.temp_gate_passed = True
+    
     st.success("✅ You may proceed. Select a tool below:")
     
     st.divider()
@@ -99,3 +107,5 @@ if cb1 and cb2 and cb3:
     st.divider()
     st.caption("⚠️ For entertainment only. Not financial advice. | bigsnapshot.com")
     st.caption("📧 Contact: aipublishingpro@gmail.com")
+else:
+    st.info("Please check all 5 boxes above to continue.")
