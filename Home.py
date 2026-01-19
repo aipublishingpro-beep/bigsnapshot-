@@ -16,35 +16,48 @@ st.markdown("""
 
 # ========== MAIN PAGE ==========
 st.title("📊 BIG SNAPSHOT")
-st.subheader("Sports Analytics Dashboard")
+st.subheader("Sports Analytics Dashboard - Public Beta")
 
 st.markdown("""
 Welcome to Big Snapshot - your sports analytics hub for Kalshi prediction markets.
 
-### Select a Sport:
+### Before You Continue:
 """)
 
-col1, col2 = st.columns(2)
+# ========== CHECKBOXES ==========
+cb1 = st.checkbox("I understand this tool provides market signals, not predictions.")
+cb2 = st.checkbox("I understand signals may change as new information arrives.")
+cb3 = st.checkbox("I understand this is not financial advice and I am responsible for my own trades.")
+cb4 = st.checkbox("I understand this free beta may end or change at any time.")
+cb5 = st.checkbox("I confirm that I am 18 years or older.")
 
-with col1:
-    st.markdown("""
-    ### 🏈 NFL
-    - Live game tracking
-    - Score updates  
-    - Field position visualization
-    - Kalshi market links
-    """)
-    st.page_link("pages/1_NFL.py", label="🏈 Open NFL Edge Finder", use_container_width=True)
-
-with col2:
-    st.markdown("""
-    ### 🏀 NBA
-    - Live scores & pace tracking
-    - Cushion scanner
-    - Position management
-    - Kalshi market links
-    """)
-    st.page_link("pages/2_NBA.py", label="🏀 Open NBA Edge Finder", use_container_width=True)
+all_checked = cb1 and cb2 and cb3 and cb4 and cb5
 
 st.divider()
-st.caption("⚠️ For entertainment only. Not financial advice. | bigsnapshot.com")
+
+if all_checked:
+    st.success("✅ You may proceed. Select a sport below:")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        ### 🏈 NFL
+        - Live game tracking
+        - Score updates  
+        - Field position visualization
+        - Kalshi market links
+        """)
+        st.page_link("pages/1_NFL.py", label="🏈 Open NFL Edge Finder", use_container_width=True)
+    
+    with col2:
+        st.markdown("""
+        ### 🏀 NBA
+        - Live scores & pace tracking
+        - Cushion scanner
+        - Position management
+        - Kalshi market links
+        """)
+        st.page_link("pages/2_NBA.py", label="🏀 Open NBA Edge Finder", use_container_width=True)
+else:
+    st.warning("⚠️ Please check all boxes above to continu
