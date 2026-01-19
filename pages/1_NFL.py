@@ -753,15 +753,15 @@ st.divider()
 scheduled_games = {k: v for k, v in games.items() if v['status_type'] == "STATUS_SCHEDULED"}
 if not scheduled_games:
     st.subheader("📅 UPCOMING PLAYOFF GAMES")
-    st.caption("Conference Championships — Sunday, January 25, 2026")
+    st.caption("Conference Championships — Sunday, January 26, 2026")
     upcoming_playoffs = [
-        {"away": "New England", "home": "Denver", "time": "3:00 PM ET", "tv": "CBS", "round": "AFC Championship", "away_note": "Drake Maye, 5 TO forced vs HOU", "home_note": "Bo Nix OUT (ankle), Stidham starts"},
-        {"away": "LA Rams", "home": "Seattle", "time": "6:30 PM ET", "tv": "FOX", "round": "NFC Championship", "away_note": "Stafford 2 OT wins, playoff tested", "home_note": "#2 DEF, 82% home win, 41-6 vs SF"}
+        {"away": "New England", "home": "Denver", "date": "Sun, Jan 26", "time": "3:00 PM ET", "tv": "CBS", "round": "AFC Championship", "away_note": "Drake Maye, 5 TO forced vs HOU", "home_note": "Bo Nix OUT (ankle), Stidham starts"},
+        {"away": "LA Rams", "home": "Seattle", "date": "Sun, Jan 26", "time": "6:30 PM ET", "tv": "FOX", "round": "NFC Championship", "away_note": "Stafford 2 OT wins, playoff tested", "home_note": "#2 DEF, 82% home win, 41-6 vs SF"}
     ]
     for game in upcoming_playoffs:
         away, home = game["away"], game["home"]
         away_code, home_code = KALSHI_CODES.get(away, "XXX"), KALSHI_CODES.get(home, "XXX")
-        ticker = f"KXNFLGAME-26JAN25{away_code}{home_code}"
+        ticker = f"KXNFLGAME-26JAN26{away_code}{home_code}"
         kalshi_url = f"https://kalshi.com/markets/KXNFLGAME/{ticker}"
         home_stats, away_stats = TEAM_STATS.get(home, {}), TEAM_STATS.get(away, {})
         home_dvoa, away_dvoa = home_stats.get('dvoa', 0), away_stats.get('dvoa', 0)
@@ -771,7 +771,7 @@ if not scheduled_games:
         else: edge_label, edge_color = "⚖️ Toss-up", "#888888"
         weather = get_weather_for_game(home)
         weather_str = "🏟️ Dome" if weather.get("dome") else f"🌡️ {weather.get('temp', 50):.0f}°F | 💨 {weather.get('wind', 0):.0f}mph"
-        st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:18px;border-radius:12px;border:2px solid #4488ff;margin-bottom:15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><span style="color:#4488ff;font-size:0.9em;font-weight:bold">{game['round']}</span><div style="color:#fff;font-size:1.4em;font-weight:bold;margin-top:4px">{away} @ {home}</div></div><div style="text-align:right"><div style="color:#ffaa00;font-size:1.2em;font-weight:bold">{game['time']}</div><div style="color:#888;font-size:0.9em">{game['tv']} | {weather_str}</div></div></div><div style="margin-top:15px;padding:12px;background:#0a0a1a;border-radius:8px"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#888">DVOA:</span><span><span style="color:#fff">{away_code} {away_dvoa:+.1f}%</span> <span style="color:#666">vs</span> <span style="color:#fff">{home_code} {home_dvoa:+.1f}%</span></span></div><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#888">Defense:</span><span><span style="color:#fff">{away_code} #{away_def}</span> <span style="color:#666">vs</span> <span style="color:#fff">{home_code} #{home_def}</span></span></div><div style="display:flex;justify-content:space-between"><span style="color:#888">Edge:</span><span style="color:{edge_color};font-weight:bold">{edge_label}</span></div></div><div style="margin-top:12px;padding-top:12px;border-top:1px solid #333"><div style="color:#88aaff;font-size:0.85em;margin-bottom:4px">✈️ {away_code}: {game['away_note']}</div><div style="color:#88aaff;font-size:0.85em">🏠 {home_code}: {game['home_note']}</div></div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:18px;border-radius:12px;border:2px solid #4488ff;margin-bottom:15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><span style="color:#4488ff;font-size:0.9em;font-weight:bold">{game['round']}</span><div style="color:#fff;font-size:1.4em;font-weight:bold;margin-top:4px">{away} @ {home}</div></div><div style="text-align:right"><div style="color:#ffaa00;font-size:1.2em;font-weight:bold">{game['date']}</div><div style="color:#fff;font-size:1.1em">{game['time']}</div><div style="color:#888;font-size:0.9em">{game['tv']} | {weather_str}</div></div></div><div style="margin-top:15px;padding:12px;background:#0a0a1a;border-radius:8px"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#888">DVOA:</span><span><span style="color:#fff">{away_code} {away_dvoa:+.1f}%</span> <span style="color:#666">vs</span> <span style="color:#fff">{home_code} {home_dvoa:+.1f}%</span></span></div><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#888">Defense:</span><span><span style="color:#fff">{away_code} #{away_def}</span> <span style="color:#666">vs</span> <span style="color:#fff">{home_code} #{home_def}</span></span></div><div style="display:flex;justify-content:space-between"><span style="color:#888">Edge:</span><span style="color:{edge_color};font-weight:bold">{edge_label}</span></div></div><div style="margin-top:12px;padding-top:12px;border-top:1px solid #333"><div style="color:#88aaff;font-size:0.85em;margin-bottom:4px">✈️ {away_code}: {game['away_note']}</div><div style="color:#88aaff;font-size:0.85em">🏠 {home_code}: {game['home_note']}</div></div></div>""", unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         col1.link_button(f"🎯 BUY {away_code}", kalshi_url, use_container_width=True)
         col2.link_button(f"🎯 BUY {home_code}", kalshi_url, use_container_width=True)
@@ -837,7 +837,7 @@ selected_game = st.selectbox("Game", game_options)
 if selected_game != "Select...":
     parts = selected_game.replace(" @ ", "@").split("@")
     g = games.get(f"{parts[0]}@{parts[1]}")
-    game_date = g.get('game_date') if g else eastern.localize(datetime(2026, 1, 25, 15, 0))
+    game_date = g.get('game_date') if g else eastern.localize(datetime(2026, 1, 26, 15, 0))
     st.link_button("🔗 View on Kalshi", build_kalshi_ml_url(parts[0], parts[1], game_date), use_container_width=True)
 
 p1, p2, p3 = st.columns(3)
