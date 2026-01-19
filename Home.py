@@ -1,123 +1,143 @@
 import streamlit as st
+from datetime import datetime
+import pytz
 
 st.set_page_config(page_title="Big Snapshot", page_icon="📊", layout="wide")
 
-# ========== HIDE MENUS ==========
+# ========== HIDE STREAMLIT STUFF ==========
 st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
 .stDeployButton {display: none;}
-[data-testid="stToolbar"] {display: none;}
+[data-testid="stSidebarNav"] {display: none;}
 </style>
 """, unsafe_allow_html=True)
 
-# ========== GA4 ==========
+# ========== GA4 TRACKING ==========
 st.markdown("""
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
-<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-NQKY5VQ376');</script>
+<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
 """, unsafe_allow_html=True)
 
-# ========== PASSWORD GATE ==========
+# ========== PASSWORD SYSTEM ==========
 VALID_PASSWORDS = {
     "WILLIE1228": "Owner",
     "BETAUSER": "Beta Tester",
 }
 
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-    st.session_state.user_type = None
+# ========== INIT SESSION STATE ==========
+if "gate_passed" not in st.session_state:
+    st.session_state.gate_passed = False
+if "user_role" not in st.session_state:
+    st.session_state.user_role = None
 
-if not st.session_state.authenticated:
-    st.title("📊 Big Snapshot")
-    st.subheader("Sports Analytics for Kalshi Prediction Markets")
+eastern = pytz.timezone("US/Eastern")
+now = datetime.now(eastern)
+
+# ========== LOGIN SCREEN ==========
+if not st.session_state.gate_passed:
+    st.title("📊 BIG SNAPSHOT")
+    st.subheader("Sports & Weather Analytics for Kalshi")
     
-    st.divider()
+    st.markdown("---")
     
-    st.markdown("**Enter password to access:**")
-    password = st.text_input("Password", type="password")
+    password_input = st.text_input("Enter Access Code:", type="password", key="pwd")
     
-    if st.button("Enter", type="primary"):
-        password_upper = password.upper()
-        if password_upper in VALID_PASSWORDS:
-            st.session_state.authenticated = True
-            st.session_state.user_type = VALID_PASSWORDS[password_upper]
+    if st.button("🔓 Enter", type="primary", use_container_width=True):
+        if password_input.upper() in VALID_PASSWORDS:
+            st.session_state.gate_passed = True
+            st.session_state.user_role = VALID_PASSWORDS[password_input.upper()]
             st.rerun()
-        else:
-            st.error("❌ Invalid password")
+        elif password_input:
+            st.error("❌ Invalid access code")
     
-    st.divider()
+    st.markdown("---")
     
+    # Beta signup callout
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px solid #00ff00; padding: 30px; border-radius: 10px; text-align: center; margin-top: 20px;">
-        <h2 style="color: #00ff00; margin-bottom: 10px;">🎯 Want FREE Access?</h2>
-        <p style="color: white; font-size: 18px; margin-bottom: 15px;">Become a Beta Tester!</p>
-        <p style="color: #00ff00; font-size: 24px; font-weight: bold;">📧 aipublishingpro@gmail.com</p>
-        <p style="color: #888; font-size: 14px; margin-top: 10px;">Email for consideration and password</p>
+    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:20px;text-align:center;border:2px solid #ffd700;margin-top:20px">
+        <h3 style="color:#ffd700;margin:0">🚀 Want Beta Access?</h3>
+        <p style="color:#fff;margin:10px 0">Get early access to all Edge Finder tools</p>
+        <p style="color:#888;font-size:0.9em">Email: <strong>aipublishingpro@gmail.com</strong></p>
     </div>
     """, unsafe_allow_html=True)
+    
     st.stop()
 
-# ========== MAIN CONTENT (AFTER LOGIN) ==========
-st.title("📊 Big Snapshot")
-st.caption(f"Logged in as: {st.session_state.user_type}")
+# ========== LOGGED IN - SHOW DASHBOARD ==========
+st.title("📊 BIG SNAPSHOT")
+st.caption(f"Logged in as: {st.session_state.user_role}")
 
-st.divider()
-
+st.markdown("---")
 st.subheader("Select an Edge Finder:")
 
+# ========== THREE APP CARDS ==========
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown("""
-    <div style="background: #1a1a2e; border-left: 4px solid #00ff00; padding: 20px; border-radius: 4px; text-align: center;">
-        <h2>🏀</h2>
-        <h3 style="color: white;">NBA Edge Finder</h3>
-        <p style="color: #888;">8-Factor ML Model</p>
-        <p style="color: #00ff00;">✅ LIVE</p>
+    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #00ff00;min-height:280px">
+        <div style="font-size:3em;margin-bottom:10px">🏀</div>
+        <h3 style="color:#fff;margin:0">NBA Edge Finder</h3>
+        <p style="color:#888;font-size:0.9em;margin:10px 0">8-Factor ML Model</p>
+        <p style="color:#00ff00;font-weight:bold">✅ LIVE</p>
     </div>
     """, unsafe_allow_html=True)
-    if st.button("Open NBA", use_container_width=True, key="nba_btn"):
-        st.switch_page("pages/2_NBA.py")
+    st.page_link("pages/2_NBA.py", label="Open NBA", use_container_width=True)
 
 with col2:
     st.markdown("""
-    <div style="background: #1a1a2e; border-left: 4px solid #00aaff; padding: 20px; border-radius: 4px; text-align: center;">
-        <h2>🏈</h2>
-        <h3 style="color: white;">NFL Edge Finder</h3>
-        <p style="color: #888;">10-Factor ML Model</p>
-        <p style="color: #00aaff;">✅ LIVE</p>
+    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #00aaff;min-height:280px">
+        <div style="font-size:3em;margin-bottom:10px">🏈</div>
+        <h3 style="color:#fff;margin:0">NFL Edge Finder</h3>
+        <p style="color:#888;font-size:0.9em;margin:10px 0">10-Factor ML Model</p>
+        <p style="color:#00ff00;font-weight:bold">✅ LIVE</p>
     </div>
     """, unsafe_allow_html=True)
-    if st.button("Open NFL", use_container_width=True, key="nfl_btn"):
-        st.switch_page("pages/1_NFL.py")
+    st.page_link("pages/1_NFL.py", label="Open NFL", use_container_width=True)
 
 with col3:
     st.markdown("""
-    <div style="background: #1a1a2e; border-left: 4px solid #ffaa00; padding: 20px; border-radius: 4px; text-align: center;">
-        <h2>🌡️</h2>
-        <h3 style="color: white;">Temp Edge Finder</h3>
-        <p style="color: #888;">NWS Forecast Model</p>
-        <p style="color: #ffaa00;">🔧 COMING SOON</p>
+    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #ff6600;min-height:280px">
+        <div style="font-size:3em;margin-bottom:10px">🌡️</div>
+        <h3 style="color:#fff;margin:0">Temp Edge Finder</h3>
+        <p style="color:#888;font-size:0.9em;margin:10px 0">NWS Forecast Model</p>
+        <p style="color:#00ff00;font-weight:bold">✅ LIVE</p>
     </div>
     """, unsafe_allow_html=True)
-    st.button("Coming Soon", disabled=True, use_container_width=True, key="temp_btn")
+    st.page_link("pages/3_Temp.py", label="Open Temp", use_container_width=True)
 
-st.divider()
-
+# ========== HOW IT WORKS ==========
+st.markdown("---")
+st.subheader("How It Works")
 st.markdown("""
-### How It Works
-
-1. **Select an Edge Finder** above
-2. **Review ML picks** based on our factor models
-3. **Click BUY** to go directly to Kalshi market
-4. **Track positions** and monitor live scores
-
-### Disclaimer
-
-⚠️ This tool provides market signals, not predictions. Not financial advice. For entertainment only.
+1. **Select an Edge Finder** — Choose NBA, NFL, or Temperature markets
+2. **Review the signals** — Our models identify mispriced Kalshi contracts  
+3. **Click BUY** — Direct links to Kalshi order pages
+4. **Track positions** — Monitor your active trades in real-time
 """)
 
-st.divider()
-st.caption("📧 Feedback: aipublishingpro@gmail.com | v1.0")
+# ========== BETA SIGNUP ==========
+st.markdown("---")
+st.markdown("""
+<div style="background:linear-gradient(135deg,#2d1f3d,#1a1a2e);border-radius:12px;padding:25px;text-align:center;border:2px solid #ffd700">
+    <h3 style="color:#ffd700;margin:0">🚀 Enjoying the Beta?</h3>
+    <p style="color:#fff;margin:15px 0">Share feedback or invite friends to join</p>
+    <p style="color:#888">Email: <strong>aipublishingpro@gmail.com</strong></p>
+</div>
+""", unsafe_allow_html=True)
+
+# ========== FOOTER ==========
+st.markdown("---")
+col1, col2 = st.columns(2)
+with col1:
+    st.caption(f"🕐 {now.strftime('%I:%M %p ET')} | 📅 {now.strftime('%B %d, %Y')}")
+with col2:
+    if st.button("🚪 Logout", use_container_width=True):
+        st.session_state.gate_passed = False
+        st.session_state.user_role = None
+        st.rerun()
+
+st.caption("⚠️ Educational analysis only. Not financial advice. | bigsnapshot.com")
