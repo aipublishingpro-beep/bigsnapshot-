@@ -1391,4 +1391,45 @@ else:
     st.info("No games today")
 
 st.divider()
+
+# ========== HOW TO USE THIS APP ==========
+st.subheader("📖 How to Use This App")
+
+st.markdown("""
+**NBA Edge Finder** analyzes NBA games using a 10-factor model for moneyline picks and real-time pace tracking for totals markets on Kalshi.
+
+**Getting Started:**
+1. Check **ML Picks** for pre-game moneyline recommendations sorted by edge strength
+2. Use **Add Position** to track your trades with entry price and contract size
+3. Monitor **Active Positions** for real-time P&L and game status
+
+**Understanding ML Signals:**
+- 🟢 **STRONG BUY** — Score 8.0+ (High confidence edge)
+- 🔵 **BUY** — Score 6.5-7.9 (Good edge detected)
+- 🟡 **LEAN** — Score 5.5-6.4 (Slight edge)
+- ⚪ **TOSS-UP** — Score 4.5-5.4 (No clear edge)
+
+**10-Factor Model Includes:**
+Opponent Back-to-Back, Net Rating, Top 5 Defense, Home Court, Star Injuries, Travel Distance (2000+ miles), Home Win %, Denver Altitude, Hot Streak, and Head-to-Head History.
+
+**Live Signal Feed (For Totals):**
+- **Pace** — Points per minute (below 4.5 = slow, above 5.2 = fast)
+- **Drought** — Time since last score (NORMAL < 60s, MODERATE 60-120s, HIGH > 120s)
+- **Momentum** — COOLING (pace dropping), NEUTRAL (stable), HEATING (pace rising)
+
+**Cushion Scanner:**
+Finds games where the projected total has a comfortable cushion above/below specific threshold lines. Look for +10 or higher cushion with favorable pace for best setups.
+
+**Pace Scanner:**
+Shows all live games sorted by pace. Slow games (under 4.5 pts/min) favor NO bets, fast games (over 5.2 pts/min) favor YES bets.
+
+**Tips for Best Results:**
+- Prioritize ML picks with score 7.0+ and multiple factors aligned
+- For totals, wait until 6+ minutes played before trusting pace data
+- Check Injury Report for star player status — this heavily impacts ML scores
+- Use the Kalshi links to execute trades directly on the platform
+""")
+
+st.divider()
+st.markdown("**📧 Questions or Feedback?** Contact us at **aipublishingpro@gmail.com**")
 st.caption("⚠️ Entertainment only. Not financial advice. v15.44 SIGNAL")
