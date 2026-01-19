@@ -73,7 +73,7 @@ st.caption(f"Logged in as: {st.session_state.user_role}")
 st.markdown("---")
 st.subheader("Select an Edge Finder:")
 
-# ========== THREE APP CARDS ==========
+# ========== ROW 1: NBA, NFL, NHL ==========
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -100,6 +100,21 @@ with col2:
 
 with col3:
     st.markdown("""
+    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #00ccff;min-height:280px">
+        <div style="font-size:3em;margin-bottom:10px">🏒</div>
+        <h3 style="color:#fff;margin:0">NHL Edge Finder</h3>
+        <p style="color:#888;font-size:0.9em;margin:10px 0">7-Factor Goalie Model</p>
+        <p style="color:#00ff00;font-weight:bold">✅ LIVE</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.page_link("pages/3_NHL.py", label="Open NHL", use_container_width=True)
+
+# ========== ROW 2: Temp, MLB, Politics ==========
+st.markdown("<br>", unsafe_allow_html=True)
+col4, col5, col6 = st.columns(3)
+
+with col4:
+    st.markdown("""
     <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #ff6600;min-height:280px">
         <div style="font-size:3em;margin-bottom:10px">🌡️</div>
         <h3 style="color:#fff;margin:0">Temp Edge Finder</h3>
@@ -107,13 +122,35 @@ with col3:
         <p style="color:#00ff00;font-weight:bold">✅ LIVE</p>
     </div>
     """, unsafe_allow_html=True)
-    st.page_link("pages/3_Temp.py", label="Open Temp", use_container_width=True)
+    st.page_link("pages/5_Temp.py", label="Open Temp", use_container_width=True)
+
+with col5:
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #ff4444;min-height:280px">
+        <div style="font-size:3em;margin-bottom:10px">⚾</div>
+        <h3 style="color:#fff;margin:0">MLB Edge Finder</h3>
+        <p style="color:#888;font-size:0.9em;margin:10px 0">Pitcher Matchup Model</p>
+        <p style="color:#ffd700;font-weight:bold">🚀 MARCH 2026</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.page_link("pages/4_MLB.py", label="Coming Soon", use_container_width=True)
+
+with col6:
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #9933ff;min-height:280px">
+        <div style="font-size:3em;margin-bottom:10px">🏛️</div>
+        <h3 style="color:#fff;margin:0">Politics Edge</h3>
+        <p style="color:#888;font-size:0.9em;margin:10px 0">Structural Analysis</p>
+        <p style="color:#ffd700;font-weight:bold">🚀 COMING SOON</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.page_link("pages/6_Politics.py", label="Coming Soon", use_container_width=True)
 
 # ========== HOW IT WORKS ==========
 st.markdown("---")
 st.subheader("How It Works")
 st.markdown("""
-1. **Select an Edge Finder** — Choose NBA, NFL, or Temperature markets
+1. **Select an Edge Finder** — Choose NBA, NFL, NHL, or Temperature markets
 2. **Review the signals** — Our models identify mispriced Kalshi contracts  
 3. **Click BUY** — Direct links to Kalshi order pages
 4. **Track positions** — Monitor your active trades in real-time
