@@ -15,14 +15,6 @@ except ImportError:
 
 st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide")
 
-# ========== GATE CHECK ==========
-if "gate_passed" not in st.session_state or not st.session_state.gate_passed:
-    st.markdown("""<style>[data-testid="stSidebarNav"] {display: none;}</style>""", unsafe_allow_html=True)
-    st.error("⛔ Access Denied")
-    st.warning("You must accept the terms on the Home page first.")
-    st.page_link("Home.py", label="👉 Go to Home Page", use_container_width=True)
-    st.stop()
-
 # ========== INIT ==========
 if "sid" not in st.session_state:
     st.session_state["sid"] = str(uuid.uuid4())
@@ -174,7 +166,7 @@ def draw_football_field(yard_line, possession_abbr, home_abbr, away_abbr, is_red
 
 # ========== TITLE ==========
 st.title("🏈 NFL Edge Finder")
-st.caption("v2.2.0 — Conference Championships Preview")
+st.caption("v2.3.0 — Conference Championships Preview")
 
 # ========== SIDEBAR ==========
 with st.sidebar:
@@ -208,7 +200,7 @@ st.markdown("""
         <span style="color:#00d4ff;font-weight:bold">NFC Championship</span>
         <span style="color:#888">Sun, Jan 26 • 3:00 PM ET</span>
     </div>
-    <h2 style="color:#fff;margin:0 0 10px 0">Philadelphia Eagles @ Washington Commanders</h2>
+    <h2 style="color:#fff;margin:0 0 10px 0">Philadelphia Eagles @ Washington Commanders 🏠</h2>
     <div style="color:#888;font-size:0.9em">FOX | 🌡️ 38°F | 💨 8mph</div>
 </div>
 """, unsafe_allow_html=True)
@@ -259,7 +251,7 @@ st.markdown("""
         <span style="color:#ff6b6b;font-weight:bold">AFC Championship</span>
         <span style="color:#888">Sun, Jan 26 • 6:30 PM ET</span>
     </div>
-    <h2 style="color:#fff;margin:0 0 10px 0">Buffalo Bills @ Kansas City Chiefs</h2>
+    <h2 style="color:#fff;margin:0 0 10px 0">Buffalo Bills @ Kansas City Chiefs 🏠</h2>
     <div style="color:#888;font-size:0.9em">CBS | 🌡️ 28°F | 💨 12mph</div>
 </div>
 """, unsafe_allow_html=True)
@@ -305,7 +297,7 @@ st.markdown("""
 <div style="background:linear-gradient(135deg,#4a1942,#2d132c);border-radius:12px;padding:20px;text-align:center;border:1px solid #801336">
     <span style="font-size:2em">🏆</span>
     <h3 style="color:#ffd700;margin:10px 0">Super Bowl LIX</h3>
-    <p style="color:#fff;margin:0">February 9, 2026 • Caesars Superdome, New Orleans</p>
+    <p style="color:#fff;margin:0">February 9, 2025 • Caesars Superdome, New Orleans</p>
     <p style="color:#888;font-size:0.9em;margin-top:5px">FOX • 6:30 PM ET</p>
 </div>
 """, unsafe_allow_html=True)
@@ -328,7 +320,7 @@ if live_games:
         with st.container():
             col1, col2 = st.columns([3, 1])
             with col1:
-                st.markdown(f"**{g['away_team']}** {g['away_score']} @ **{g['home_team']}** {g['home_score']}")
+                st.markdown(f"**{g['away_team']}** {g['away_score']} @ **{g['home_team']}** 🏠 {g['home_score']}")
                 st.caption(f"Q{g['period']} {g['clock']} | Total: {g['total']} pts")
                 if g['down'] > 0:
                     st.caption(f"📍 {g['down']} & {g['distance']} at {g['yard_line']} yd line")
@@ -350,7 +342,7 @@ if final_games:
     st.subheader("✅ RECENT FINALS")
     for gid, g in final_games.items():
         winner = g['away_team'] if g['away_score'] > g['home_score'] else g['home_team']
-        st.markdown(f"**{g['away_team']}** {g['away_score']} @ **{g['home_team']}** {g['home_score']} — **{winner} WIN**")
+        st.markdown(f"**{g['away_team']}** {g['away_score']} @ **{g['home_team']}** 🏠 {g['home_score']} — **{winner} WIN**")
 
 # ========== INJURY REPORT ==========
 st.divider()
@@ -398,7 +390,7 @@ st.divider()
 st.subheader("📊 10-FACTOR EDGE ANALYSIS")
 
 # NFC Analysis
-st.markdown("**NFC CHAMPIONSHIP — PHI @ WAS**")
+st.markdown("**NFC CHAMPIONSHIP — PHI @ WAS 🏠**")
 nfc_factors = {
     "Home Field": ("WAS +1", "🏠"),
     "Rest Days": ("EVEN", "😴"),
@@ -423,7 +415,7 @@ st.success("**NFC EDGE: PHI 7.5/10** — Strong favorite based on DVOA and defen
 st.markdown("---")
 
 # AFC Analysis  
-st.markdown("**AFC CHAMPIONSHIP — BUF @ KC**")
+st.markdown("**AFC CHAMPIONSHIP — BUF @ KC 🏠**")
 afc_factors = {
     "Home Field": ("KC +1", "🏠"),
     "Rest Days": ("EVEN", "😴"),
@@ -458,4 +450,4 @@ st.markdown("""
 **Questions?** aipublishingpro@gmail.com
 """)
 
-st.caption("⚠️ Educational analysis only. Not financial advice. v2.2.0")
+st.caption("⚠️ Educational analysis only. Not financial advice. v2.3.0")
