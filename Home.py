@@ -60,4 +60,4 @@ if all_checked:
         """)
         st.page_link("pages/2_NBA.py", label="🏀 Open NBA Edge Finder", use_container_width=True)
 else:
-    st.warning("⚠️ Please check all boxes above to continu
+   st.warning("Please check all boxes above to continue.")
