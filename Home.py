@@ -21,7 +21,7 @@ st.markdown("""
 
 # ========== PASSWORD GATE ==========
 VALID_PASSWORDS = {
-    "Willie1228": "Owner",
+    "WILLIE1228": "Owner",
     "BETAUSER": "Beta Tester",
 }
 
@@ -39,9 +39,10 @@ if not st.session_state.authenticated:
     password = st.text_input("Password", type="password")
     
     if st.button("Enter", type="primary"):
-        if password in VALID_PASSWORDS:
+        password_upper = password.upper()
+        if password_upper in VALID_PASSWORDS:
             st.session_state.authenticated = True
-            st.session_state.user_type = VALID_PASSWORDS[password]
+            st.session_state.user_type = VALID_PASSWORDS[password_upper]
             st.rerun()
         else:
             st.error("❌ Invalid password")
