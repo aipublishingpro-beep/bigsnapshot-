@@ -89,7 +89,7 @@ KALSHI_CODES = {
     "Carolina": "CAR", "Chicago": "CHI", "Cincinnati": "CIN", "Cleveland": "CLE",
     "Dallas": "DAL", "Denver": "DEN", "Detroit": "DET", "Green Bay": "GB",
     "Houston": "HOU", "Indianapolis": "IND", "Jacksonville": "JAX", "Kansas City": "KC",
-    "Las Vegas": "LV", "LA Chargers": "LAC", "LA Rams": "LAR", "Miami": "MIA",
+    "Las Vegas": "LV", "LA Chargers": "LAC", "LA Rams": "LA", "Miami": "MIA",
     "Minnesota": "MIN", "New England": "NE", "New Orleans": "NO", "NY Giants": "NYG",
     "NY Jets": "NYJ", "Philadelphia": "PHI", "Pittsburgh": "PIT", "San Francisco": "SF",
     "Seattle": "SEA", "Tampa Bay": "TB", "Tennessee": "TEN", "Washington": "WAS"
@@ -773,8 +773,12 @@ if not scheduled_games:
         weather_str = "🏟️ Dome" if weather.get("dome") else f"🌡️ {weather.get('temp', 50):.0f}°F | 💨 {weather.get('wind', 0):.0f}mph"
         st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:18px;border-radius:12px;border:2px solid #4488ff;margin-bottom:15px"><div style="display:flex;justify-content:space-between;align-items:center"><div><span style="color:#4488ff;font-size:0.9em;font-weight:bold">{game['round']}</span><div style="color:#fff;font-size:1.4em;font-weight:bold;margin-top:4px">{away} @ {home}</div></div><div style="text-align:right"><div style="color:#ffaa00;font-size:1.2em;font-weight:bold">{game['date']}</div><div style="color:#fff;font-size:1.1em">{game['time']}</div><div style="color:#888;font-size:0.9em">{game['tv']} | {weather_str}</div></div></div><div style="margin-top:15px;padding:12px;background:#0a0a1a;border-radius:8px"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#888">DVOA:</span><span><span style="color:#fff">{away_code} {away_dvoa:+.1f}%</span> <span style="color:#666">vs</span> <span style="color:#fff">{home_code} {home_dvoa:+.1f}%</span></span></div><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:#888">Defense:</span><span><span style="color:#fff">{away_code} #{away_def}</span> <span style="color:#666">vs</span> <span style="color:#fff">{home_code} #{home_def}</span></span></div><div style="display:flex;justify-content:space-between"><span style="color:#888">Edge:</span><span style="color:{edge_color};font-weight:bold">{edge_label}</span></div></div><div style="margin-top:12px;padding-top:12px;border-top:1px solid #333"><div style="color:#88aaff;font-size:0.85em;margin-bottom:4px">✈️ {away_code}: {game['away_note']}</div><div style="color:#88aaff;font-size:0.85em">🏠 {home_code}: {game['home_note']}</div></div></div>""", unsafe_allow_html=True)
         col1, col2 = st.columns(2)
-        col1.link_button(f"🎯 BUY {away_code}", kalshi_url, use_container_width=True)
-        col2.link_button(f"🎯 BUY {home_code}", kalshi_url, use_container_width=True)
+        st.markdown(f"""
+        <div style="display:flex;gap:10px;margin-bottom:15px">
+        <a href="{kalshi_url}" target="_blank" style="flex:1;background:#16a34a;color:#fff;padding:12px;border-radius:8px;text-align:center;text-decoration:none;font-weight:bold">🎯 BUY {away_code}</a>
+        <a href="{kalshi_url}" target="_blank" style="flex:1;background:#16a34a;color:#fff;padding:12px;border-radius:8px;text-align:center;text-decoration:none;font-weight:bold">🎯 BUY {home_code}</a>
+        </div>
+        """, unsafe_allow_html=True)
     st.markdown("""<div style="background:#1a2a1a;padding:12px;border-radius:8px;margin-top:10px"><span style="color:#88ff88">🏆 Super Bowl LX:</span> <span style="color:#fff">February 8, 2026 @ Levi's Stadium (Santa Clara, CA) on NBC</span></div>""", unsafe_allow_html=True)
     st.info("💡 Full 10-factor ML picks appear once ESPN lists these games (usually 2-3 days before kickoff)")
     st.divider()
