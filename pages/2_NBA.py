@@ -59,6 +59,8 @@ with st.sidebar:
     🔵 **BUY** → 6.5-7.9
     
     🟡 **LEAN** → 5.5-6.4
+    
+    ⚪ **WEAK / NO EDGE** → Below 5.5
     """)
     
     st.divider()
@@ -88,7 +90,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v15.53 | 8-Factor ML")
+    st.caption("v15.54 | 8-Factor ML")
 
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
@@ -449,7 +451,7 @@ def get_signal_tier(score):
     elif score >= 5.5:
         return "🟡 LEAN", "#ffff00"
     else:
-        return "⚪ HIDDEN", "#888888"
+        return "⚪ WEAK / NO EDGE", "#888888"
 
 # ========== FETCH DATA ==========
 games = fetch_espn_scores(date_key=today_str)
@@ -467,7 +469,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # ========== HEADER ==========
 st.title("🎯 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.53")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.54")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -477,7 +479,7 @@ if hdr3.button("🔄 Refresh", use_container_width=True):
 
 st.divider()
 
-# ========== ML PICKS (SHOWS FOR SCHEDULED GAMES) ==========
+# ========== ML PICKS (SHOWS ALL GAMES) ==========
 st.subheader("🎯 ML PICKS")
 
 ml_results = []
@@ -486,8 +488,8 @@ for gk in game_list:
     away, home = g['away_team'], g['home_team']
     pick, score, reasons = calc_ml_score(away, home, injuries, yesterday_teams)
     
-    # Show picks with score >= 5.5
-    if pick and score >= 5.5:
+    # Show ALL picks (no score filter)
+    if pick:
         ml_results.append({
             "game": gk, "pick": pick, "score": score, "reasons": reasons,
             "away": away, "home": home, "status": g['status_type']
@@ -523,10 +525,7 @@ if ml_results:
                     st.warning(f"⏳ {pick_code} — Not live yet")
                     st.caption(ticker)
 else:
-    if game_list:
-        st.info("No games with score ≥ 5.5 — all matchups are toss-ups today")
-    else:
-        st.info("No games scheduled for today")
+    st.info("No games scheduled for today")
 
 st.divider()
 
@@ -707,4 +706,4 @@ st.markdown("""
 📧 Feedback: **aipublishingpro@gmail.com**
 """)
 
-st.caption("⚠️ For entertainment only. Not financial advice. v15.53")
+st.caption("⚠️ For entertainment only. Not financial advice. v15.54")
