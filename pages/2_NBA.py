@@ -90,7 +90,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v15.56 | 8-Factor ML")
+    st.caption("v15.55 | 8-Factor ML")
 
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
@@ -683,83 +683,20 @@ st.divider()
 # ========== INJURY REPORT ==========
 st.subheader("🏥 INJURY REPORT")
 
-# Collect all injuries for today's teams
-injury_cards = []
+injury_count = 0
 for team in sorted(today_teams):
     team_inj = injuries.get(team, [])
     stars = STAR_PLAYERS.get(team, [])
     for inj in team_inj:
         name = inj.get("name", "")
-        status = inj.get("status", "").upper()
+        status = inj.get("status", "")
         is_star = any(s.lower() in name.lower() for s in stars)
-        
-        # Determine star rating (3 for primary star, 2 for secondary)
-        star_rating = 0
         if is_star:
-            if stars and name.lower() in stars[0].lower():
-                star_rating = 3
-            else:
-                star_rating = 2
-        
-        # Only show players with injuries (OUT, DTD, GTD, Questionable, Doubtful)
-        if any(s in status for s in ["OUT", "DTD", "DAY-TO-DAY", "GTD", "QUESTIONABLE", "DOUBTFUL"]):
-            # Determine status label and color
-            if "OUT" in status:
-                status_label = "OUT"
-                status_color = "#ff4444"
-            elif "DTD" in status or "DAY-TO-DAY" in status:
-                status_label = "DTD"
-                status_color = "#ff8800"
-            elif "GTD" in status or "QUESTIONABLE" in status:
-                status_label = "GTD"
-                status_color = "#ffaa00"
-            elif "DOUBTFUL" in status:
-                status_label = "DTD"
-                status_color = "#ff6600"
-            else:
-                status_label = status[:3]
-                status_color = "#ff8800"
-            
-            # Injury type icon
-            if any(x in status for x in ["ANKLE", "KNEE", "LEG", "FOOT", "HAMSTRING", "CALF", "ACHILLES"]):
-                inj_icon = "🦴"
-            elif any(x in status for x in ["SHOULDER", "ARM", "WRIST", "HAND", "FINGER"]):
-                inj_icon = "🦴"
-            elif any(x in status for x in ["BACK", "HIP", "CORE"]):
-                inj_icon = "🔥"
-            elif any(x in status for x in ["ILLNESS", "SICK", "FLU"]):
-                inj_icon = "🤒"
-            elif any(x in status for x in ["REST", "MANAGEMENT"]):
-                inj_icon = "🛡️"
-            else:
-                inj_icon = "🔥"
-            
-            injury_cards.append({
-                "name": name,
-                "team": team,
-                "status_label": status_label,
-                "status_color": status_color,
-                "star_rating": star_rating,
-                "icon": inj_icon
-            })
+            st.markdown(f"**⭐ {team}**: {name} — {status}")
+            injury_count += 1
 
-# Sort by star rating (highest first), then by team
-injury_cards.sort(key=lambda x: (-x['star_rating'], x['team']))
-
-if injury_cards:
-    # Display in 3-column grid
-    cols = st.columns(3)
-    for i, card in enumerate(injury_cards):
-        with cols[i % 3]:
-            stars_display = "⭐ " * card['star_rating'] if card['star_rating'] > 0 else ""
-            st.markdown(f"""
-            <div style="background: #1a1a2e; border-left: 4px solid {card['status_color']}; padding: 10px 14px; margin-bottom: 8px; border-radius: 4px;">
-                <div style="color: white; font-weight: bold;">{stars_display}{card['name']} {card['icon']}</div>
-                <div><span style="color: {card['status_color']}; font-weight: bold;">{card['status_label']}</span><span style="color: #888;"> • {card['team']}</span></div>
-            </div>
-            """, unsafe_allow_html=True)
-else:
-    st.info("No injuries reported for today's teams")
+if injury_count == 0:
+    st.info("No star injuries for today's teams")
 
 st.divider()
 
@@ -807,7 +744,7 @@ if games:
     for i, (k, g) in enumerate(games.items()):
         with cols[i % 4]:
             st.write(f"**{g['away_team']}** {g['away_score']}")
-            st.write(f"🏠 **{g['home_team']}** {g['home_score']}")
+            st.write(f"**{g['home_team']}** {g['home_score']}")
             status = "FINAL" if g['status_type'] == "STATUS_FINAL" else f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "SCHEDULED"
             st.caption(f"{status} | {g['total']} pts")
 else:
