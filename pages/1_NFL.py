@@ -870,4 +870,39 @@ else:
     st.info("No games from ESPN API this week")
 
 st.divider()
-st.caption("⚠️ Educational analysis only. Not financial advice. v2.1.3")
+
+# ========== HOW TO USE THIS APP ==========
+st.subheader("📖 How to Use This App")
+
+st.markdown("""
+**NFL Edge Finder** analyzes NFL games using a 10-factor model to identify potential edges in Kalshi prediction markets.
+
+**Getting Started:**
+1. Check **Upcoming Playoff Games** for scheduled matchups with DVOA comparisons and weather data
+2. During live games, **LiveState Tracker** shows real-time scores, field position, and game uncertainty levels
+3. Use **Add Position** to track your trades and monitor P&L in real-time
+
+**Understanding the Signals:**
+- 🟢 **STRONG BUY** — Score 8.0+ (High confidence edge)
+- 🔵 **BUY** — Score 6.5-7.9 (Good edge detected)
+- 🟡 **LEAN** — Score 5.5-6.4 (Slight edge)
+- ⚪ **TOSS-UP** — Score below 5.5 (No clear edge)
+
+**10-Factor Model Includes:**
+DVOA Rating, Defense Rank, Home Field Advantage, Key Injuries, Home Win %, Away Win %, Weather Gate, Rest Days, Recent Form (Last 5), and Short Week Detection.
+
+**LiveState Uncertainty Levels:**
+- 🟢 **NORMAL** — Standard game flow, minimal price movement expected
+- 🟠 **ELEVATED** — Q4 close game, expect 1-4¢ price swings
+- 🔴 **MAX** — Overtime or critical moment, expect 3-7¢ price swings
+
+**Tips for Best Results:**
+- Higher scores indicate stronger edges — prioritize 7.0+ picks
+- Weather Gate matters most for pass-heavy teams in outdoor stadiums
+- Check Injury Report for QB status — this has the biggest impact on picks
+- Use the Kalshi links to execute trades directly on the platform
+""")
+
+st.divider()
+st.markdown("**📧 Questions or Feedback?** Contact us at **aipublishingpro@gmail.com**")
+st.caption("⚠️ Entertainment only. Not financial advice. v2.1.3")
