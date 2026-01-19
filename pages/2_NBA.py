@@ -544,13 +544,16 @@ st.subheader("🎯 CUSHION SCANNER")
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5, 250.5, 255.5]
 
 cush_col1, cush_col2 = st.columns(2)
-cush_min = cush_col1.selectbox("Min Minutes", [6, 9, 12, 15, 18], index=0, key="cush_min")
-cush_side = cush_col2.selectbox("Side", ["NO (Under)", "YES (Over)"], key="cush_side")
-is_no = "NO" in cush_side
+cush_min = cush_col1.selectbox("Min minutes", [6, 9, 12, 15, 18], index=0, key="cush_min")
+cush_side = cush_col2.selectbox("Side", ["NO", "YES"], key="cush_side")
+is_no = cush_side == "NO"
 
 cushion_data = []
+live_count = 0
 for gk, g in games.items():
     mins = get_minutes_played(g['period'], g['clock'], g['status_type'])
+    if g['status_type'] != "STATUS_FINAL" and g['period'] > 0:
+        live_count += 1
     if mins < cush_min or g['status_type'] == "STATUS_FINAL":
         continue
     
@@ -586,13 +589,52 @@ for gk, g in games.items():
 
 cushion_data.sort(key=lambda x: x['cushion'], reverse=True)
 
+st.caption(f"🏀 {len(games)} games | {live_count} live")
+
 if cushion_data:
-    st.markdown("| Game | Status | Total | Proj | 🎯 Bet Line | Cushion | Pace |")
-    st.markdown("|------|--------|-------|------|-------------|---------|------|")
     for cd in cushion_data:
-        pace_lbl = "🟢" if cd['pace'] < 4.5 else "🟡" if cd['pace'] < 4.8 else "🟠" if cd['pace'] < 5.2 else "🔴"
+        # Pace label and color
+        if cd['pace'] < 4.5:
+            pace_label, pace_color = "SLOW", "#00ff00"
+            pace_icon = "✅"
+        elif cd['pace'] < 4.8:
+            pace_label, pace_color = "AVG", "#ffaa00"
+            pace_icon = "⚠️"
+        elif cd['pace'] < 5.2:
+            pace_label, pace_color = "FAST", "#ff8800"
+            pace_icon = "⚠️"
+        else:
+            pace_label, pace_color = "SHOOTOUT", "#ff4444"
+            pace_icon = "🔴"
+        
+        # Cushion color
+        if cd['cushion'] >= 15:
+            cush_color = "#00ff00"
+        elif cd['cushion'] >= 10:
+            cush_color = "#00aaff"
+        elif cd['cushion'] >= 6:
+            cush_color = "#ffaa00"
+        else:
+            cush_color = "#888888"
+        
         status = f"Q{cd['period']} {cd['clock']}"
-        st.markdown(f"| {cd['game'].replace('@', ' @ ')} | {status} | {cd['total']} | {cd['proj']} | **{cd['bet_line']}** | +{cd['cushion']:.0f} | {pace_lbl} {cd['pace']:.2f} |")
+        side_label = "NO" if is_no else "YES"
+        
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; background: #1a1a2e; border-left: 4px solid {cush_color}; padding: 12px 16px; margin-bottom: 8px; border-radius: 4px;">
+            <div style="flex: 1;">
+                <span style="font-weight: bold; color: white;">{cd['game'].replace('@', ' @ ')}</span>
+                <span style="color: #888; margin-left: 8px;">{status}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <span style="color: #888;">Total: <b style="color: white;">{cd['total']}</b></span>
+                <span style="color: #888;">Proj: <b style="color: white;">{cd['proj']}</b></span>
+                <span style="background: #ff6600; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;">🎯 {side_label} {cd['bet_line']}</span>
+                <span style="color: {cush_color}; font-weight: bold;">+{cd['cushion']:.1f}</span>
+                <span style="color: {pace_color};">{pace_icon} {pace_label} {cd['pace']:.2f}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 else:
     st.info(f"No games with {cush_min}+ min and 6+ cushion")
 
@@ -617,15 +659,15 @@ pace_data.sort(key=lambda x: x['pace'])
 if pace_data:
     for p in pace_data:
         if p['pace'] < 4.5:
-            lbl, clr = "🟢 SLOW", "#00ff00"
+            lbl, icon = "SLOW", "🟢"
         elif p['pace'] < 4.8:
-            lbl, clr = "🟡 AVG", "#ffff00"
+            lbl, icon = "AVG", "🟡"
         elif p['pace'] < 5.2:
-            lbl, clr = "🟠 FAST", "#ff8800"
+            lbl, icon = "FAST", "🟠"
         else:
-            lbl, clr = "🔴 SHOOTOUT", "#ff0000"
+            lbl, icon = "SHOOTOUT", "🔴"
         status = "FINAL" if p['final'] else f"Q{p['period']} {p['clock']}"
-        st.markdown(f"**{p['game'].replace('@', ' @ ')}** — {p['total']} pts in {p['mins']:.0f} min — **{p['pace']}/min** <span style='color:{clr}'>**{lbl}**</span> — Proj: **{p['proj']}** — {status}", unsafe_allow_html=True)
+        st.markdown(f"**{p['game'].replace('@', ' @ ')}** — {p['total']}pts/{p['mins']:.0f}min — **{p['pace']}/min** {icon} **{lbl}** — Proj: {p['proj']} — {status}")
 else:
     st.info("No games with 6+ minutes played yet")
 
