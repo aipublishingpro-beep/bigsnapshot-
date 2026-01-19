@@ -4,7 +4,7 @@ from datetime import datetime
 import pytz
 
 # ============================================
-# TEMPERATURE EDGE FINDER v1.0.0
+# TEMPERATURE EDGE FINDER v1.0.1
 # ============================================
 
 st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
@@ -94,7 +94,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v1.0.0 | High + Low Temps")
+    st.caption("v1.0.1 | High + Low Temps")
 
 # ============================================
 # CITY CONFIGS
@@ -343,8 +343,11 @@ def display_edge(nws_temp, market_temp):
 now = datetime.now(pytz.timezone('US/Eastern'))
 hour = now.hour
 
+# Determine if post-noon (action lock)
+is_post_noon = hour >= 12
+
 st.title("🌡️ TEMP EDGE FINDER")
-st.caption(f"Updated: {now.strftime('%I:%M %p ET')} | v1.0.0")
+st.caption(f"Updated: {now.strftime('%I:%M %p ET')} | v1.0.1")
 
 # Trading window indicator
 if hour < 8:
@@ -355,6 +358,8 @@ elif 10 <= hour < 12:
     st.info("📈 **10 AM-12 PM** — Good entry. Forecast locked, prices rising.")
 else:
     st.error("⚠️ **After 12 PM** — Late entry. Prices already reflect outcome.")
+    st.markdown("*Late entries historically underperform due to price convergence.*")
+    st.markdown("🔒 **Remaining edge today: LOW / NONE** — Session is read-only.")
 
 st.divider()
 
@@ -420,15 +425,26 @@ with col_high:
                     spread_color = "#32CD32"
                     spread_warn = f"✅ Tight spread: {spread}¢"
                 
-                st.markdown(
-                    f'<div style="background-color: #FF8C00; padding: 12px; border-radius: 8px; margin: 10px 0;">'
-                    f'<span style="color: white; font-size: 18px; font-weight: bold;">🎯 BUY YES: {high_buy["range"]}</span><br>'
-                    f'<span style="color: white;">YES @ {high_buy["yes"]:.0f}¢ (bid: {high_buy.get("yes_bid", 0):.0f}¢)</span><br>'
-                    f'<span style="color: {spread_color}; font-size: 12px;">{spread_warn}</span><br>'
-                    f'<a href="{high_buy["url"]}" target="_blank" style="color: #90EE90; font-weight: bold;">→ BUY ON KALSHI</a>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
+                # Post-noon: grayed out with lock indicator
+                if is_post_noon:
+                    st.markdown(
+                        f'<div style="background-color: #555555; padding: 12px; border-radius: 8px; margin: 10px 0; opacity: 0.6;">'
+                        f'<span style="color: #AAAAAA; font-size: 18px; font-weight: bold;">🔒 {high_buy["range"]}</span><br>'
+                        f'<span style="color: #AAAAAA;">YES @ {high_buy["yes"]:.0f}¢ (bid: {high_buy.get("yes_bid", 0):.0f}¢)</span><br>'
+                        f'<span style="color: #888888; font-size: 12px;">Session locked — view only</span>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.markdown(
+                        f'<div style="background-color: #FF8C00; padding: 12px; border-radius: 8px; margin: 10px 0;">'
+                        f'<span style="color: white; font-size: 18px; font-weight: bold;">🎯 BUY YES: {high_buy["range"]}</span><br>'
+                        f'<span style="color: white;">YES @ {high_buy["yes"]:.0f}¢ (bid: {high_buy.get("yes_bid", 0):.0f}¢)</span><br>'
+                        f'<span style="color: {spread_color}; font-size: 12px;">{spread_warn}</span><br>'
+                        f'<a href="{high_buy["url"]}" target="_blank" style="color: #90EE90; font-weight: bold;">→ BUY ON KALSHI</a>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
             else:
                 st.warning(f"⚠️ No edge — {high_buy['range']} @ {high_buy['yes']:.0f}¢ (too expensive)")
         
@@ -475,15 +491,26 @@ with col_low:
                     spread_color = "#32CD32"
                     spread_warn = f"✅ Tight spread: {spread}¢"
                 
-                st.markdown(
-                    f'<div style="background-color: #1E90FF; padding: 12px; border-radius: 8px; margin: 10px 0;">'
-                    f'<span style="color: white; font-size: 18px; font-weight: bold;">🎯 BUY YES: {low_buy["range"]}</span><br>'
-                    f'<span style="color: white;">YES @ {low_buy["yes"]:.0f}¢ (bid: {low_buy.get("yes_bid", 0):.0f}¢)</span><br>'
-                    f'<span style="color: {spread_color}; font-size: 12px;">{spread_warn}</span><br>'
-                    f'<a href="{low_buy["url"]}" target="_blank" style="color: #90EE90; font-weight: bold;">→ BUY ON KALSHI</a>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
+                # Post-noon: grayed out with lock indicator
+                if is_post_noon:
+                    st.markdown(
+                        f'<div style="background-color: #555555; padding: 12px; border-radius: 8px; margin: 10px 0; opacity: 0.6;">'
+                        f'<span style="color: #AAAAAA; font-size: 18px; font-weight: bold;">🔒 {low_buy["range"]}</span><br>'
+                        f'<span style="color: #AAAAAA;">YES @ {low_buy["yes"]:.0f}¢ (bid: {low_buy.get("yes_bid", 0):.0f}¢)</span><br>'
+                        f'<span style="color: #888888; font-size: 12px;">Session locked — view only</span>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.markdown(
+                        f'<div style="background-color: #1E90FF; padding: 12px; border-radius: 8px; margin: 10px 0;">'
+                        f'<span style="color: white; font-size: 18px; font-weight: bold;">🎯 BUY YES: {low_buy["range"]}</span><br>'
+                        f'<span style="color: white;">YES @ {low_buy["yes"]:.0f}¢ (bid: {low_buy.get("yes_bid", 0):.0f}¢)</span><br>'
+                        f'<span style="color: {spread_color}; font-size: 12px;">{spread_warn}</span><br>'
+                        f'<a href="{low_buy["url"]}" target="_blank" style="color: #90EE90; font-weight: bold;">→ BUY ON KALSHI</a>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
             else:
                 st.warning(f"⚠️ No edge — {low_buy['range']} @ {low_buy['yes']:.0f}¢ (too expensive)")
         
@@ -532,6 +559,11 @@ with st.expander("📖 How to Use This Tool"):
     - 🟢 < 10¢ spread: Easy to exit anytime
     - 🟡 10-20¢ spread: Harder to exit, consider holding
     - 🔴 > 20¢ spread: Hold to settlement recommended
+    
+    **Post-Noon Lock**
+    - After 12 PM ET, action buttons are disabled
+    - Data remains visible for transparency
+    - Late entries typically have minimal edge
     """)
 
 # ============================================
@@ -540,4 +572,4 @@ with st.expander("📖 How to Use This Tool"):
 st.divider()
 st.caption("⚠️ For educational purposes only. Not financial advice. Settlement based on NWS Daily Climate Report.")
 st.caption("📧 Contact: aipublishingpro@gmail.com")
-st.caption("v1.0.0 | Temperature Edge Finder")
+st.caption("v1.0.1 | Temperature Edge Finder")
