@@ -78,7 +78,8 @@ with col1:
         <p style="color: #00ff00;">✅ LIVE</p>
     </div>
     """, unsafe_allow_html=True)
-    st.page_link("pages/2_🏀_NBA_Edge.py", label="Open NBA", use_container_width=True)
+    if st.button("Open NBA", use_container_width=True, key="nba_btn"):
+        st.switch_page("pages/2_NBA.py")
 
 with col2:
     st.markdown("""
@@ -89,7 +90,8 @@ with col2:
         <p style="color: #00aaff;">✅ LIVE</p>
     </div>
     """, unsafe_allow_html=True)
-    st.page_link("pages/1_🏈_NFL_Edge.py", label="Open NFL", use_container_width=True)
+    if st.button("Open NFL", use_container_width=True, key="nfl_btn"):
+        st.switch_page("pages/1_NFL.py")
 
 with col3:
     st.markdown("""
@@ -100,7 +102,7 @@ with col3:
         <p style="color: #ffaa00;">🔧 COMING SOON</p>
     </div>
     """, unsafe_allow_html=True)
-    st.button("Coming Soon", disabled=True, use_container_width=True)
+    st.button("Coming Soon", disabled=True, use_container_width=True, key="temp_btn")
 
 st.divider()
 
