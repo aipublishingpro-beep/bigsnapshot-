@@ -1,4 +1,14 @@
 import streamlit as st
+
+# ========== GATE CHECK - MUST BE FIRST ==========
+if "gate_passed" not in st.session_state or not st.session_state.gate_passed:
+    st.set_page_config(page_title="Access Denied", page_icon="⛔")
+    st.markdown("""<style>[data-testid="stSidebarNav"] {display: none;}</style>""", unsafe_allow_html=True)
+    st.error("⛔ Access Denied")
+    st.warning("You must accept the terms on the Home page first.")
+    st.page_link("Home.py", label="👉 Go to Home Page", use_container_width=True)
+    st.stop()
+
 import requests
 from datetime import datetime, timedelta
 import pytz
@@ -117,9 +127,9 @@ if "editing_position" not in st.session_state:
 
 # ========== LIVE SIGNAL FEED SESSION STATE ==========
 if "drought_tracker" not in st.session_state:
-    st.session_state.drought_tracker = {}  # {game_key: {"last_total": int, "last_change_time": datetime}}
+    st.session_state.drought_tracker = {}
 if "pace_history" not in st.session_state:
-    st.session_state.pace_history = {}  # {game_key: [{"time": datetime, "total": int, "mins": float}]}
+    st.session_state.pace_history = {}
 
 # ========== DATE INVALIDATION ==========
 if "snapshot_date" not in st.session_state or st.session_state["snapshot_date"] != today_str:
@@ -432,7 +442,6 @@ def fetch_espn_injuries():
     return injuries
 
 def fetch_team_record(team_name):
-    """Fetch team's last 5 games record from ESPN"""
     try:
         team_ids = {
             "Atlanta": "1", "Boston": "2", "Brooklyn": "17", "Charlotte": "30",
@@ -662,7 +671,6 @@ def get_signal_tier(score):
 
 # ========== LIVE SIGNAL FEED FUNCTIONS ==========
 def update_drought_tracker(game_key, current_total):
-    """Track scoring droughts per game"""
     now = datetime.now(pytz.timezone('US/Eastern'))
     
     if game_key not in st.session_state.drought_tracker:
@@ -689,7 +697,6 @@ def update_drought_tracker(game_key, current_total):
         return seconds_since, "HIGH"
 
 def update_pace_history(game_key, current_total, current_mins):
-    """Track pace history for momentum detection"""
     now = datetime.now(pytz.timezone('US/Eastern'))
     
     if game_key not in st.session_state.pace_history:
@@ -697,32 +704,27 @@ def update_pace_history(game_key, current_total, current_mins):
     
     history = st.session_state.pace_history[game_key]
     
-    # Add current data point
     history.append({
         "time": now,
         "total": current_total,
         "mins": current_mins
     })
     
-    # Keep only last 10 data points (roughly 5 min at 30s refresh)
     if len(history) > 10:
         st.session_state.pace_history[game_key] = history[-10:]
 
 def get_momentum_signal(game_key, current_pace):
-    """Calculate momentum direction based on pace history"""
     history = st.session_state.pace_history.get(game_key, [])
     
     if len(history) < 3:
         return "NEUTRAL", "#888888"
     
-    # Get recent pace (last 3 samples) vs earlier pace
     recent_entries = history[-3:]
     earlier_entries = history[:-3] if len(history) > 3 else []
     
     if not earlier_entries:
         return "NEUTRAL", "#888888"
     
-    # Calculate average pace for each window
     def calc_window_pace(entries):
         if len(entries) < 2:
             return None
@@ -741,7 +743,6 @@ def get_momentum_signal(game_key, current_pace):
     
     pace_delta = recent_pace - earlier_pace
     
-    # Thresholds for meaningful change
     if pace_delta < -0.3:
         return "COOLING", "#00aaff"
     elif pace_delta > 0.3:
@@ -750,28 +751,23 @@ def get_momentum_signal(game_key, current_pace):
         return "NEUTRAL", "#888888"
 
 def calc_required_pace(current_total, threshold, mins_played, side):
-    """Calculate required pace to break the line"""
     remaining_mins = max(48 - mins_played, 0.1)
     
     if side == "NO":
-        # For NO bet: required pace for total to go OVER (bad for us)
-        points_needed = threshold - current_total + 0.5  # Need to exceed threshold
+        points_needed = threshold - current_total + 0.5
         required = points_needed / remaining_mins
         return max(required, 0), "OVER"
     else:
-        # For YES bet: required pace for total to stay OVER (good for us)
         points_needed = threshold - current_total + 0.5
         required = points_needed / remaining_mins
         return max(required, 0), "OVER"
 
 def format_drought_time(seconds):
-    """Format seconds into M:SS display"""
     mins = int(seconds // 60)
     secs = int(seconds % 60)
     return f"{mins}:{secs:02d}"
 
 def get_cushion_status(cushion, side):
-    """Get cushion status label and color"""
     if cushion >= 15:
         return "VERY SAFE", "#00ff00"
     elif cushion >= 8:
@@ -784,38 +780,31 @@ def get_cushion_status(cushion, side):
         return "AT RISK", "#ff0000"
 
 def get_signal_recommendation(current_pace, projected, momentum, drought_level):
-    """Generate actionable recommendation based on all signals"""
     THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5, 250.5, 255.5, 260.5, 265.5, 270.5]
     
-    # Score the signals for NO vs YES
     no_score = 0
     yes_score = 0
     
-    # Pace scoring
     if current_pace < 4.5:
-        no_score += 2   # Very slow = NO (under) - low scoring game
+        no_score += 2
     elif current_pace < 4.8:
-        no_score += 1   # Slow-ish = lean NO
+        no_score += 1
     elif current_pace > 5.2:
-        yes_score += 2  # Very fast = YES (over) - high scoring game
+        yes_score += 2
     elif current_pace > 4.9:
-        yes_score += 1  # Fast-ish = lean YES
+        yes_score += 1
     
-    # Momentum scoring
     if momentum == "COOLING":
-        no_score += 2   # Offense slowing = NO (under)
+        no_score += 2
     elif momentum == "HEATING":
-        yes_score += 2  # Offense heating = YES (over)
+        yes_score += 2
     
-    # Drought scoring
     if drought_level == "HIGH":
-        no_score += 1   # Long drought = NO (scoring stopped)
+        no_score += 1
     elif drought_level == "MODERATE":
         no_score += 0.5
     
-    # Determine recommendation
     if no_score >= 3 and no_score > yes_score + 1:
-        # Strong NO signal - find threshold above projected
         for t in THRESHOLDS:
             if t > projected + 5:
                 cushion = t - projected
@@ -823,7 +812,6 @@ def get_signal_recommendation(current_pace, projected, momentum, drought_level):
         return "NO", THRESHOLDS[-1], THRESHOLDS[-1] - projected, "#00ff00"
     
     elif yes_score >= 3 and yes_score > no_score + 1:
-        # Strong YES signal - find threshold below projected
         for t in reversed(THRESHOLDS):
             if t < projected - 5:
                 cushion = projected - t
@@ -831,7 +819,6 @@ def get_signal_recommendation(current_pace, projected, momentum, drought_level):
         return "YES", THRESHOLDS[0], projected - THRESHOLDS[0], "#00aaff"
     
     else:
-        # Mixed signals - no clear edge
         return "WAIT", None, 0, "#888888"
 
 # ========== FETCH DATA ==========
@@ -1036,11 +1023,9 @@ if live_games:
         current_pace = round(total / mins, 2) if mins > 0 else 0
         projected = round(current_pace * 48) if mins > 0 else 0
         
-        # Get signals
         drought_secs, drought_level = update_drought_tracker(game_key, total)
         momentum, momentum_color = get_momentum_signal(game_key, current_pace)
         
-        # Drought color
         if drought_level == "HIGH":
             drought_color = "#ff0000"
         elif drought_level == "MODERATE":
@@ -1048,21 +1033,17 @@ if live_games:
         else:
             drought_color = "#00ff00"
         
-        # Find if user has position on this game
         user_position = None
         for pos in st.session_state.positions:
             if pos.get('game') == game_key and pos.get('type') == 'totals':
                 user_position = pos
                 break
         
-        # Build signal card
         game_status = f"Q{g['period']} {g['clock']}"
         
-        # Get recommendation
         rec_side, rec_threshold, rec_cushion, rec_color = get_signal_recommendation(current_pace, projected, momentum, drought_level)
         
         with st.expander(f"📡 {game_key.replace('@', ' @ ')} — {game_status}", expanded=False):
-            # RECOMMENDATION BOX - TOP AND CENTER
             if rec_side != "WAIT":
                 st.markdown(f"""
                 <div style='background:linear-gradient(135deg,#1a3a1a,#0f2a0f);padding:15px;border-radius:10px;border:2px solid {rec_color};margin-bottom:12px;text-align:center'>
@@ -1108,13 +1089,11 @@ if live_games:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Required pace (if user has totals position)
                 if user_position:
                     threshold = user_position.get('threshold', 225.5)
                     side = user_position.get('side', 'NO')
                     required_pace, direction = calc_required_pace(total, threshold, mins, side)
                     
-                    # Color based on comparison to current pace
                     if side == "NO":
                         if required_pace > current_pace + 0.5:
                             req_color = "#00ff00"
