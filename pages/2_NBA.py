@@ -939,8 +939,17 @@ if st.session_state.positions:
             
             btn1, btn2, btn3 = st.columns([3, 1, 1])
             parts = game_key.split("@")
-            kalshi_url = build_kalshi_ml_url(parts[0], parts[1]) if pos_type == 'ml' else build_kalshi_totals_url(parts[0], parts[1])
-            btn1.link_button("🔗 Trade on Kalshi", kalshi_url, use_container_width=True)
+            away_code = KALSHI_CODES.get(parts[0], "xxx").lower()
+            home_code = KALSHI_CODES.get(parts[1], "xxx").lower()
+            today = datetime.now(pytz.timezone('US/Eastern'))
+            date_str = today.strftime("%y%b%d").lower()
+            if pos_type == 'ml':
+                ticker = f"kxnbagame-{date_str}{away_code}{home_code}"
+                kalshi_url = f"https://kalshi.com/markets/kxnbagame/{ticker}"
+            else:
+                ticker = f"kxnbatotal-{date_str}{away_code}{home_code}"
+                kalshi_url = f"https://kalshi.com/markets/kxnbatotal/{ticker}"
+            btn1.markdown(f'<a href="{kalshi_url}" target="_blank" style="display:block;background:#16a34a;color:#fff;padding:8px 16px;border-radius:5px;text-align:center;text-decoration:none;font-weight:600">🔗 Trade on Kalshi</a>', unsafe_allow_html=True)
             if btn2.button("✏️", key=f"edit_{idx}"):
                 st.session_state.editing_position = idx if st.session_state.editing_position != idx else None
                 st.rerun()
@@ -1184,9 +1193,19 @@ ml_results.sort(key=lambda x: x["score"], reverse=True)
 
 for r in ml_results:
     if r["score"] < 5.5: continue
-    kalshi_url = build_kalshi_ml_url(r["away"], r["home"])
+    game_away = r["away"]
+    game_home = r["home"]
+    pick_team = r["pick"]
+    opponent = game_away if pick_team == game_home else game_home
+    pick_code = KALSHI_CODES.get(pick_team, "xxx").upper()
+    away_code = KALSHI_CODES.get(game_away, "xxx").lower()
+    home_code = KALSHI_CODES.get(game_home, "xxx").lower()
+    today = datetime.now(pytz.timezone('US/Eastern'))
+    date_str = today.strftime("%y%b%d").lower()
+    ticker = f"kxnbagame-{date_str}{away_code}{home_code}"
+    this_url = f"https://kalshi.com/markets/kxnbagame/{ticker}"
     reasons = " • ".join(r["reasons"])
-    st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:6px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {r['color']}"><div><b style="color:#fff">{r['pick']}</b> <span style="color:#666">vs {r['away'] if r['pick']==r['home'] else r['home']}</span> <span style="color:#38bdf8">{r['score']}/10</span> <span style="color:#777;font-size:0.8em">{reasons}</span></div><a href="{kalshi_url}" target="_blank" style="background:#16a34a;color:#fff;padding:4px 10px;border-radius:5px;font-size:0.8em;text-decoration:none;font-weight:600">BUY {r['pick']}</a></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:6px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {r['color']}"><div><b style="color:#fff">{r['pick']}</b> <span style="color:#666">vs {opponent}</span> <span style="color:#38bdf8">{r['score']}/10</span> <span style="color:#777;font-size:0.8em">{reasons}</span></div><a href="{this_url}" target="_blank" style="background:#16a34a;color:#fff;padding:4px 10px;border-radius:5px;font-size:0.8em;text-decoration:none;font-weight:600">BUY {pick_code}</a></div>""", unsafe_allow_html=True)
 
 strong_picks = [r for r in ml_results if r["score"] >= 6.5]
 if strong_picks:
@@ -1211,9 +1230,17 @@ selected_game = st.selectbox("Game", game_options)
 
 if selected_game != "Select...":
     parts = selected_game.replace(" @ ", "@").split("@")
+    away_code = KALSHI_CODES.get(parts[0], "xxx").lower()
+    home_code = KALSHI_CODES.get(parts[1], "xxx").lower()
+    today = datetime.now(pytz.timezone('US/Eastern'))
+    date_str = today.strftime("%y%b%d").lower()
+    ml_ticker = f"kxnbagame-{date_str}{away_code}{home_code}"
+    totals_ticker = f"kxnbatotal-{date_str}{away_code}{home_code}"
+    ml_url = f"https://kalshi.com/markets/kxnbagame/{ml_ticker}"
+    totals_url = f"https://kalshi.com/markets/kxnbatotal/{totals_ticker}"
     col1, col2 = st.columns(2)
-    col1.link_button("🔗 ML", build_kalshi_ml_url(parts[0], parts[1]), use_container_width=True)
-    col2.link_button("🔗 Totals", build_kalshi_totals_url(parts[0], parts[1]), use_container_width=True)
+    col1.markdown(f'<a href="{ml_url}" target="_blank" style="display:block;background:#16a34a;color:#fff;padding:8px;border-radius:5px;text-align:center;text-decoration:none;font-weight:600">🔗 ML</a>', unsafe_allow_html=True)
+    col2.markdown(f'<a href="{totals_url}" target="_blank" style="display:block;background:#16a34a;color:#fff;padding:8px;border-radius:5px;text-align:center;text-decoration:none;font-weight:600">🔗 Totals</a>', unsafe_allow_html=True)
 
 market_type = st.radio("Type", ["Moneyline", "Totals"], horizontal=True)
 
