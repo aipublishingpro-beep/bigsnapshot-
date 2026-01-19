@@ -119,36 +119,37 @@ DOME_STADIUMS = ["Arizona", "Atlanta", "Dallas", "Detroit", "Houston", "Indianap
 PASS_HEAVY_TEAMS = ["Buffalo", "Cincinnati", "Miami", "Tampa Bay", "LA Chargers", "Detroit", "Philadelphia"]
 RUN_HEAVY_TEAMS = ["Baltimore", "San Francisco", "Cleveland", "Tennessee", "Denver"]
 
+# Updated DVOA/stats for playoff teams (Jan 2026)
 TEAM_STATS = {
     "Arizona": {"dvoa": -12.5, "def_rank": 27, "home_win_pct": 0.42, "away_win_pct": 0.30},
     "Atlanta": {"dvoa": 2.5, "def_rank": 18, "home_win_pct": 0.55, "away_win_pct": 0.42},
     "Baltimore": {"dvoa": 15.5, "def_rank": 6, "home_win_pct": 0.72, "away_win_pct": 0.62},
     "Buffalo": {"dvoa": 18.2, "def_rank": 5, "home_win_pct": 0.78, "away_win_pct": 0.68},
     "Carolina": {"dvoa": -18.5, "def_rank": 30, "home_win_pct": 0.35, "away_win_pct": 0.22},
-    "Chicago": {"dvoa": -8.5, "def_rank": 22, "home_win_pct": 0.45, "away_win_pct": 0.35},
+    "Chicago": {"dvoa": 8.5, "def_rank": 12, "home_win_pct": 0.55, "away_win_pct": 0.45},
     "Cincinnati": {"dvoa": 5.8, "def_rank": 14, "home_win_pct": 0.58, "away_win_pct": 0.48},
     "Cleveland": {"dvoa": -25.0, "def_rank": 32, "home_win_pct": 0.38, "away_win_pct": 0.25},
     "Dallas": {"dvoa": -5.2, "def_rank": 20, "home_win_pct": 0.52, "away_win_pct": 0.38},
-    "Denver": {"dvoa": 8.5, "def_rank": 8, "home_win_pct": 0.65, "away_win_pct": 0.50},
+    "Denver": {"dvoa": 16.5, "def_rank": 3, "home_win_pct": 0.75, "away_win_pct": 0.58},
     "Detroit": {"dvoa": 22.5, "def_rank": 4, "home_win_pct": 0.78, "away_win_pct": 0.68},
     "Green Bay": {"dvoa": 12.2, "def_rank": 10, "home_win_pct": 0.70, "away_win_pct": 0.55},
-    "Houston": {"dvoa": 16.5, "def_rank": 7, "home_win_pct": 0.68, "away_win_pct": 0.58},
+    "Houston": {"dvoa": 14.5, "def_rank": 1, "home_win_pct": 0.68, "away_win_pct": 0.58},
     "Indianapolis": {"dvoa": 14.5, "def_rank": 12, "home_win_pct": 0.55, "away_win_pct": 0.48},
     "Jacksonville": {"dvoa": 10.5, "def_rank": 11, "home_win_pct": 0.55, "away_win_pct": 0.48},
-    "Kansas City": {"dvoa": 18.5, "def_rank": 9, "home_win_pct": 0.82, "away_win_pct": 0.72},
+    "Kansas City": {"dvoa": 8.5, "def_rank": 15, "home_win_pct": 0.72, "away_win_pct": 0.55},
     "Las Vegas": {"dvoa": -10.2, "def_rank": 25, "home_win_pct": 0.42, "away_win_pct": 0.28},
     "LA Chargers": {"dvoa": 11.8, "def_rank": 3, "home_win_pct": 0.62, "away_win_pct": 0.52},
-    "LA Rams": {"dvoa": 24.5, "def_rank": 5, "home_win_pct": 0.72, "away_win_pct": 0.62},
+    "LA Rams": {"dvoa": 18.5, "def_rank": 8, "home_win_pct": 0.72, "away_win_pct": 0.62},
     "Miami": {"dvoa": -2.5, "def_rank": 16, "home_win_pct": 0.55, "away_win_pct": 0.38},
     "Minnesota": {"dvoa": 8.5, "def_rank": 13, "home_win_pct": 0.68, "away_win_pct": 0.52},
-    "New England": {"dvoa": 12.5, "def_rank": 8, "home_win_pct": 0.62, "away_win_pct": 0.50},
+    "New England": {"dvoa": 15.8, "def_rank": 6, "home_win_pct": 0.68, "away_win_pct": 0.55},
     "New Orleans": {"dvoa": -8.8, "def_rank": 23, "home_win_pct": 0.48, "away_win_pct": 0.35},
     "NY Giants": {"dvoa": -15.5, "def_rank": 29, "home_win_pct": 0.35, "away_win_pct": 0.22},
     "NY Jets": {"dvoa": -12.5, "def_rank": 26, "home_win_pct": 0.42, "away_win_pct": 0.28},
     "Philadelphia": {"dvoa": 14.8, "def_rank": 6, "home_win_pct": 0.75, "away_win_pct": 0.60},
     "Pittsburgh": {"dvoa": 4.8, "def_rank": 10, "home_win_pct": 0.62, "away_win_pct": 0.45},
     "San Francisco": {"dvoa": 6.5, "def_rank": 15, "home_win_pct": 0.58, "away_win_pct": 0.48},
-    "Seattle": {"dvoa": 28.5, "def_rank": 2, "home_win_pct": 0.78, "away_win_pct": 0.68},
+    "Seattle": {"dvoa": 24.5, "def_rank": 2, "home_win_pct": 0.82, "away_win_pct": 0.68},
     "Tampa Bay": {"dvoa": -3.2, "def_rank": 19, "home_win_pct": 0.52, "away_win_pct": 0.40},
     "Tennessee": {"dvoa": -14.8, "def_rank": 28, "home_win_pct": 0.40, "away_win_pct": 0.25},
     "Washington": {"dvoa": -4.5, "def_rank": 21, "home_win_pct": 0.52, "away_win_pct": 0.42}
@@ -159,7 +160,7 @@ STAR_PLAYERS = {
     "Baltimore": ["Lamar Jackson", "Derrick Henry"], "Buffalo": ["Josh Allen", "James Cook"],
     "Carolina": ["Bryce Young"], "Chicago": ["Caleb Williams"],
     "Cincinnati": ["Joe Burrow", "Ja'Marr Chase"], "Cleveland": ["Deshaun Watson"],
-    "Dallas": ["Dak Prescott", "CeeDee Lamb"], "Denver": ["Bo Nix"],
+    "Dallas": ["Dak Prescott", "CeeDee Lamb"], "Denver": ["Jarrett Stidham"],
     "Detroit": ["Jared Goff", "Amon-Ra St. Brown"], "Green Bay": ["Jordan Love"],
     "Houston": ["C.J. Stroud", "Nico Collins"], "Indianapolis": ["Anthony Richardson"],
     "Jacksonville": ["Trevor Lawrence"], "Kansas City": ["Patrick Mahomes", "Travis Kelce"],
@@ -271,9 +272,9 @@ def fetch_last_5_records():
                 winner = c.get("winner", False)
                 if team_key in team_games:
                     team_games[team_key].append({"date": game_date, "win": winner})
-        for team, games in team_games.items():
-            games.sort(key=lambda x: x['date'], reverse=True)
-            recent = games[:5]
+        for team, games_list in team_games.items():
+            games_list.sort(key=lambda x: x['date'], reverse=True)
+            recent = games_list[:5]
             wins = sum(1 for g in recent if g['win'])
             losses = len(recent) - wins
             form = "".join(["W" if g['win'] else "L" for g in recent])
@@ -773,14 +774,13 @@ with st.sidebar:
         st.caption("✅ streamlit-autorefresh installed")
     else:
         st.caption("⚠️ Install: pip install streamlit-autorefresh")
-    st.caption("v2.1.2 NFL EDGE")
+    st.caption("v2.1.3 NFL EDGE")
 
 st.title("🏈 NFL EDGE FINDER")
-st.caption("10-Factor ML Model + LiveState Tracker | v2.1.2")
+st.caption("10-Factor ML Model + LiveState Tracker | v2.1.3")
 
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
 
-# Only show FINAL games from today or yesterday (not old history)
 today = datetime.now(eastern).date()
 yesterday = today - timedelta(days=1)
 final_games = {k: v for k, v in games.items() 
@@ -791,7 +791,7 @@ final_games = {k: v for k, v in games.items()
 if live_games or final_games:
     st.subheader("⚡ LiveState — Live Uncertainty Tracker")
     hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-    hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v2.1.2")
+    hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v2.1.3")
     if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True, key="auto_live"):
         st.session_state.auto_refresh = not st.session_state.auto_refresh
         st.rerun()
@@ -854,7 +854,7 @@ st.subheader("📈 ACTIVE POSITIONS")
 
 if not live_games and not final_games:
     hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-    hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v2.1.2")
+    hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v2.1.3")
     if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True, key="auto_pos"):
         st.session_state.auto_refresh = not st.session_state.auto_refresh
         st.rerun()
@@ -1005,6 +1005,91 @@ if last_5:
 
 st.divider()
 
+# ========== UPCOMING PLAYOFF GAMES (when no scheduled games in API) ==========
+scheduled_games = {k: v for k, v in games.items() if v['status_type'] == "STATUS_SCHEDULED"}
+
+if not scheduled_games:
+    st.subheader("📅 UPCOMING PLAYOFF GAMES")
+    st.caption("Conference Championships — Sunday, January 25, 2026")
+    
+    upcoming_playoffs = [
+        {"away": "New England", "home": "Denver", "time": "3:00 PM ET", "tv": "CBS", "round": "AFC Championship",
+         "away_note": "Drake Maye, 5 TO forced vs HOU", "home_note": "Bo Nix OUT (ankle), Stidham starts"},
+        {"away": "LA Rams", "home": "Seattle", "time": "6:30 PM ET", "tv": "FOX", "round": "NFC Championship",
+         "away_note": "Stafford 2 OT wins, playoff tested", "home_note": "#2 DEF, 82% home win, 41-6 vs SF"}
+    ]
+    
+    for game in upcoming_playoffs:
+        away, home = game["away"], game["home"]
+        away_code = KALSHI_CODES.get(away, "XXX")
+        home_code = KALSHI_CODES.get(home, "XXX")
+        
+        ticker = f"KXNFLGAME-26JAN25{away_code}{home_code}"
+        kalshi_url = f"https://kalshi.com/markets/KXNFLGAME/{ticker}"
+        
+        home_stats = TEAM_STATS.get(home, {})
+        away_stats = TEAM_STATS.get(away, {})
+        home_dvoa = home_stats.get('dvoa', 0)
+        away_dvoa = away_stats.get('dvoa', 0)
+        home_def = home_stats.get('def_rank', 16)
+        away_def = away_stats.get('def_rank', 16)
+        
+        if home_dvoa > away_dvoa + 5:
+            edge_team, edge_label, edge_color = home, f"🏠 {home_code} favored", "#00ff00"
+        elif away_dvoa > home_dvoa + 5:
+            edge_team, edge_label, edge_color = away, f"✈️ {away_code} has edge", "#ffaa00"
+        else:
+            edge_team, edge_label, edge_color = None, "⚖️ Toss-up", "#888888"
+        
+        # Get weather for home stadium
+        weather = get_weather_for_game(home)
+        if weather.get("dome"):
+            weather_str = "🏟️ Dome"
+        else:
+            weather_str = f"🌡️ {weather.get('temp', 50):.0f}°F | 💨 {weather.get('wind', 0):.0f}mph"
+        
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:18px;border-radius:12px;border:2px solid #4488ff;margin-bottom:15px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <span style="color:#4488ff;font-size:0.9em;font-weight:bold">{game['round']}</span>
+                    <div style="color:#fff;font-size:1.4em;font-weight:bold;margin-top:4px">{away} @ {home}</div>
+                </div>
+                <div style="text-align:right">
+                    <div style="color:#ffaa00;font-size:1.2em;font-weight:bold">{game['time']}</div>
+                    <div style="color:#888;font-size:0.9em">{game['tv']} | {weather_str}</div>
+                </div>
+            </div>
+            <div style="margin-top:15px;padding:12px;background:#0a0a1a;border-radius:8px">
+                <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                    <span style="color:#888">DVOA:</span>
+                    <span><span style="color:#fff">{away_code} {away_dvoa:+.1f}%</span> <span style="color:#666">vs</span> <span style="color:#fff">{home_code} {home_dvoa:+.1f}%</span></span>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                    <span style="color:#888">Defense:</span>
+                    <span><span style="color:#fff">{away_code} #{away_def}</span> <span style="color:#666">vs</span> <span style="color:#fff">{home_code} #{home_def}</span></span>
+                </div>
+                <div style="display:flex;justify-content:space-between">
+                    <span style="color:#888">Edge:</span>
+                    <span style="color:{edge_color};font-weight:bold">{edge_label}</span>
+                </div>
+            </div>
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid #333">
+                <div style="color:#88aaff;font-size:0.85em;margin-bottom:4px">✈️ {away_code}: {game['away_note']}</div>
+                <div style="color:#88aaff;font-size:0.85em">🏠 {home_code}: {game['home_note']}</div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        col1.link_button(f"🎯 BUY {away_code}", kalshi_url, use_container_width=True)
+        col2.link_button(f"🎯 BUY {home_code}", kalshi_url, use_container_width=True)
+    
+    st.markdown("""<div style="background:#1a2a1a;padding:12px;border-radius:8px;margin-top:10px">
+        <span style="color:#88ff88">🏆 Super Bowl LX:</span> <span style="color:#fff">February 8, 2026 @ Levi's Stadium (Santa Clara, CA) on NBC</span>
+    </div>""", unsafe_allow_html=True)
+    
+    st.info("💡 Full 10-factor ML picks appear once ESPN lists these games (usually 2-3 days before kickoff)")
+    st.divider()
+
 st.subheader("🎯 PRE-GAME NFL MONEYLINE PICKS")
 
 ml_results = []
@@ -1088,19 +1173,28 @@ if ml_results:
         {injury_html}</div>""", unsafe_allow_html=True)
         st.link_button(f"BUY {pick_code}", this_url, use_container_width=True)
 else:
-    st.info("No scheduled games with picks")
+    st.info("No scheduled games from ESPN — see Upcoming Playoff Games above")
 
 st.divider()
 
 st.subheader("➕ ADD POSITION")
 
-game_options = ["Select..."] + [gk.replace("@", " @ ") for gk in game_list]
+# Add upcoming playoff games to the game list if not in API
+playoff_games_manual = ["New England@Denver", "LA Rams@Seattle"]
+all_game_options = list(set(game_list + playoff_games_manual))
+all_game_options.sort()
+
+game_options = ["Select..."] + [gk.replace("@", " @ ") for gk in all_game_options]
 selected_game = st.selectbox("Game", game_options)
 
 if selected_game != "Select...":
     parts = selected_game.replace(" @ ", "@").split("@")
     g = games.get(f"{parts[0]}@{parts[1]}")
-    game_date = g.get('game_date') if g else None
+    if g:
+        game_date = g.get('game_date')
+    else:
+        # Manual date for Conference Championship
+        game_date = eastern.localize(datetime(2026, 1, 25, 15, 0))
     st.link_button("🔗 View on Kalshi", build_kalshi_ml_url(parts[0], parts[1], game_date), use_container_width=True)
 
 p1, p2, p3 = st.columns(3)
@@ -1138,7 +1232,7 @@ if games:
             status = "FINAL" if g['status_type'] == "STATUS_FINAL" else f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "SCHEDULED"
             st.caption(f"{status} | {g['total']} pts")
 else:
-    st.info("No games this week")
+    st.info("No games from ESPN API this week")
 
 st.divider()
-st.caption("⚠️ Educational analysis only. Not financial advice. v2.1.2")
+st.caption("⚠️ Educational analysis only. Not financial advice. v2.1.3")
