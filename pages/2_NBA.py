@@ -90,7 +90,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v15.54 | 8-Factor ML")
+    st.caption("v15.55 | 8-Factor ML")
 
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
@@ -469,7 +469,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # ========== HEADER ==========
 st.title("🎯 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.54")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.55")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -490,40 +490,98 @@ for gk in game_list:
     
     # Show ALL picks (no score filter)
     if pick:
+        # Build compact reason string with icons
+        reason_parts = []
+        for r in reasons:
+            if "B2B" in r:
+                reason_parts.append("🛏️ B2B")
+            elif "DEF #" in r:
+                rank = r.split("#")[1].split()[0]
+                reason_parts.append(f"🛡️ #{rank} DEF")
+            elif "Travel" in r:
+                miles = r.split()[1]
+                reason_parts.append(f"✈️ {miles}")
+            elif "Inj diff" in r:
+                # Check for star injuries
+                team_inj = injuries.get(away if pick == home else home, [])
+                stars = STAR_PLAYERS.get(away if pick == home else home, [])
+                for inj in team_inj:
+                    name = inj.get("name", "")
+                    status = inj.get("status", "").lower()
+                    is_star = any(s.lower() in name.lower() for s in stars)
+                    if is_star and "out" in status:
+                        short_name = name.split()[-1][:4] if len(name.split()) > 1 else name[:4]
+                        first_name = name.split()[0][:5] if name.split() else ""
+                        reason_parts.append(f"🏥 {first_name} {short_name} OUT")
+                        break
+            elif "Home " in r and "%" in r:
+                pct = r.split()[1]
+                reason_parts.append(f"🏠 {pct}")
+            elif "Denver Alt" in r:
+                reason_parts.append("🏔️ Denver")
+            elif "Net " in r:
+                reason_parts.append("📊 Net+")
+        
+        # Get home win pct for display
+        home_stats_display = TEAM_STATS.get(home, {})
+        home_pct = int(home_stats_display.get("home_win_pct", 0.5) * 100)
+        
         ml_results.append({
-            "game": gk, "pick": pick, "score": score, "reasons": reasons,
-            "away": away, "home": home, "status": g['status_type']
+            "game": gk, "pick": pick, "score": score, "reasons": reason_parts,
+            "away": away, "home": home, "status": g['status_type'], "home_pct": home_pct
         })
 
 ml_results.sort(key=lambda x: x['score'], reverse=True)
 
 if ml_results:
     for r in ml_results:
-        signal, color = get_signal_tier(r['score'])
-        reasons_txt = " | ".join(r['reasons'][:3]) if r['reasons'] else ""
+        # Determine border color based on score
+        if r['score'] >= 8.0:
+            border_color = "#00ff00"  # Green
+        elif r['score'] >= 6.5:
+            border_color = "#00aaff"  # Blue
+        elif r['score'] >= 5.5:
+            border_color = "#ffff00"  # Yellow
+        else:
+            border_color = "#888888"  # Gray
         
-        with st.container():
-            c1, c2, c3 = st.columns([3, 2, 2])
-            with c1:
-                st.markdown(f"**{r['away']} @ {r['home']}**")
-                st.caption(f"{signal} | Score: {r['score']}/10")
-            with c2:
-                st.caption(reasons_txt)
-            with c3:
-                pick_code = KALSHI_CODES.get(r['pick'], "XXX")
-                date_code = now.strftime("%y%b%d").upper()
-                away_code = KALSHI_CODES.get(r['away'], "XXX")
-                home_code = KALSHI_CODES.get(r['home'], "XXX")
-                ticker = f"KXNBAGAME-{date_code}{away_code}{home_code}"
-                kalshi_url = f"https://kalshi.com/markets/{ticker.lower()}"
-                
-                market_exists = check_kalshi_market_exists(ticker)
-                if market_exists:
-                    st.link_button(f"🎯 BUY {pick_code}", kalshi_url, use_container_width=True)
-                    st.caption(f"✅ {ticker}")
-                else:
-                    st.warning(f"⏳ {pick_code} — Not live yet")
-                    st.caption(ticker)
+        # Build reason string
+        reason_str = " • ".join(r['reasons'][:3]) if r['reasons'] else ""
+        if reason_str:
+            reason_str = " " + reason_str
+        
+        # Opponent team
+        opponent = r['away'] if r['pick'] == r['home'] else r['home']
+        
+        # Build Kalshi URL
+        pick_code = KALSHI_CODES.get(r['pick'], "XXX")
+        date_code = now.strftime("%y%b%d").upper()
+        away_code = KALSHI_CODES.get(r['away'], "XXX")
+        home_code = KALSHI_CODES.get(r['home'], "XXX")
+        ticker = f"KXNBAGAME-{date_code}{away_code}{home_code}"
+        kalshi_url = f"https://kalshi.com/markets/{ticker.lower()}"
+        
+        # Card with colored left border
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; background: #1a1a2e; border-left: 4px solid {border_color}; padding: 12px 16px; margin-bottom: 8px; border-radius: 4px;">
+            <div style="flex: 1;">
+                <span style="font-weight: bold; color: white;">{r['pick']}</span>
+                <span style="color: #888;"> vs {opponent}</span>
+                <span style="color: {border_color}; font-weight: bold; margin-left: 8px;">{r['score']}/10</span>
+                <span style="color: #888; font-size: 0.9em;">{reason_str} • 🏠 {r['home_pct']}%</span>
+            </div>
+            <div>
+                <a href="{kalshi_url}" target="_blank" style="background: #00aa00; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-weight: bold;">BUY {pick_code}</a>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Add picks button
+    st.markdown(f"""
+    <div style="text-align: center; margin-top: 16px;">
+        <span style="color: #888;">➕ {len(ml_results)} Picks Available</span>
+    </div>
+    """, unsafe_allow_html=True)
 else:
     st.info("No games scheduled for today")
 
