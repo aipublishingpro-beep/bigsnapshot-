@@ -158,20 +158,20 @@ KALSHI_CODES = {
 }
 
 def build_kalshi_totals_url(away_team, home_team):
-    away_code = KALSHI_CODES.get(away_team, "xxx").upper()
-    home_code = KALSHI_CODES.get(home_team, "xxx").upper()
+    away_code = KALSHI_CODES.get(away_team, "xxx").lower()
+    home_code = KALSHI_CODES.get(home_team, "xxx").lower()
     today = datetime.now(pytz.timezone('US/Eastern'))
-    date_str = today.strftime("%y%b%d").upper()
-    ticker = f"KXNBATOTAL-{date_str}{away_code}{home_code}"
-    return f"https://kalshi.com/markets/KXNBATOTAL/{ticker}"
+    date_str = today.strftime("%y%b%d").lower()
+    ticker = f"kxnbatotal-{date_str}{away_code}{home_code}"
+    return f"https://kalshi.com/markets/kxnbatotal/{ticker}"
 
 def build_kalshi_ml_url(away_team, home_team):
-    away_code = KALSHI_CODES.get(away_team, "xxx").upper()
-    home_code = KALSHI_CODES.get(home_team, "xxx").upper()
+    away_code = KALSHI_CODES.get(away_team, "xxx").lower()
+    home_code = KALSHI_CODES.get(home_team, "xxx").lower()
     today = datetime.now(pytz.timezone('US/Eastern'))
-    date_str = today.strftime("%y%b%d").upper()
-    ticker = f"KXNBAGAME-{date_str}{away_code}{home_code}"
-    return f"https://kalshi.com/markets/KXNBAGAME/{ticker}"
+    date_str = today.strftime("%y%b%d").lower()
+    ticker = f"kxnbagame-{date_str}{away_code}{home_code}"
+    return f"https://kalshi.com/markets/kxnbagame/{ticker}"
 
 # ========== STAR PLAYERS DATABASE ==========
 STAR_PLAYERS_DB = {
