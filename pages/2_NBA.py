@@ -50,6 +50,48 @@ if not st.session_state.gate_passed:
             st.rerun()
     st.stop()
 
+# ========== SIDEBAR LEGENDS ==========
+with st.sidebar:
+    st.header("🎯 ML Signal Legend")
+    st.markdown("""
+    🟢 **STRONG BUY** → 8.0+
+    
+    🔵 **BUY** → 6.5-7.9
+    
+    🟡 **LEAN** → 5.5-6.4
+    
+    ⚪ **TOSS-UP** → Below 5.5
+    """)
+    
+    st.divider()
+    
+    st.header("🔥 Pace Legend")
+    st.markdown("""
+    🟢 **SLOW** → Under 4.5 pts/min
+    
+    🟡 **AVG** → 4.5-4.8 pts/min
+    
+    🟠 **FAST** → 4.8-5.2 pts/min
+    
+    🔴 **SHOOTOUT** → Over 5.2 pts/min
+    """)
+    
+    st.divider()
+    
+    st.header("🎯 Cushion Guide")
+    st.markdown("""
+    **+15** → 🟢 Safe cushion
+    
+    **+10-14** → 🔵 Good cushion
+    
+    **+6-9** → 🟡 Thin cushion
+    
+    **<6** → 🔴 No edge
+    """)
+    
+    st.divider()
+    st.caption("v15.52")
+
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
@@ -170,6 +212,19 @@ def get_minutes_played(period, clock, status_type):
     except:
         return (period - 1) * 12 if period <= 4 else 48
 
+# ========== KALSHI MARKET CHECK ==========
+@st.cache_data(ttl=300)
+def check_kalshi_market_exists(ticker):
+    try:
+        url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker.upper()}"
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("market") is not None
+        return False
+    except:
+        return False
+
 # ========== FETCH ESPN GAMES - FIXED ==========
 @st.cache_data(ttl=60)
 def fetch_espn_scores(date_key=None):
@@ -188,7 +243,6 @@ def fetch_espn_scores(date_key=None):
                 full_name = c.get("team", {}).get("displayName", "")
                 team_name = TEAM_ABBREVS.get(full_name, full_name)
                 score = int(c.get("score", 0) or 0)
-                # FIXED: Use homeAway field to correctly identify teams
                 if c.get("homeAway") == "home":
                     home_team, home_score = team_name, score
                 else:
@@ -266,17 +320,14 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
     score = 5.0
     reasons = []
     
-    # Factor 1: Net Rating
     net_diff = home_stats.get("net_rtg", 0) - away_stats.get("net_rtg", 0)
     score += min(1.5, max(-1.5, net_diff * 0.1))
     if abs(net_diff) >= 5:
         reasons.append(f"Net Rtg: {'+' if net_diff > 0 else ''}{net_diff:.1f}")
     
-    # Factor 2: Home Court
     score += 0.8
     reasons.append("Home +0.8")
     
-    # Factor 3: B2B Fatigue
     away_b2b = away_team in yesterday_teams
     home_b2b = home_team in yesterday_teams
     if away_b2b and not home_b2b:
@@ -286,7 +337,6 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
         score -= 0.7
         reasons.append("Home B2B")
     
-    # Factor 4: Star Injuries
     away_stars = STAR_PLAYERS.get(away_team, [])
     home_stars = STAR_PLAYERS.get(home_team, [])
     away_inj = injuries.get(away_team, [])
@@ -302,7 +352,6 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
     if home_out > 0:
         reasons.append(f"Home {home_out}⭐ out")
     
-    # Factor 5: Defense Rating
     def_diff = away_stats.get("def_rtg", 110) - home_stats.get("def_rtg", 110)
     score += min(0.5, max(-0.5, def_diff * 0.05))
     
@@ -342,7 +391,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # ========== HEADER ==========
 st.title("🎯 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.51")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.52")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -387,8 +436,15 @@ if ml_results:
                 home_code = KALSHI_CODES.get(r['home'], "XXX")
                 ticker = f"KXNBAGAME-{date_code}{away_code}{home_code}"
                 kalshi_url = f"https://kalshi.com/markets/{ticker.lower()}"
-                st.link_button(f"🎯 BUY {pick_code}", kalshi_url, use_container_width=True)
-                st.caption(f"→ {ticker}")
+                
+                # Check if market exists
+                market_exists = check_kalshi_market_exists(ticker)
+                if market_exists:
+                    st.link_button(f"🎯 BUY {pick_code}", kalshi_url, use_container_width=True)
+                    st.caption(f"✅ {ticker}")
+                else:
+                    st.warning(f"⏳ {pick_code} — Not live yet")
+                    st.caption(ticker)
 else:
     st.info("No strong ML picks right now")
 
@@ -571,4 +627,4 @@ st.markdown("""
 📧 Feedback: **aipublishingpro@gmail.com**
 """)
 
-st.caption("⚠️ For entertainment only. Not financial advice. v15.51")
+st.caption("⚠️ For entertainment only. Not financial advice. v15.52")
