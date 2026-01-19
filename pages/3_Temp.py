@@ -32,27 +32,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================
-# GATE CHECK
+# GATE CHECK - Uses shared gate from Home.py
 # ============================================
-if "temp_gate_passed" not in st.session_state:
-    st.session_state.temp_gate_passed = False
+if "gate_passed" not in st.session_state:
+    st.session_state.gate_passed = False
 
-if not st.session_state.temp_gate_passed:
-    st.title("🌡️ Temperature Edge Finder")
-    st.warning("⚠️ Please confirm the following before accessing this tool:")
-    
-    cb1 = st.checkbox("I understand this tool is for informational purposes only", key="temp_cb1")
-    cb2 = st.checkbox("I understand past performance does not guarantee future results", key="temp_cb2")
-    cb3 = st.checkbox("I will use this tool responsibly", key="temp_cb3")
-    cb4 = st.checkbox("I am of legal age to participate in prediction markets in my jurisdiction", key="temp_cb4")
-    cb5 = st.checkbox("I have read and accept the terms of use", key="temp_cb5")
-    
-    if cb1 and cb2 and cb3 and cb4 and cb5:
-        if st.button("Enter Temperature Edge Finder", type="primary"):
-            st.session_state.temp_gate_passed = True
-            st.rerun()
-    else:
-        st.info("Please check all boxes above to continue.")
+if not st.session_state.gate_passed:
+    st.error("🚫 Access Denied")
+    st.warning("You must accept the terms on the Home page first.")
+    if st.button("👉 Go to Home Page"):
+        st.switch_page("Home.py")
     st.stop()
 
 # ============================================
