@@ -32,23 +32,7 @@ st.markdown("""
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-NQKY5VQ376');</script>
 """, unsafe_allow_html=True)
 
-# ========== GATE CHECK ==========
-if "gate_passed" not in st.session_state:
-    st.session_state.gate_passed = False
-
-if not st.session_state.gate_passed:
-    st.title("🎯 NBA Edge Finder")
-    st.warning("⚠️ Please confirm the following:")
-    cb1 = st.checkbox("I understand this tool provides market signals, not predictions.")
-    cb2 = st.checkbox("I understand signals may change as new information arrives.")
-    cb3 = st.checkbox("I understand this is not financial advice.")
-    cb4 = st.checkbox("I understand this free beta may end at any time.")
-    cb5 = st.checkbox("I confirm I am 18+ years old.")
-    if cb1 and cb2 and cb3 and cb4 and cb5:
-        if st.button("Enter NBA Edge Finder", type="primary"):
-            st.session_state.gate_passed = True
-            st.rerun()
-    st.stop()
+# ========== NO GATE (Home.py handles authentication) ==========
 
 # ========== SIDEBAR LEGENDS ==========
 with st.sidebar:
@@ -90,7 +74,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v15.55 | 8-Factor ML")
+    st.caption("v15.58 | 8-Factor ML")
 
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
@@ -214,8 +198,7 @@ def get_minutes_played(period, clock, status_type):
         return (period - 1) * 12 if period <= 4 else 48
 
 def calc_distance_miles(lat1, lon1, lat2, lon2):
-    """Calculate distance between two points in miles"""
-    R = 3959  # Earth radius in miles
+    R = 3959
     lat1_rad = math.radians(lat1)
     lat2_rad = math.radians(lat2)
     delta_lat = math.radians(lat2 - lat1)
@@ -324,10 +307,6 @@ def fetch_espn_injuries():
 
 # ========== 8-FACTOR ML SCORING (AUTHORITATIVE) ==========
 def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
-    """
-    AUTHORITATIVE 8-FACTOR ML ENGINE
-    DO NOT MODIFY WITHOUT EXPLICIT INSTRUCTION
-    """
     away_stats = TEAM_STATS.get(away_team, {})
     home_stats = TEAM_STATS.get(home_team, {})
     
@@ -338,8 +317,6 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
     score_away = 0.0
     reasons = []
     
-    # ========== FACTOR 1: BACK-TO-BACK FATIGUE ==========
-    # +1.0 if opponent played yesterday and we didn't
     away_b2b = away_team in yesterday_teams
     home_b2b = home_team in yesterday_teams
     
@@ -350,8 +327,6 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
         score_away += 1.0
         reasons.append("Home B2B +1")
     
-    # ========== FACTOR 2: NET RATING DIFFERENTIAL ==========
-    # +1.0 if diff > +5 (home) or < -5 (away)
     net_diff = home_stats.get("net_rtg", 0) - away_stats.get("net_rtg", 0)
     
     if net_diff > 5:
@@ -361,8 +336,6 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
         score_away += 1.0
         reasons.append(f"Net {net_diff:.1f} → Away +1")
     
-    # ========== FACTOR 3: ELITE DEFENSE BONUS ==========
-    # +1.0 if DEF rank ≤ 5
     home_def_rank = home_stats.get("def_rank", 15)
     away_def_rank = away_stats.get("def_rank", 15)
     
@@ -373,13 +346,9 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
         score_away += 1.0
         reasons.append(f"Away DEF #{away_def_rank} +1")
     
-    # ========== FACTOR 4: HOME COURT (ALWAYS ON) ==========
-    # +1.0 to home ALWAYS
     score_home += 1.0
     reasons.append("Home Court +1")
     
-    # ========== FACTOR 5: INJURY DIFFERENTIAL (STAR-WEIGHTED) ==========
-    # Star OUT = +4.0, Star GTD = +2.5, Non-star OUT = +1.0, Non-star GTD = +0.5
     def calc_injury_score(team, team_injuries):
         stars = STAR_PLAYERS.get(team, [])
         total = 0.0
@@ -387,7 +356,6 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
             name = inj.get("name", "").lower()
             status = inj.get("status", "").lower()
             is_star = any(s.lower() in name for s in stars)
-            
             if "out" in status:
                 total += 4.0 if is_star else 1.0
             elif "gtd" in status or "questionable" in status or "doubtful" in status:
@@ -405,8 +373,6 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
         score_away += 1.0
         reasons.append(f"Inj diff {inj_diff:.1f} → Away +1")
     
-    # ========== FACTOR 6: TRAVEL FATIGUE (AWAY ONLY) ==========
-    # +1.0 home if away traveled > 2000 miles
     away_lat = away_stats.get("lat", 0)
     away_lon = away_stats.get("lon", 0)
     home_lat = home_stats.get("lat", 0)
@@ -417,20 +383,15 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
         score_home += 1.0
         reasons.append(f"Travel {distance:.0f}mi +1")
     
-    # ========== FACTOR 7: HOME WIN PERCENTAGE ==========
-    # +0.8 if home win % > 65%
     home_win_pct = home_stats.get("home_win_pct", 0.5)
     if home_win_pct > 0.65:
         score_home += 0.8
         reasons.append(f"Home {home_win_pct*100:.0f}% +0.8")
     
-    # ========== FACTOR 8: DENVER ALTITUDE ==========
-    # +1.0 if home = Denver
     if home_team == "Denver":
         score_home += 1.0
         reasons.append("Denver Alt +1")
     
-    # ========== FINAL SCORING ==========
     total = score_home + score_away
     if total == 0:
         return None, 0, []
@@ -469,7 +430,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # ========== HEADER ==========
 st.title("🎯 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.55")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.58")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -488,9 +449,7 @@ for gk in game_list:
     away, home = g['away_team'], g['home_team']
     pick, score, reasons = calc_ml_score(away, home, injuries, yesterday_teams)
     
-    # Show ALL picks (no score filter)
     if pick:
-        # Build compact reason string with icons
         reason_parts = []
         for r in reasons:
             if "B2B" in r:
@@ -502,7 +461,6 @@ for gk in game_list:
                 miles = r.split()[1]
                 reason_parts.append(f"✈️ {miles}")
             elif "Inj diff" in r:
-                # Check for star injuries
                 team_inj = injuries.get(away if pick == home else home, [])
                 stars = STAR_PLAYERS.get(away if pick == home else home, [])
                 for inj in team_inj:
@@ -522,7 +480,6 @@ for gk in game_list:
             elif "Net " in r:
                 reason_parts.append("📊 Net+")
         
-        # Get home win pct for display
         home_stats_display = TEAM_STATS.get(home, {})
         home_pct = int(home_stats_display.get("home_win_pct", 0.5) * 100)
         
@@ -535,25 +492,21 @@ ml_results.sort(key=lambda x: x['score'], reverse=True)
 
 if ml_results:
     for r in ml_results:
-        # Determine border color based on score
         if r['score'] >= 8.0:
-            border_color = "#00ff00"  # Green
+            border_color = "#00ff00"
         elif r['score'] >= 6.5:
-            border_color = "#00aaff"  # Blue
+            border_color = "#00aaff"
         elif r['score'] >= 5.5:
-            border_color = "#ffff00"  # Yellow
+            border_color = "#ffff00"
         else:
-            border_color = "#888888"  # Gray
+            border_color = "#888888"
         
-        # Build reason string
         reason_str = " • ".join(r['reasons'][:3]) if r['reasons'] else ""
         if reason_str:
             reason_str = " " + reason_str
         
-        # Opponent team
         opponent = r['away'] if r['pick'] == r['home'] else r['home']
         
-        # Build Kalshi URL
         pick_code = KALSHI_CODES.get(r['pick'], "XXX")
         date_code = now.strftime("%y%b%d").upper()
         away_code = KALSHI_CODES.get(r['away'], "XXX")
@@ -561,7 +514,6 @@ if ml_results:
         ticker = f"KXNBAGAME-{date_code}{away_code}{home_code}"
         kalshi_url = f"https://kalshi.com/markets/{ticker.lower()}"
         
-        # Card with colored left border
         st.markdown(f"""
         <div style="display: flex; align-items: center; background: #1a1a2e; border-left: 4px solid {border_color}; padding: 12px 16px; margin-bottom: 8px; border-radius: 4px;">
             <div style="flex: 1;">
@@ -576,7 +528,6 @@ if ml_results:
         </div>
         """, unsafe_allow_html=True)
     
-    # Add picks button
     st.markdown(f"""
     <div style="text-align: center; margin-top: 16px;">
         <span style="color: #888;">➕ {len(ml_results)} Picks Available</span>
@@ -683,20 +634,72 @@ st.divider()
 # ========== INJURY REPORT ==========
 st.subheader("🏥 INJURY REPORT")
 
-injury_count = 0
+injury_cards = []
 for team in sorted(today_teams):
     team_inj = injuries.get(team, [])
     stars = STAR_PLAYERS.get(team, [])
     for inj in team_inj:
         name = inj.get("name", "")
-        status = inj.get("status", "")
+        status = inj.get("status", "").upper()
         is_star = any(s.lower() in name.lower() for s in stars)
+        
+        star_rating = 0
         if is_star:
-            st.markdown(f"**⭐ {team}**: {name} — {status}")
-            injury_count += 1
+            if stars and name.lower() in stars[0].lower():
+                star_rating = 3
+            else:
+                star_rating = 2
+        
+        if any(s in status for s in ["OUT", "DTD", "DAY-TO-DAY", "GTD", "QUESTIONABLE", "DOUBTFUL"]):
+            if "OUT" in status:
+                status_label = "OUT"
+                status_color = "#ff4444"
+            elif "DTD" in status or "DAY-TO-DAY" in status:
+                status_label = "DTD"
+                status_color = "#ff8800"
+            elif "GTD" in status or "QUESTIONABLE" in status:
+                status_label = "GTD"
+                status_color = "#ffaa00"
+            elif "DOUBTFUL" in status:
+                status_label = "DTD"
+                status_color = "#ff6600"
+            else:
+                status_label = status[:3]
+                status_color = "#ff8800"
+            
+            if any(x in status for x in ["ANKLE", "KNEE", "LEG", "FOOT", "HAMSTRING", "CALF", "ACHILLES"]):
+                inj_icon = "🦴"
+            elif any(x in status for x in ["SHOULDER", "ARM", "WRIST", "HAND", "FINGER"]):
+                inj_icon = "🦴"
+            elif any(x in status for x in ["BACK", "HIP", "CORE"]):
+                inj_icon = "🔥"
+            elif any(x in status for x in ["ILLNESS", "SICK", "FLU"]):
+                inj_icon = "🤒"
+            elif any(x in status for x in ["REST", "MANAGEMENT"]):
+                inj_icon = "🛡️"
+            else:
+                inj_icon = "🔥"
+            
+            injury_cards.append({
+                "name": name, "team": team, "status_label": status_label,
+                "status_color": status_color, "star_rating": star_rating, "icon": inj_icon
+            })
 
-if injury_count == 0:
-    st.info("No star injuries for today's teams")
+injury_cards.sort(key=lambda x: (-x['star_rating'], x['team']))
+
+if injury_cards:
+    cols = st.columns(3)
+    for i, card in enumerate(injury_cards):
+        with cols[i % 3]:
+            stars_display = "⭐ " * card['star_rating'] if card['star_rating'] > 0 else ""
+            st.markdown(f"""
+            <div style="background: #1a1a2e; border-left: 4px solid {card['status_color']}; padding: 10px 14px; margin-bottom: 8px; border-radius: 4px;">
+                <div style="color: white; font-weight: bold;">{stars_display}{card['name']} {card['icon']}</div>
+                <div><span style="color: {card['status_color']}; font-weight: bold;">{card['status_label']}</span><span style="color: #888;"> • {card['team']}</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+else:
+    st.info("No injuries reported for today's teams")
 
 st.divider()
 
@@ -744,7 +747,7 @@ if games:
     for i, (k, g) in enumerate(games.items()):
         with cols[i % 4]:
             st.write(f"**{g['away_team']}** {g['away_score']}")
-            st.write(f"**{g['home_team']}** {g['home_score']}")
+            st.write(f"🏠 **{g['home_team']}** {g['home_score']}")
             status = "FINAL" if g['status_type'] == "STATUS_FINAL" else f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "SCHEDULED"
             st.caption(f"{status} | {g['total']} pts")
 else:
@@ -764,4 +767,4 @@ st.markdown("""
 📧 Feedback: **aipublishingpro@gmail.com**
 """)
 
-st.caption("⚠️ For entertainment only. Not financial advice. v15.55")
+st.caption("⚠️ For entertainment only. Not financial advice. v15.58")
