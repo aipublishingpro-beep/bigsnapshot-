@@ -1,8 +1,11 @@
 import streamlit as st
-
 st.set_page_config(page_title="Big Snapshot", page_icon="📊", layout="wide")
 
-# ========== GOOGLE ANALYTICS ==========
+# Initialize gate state
+if "gate_passed" not in st.session_state:
+    st.session_state.gate_passed = False
+
+# Google Analytics
 st.markdown("""
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
@@ -14,17 +17,13 @@ st.markdown("""
 </script>
 """, unsafe_allow_html=True)
 
-# ========== MAIN PAGE ==========
 st.title("📊 BIG SNAPSHOT")
 st.subheader("Sports Analytics Dashboard - Public Beta")
-
 st.markdown("""
 Welcome to Big Snapshot - your sports analytics hub for Kalshi prediction markets.
-
 ### Before You Continue:
 """)
 
-# ========== CHECKBOXES ==========
 cb1 = st.checkbox("I understand this tool provides market signals, not predictions.")
 cb2 = st.checkbox("I understand signals may change as new information arrives.")
 cb3 = st.checkbox("I understand this is not financial advice and I am responsible for my own trades.")
@@ -32,6 +31,9 @@ cb4 = st.checkbox("I understand this free beta may end or change at any time.")
 cb5 = st.checkbox("I confirm that I am 18 years or older.")
 
 all_checked = cb1 and cb2 and cb3 and cb4 and cb5
+
+# Store in session state
+st.session_state.gate_passed = all_checked
 
 st.divider()
 
@@ -60,4 +62,4 @@ if all_checked:
         """)
         st.page_link("pages/2_NBA.py", label="🏀 Open NBA Edge Finder", use_container_width=True)
 else:
-   st.warning("Please check all boxes above to continue.")
+    st.warning("Please check all boxes above to continue.")
