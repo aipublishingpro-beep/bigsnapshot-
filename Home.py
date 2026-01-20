@@ -357,87 +357,40 @@ if not st.session_state.authenticated:
 # ============================================================
 # AUTHENTICATED - SHOW APP HUB (LIVE TOOLS FIRST)
 # ============================================================
-st.markdown("""
-<div style="text-align: center; padding: 30px 20px 20px 20px;">
-    <div style="font-size: 50px; margin-bottom: 10px;">📊</div>
-    <h1 style="font-size: 42px; font-weight: 800; color: #fff; margin-bottom: 5px;">BigSnapshot</h1>
-    <p style="color: #888; font-size: 16px;">Prediction Market Edge Finder</p>
-</div>
-""", unsafe_allow_html=True)
+st.title("📊 BigSnapshot")
+st.caption("Prediction Market Edge Finder")
 
-# ============ LIVE TOOLS - BIG CLICKABLE BUTTONS ============
-st.markdown("## 🔥 LIVE TOOLS")
+st.markdown("---")
+
+# ============ LIVE TOOLS - PURE STREAMLIT ============
+st.header("🔥 LIVE TOOLS")
 
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; padding: 25px; text-align: center; border: 2px solid #00d4ff; margin-bottom: 10px;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🏀</div>
-        <h3 style="color: #fff; margin: 0;">NBA</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("🏀 OPEN NBA", use_container_width=True, type="primary"):
+    st.subheader("🏀 NBA")
+    if st.button("OPEN NBA", use_container_width=True, type="primary", key="nav_nba"):
         st.switch_page("pages/2_NBA.py")
 
 with col2:
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 25px; text-align: center; border: 2px solid #00ff88; margin-bottom: 10px;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🏈</div>
-        <h3 style="color: #fff; margin: 0;">NFL</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("🏈 OPEN NFL", use_container_width=True, type="primary"):
+    st.subheader("🏈 NFL")
+    if st.button("OPEN NFL", use_container_width=True, type="primary", key="nav_nfl"):
         st.switch_page("pages/1_NFL.py")
 
 with col3:
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #2a2a3a 0%, #3a3a4a 100%); border-radius: 16px; padding: 25px; text-align: center; border: 2px solid #a855f7; margin-bottom: 10px;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🏒</div>
-        <h3 style="color: #fff; margin: 0;">NHL</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("🏒 OPEN NHL", use_container_width=True, type="primary"):
+    st.subheader("🏒 NHL")
+    if st.button("OPEN NHL", use_container_width=True, type="primary", key="nav_nhl"):
         st.switch_page("pages/3_NHL.py")
 
 with col4:
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #3a2a2a 0%, #4a3a3a 100%); border-radius: 16px; padding: 25px; text-align: center; border: 2px solid #ff6b6b; margin-bottom: 10px;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🌡️</div>
-        <h3 style="color: #fff; margin: 0;">TEMP</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("🌡️ OPEN TEMP", use_container_width=True, type="primary"):
+    st.subheader("🌡️ TEMP")
+    if st.button("OPEN TEMP", use_container_width=True, type="primary", key="nav_temp"):
         st.switch_page("pages/5_Temp.py")
 
 st.markdown("---")
 
-# ============ COMING SOON - SMALLER ============
-st.markdown("### 🚧 Coming Soon")
-st.markdown("""
-<div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; padding: 10px;">
-    <div style="background: #2a2a2a; border-radius: 10px; padding: 15px; width: 100px; text-align: center; opacity: 0.6;">
-        <div style="font-size: 25px;">⚾</div>
-        <p style="color: #666; margin: 5px 0 0 0; font-size: 12px;">MLB</p>
-    </div>
-    <div style="background: #2a2a2a; border-radius: 10px; padding: 15px; width: 100px; text-align: center; opacity: 0.6;">
-        <div style="font-size: 25px;">⚽</div>
-        <p style="color: #666; margin: 5px 0 0 0; font-size: 12px;">Soccer</p>
-    </div>
-    <div style="background: #2a2a2a; border-radius: 10px; padding: 15px; width: 100px; text-align: center; opacity: 0.6;">
-        <div style="font-size: 25px;">🏛️</div>
-        <p style="color: #666; margin: 5px 0 0 0; font-size: 12px;">Politics</p>
-    </div>
-    <div style="background: #2a2a2a; border-radius: 10px; padding: 15px; width: 100px; text-align: center; opacity: 0.6;">
-        <div style="font-size: 25px;">📈</div>
-        <p style="color: #666; margin: 5px 0 0 0; font-size: 12px;">Economics</p>
-    </div>
-    <div style="background: #2a2a2a; border-radius: 10px; padding: 15px; width: 100px; text-align: center; opacity: 0.6;">
-        <div style="font-size: 25px;">🎬</div>
-        <p style="color: #666; margin: 5px 0 0 0; font-size: 12px;">Entertainment</p>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+# ============ COMING SOON - MINIMAL ============
+st.caption("🚧 Coming Soon: MLB • Soccer • Politics • Economics • Entertainment")
 
 st.markdown("---")
 
