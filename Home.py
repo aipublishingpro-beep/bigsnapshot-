@@ -107,6 +107,7 @@ if not st.session_state.authenticated:
             BigSnapshot is a decision-compression tool for serious Kalshi bettors. It pulls the signals that matter into one screen—so you spend less time hunting and more time deciding.
         </p>
         <p style="color: #666; font-size: 1.1em;">No hype. No picks shoved in your face. Just clarity.</p>
+        <p style="color: #555; font-size: 1em; margin-top: 20px;">Because edge disappears once everyone sees it.</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -214,8 +215,8 @@ if not st.session_state.authenticated:
         
         st.markdown("""
         <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #88ff88;">
-            <h3 style="color: #88ff88; margin: 0 0 10px 0;">🔒 Human-in-the-Loop</h3>
-            <p style="color: #aaa; margin: 0;">Doesn't bet for you. Doesn't override judgment. You stay in control at all times.</p>
+            <h3 style="color: #88ff88; margin: 0 0 10px 0;">⏳ Time Is the Real Edge</h3>
+            <p style="color: #aaa; margin: 0;">Most edges don't fail — they get crowded. BigSnapshot helps you see pressure early, before the market fully reacts.</p>
         </div>
         """, unsafe_allow_html=True)
     
