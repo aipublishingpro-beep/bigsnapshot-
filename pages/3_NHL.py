@@ -2,22 +2,35 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import random
+import pytz
 
 # ============================================================
-# NHL EDGE FINDER v1.0
+# NHL EDGE FINDER v1.1
 # Kalshi NHL Moneyline Edge Detection
+# BigSnapshot — NHL Market Pressure Engine v1.1 (Charts Enabled)
 # ============================================================
 
 st.set_page_config(page_title="NHL Edge Finder", page_icon="🏒", layout="wide")
 
-# Version tracking
-VERSION = "1.0"
+VERSION = "1.1"
 
 # ============================================================
-# MOCK DATA - Replace with real APIs later
+# STYLING
 # ============================================================
 
-# NHL Teams
+st.markdown("""
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+.stDeployButton {display: none;}
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# NHL TEAMS (UNCHANGED)
+# ============================================================
+
 NHL_TEAMS = {
     "ANA": {"name": "Anaheim Ducks", "division": "Pacific"},
     "ARI": {"name": "Arizona Coyotes", "division": "Central"},
@@ -53,7 +66,10 @@ NHL_TEAMS = {
     "WPG": {"name": "Winnipeg Jets", "division": "Central"},
 }
 
-# Mock goalie data
+# ============================================================
+# MOCK GOALIE DATA (UNCHANGED)
+# ============================================================
+
 GOALIES = {
     "COL": {"starter": "Alexandar Georgiev", "starter_sv": 0.912, "backup": "Justus Annunen", "backup_sv": 0.895},
     "WSH": {"starter": "Charlie Lindgren", "starter_sv": 0.908, "backup": "Logan Thompson", "backup_sv": 0.901},
@@ -77,8 +93,12 @@ GOALIES = {
     "DAL": {"starter": "Jake Oettinger", "starter_sv": 0.915, "backup": "Casey DeSmith", "backup_sv": 0.898},
 }
 
+# ============================================================
+# MOCK GAMES WITH OPEN PRICES (v1.1 - Added for Market Pressure)
+# ============================================================
+
 def get_mock_games():
-    """Generate mock NHL games for today"""
+    """Generate mock NHL games with open prices for line movement tracking"""
     games = [
         {
             "game_id": "nhl_20260119_1",
@@ -86,6 +106,8 @@ def get_mock_games():
             "home_team": "COL",
             "away_kalshi": 15,
             "home_kalshi": 87,
+            "away_open": 18,  # Open price for line movement
+            "home_open": 84,
             "game_time": "9:00 PM ET",
             "status": "scheduled",
             "away_record": "23-18-4",
@@ -115,6 +137,8 @@ def get_mock_games():
             "home_team": "SEA",
             "away_kalshi": 77,
             "home_kalshi": 23,
+            "away_open": 65,
+            "home_open": 35,
             "game_time": "10:00 PM ET",
             "status": "live_2nd",
             "away_record": "25-18-5",
@@ -144,6 +168,8 @@ def get_mock_games():
             "home_team": "FLA",
             "away_kalshi": 40,
             "home_kalshi": 63,
+            "away_open": 35,
+            "home_open": 67,
             "game_time": "7:00 PM ET",
             "status": "scheduled",
             "away_record": "15-28-6",
@@ -173,6 +199,8 @@ def get_mock_games():
             "home_team": "TOR",
             "away_kalshi": 51,
             "home_kalshi": 51,
+            "away_open": 48,
+            "home_open": 54,
             "game_time": "7:30 PM ET",
             "status": "scheduled",
             "away_record": "28-16-4",
@@ -202,6 +230,8 @@ def get_mock_games():
             "home_team": "VAN",
             "away_kalshi": 57,
             "home_kalshi": 44,
+            "away_open": 52,
+            "home_open": 49,
             "game_time": "10:00 PM ET",
             "status": "scheduled",
             "away_record": "24-18-7",
@@ -231,6 +261,8 @@ def get_mock_games():
             "home_team": "CGY",
             "away_kalshi": 52,
             "home_kalshi": 49,
+            "away_open": 55,
+            "home_open": 46,
             "game_time": "9:00 PM ET",
             "status": "scheduled",
             "away_record": "26-19-5",
@@ -260,6 +292,8 @@ def get_mock_games():
             "home_team": "VGK",
             "away_kalshi": 34,
             "home_kalshi": 66,
+            "away_open": 38,
+            "home_open": 63,
             "game_time": "10:00 PM ET",
             "status": "scheduled",
             "away_record": "20-22-6",
@@ -289,6 +323,8 @@ def get_mock_games():
             "home_team": "ANA",
             "away_kalshi": 68,
             "home_kalshi": 32,
+            "away_open": 62,
+            "home_open": 38,
             "game_time": "8:00 PM ET",
             "status": "scheduled",
             "away_record": "27-18-4",
@@ -316,7 +352,116 @@ def get_mock_games():
     return games
 
 # ============================================================
-# EDGE CALCULATION ENGINE
+# MARKET PRESSURE LOGIC (v1.1 - NEW)
+# Confirmation / Warning layer only - does NOT affect edge scores
+# ============================================================
+
+def calculate_market_pressure(game, team, model_favors_team):
+    """
+    Calculate Market Pressure based on Kalshi line movement.
+    This is a CONFIRMATION / WARNING layer only.
+    Does NOT affect edge scores or model output.
+    
+    Rules:
+    - Movement TOWARD model side → Sharp Support (CONFIRMED)
+    - No meaningful movement → Neutral (MODEL ONLY)  
+    - Movement AGAINST model side → Sharp Resistance (CAUTION)
+    - Ignore moves smaller than 8 cents
+    """
+    MOVEMENT_THRESHOLD = 8  # Ignore moves smaller than this
+    
+    if team == "away":
+        current = game["away_kalshi"]
+        open_price = game["away_open"]
+    else:
+        current = game["home_kalshi"]
+        open_price = game["home_open"]
+    
+    movement = current - open_price  # Positive = price went UP
+    
+    # Ignore small movements
+    if abs(movement) < MOVEMENT_THRESHOLD:
+        return {
+            "pressure": "→ Neutral",
+            "status": "MODEL ONLY",
+            "movement": movement,
+        }
+    
+    # Determine if movement confirms or contradicts model
+    if model_favors_team:
+        # Model likes this team
+        if movement > 0:
+            # Price went UP = market agrees with model
+            return {
+                "pressure": "↑ Sharp Support",
+                "status": "CONFIRMED",
+                "movement": movement,
+            }
+        else:
+            # Price went DOWN = market disagrees with model
+            return {
+                "pressure": "↓ Sharp Resistance",
+                "status": "CAUTION",
+                "movement": movement,
+            }
+    else:
+        # Model doesn't favor this team
+        if movement < 0:
+            # Price dropped on non-favored side = confirms model
+            return {
+                "pressure": "↑ Sharp Support",
+                "status": "CONFIRMED",
+                "movement": movement,
+            }
+        else:
+            return {
+                "pressure": "→ Neutral",
+                "status": "MODEL ONLY",
+                "movement": movement,
+            }
+
+def generate_line_movement_data(game, team):
+    """
+    Generate line movement timeline data for charting.
+    In production: Replace with real Kalshi API historical data.
+    For now: Mock data based on open → current price.
+    """
+    if team == "away":
+        open_price = game["away_open"]
+        current = game["away_kalshi"]
+    else:
+        open_price = game["home_open"]
+        current = game["home_kalshi"]
+    
+    # Generate mock timeline (hourly intervals from open to now)
+    # Simulates gradual line movement
+    hours = 8  # 8 hours of data
+    movement = current - open_price
+    
+    data = []
+    for i in range(hours + 1):
+        # Simulate non-linear movement (sharper early if sharp money)
+        if abs(movement) >= 8:
+            # Sharp movement pattern (early move, then stable)
+            progress = min(1.0, (i / hours) * 1.5) if i < hours * 0.6 else 1.0
+        else:
+            # Gradual/public pattern (linear)
+            progress = i / hours
+        
+        price = open_price + (movement * progress)
+        hour = 10 + i  # Start at 10 AM
+        time_label = f"{hour}:00" if hour < 12 else f"{hour-12 if hour > 12 else 12}:00 PM"
+        
+        data.append({
+            "time": time_label,
+            "hour": i,
+            "price": round(price, 1),
+        })
+    
+    return pd.DataFrame(data)
+
+# ============================================================
+# EDGE CALCULATION ENGINE (UNCHANGED from v1.0)
 # ============================================================
 
 def calculate_goalie_edge(game, team):
@@ -335,21 +480,17 @@ def calculate_goalie_edge(game, team):
     team_goalie = GOALIES.get(team_code, {"starter_sv": 0.905, "backup_sv": 0.890})
     opp_goalie = GOALIES.get(opp_code, {"starter_sv": 0.905, "backup_sv": 0.890})
     
-    # Get save percentages
     team_sv = team_goalie["starter_sv"] if goalie_status == "starter" else team_goalie["backup_sv"]
     opp_sv = opp_goalie["starter_sv"] if opp_goalie_status == "starter" else opp_goalie["backup_sv"]
     
-    # Calculate edge based on save % differential
     sv_diff = team_sv - opp_sv
     
-    # Bonus/penalty for backup vs starter
     if goalie_status == "backup" and opp_goalie_status == "starter":
-        sv_diff -= 0.008  # Penalty for using backup vs starter
+        sv_diff -= 0.008
     elif goalie_status == "starter" and opp_goalie_status == "backup":
-        sv_diff += 0.008  # Bonus for starter vs backup
+        sv_diff += 0.008
     
-    # Scale to -2 to +2
-    edge = sv_diff * 100  # Convert to points scale
+    edge = sv_diff * 100
     return max(-2, min(2, edge))
 
 def calculate_fatigue_edge(game, team):
@@ -367,13 +508,11 @@ def calculate_fatigue_edge(game, team):
     
     edge = 0
     
-    # Back-to-back penalty
     if b2b and not opp_b2b:
         edge -= 1.0
     elif not b2b and opp_b2b:
         edge += 1.0
     
-    # Rest advantage
     rest_diff = rest - opp_rest
     edge += rest_diff * 0.25
     
@@ -395,11 +534,10 @@ def calculate_form_edge(game, team):
         last10 = game["home_last10"]
         opp_last10 = game["away_last10"]
     
-    # Parse last 10 record (W-L-OT)
     def parse_record(rec):
         parts = rec.split("-")
         w, l, ot = int(parts[0]), int(parts[1]), int(parts[2])
-        return (w * 2 + ot) / 20  # Points percentage
+        return (w * 2 + ot) / 20
     
     team_pct = parse_record(last10)
     opp_pct = parse_record(opp_last10)
@@ -420,9 +558,7 @@ def calculate_special_teams_edge(game, team):
         opp_pp = game["away_pp"]
         opp_pk = game["away_pk"]
     
-    # PP vs opponent PK
     pp_edge = (pp - opp_pk) / 100
-    # PK vs opponent PP
     pk_edge = (pk - opp_pp) / 100
     
     combined = (pp_edge + pk_edge) * 5
@@ -441,7 +577,6 @@ def calculate_xg_edge(game, team):
         opp_xgf = game["away_xgf"]
         opp_xga = game["away_xga"]
     
-    # Team's xG differential vs opponent's
     team_diff = xgf - xga
     opp_diff = opp_xgf - opp_xga
     
@@ -466,7 +601,7 @@ def calculate_h2h_edge(game, team):
     return max(-0.5, min(0.5, edge))
 
 def calculate_total_edge(game, team):
-    """Calculate total edge score for a team"""
+    """Calculate total edge score for a team (UNCHANGED)"""
     goalie = calculate_goalie_edge(game, team)
     fatigue = calculate_fatigue_edge(game, team)
     home_ice = calculate_home_ice_edge(game, team)
@@ -475,15 +610,14 @@ def calculate_total_edge(game, team):
     xg = calculate_xg_edge(game, team)
     h2h = calculate_h2h_edge(game, team)
     
-    # Weights
     total = (
-        goalie * 1.5 +      # Goalie is huge in NHL
-        fatigue * 1.2 +     # B2B matters
-        home_ice * 1.0 +    # Home ice solid
-        form * 1.0 +        # Recent form
-        special_teams * 0.8 + # Special teams
-        xg * 1.0 +          # Expected goals
-        h2h * 0.5           # H2H minor factor
+        goalie * 1.5 +
+        fatigue * 1.2 +
+        home_ice * 1.0 +
+        form * 1.0 +
+        special_teams * 0.8 +
+        xg * 1.0 +
+        h2h * 0.5
     )
     
     return {
@@ -498,19 +632,15 @@ def calculate_total_edge(game, team):
     }
 
 def calculate_model_probability(away_edge, home_edge):
-    """Convert edge scores to win probabilities"""
+    """Convert edge scores to win probabilities (UNCHANGED)"""
     edge_diff = home_edge - away_edge
-    
-    # Sigmoid-like conversion
-    # Base is 50-50, adjusted by edge differential
     home_prob = 50 + (edge_diff * 5)
     home_prob = max(10, min(90, home_prob))
     away_prob = 100 - home_prob
-    
     return round(away_prob), round(home_prob)
 
 def detect_edge(kalshi_price, model_prob, threshold=8):
-    """Detect if there's a betting edge"""
+    """Detect if there's a betting edge (UNCHANGED)"""
     diff = model_prob - kalshi_price
     if diff >= threshold:
         return {"edge": True, "direction": "BUY", "diff": diff}
@@ -534,13 +664,21 @@ def render_edge_badge(edge_info):
     """Render edge indicator badge"""
     if edge_info["edge"]:
         if edge_info["direction"] == "BUY":
-            return f"🟢 BUY EDGE +{edge_info['diff']:.0f}¢"
+            return f"🟢 +{edge_info['diff']:.0f}¢"
         else:
-            return f"🔴 SELL EDGE +{edge_info['diff']:.0f}¢"
+            return f"🔴 +{edge_info['diff']:.0f}¢"
     return "⚪ No Edge"
 
+def render_line_movement_chart(game, team, team_code):
+    """Render line movement chart (click-to-expand)"""
+    df = generate_line_movement_data(game, team)
+    
+    st.caption(f"**{team_code} Line Movement** (Open → Current)")
+    st.line_chart(df.set_index("time")["price"], height=200)
+    st.caption("Chart shows Kalshi price movement over time. Early smooth moves suggest sharp action; late jagged moves suggest public action.")
+
 def render_game_card(game):
-    """Render a single game analysis card"""
+    """Render a single game analysis card with Market Pressure"""
     away = game["away_team"]
     home = game["home_team"]
     
@@ -553,6 +691,13 @@ def render_game_card(game):
     
     away_edge_info = detect_edge(game["away_kalshi"], away_model_prob)
     home_edge_info = detect_edge(game["home_kalshi"], home_model_prob)
+    
+    # Market Pressure (v1.1)
+    away_model_favors = away_edge_info["diff"] > 0
+    home_model_favors = home_edge_info["diff"] > 0
+    
+    away_pressure = calculate_market_pressure(game, "away", away_model_favors)
+    home_pressure = calculate_market_pressure(game, "home", home_model_favors)
     
     # Status indicator
     if "live" in game["status"]:
@@ -577,59 +722,69 @@ def render_game_card(game):
         col1, col2, col3 = st.columns([2, 1, 2])
         
         with col1:
-            st.markdown(f"### {away} @ ")
+            st.markdown(f"### {away}")
             st.caption(f"{NHL_TEAMS[away]['name']}")
-            st.caption(f"Record: {game['away_record']}")
-            st.caption(f"Last 10: {game['away_last10']}")
+            st.caption(f"Record: {game['away_record']} | L10: {game['away_last10']}")
             
-            # Goalie info
             goalie_data = GOALIES.get(away, {})
             goalie_type = game["away_goalie"]
             if goalie_type == "starter":
                 st.caption(f"🥅 {goalie_data.get('starter', 'TBD')} ({goalie_data.get('starter_sv', 0):.3f})")
             else:
-                st.caption(f"🥅 {goalie_data.get('backup', 'TBD')} ({goalie_data.get('backup_sv', 0):.3f}) ⚠️ BACKUP")
+                st.caption(f"🥅 {goalie_data.get('backup', 'TBD')} ⚠️ BACKUP")
             
             if game["away_b2b"]:
                 st.caption("⚠️ BACK-TO-BACK")
         
         with col2:
-            st.markdown("### VS")
+            st.markdown("### @")
             st.markdown(f"**Kalshi:** {game['away_kalshi']}¢ / {game['home_kalshi']}¢")
             st.markdown(f"**Model:** {away_model_prob}% / {home_model_prob}%")
         
         with col3:
             st.markdown(f"### {home}")
             st.caption(f"{NHL_TEAMS[home]['name']}")
-            st.caption(f"Record: {game['home_record']}")
-            st.caption(f"Last 10: {game['home_last10']}")
+            st.caption(f"Record: {game['home_record']} | L10: {game['home_last10']}")
             
-            # Goalie info
             goalie_data = GOALIES.get(home, {})
             goalie_type = game["home_goalie"]
             if goalie_type == "starter":
                 st.caption(f"🥅 {goalie_data.get('starter', 'TBD')} ({goalie_data.get('starter_sv', 0):.3f})")
             else:
-                st.caption(f"🥅 {goalie_data.get('backup', 'TBD')} ({goalie_data.get('backup_sv', 0):.3f}) ⚠️ BACKUP")
+                st.caption(f"🥅 {goalie_data.get('backup', 'TBD')} ⚠️ BACKUP")
             
             if game["home_b2b"]:
                 st.caption("⚠️ BACK-TO-BACK")
         
         st.markdown("---")
         
-        # Edge signals
+        # Edge signals + Market Pressure (v1.1)
         col_a, col_b = st.columns(2)
         with col_a:
             badge = render_edge_badge(away_edge_info)
             st.markdown(f"**{away}:** {badge}")
             st.caption(f"Edge Score: {away_edge['total']:+.2f}")
+            st.caption(f"Market Pressure: **{away_pressure['pressure']}**")
+            if away_pressure["status"] != "MODEL ONLY":
+                st.caption(f"Status: {away_pressure['status']}")
         
         with col_b:
             badge = render_edge_badge(home_edge_info)
             st.markdown(f"**{home}:** {badge}")
             st.caption(f"Edge Score: {home_edge['total']:+.2f}")
+            st.caption(f"Market Pressure: **{home_pressure['pressure']}**")
+            if home_pressure["status"] != "MODEL ONLY":
+                st.caption(f"Status: {home_pressure['status']}")
         
-        # Factor breakdown expander
+        # Line Movement Chart (v1.1 - click to expand)
+        with st.expander("📈 View Market Movement"):
+            chart_col1, chart_col2 = st.columns(2)
+            with chart_col1:
+                render_line_movement_chart(game, "away", away)
+            with chart_col2:
+                render_line_movement_chart(game, "home", home)
+        
+        # Factor breakdown expander (UNCHANGED)
         with st.expander("📊 Factor Breakdown"):
             fcol1, fcol2 = st.columns(2)
             
@@ -654,7 +809,7 @@ def render_game_card(game):
                 st.caption(f"🔄 H2H: {home_edge['h2h']:+.2f}")
 
 def render_edge_summary(games):
-    """Render summary of all edges detected"""
+    """Render summary of all edges detected with Market Pressure"""
     edges = []
     
     for game in games:
@@ -671,14 +826,22 @@ def render_edge_summary(games):
         away_edge_info = detect_edge(game["away_kalshi"], away_model_prob)
         home_edge_info = detect_edge(game["home_kalshi"], home_model_prob)
         
+        # Market Pressure
+        away_model_favors = away_edge_info["diff"] > 0
+        home_model_favors = home_edge_info["diff"] > 0
+        
+        away_pressure = calculate_market_pressure(game, "away", away_model_favors)
+        home_pressure = calculate_market_pressure(game, "home", home_model_favors)
+        
         if away_edge_info["edge"]:
             edges.append({
                 "game": f"{away} @ {home}",
                 "team": away,
-                "direction": away_edge_info["direction"],
                 "kalshi": game["away_kalshi"],
                 "model": away_model_prob,
                 "edge": away_edge_info["diff"],
+                "pressure": away_pressure["pressure"],
+                "status": away_pressure["status"],
                 "time": game["game_time"],
             })
         
@@ -686,10 +849,11 @@ def render_edge_summary(games):
             edges.append({
                 "game": f"{away} @ {home}",
                 "team": home,
-                "direction": home_edge_info["direction"],
                 "kalshi": game["home_kalshi"],
                 "model": home_model_prob,
                 "edge": home_edge_info["diff"],
+                "pressure": home_pressure["pressure"],
+                "status": home_pressure["status"],
                 "time": game["game_time"],
             })
     
@@ -719,6 +883,13 @@ def main():
         st.caption("🔄 Head-to-Head: 0.5x")
         
         st.markdown("---")
+        st.markdown("### 📈 Market Pressure (v1.1)")
+        st.caption("↑ Sharp Support = CONFIRMED")
+        st.caption("→ Neutral = MODEL ONLY")
+        st.caption("↓ Sharp Resistance = CAUTION")
+        st.caption("*Based on Kalshi line movement*")
+        
+        st.markdown("---")
         st.markdown("### 🔗 Quick Links")
         st.markdown("[Kalshi NHL Markets](https://kalshi.com/?search=nhl)")
         
@@ -735,15 +906,13 @@ def main():
     if edges:
         st.markdown("### 🎯 Active Edges")
         
-        edge_df = pd.DataFrame(edges)
-        edge_df = edge_df.sort_values("edge", ascending=False)
-        
-        for _, row in edge_df.iterrows():
-            emoji = "🟢" if row["direction"] == "BUY" else "🔴"
+        # Create DataFrame for cleaner display
+        for row in sorted(edges, key=lambda x: -x["edge"]):
+            status_color = "🟢" if row["status"] == "CONFIRMED" else "🟡" if row["status"] == "MODEL ONLY" else "🟠"
             st.markdown(
-                f"{emoji} **{row['team']}** ({row['game']}) — "
-                f"{row['direction']} @ {row['kalshi']}¢ | "
-                f"Model: {row['model']}% | Edge: +{row['edge']:.0f}¢ | {row['time']}"
+                f"{status_color} **{row['team']}** ({row['game']}) — "
+                f"Kalshi: {row['kalshi']}¢ | Model: {row['model']}% | "
+                f"Edge: +{row['edge']:.0f}¢ | {row['pressure']} | {row['time']}"
             )
         
         st.markdown("---")
@@ -754,7 +923,6 @@ def main():
     st.markdown("### 🏒 Today's Games")
     
     for game in games:
-        # Check if game has edge
         away_edge = calculate_total_edge(game, "away")
         home_edge = calculate_total_edge(game, "home")
         away_model_prob, home_model_prob = calculate_model_probability(
@@ -776,6 +944,7 @@ def main():
         Past performance does not guarantee future results. All trading involves risk. 
         Not financial advice. Kalshi trading subject to their terms of service.
         Model probabilities are estimates based on historical factors and may not reflect actual outcomes.
+        Market Pressure is derived from Kalshi price movement and is for confirmation only.
     </div>
     """, unsafe_allow_html=True)
 
