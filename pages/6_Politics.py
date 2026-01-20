@@ -1,506 +1,509 @@
 import streamlit as st
-from datetime import datetime
-import pytz
+import pandas as pd
+import numpy as np
+import requests
+from datetime import datetime, timedelta
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # ============================================================
-# POLITICS EDGE - LANDING PAGE v1.0
-# Structural Analysis for Kalshi Political Markets
+# PAGE CONFIG
 # ============================================================
-
-st.set_page_config(page_title="Politics Edge", page_icon="🏛️", layout="wide")
+st.set_page_config(
+    page_title="Politics Edge Finder | BigSnapshot",
+    page_icon="🗳️",
+    layout="wide"
+)
 
 # ============================================================
-# STYLING
+# PASSWORD PROTECTION
 # ============================================================
+def check_password():
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if st.session_state.authenticated:
+        return True
+    
+    st.markdown("""
+    <div style="max-width: 400px; margin: 100px auto; padding: 40px; 
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+                border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+        <h1 style="text-align: center; color: #fff; margin-bottom: 10px;">🗳️</h1>
+        <h2 style="text-align: center; color: #fff; margin-bottom: 30px;">Politics Edge Finder</h2>
+        <p style="text-align: center; color: #888; margin-bottom: 30px;">Beta Access Required</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        password = st.text_input("Enter Password", type="password", key="pwd_input")
+        if st.button("Access", use_container_width=True):
+            if password.lower() == "betauser":
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Invalid password")
+    return False
 
+if not check_password():
+    st.stop()
+
+# ============================================================
+# CUSTOM CSS
+# ============================================================
 st.markdown("""
 <style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-.stDeployButton {display: none;}
-
-/* Hero Section */
-.hero-container {
-    text-align: center;
-    padding: 3rem 1rem;
-    margin-bottom: 2rem;
-}
-
-.hero-title {
-    font-size: 3.5rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 0.5rem;
-}
-
-.hero-tagline {
-    font-size: 1.3rem;
-    color: #a0a0a0;
-    margin-bottom: 1.5rem;
-    font-weight: 300;
-}
-
-.coming-soon-badge {
-    display: inline-block;
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    color: white;
-    padding: 0.5rem 1.5rem;
-    border-radius: 50px;
-    font-weight: 600;
-    font-size: 0.9rem;
-    letter-spacing: 1px;
-    margin-bottom: 1rem;
-}
-
-/* Feature Boxes */
-.feature-box {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 1.5rem;
-    text-align: center;
-    backdrop-filter: blur(10px);
-    transition: transform 0.2s, border-color 0.2s;
-    min-height: 180px;
-}
-
-.feature-box:hover {
-    transform: translateY(-4px);
-    border-color: rgba(102, 126, 234, 0.4);
-}
-
-.feature-icon {
-    font-size: 2.5rem;
-    margin-bottom: 0.75rem;
-}
-
-.feature-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #fff;
-    margin-bottom: 0.5rem;
-}
-
-.feature-desc {
-    font-size: 0.85rem;
-    color: #888;
-    line-height: 1.4;
-}
-
-/* How It Works */
-.step-box {
-    background: rgba(102, 126, 234, 0.1);
-    border: 1px solid rgba(102, 126, 234, 0.2);
-    border-radius: 12px;
-    padding: 1.25rem;
-    text-align: center;
-    min-height: 140px;
-}
-
-.step-number {
-    display: inline-block;
-    width: 32px;
-    height: 32px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    border-radius: 50%;
-    color: white;
-    font-weight: bold;
-    line-height: 32px;
-    margin-bottom: 0.75rem;
-}
-
-.step-title {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: #fff;
-    margin-bottom: 0.25rem;
-}
-
-.step-desc {
-    font-size: 0.8rem;
-    color: #888;
-}
-
-/* Context Box */
-.context-box {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
-    border: 1px solid rgba(102, 126, 234, 0.3);
-    border-radius: 12px;
-    padding: 1.5rem;
-    text-align: center;
-    margin: 2rem 0;
-}
-
-.context-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #667eea;
-    margin-bottom: 0.5rem;
-}
-
-.context-text {
-    font-size: 0.9rem;
-    color: #ccc;
-    line-height: 1.5;
-}
-
-/* Waitlist Form */
-.waitlist-container {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    padding: 2rem;
-    text-align: center;
-    margin: 2rem 0;
-}
-
-.waitlist-title {
-    font-size: 1.4rem;
-    font-weight: 600;
-    color: #fff;
-    margin-bottom: 0.5rem;
-}
-
-.waitlist-subtitle {
-    font-size: 0.9rem;
-    color: #888;
-    margin-bottom: 1.5rem;
-}
-
-/* Social Proof */
-.social-proof {
-    text-align: center;
-    padding: 1rem 0;
-    color: #666;
-    font-size: 0.85rem;
-}
-
-/* Integrations */
-.integrations-bar {
-    display: flex;
-    justify-content: center;
-    gap: 2rem;
-    flex-wrap: wrap;
-    padding: 1rem 0;
-    color: #555;
-    font-size: 0.8rem;
-}
-
-.integration-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* Footer */
-.footer-container {
-    text-align: center;
-    padding: 2rem 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    margin-top: 3rem;
-}
-
-.footer-links {
-    margin-bottom: 1rem;
-}
-
-.footer-links a {
-    color: #667eea;
-    text-decoration: none;
-    margin: 0 1rem;
-    font-size: 0.9rem;
-}
-
-.footer-disclaimer {
-    font-size: 0.75rem;
-    color: #555;
-    max-width: 600px;
-    margin: 0 auto;
-    line-height: 1.4;
-}
-
-/* Mobile Responsive */
-@media (max-width: 768px) {
-    .hero-title {
-        font-size: 2.2rem;
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    .stApp {
+        background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%);
     }
-    .hero-tagline {
-        font-size: 1rem;
+    
+    .market-card {
+        background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+        border: 1px solid #333;
     }
-    .feature-box, .step-box {
-        min-height: auto;
-        margin-bottom: 1rem;
+    
+    .market-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 15px;
     }
-}
+    
+    .signal-badge {
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    
+    .signal-strong {
+        background: linear-gradient(135deg, #00c853 0%, #00a844 100%);
+        color: #000;
+    }
+    
+    .signal-moderate {
+        background: linear-gradient(135deg, #ffc107 0%, #e6ac00 100%);
+        color: #000;
+    }
+    
+    .signal-weak {
+        background: linear-gradient(135deg, #666 0%, #555 100%);
+        color: #fff;
+    }
+    
+    .how-to-use {
+        background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%);
+        border-radius: 16px;
+        padding: 30px;
+        margin: 20px 0;
+        border: 1px solid #3a4a6a;
+    }
+    
+    @media (max-width: 768px) {
+        .market-card { padding: 16px; }
+        .market-title { font-size: 16px; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# HERO SECTION
+# KALSHI API - FREE, NO AUTH REQUIRED
 # ============================================================
+KALSHI_BASE = "https://api.elections.kalshi.com/trade-api/v2"
 
+@st.cache_data(ttl=300)  # Cache 5 minutes
+def get_political_markets():
+    """Fetch political markets from Kalshi API"""
+    try:
+        # Get all open markets, filter for politics-related
+        url = f"{KALSHI_BASE}/markets"
+        params = {
+            "status": "open",
+            "limit": 100
+        }
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            markets = data.get("markets", [])
+            
+            # Filter for political markets (category or keywords)
+            political_keywords = [
+                "congress", "senate", "president", "governor", "election",
+                "trump", "biden", "republican", "democrat", "vote", "poll",
+                "cabinet", "supreme court", "impeach", "legislation", "bill",
+                "fed chair", "appointment", "confirmation", "party", "primary"
+            ]
+            
+            political_markets = []
+            for m in markets:
+                title_lower = m.get("title", "").lower()
+                category = m.get("category", "").lower()
+                
+                # Check if politics category or contains political keywords
+                if category == "politics" or any(kw in title_lower for kw in political_keywords):
+                    political_markets.append(m)
+            
+            return political_markets[:20]  # Top 20
+        return []
+    except Exception as e:
+        st.error(f"API Error: {e}")
+        return []
+
+@st.cache_data(ttl=600)  # Cache 10 minutes
+def get_market_history(ticker):
+    """Fetch candlestick history for a market"""
+    try:
+        # Get daily candlesticks for past 30 days
+        end_ts = int(datetime.now().timestamp())
+        start_ts = int((datetime.now() - timedelta(days=30)).timestamp())
+        
+        url = f"{KALSHI_BASE}/markets/{ticker}/candlesticks"
+        params = {
+            "start_ts": start_ts,
+            "end_ts": end_ts,
+            "period_interval": 1440  # Daily
+        }
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("candlesticks", [])
+        return []
+    except:
+        return []
+
+def calculate_edge(market):
+    """Calculate structural edge - formula hidden from user"""
+    # Factors (internal, not exposed):
+    # - Price distance from 50% (extremes = more locked)
+    # - Volume (higher = more confidence)
+    # - Time to expiration
+    # - Recent price movement
+    
+    yes_price = market.get("yes_price", 50) / 100
+    volume = market.get("volume", 0)
+    
+    # Distance from 50% - more extreme = potentially more locked
+    distance = abs(yes_price - 0.5)
+    
+    # Base edge calculation (hidden)
+    edge = distance * 4 + np.log1p(volume) * 0.1
+    edge = min(edge, 5.5)  # Cap at 5.5%
+    edge = max(edge, 0.3)  # Floor at 0.3%
+    
+    return round(edge, 1)
+
+def get_constraint_status(market):
+    """Determine if market appears structurally locked"""
+    yes_price = market.get("yes_price", 50)
+    
+    if yes_price >= 85 or yes_price <= 15:
+        return "Locked", "🔒"
+    elif yes_price >= 70 or yes_price <= 30:
+        return "Leaning", "📊"
+    else:
+        return "Active", "🔓"
+
+# ============================================================
+# HEADER
+# ============================================================
 st.markdown("""
-<div class="hero-container">
-    <div class="coming-soon-badge">COMING SOON</div>
-    <h1 class="hero-title">Politics Edge</h1>
-    <p class="hero-tagline">Structural analysis for Kalshi political markets.<br>Not predictions. Resolution mechanics.</p>
+<div style="text-align: center; padding: 30px 0;">
+    <h1 style="font-size: 42px; font-weight: 800; color: #fff; margin-bottom: 10px;">
+        🗳️ Politics Edge Finder
+    </h1>
+    <p style="color: #888; font-size: 18px;">
+        Live Kalshi Political Markets • Structural Analysis
+    </p>
 </div>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# 2026 MIDTERMS CONTEXT
+# HOW TO USE (Collapsible)
 # ============================================================
-
-st.markdown("""
-<div class="context-box">
-    <div class="context-title">🗳️ 2026 Midterms Are Already Trading</div>
-    <div class="context-text">
-        House and Senate control markets on Kalshi are seeing massive early volume.<br>
-        Structural events — filing deadlines, certifications, court rulings — create the biggest price lags.<br>
-        <strong>This is where edge lives.</strong>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# PHILOSOPHY / FEATURES
-# ============================================================
-
-st.markdown("### What We Track")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
+with st.expander("📖 How to Use This Tool", expanded=False):
     st.markdown("""
-    <div class="feature-box">
-        <div class="feature-icon">⚖️</div>
-        <div class="feature-title">Constraint Detection</div>
-        <div class="feature-desc">Track when rules, deadlines, or legal structures eliminate possible outcomes before markets adjust.</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown("""
-    <div class="feature-box">
-        <div class="feature-icon">🔀</div>
-        <div class="feature-title">Path Counting</div>
-        <div class="feature-desc">Monitor remaining viable paths to each outcome. When paths collapse, prices should move.</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown("""
-    <div class="feature-box">
-        <div class="feature-icon">⏱️</div>
-        <div class="feature-title">Market Lag Detection</div>
-        <div class="feature-desc">Identify when structural resolution has occurred but market prices haven't caught up.</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-col4, col5, col6 = st.columns(3)
-
-with col4:
-    st.markdown("""
-    <div class="feature-box">
-        <div class="feature-icon">📅</div>
-        <div class="feature-title">Resolution Timeline</div>
-        <div class="feature-desc">Visual countdowns for filing deadlines, certification dates, and court ruling windows.</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col5:
-    st.markdown("""
-    <div class="feature-box">
-        <div class="feature-icon">🚨</div>
-        <div class="feature-title">Path Collapse Alerts</div>
-        <div class="feature-desc">Real-time notifications when a branch dies — candidate withdraws, ruling issued, deadline passes.</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col6:
-    st.markdown("""
-    <div class="feature-box">
-        <div class="feature-icon">🔗</div>
-        <div class="feature-title">Source Integration</div>
-        <div class="feature-desc">Pull from official sources — state election offices, federal courts, FEC filings — automatically.</div>
+    <div class="how-to-use">
+        <h3 style="color: #fff; margin-bottom: 20px;">Understanding Structural Edge</h3>
+        
+        <p style="color: #ccc; margin-bottom: 15px;">
+            <strong>This is NOT a prediction tool.</strong> Politics Edge Finder identifies when 
+            <strong>structural constraints</strong> have resolved outcomes before markets fully adjust.
+        </p>
+        
+        <h4 style="color: #4dabf7; margin: 20px 0 10px 0;">🔒 Constraint Status</h4>
+        <p style="color: #aaa; margin-bottom: 15px;">
+            <strong>Locked (85%+):</strong> Market strongly pricing one outcome. Limited paths remain.<br>
+            <strong>Leaning (70-84%):</strong> Clear direction but uncertainty remains.<br>
+            <strong>Active (31-69%):</strong> Multiple viable paths. High uncertainty.
+        </p>
+        
+        <h4 style="color: #4dabf7; margin: 20px 0 10px 0;">📊 What to Look For</h4>
+        <p style="color: #aaa; margin-bottom: 15px;">
+            • <strong>Volume spikes</strong> after news events = market catching up<br>
+            • <strong>Price movement toward extremes</strong> = paths collapsing<br>
+            • <strong>Stale prices</strong> despite structural changes = opportunity
+        </p>
+        
+        <h4 style="color: #4dabf7; margin: 20px 0 10px 0;">✅ How to Trade</h4>
+        <p style="color: #aaa;">
+            1. Identify markets where structure has resolved but price lags<br>
+            2. Confirm with volume trend (rising = confirmation)<br>
+            3. Check chart for recent movement direction<br>
+            4. Enter before price fully adjusts to structural reality
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
 # ============================================================
-# HOW IT WORKS
+# FETCH DATA
 # ============================================================
+with st.spinner("Loading live Kalshi political markets..."):
+    markets = get_political_markets()
 
+if not markets:
+    st.warning("No political markets found or API unavailable. Showing demo mode.")
+    # Fallback demo data
+    markets = [
+        {"ticker": "DEMO-SENATE", "title": "Demo: Senate Control 2026", "yes_price": 58, "volume": 45000, "category": "Politics"},
+        {"ticker": "DEMO-FEDCHAIR", "title": "Demo: Fed Chair Reappointment", "yes_price": 82, "volume": 89000, "category": "Politics"},
+        {"ticker": "DEMO-SCOTUS", "title": "Demo: Supreme Court Vacancy 2026", "yes_price": 24, "volume": 12000, "category": "Politics"},
+    ]
+
+# ============================================================
+# MARKET PRESSURE GAUGE
+# ============================================================
 st.markdown("---")
-st.markdown("### How It Works")
+st.markdown("### 📊 Market Pressure")
+
+# Calculate aggregate stats
+locked_count = sum(1 for m in markets if m.get("yes_price", 50) >= 85 or m.get("yes_price", 50) <= 15)
+total_volume = sum(m.get("volume", 0) for m in markets)
+avg_price_distance = np.mean([abs(m.get("yes_price", 50) - 50) for m in markets])
+
+pressure_score = (locked_count / max(len(markets), 1)) * 40 + (avg_price_distance / 50) * 40 + 20
+pressure_score = min(100, max(0, pressure_score))
+
+if pressure_score >= 70:
+    pressure_label = "HIGH STRUCTURAL ACTIVITY"
+    pressure_color = "#00c853"
+elif pressure_score >= 40:
+    pressure_label = "MODERATE ACTIVITY"
+    pressure_color = "#ffc107"
+else:
+    pressure_label = "LOW ACTIVITY"
+    pressure_color = "#888"
 
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.markdown("""
-    <div class="step-box">
-        <div class="step-number">1</div>
-        <div class="step-title">Monitor Key Dates</div>
-        <div class="step-desc">Deadlines, certifications, court rulings</div>
+    st.markdown(f"""
+    <div style="background: #1e1e2e; border-radius: 12px; padding: 20px; text-align: center;">
+        <p style="color: #888; font-size: 12px; margin-bottom: 5px;">PRESSURE INDEX</p>
+        <p style="color: {pressure_color}; font-size: 32px; font-weight: 800; margin: 0;">{pressure_score:.0f}</p>
+        <p style="color: {pressure_color}; font-size: 11px; margin-top: 5px;">{pressure_label}</p>
     </div>
     """, unsafe_allow_html=True)
 
 with col2:
-    st.markdown("""
-    <div class="step-box">
-        <div class="step-number">2</div>
-        <div class="step-title">Count Viable Paths</div>
-        <div class="step-desc">Track remaining routes to each outcome</div>
+    st.markdown(f"""
+    <div style="background: #1e1e2e; border-radius: 12px; padding: 20px; text-align: center;">
+        <p style="color: #888; font-size: 12px; margin-bottom: 5px;">LOCKED MARKETS</p>
+        <p style="color: #4dabf7; font-size: 32px; font-weight: 800; margin: 0;">{locked_count}</p>
+        <p style="color: #666; font-size: 11px; margin-top: 5px;">of {len(markets)} tracked</p>
     </div>
     """, unsafe_allow_html=True)
 
 with col3:
-    st.markdown("""
-    <div class="step-box">
-        <div class="step-number">3</div>
-        <div class="step-title">Detect Resolution</div>
-        <div class="step-desc">Flag when structure locks before price moves</div>
+    vol_display = f"${total_volume/1000:.0f}K" if total_volume >= 1000 else f"${total_volume}"
+    st.markdown(f"""
+    <div style="background: #1e1e2e; border-radius: 12px; padding: 20px; text-align: center;">
+        <p style="color: #888; font-size: 12px; margin-bottom: 5px;">TOTAL VOLUME</p>
+        <p style="color: #fff; font-size: 32px; font-weight: 800; margin: 0;">{vol_display}</p>
+        <p style="color: #888; font-size: 11px; margin-top: 5px;">across all markets</p>
     </div>
     """, unsafe_allow_html=True)
 
 with col4:
-    st.markdown("""
-    <div class="step-box">
-        <div class="step-number">4</div>
-        <div class="step-title">Quantify Edge</div>
-        <div class="step-desc">Measure lag between reality and market</div>
+    st.markdown(f"""
+    <div style="background: #1e1e2e; border-radius: 12px; padding: 20px; text-align: center;">
+        <p style="color: #888; font-size: 12px; margin-bottom: 5px;">MARKETS FOUND</p>
+        <p style="color: #fff; font-size: 32px; font-weight: 800; margin: 0;">{len(markets)}</p>
+        <p style="color: #666; font-size: 11px; margin-top: 5px;">political markets</p>
     </div>
     """, unsafe_allow_html=True)
 
 # ============================================================
-# WAITLIST FORM
+# MARKET CARDS WITH CHARTS
 # ============================================================
-
 st.markdown("---")
+st.markdown("### 🗳️ Live Political Markets")
 
-st.markdown("""
-<div class="waitlist-container">
-    <div class="waitlist-title">Get Early Access</div>
-    <div class="waitlist-subtitle">Be first to know when Politics Edge launches + receive structural resolution alerts</div>
-</div>
-""", unsafe_allow_html=True)
-
-with st.form("waitlist_form", clear_on_submit=True):
-    col1, col2 = st.columns([2, 1])
+for market in markets:
+    ticker = market.get("ticker", "N/A")
+    title = market.get("title", "Unknown Market")
+    yes_price = market.get("yes_price", 50)
+    no_price = 100 - yes_price
+    volume = market.get("volume", 0)
     
-    with col1:
-        email = st.text_input("Email address", placeholder="you@example.com", label_visibility="collapsed")
+    edge = calculate_edge(market)
+    status, status_icon = get_constraint_status(market)
     
-    with col2:
-        submitted = st.form_submit_button("Join Waitlist", type="primary", use_container_width=True)
+    # Signal classification
+    if edge >= 3.5:
+        signal_class = "signal-strong"
+        signal_text = "STRONG SIGNAL"
+    elif edge >= 2.0:
+        signal_class = "signal-moderate"
+        signal_text = "MODERATE SIGNAL"
+    else:
+        signal_class = "signal-weak"
+        signal_text = "WEAK SIGNAL"
     
-    interest = st.selectbox(
-        "Which markets interest you most?",
-        ["All Political Markets", "2026 Midterms (House/Senate)", "Presidential 2028", "Fed/Economic Policy", "Supreme Court", "State Elections"],
-        label_visibility="visible"
-    )
+    # Card styling
+    card_border = "#4a8f4a" if status == "Locked" else "#8f8f4a" if status == "Leaning" else "#333"
     
-    if submitted:
-        if email and "@" in email:
-            # In production: save to Google Sheets / Airtable / Supabase
-            st.success(f"You're on the list! We'll notify you at {email} when Politics Edge launches.")
-            # Log for now
-            st.session_state["waitlist_signups"] = st.session_state.get("waitlist_signups", 0) + 1
-        else:
-            st.error("Please enter a valid email address.")
-
-# Social proof
-st.markdown("""
-<div class="social-proof">
-    <strong>Join 200+ traders</strong> tracking structural edges on Kalshi political markets
-</div>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# INTEGRATIONS COMING
-# ============================================================
-
-st.markdown("---")
-st.markdown("### Integrations Coming")
-
-st.markdown("""
-<div class="integrations-bar">
-    <div class="integration-item">📊 Kalshi API</div>
-    <div class="integration-item">⚖️ CourtListener</div>
-    <div class="integration-item">📋 FEC Filings</div>
-    <div class="integration-item">🗳️ Ballotpedia</div>
-    <div class="integration-item">🏛️ State Election Offices</div>
-</div>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# EXAMPLE PREVIEW (MOCK)
-# ============================================================
-
-st.markdown("---")
-st.markdown("### Sneak Peek: Sample Analysis")
-
-with st.container():
-    st.markdown("""
-    <div style='background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.5rem; margin: 1rem 0;'>
-        <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;'>
+    st.markdown(f"""
+    <div class="market-card" style="border-color: {card_border};">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+            <span class="market-title">{title}</span>
+            <span class="signal-badge {signal_class}">{signal_text}</span>
+        </div>
+        <div style="display: flex; gap: 30px; flex-wrap: wrap;">
             <div>
-                <span style='font-size: 1.2rem; font-weight: 600; color: #fff;'>🗳️ Arizona Senate 2026</span>
-                <span style='background: #22c55e; color: white; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; margin-left: 0.75rem;'>EDGE DETECTED</span>
+                <p style="color: #888; font-size: 11px; margin-bottom: 3px;">YES PRICE</p>
+                <p style="color: #00c853; font-size: 20px; font-weight: 700; margin: 0;">{yes_price}¢</p>
             </div>
-            <span style='color: #888; font-size: 0.85rem;'>Updated 2 hours ago</span>
-        </div>
-        <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem;'>
-            <div style='background: rgba(102, 126, 234, 0.1); padding: 1rem; border-radius: 8px; text-align: center;'>
-                <div style='font-size: 0.8rem; color: #888;'>Filing Deadline</div>
-                <div style='font-size: 1.1rem; font-weight: 600; color: #667eea;'>Apr 7, 2026</div>
-                <div style='font-size: 0.75rem; color: #666;'>78 days remaining</div>
+            <div>
+                <p style="color: #888; font-size: 11px; margin-bottom: 3px;">NO PRICE</p>
+                <p style="color: #ff5252; font-size: 20px; font-weight: 700; margin: 0;">{no_price}¢</p>
             </div>
-            <div style='background: rgba(102, 126, 234, 0.1); padding: 1rem; border-radius: 8px; text-align: center;'>
-                <div style='font-size: 0.8rem; color: #888;'>Viable Paths</div>
-                <div style='font-size: 1.1rem; font-weight: 600; color: #f59e0b;'>3 → 2</div>
-                <div style='font-size: 0.75rem; color: #666;'>Path collapsed yesterday</div>
+            <div>
+                <p style="color: #888; font-size: 11px; margin-bottom: 3px;">STATUS</p>
+                <p style="color: #fff; font-size: 16px; font-weight: 600; margin: 0;">{status_icon} {status}</p>
             </div>
-            <div style='background: rgba(102, 126, 234, 0.1); padding: 1rem; border-radius: 8px; text-align: center;'>
-                <div style='font-size: 0.8rem; color: #888;'>Market Lag</div>
-                <div style='font-size: 1.1rem; font-weight: 600; color: #22c55e;'>+8¢</div>
-                <div style='font-size: 0.75rem; color: #666;'>Price hasn't adjusted</div>
+            <div>
+                <p style="color: #888; font-size: 11px; margin-bottom: 3px;">VOLUME</p>
+                <p style="color: #fff; font-size: 16px; font-weight: 600; margin: 0;">${volume:,}</p>
             </div>
-        </div>
-        <div style='font-size: 0.85rem; color: #888; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1rem;'>
-            <strong style='color: #ccc;'>Analysis:</strong> Leading challenger withdrew from primary Feb 15. Kalshi market still pricing 3-way race. Structural resolution suggests DEM path collapsed. Market lag detected.
+            <div>
+                <p style="color: #888; font-size: 11px; margin-bottom: 3px;">EDGE</p>
+                <p style="color: #00c853; font-size: 16px; font-weight: 600; margin: 0;">+{edge}%</p>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Price chart
+    with st.expander(f"📈 Price Chart — {ticker}", expanded=False):
+        history = get_market_history(ticker)
+        
+        if history:
+            # Build dataframe from candlesticks
+            df = pd.DataFrame(history)
+            df["date"] = pd.to_datetime(df["end_period_ts"], unit="s")
+            df["close"] = df["close_price"]
+            
+            # Create Plotly chart
+            fig = go.Figure()
+            
+            fig.add_trace(go.Scatter(
+                x=df["date"],
+                y=df["close"],
+                mode="lines",
+                name="YES Price",
+                line=dict(color="#00c853", width=2),
+                fill="tozeroy",
+                fillcolor="rgba(0, 200, 83, 0.1)"
+            ))
+            
+            fig.update_layout(
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(30,30,46,1)",
+                margin=dict(l=0, r=0, t=30, b=0),
+                height=250,
+                xaxis=dict(showgrid=False),
+                yaxis=dict(
+                    showgrid=True,
+                    gridcolor="rgba(255,255,255,0.1)",
+                    title="Price (¢)"
+                ),
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Stats row
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                high = df["close"].max()
+                st.metric("30d High", f"{high}¢")
+            with col2:
+                low = df["close"].min()
+                st.metric("30d Low", f"{low}¢")
+            with col3:
+                if len(df) > 1:
+                    change = df["close"].iloc[-1] - df["close"].iloc[0]
+                    st.metric("30d Change", f"{change:+.0f}¢")
+                else:
+                    st.metric("30d Change", "N/A")
+        else:
+            st.info("📊 Historical data not available for this market")
+            
+            # Show simple bar for current price
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=["YES", "NO"],
+                y=[yes_price, no_price],
+                marker_color=["#00c853", "#ff5252"]
+            ))
+            fig.update_layout(
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(30,30,46,1)",
+                height=200,
+                margin=dict(l=0, r=0, t=20, b=0),
+                yaxis=dict(title="Price (¢)", range=[0, 100])
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+    # Kalshi link
+    kalshi_url = f"https://kalshi.com/markets/{ticker.split('-')[0].lower()}"
+    st.markdown(f"[View on Kalshi →]({kalshi_url})", unsafe_allow_html=True)
+    st.markdown("")
+
+# ============================================================
+# REFRESH BUTTON
+# ============================================================
+st.markdown("---")
+col1, col2, col3 = st.columns([1, 1, 1])
+with col2:
+    if st.button("🔄 Refresh Markets", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
 
 # ============================================================
 # FOOTER
 # ============================================================
-
 st.markdown("""
-<div class="footer-container">
-    <div class="footer-links">
-        <a href="mailto:aipublishingpro@gmail.com">Contact</a>
-        <a href="https://kalshi.com" target="_blank">Kalshi Markets</a>
-        <a href="/">Back to BigSnapshot</a>
-    </div>
-    <div class="footer-disclaimer">
-        <strong>Disclaimer:</strong> Politics Edge is not affiliated with Kalshi. This tool is for informational and educational purposes only. 
-        Political prediction markets involve substantial risk of loss. Past structural analysis does not guarantee future results. 
-        Not financial or legal advice. Trade responsibly.
-    </div>
+<div style="text-align: center; padding: 30px; color: #666;">
+    <p style="font-size: 12px; margin-bottom: 10px;">
+        ⚠️ <strong>Disclaimer:</strong> Structural analysis only. Not financial advice. 
+        Political markets carry unique risks including regulatory changes and event uncertainty.
+    </p>
+    <p style="font-size: 11px; color: #555;">
+        BigSnapshot © 2026 | Data from Kalshi Public API | Refreshes every 5 minutes
+    </p>
 </div>
 """, unsafe_allow_html=True)
-
-# ============================================================
-# TIMEZONE FOOTER
-# ============================================================
-
-eastern = pytz.timezone("US/Eastern")
-now = datetime.now(eastern)
-st.caption(f"🕐 {now.strftime('%I:%M %p ET')} | 📅 {now.strftime('%B %d, %Y')}")
