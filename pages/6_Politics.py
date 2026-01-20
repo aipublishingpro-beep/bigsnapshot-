@@ -478,8 +478,8 @@ for market in markets:
             )
             st.plotly_chart(fig, use_container_width=True)
     
-    # Kalshi link
-    kalshi_url = f"https://kalshi.com/markets/{ticker.split('-')[0].lower()}"
+    # Kalshi link - use full ticker, never parse/split
+    kalshi_url = f"https://kalshi.com/markets/{ticker}"
     st.markdown(f"[View on Kalshi →]({kalshi_url})", unsafe_allow_html=True)
     st.markdown("")
 
