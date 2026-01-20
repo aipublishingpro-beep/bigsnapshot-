@@ -35,52 +35,6 @@ st.markdown("""
     .stApp {
         background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%);
     }
-    
-    .app-card {
-        display: block;
-        background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
-        border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 15px;
-        border: 1px solid #333;
-        transition: transform 0.2s, border-color 0.2s;
-        text-decoration: none;
-        cursor: pointer;
-    }
-    
-    .app-card:hover {
-        transform: translateY(-4px);
-        border-color: #4dabf7;
-        box-shadow: 0 8px 25px rgba(77, 171, 247, 0.2);
-    }
-    
-    .app-card-disabled {
-        display: block;
-        background: linear-gradient(135deg, #1a1a24 0%, #22222e 100%);
-        border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 15px;
-        border: 1px solid #2a2a2a;
-        opacity: 0.6;
-    }
-    
-    .status-live {
-        background: #00c853;
-        color: #000;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 700;
-    }
-    
-    .status-soon {
-        background: #555;
-        color: #fff;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 700;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -154,125 +108,42 @@ if not st.session_state.authenticated:
 # AUTHENTICATED - SHOW APP HUB
 # ============================================================
 st.markdown("""
-<div style="text-align: center; padding: 60px 20px 40px 20px;">
-    <div style="font-size: 70px; margin-bottom: 15px;">📊</div>
-    <h1 style="font-size: 52px; font-weight: 800; color: #fff; margin-bottom: 10px;">
+<div style="text-align: center; padding: 40px 20px 20px 20px;">
+    <div style="font-size: 60px; margin-bottom: 10px;">📊</div>
+    <h1 style="font-size: 42px; font-weight: 800; color: #fff; margin-bottom: 10px;">
         BigSnapshot
     </h1>
-    <p style="color: #888; font-size: 20px; margin-bottom: 10px;">
-        Prediction Market Edge Finder
-    </p>
-    <p style="color: #555; font-size: 14px;">
-        Structural analysis for Kalshi markets
+    <p style="color: #888; font-size: 16px;">
+        Select an app below or use the sidebar
     </p>
 </div>
 """, unsafe_allow_html=True)
 
+st.markdown("---")
+
 # ============================================================
-# CLICKABLE APP CARDS
+# APP BUTTONS - WORKING NAVIGATION
 # ============================================================
-st.markdown("""
-<div style="max-width: 900px; margin: 0 auto; padding: 0 20px;">
-    <p style="color: #888; font-size: 13px; margin-bottom: 20px; text-align: center;">
-        CLICK A CARD TO OPEN
-    </p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("### 🟢 LIVE APPS")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    # NFL - CLICKABLE
-    st.markdown("""
-    <a href="/NFL" class="app-card">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <span style="font-size: 28px;">🏈</span>
-                <span style="font-size: 20px; font-weight: 700; color: #fff; margin-left: 12px;">NFL Edge Finder</span>
-            </div>
-            <span class="status-live">LIVE</span>
-        </div>
-        <p style="color: #888; font-size: 14px; margin-top: 12px;">Game spreads, totals, player props</p>
-    </a>
-    """, unsafe_allow_html=True)
-    
-    # NHL - CLICKABLE
-    st.markdown("""
-    <a href="/NHL" class="app-card">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <span style="font-size: 28px;">🏒</span>
-                <span style="font-size: 20px; font-weight: 700; color: #fff; margin-left: 12px;">NHL Edge Finder</span>
-            </div>
-            <span class="status-live">LIVE</span>
-        </div>
-        <p style="color: #888; font-size: 14px; margin-top: 12px;">Game spreads, totals, player props</p>
-    </a>
-    """, unsafe_allow_html=True)
-    
-    # Temp - CLICKABLE
-    st.markdown("""
-    <a href="/Temp" class="app-card">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <span style="font-size: 28px;">🌡️</span>
-                <span style="font-size: 20px; font-weight: 700; color: #fff; margin-left: 12px;">Temp Edge Finder</span>
-            </div>
-            <span class="status-live">LIVE</span>
-        </div>
-        <p style="color: #888; font-size: 14px; margin-top: 12px;">Daily temperature forecasts vs markets</p>
-    </a>
-    """, unsafe_allow_html=True)
+    st.page_link("pages/1_NFL.py", label="🏈 NFL Edge Finder", use_container_width=True)
+    st.page_link("pages/3_NHL.py", label="🏒 NHL Edge Finder", use_container_width=True)
+    st.page_link("pages/5_Temp.py", label="🌡️ Temp Edge Finder", use_container_width=True)
 
 with col2:
-    # NBA - CLICKABLE
-    st.markdown("""
-    <a href="/NBA" class="app-card">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <span style="font-size: 28px;">🏀</span>
-                <span style="font-size: 20px; font-weight: 700; color: #fff; margin-left: 12px;">NBA Edge Finder</span>
-            </div>
-            <span class="status-live">LIVE</span>
-        </div>
-        <p style="color: #888; font-size: 14px; margin-top: 12px;">12-factor scoring model, live odds</p>
-    </a>
-    """, unsafe_allow_html=True)
-    
-    # MLB - DISABLED
-    st.markdown("""
-    <div class="app-card-disabled">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <span style="font-size: 28px;">⚾</span>
-                <span style="font-size: 20px; font-weight: 700; color: #fff; margin-left: 12px;">MLB Edge Finder</span>
-            </div>
-            <span class="status-soon">COMING SOON</span>
-        </div>
-        <p style="color: #888; font-size: 14px; margin-top: 12px;">Launching for 2026 season</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Politics - DISABLED
-    st.markdown("""
-    <div class="app-card-disabled">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <span style="font-size: 28px;">🗳️</span>
-                <span style="font-size: 20px; font-weight: 700; color: #fff; margin-left: 12px;">Politics Edge Finder</span>
-            </div>
-            <span class="status-soon">COMING SOON</span>
-        </div>
-        <p style="color: #888; font-size: 14px; margin-top: 12px;">2026 Midterms — launching Summer 2026</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.page_link("pages/2_NBA.py", label="🏀 NBA Edge Finder", use_container_width=True)
+    st.button("⚾ MLB Edge Finder — COMING SOON", use_container_width=True, disabled=True)
+    st.button("🗳️ Politics Edge Finder — COMING SOON", use_container_width=True, disabled=True)
 
 # ============================================================
 # HOW IT WORKS
 # ============================================================
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("---")
 st.markdown("""
-<div style="max-width: 800px; margin: 40px auto; padding: 30px; 
+<div style="max-width: 800px; margin: 20px auto; padding: 30px; 
             background: linear-gradient(135deg, #1a2a3a 0%, #2a3a4a 100%);
             border-radius: 16px; border: 1px solid #3a4a5a;">
     <h3 style="color: #fff; font-size: 18px; margin-bottom: 20px; text-align: center;">
