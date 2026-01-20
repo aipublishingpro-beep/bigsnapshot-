@@ -438,7 +438,7 @@ for market in markets:
                 margin=dict(l=0, r=0, t=20, b=0),
                 yaxis=dict(title="Price (¢)", range=[0, 100])
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key=f"bar_{ticker}")
     
     # Kalshi link
     kalshi_url = f"https://kalshi.com/markets?search={ticker}"
