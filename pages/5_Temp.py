@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
@@ -107,7 +107,7 @@ CITIES = {
 }
 
 def get_date_suffix(target_date):
-    return target_date.strftime("%y%b%d").lower()
+    return target_date.strftime("%y%b%d").upper()
 
 def get_nws_forecast(office, grid):
     """Fetch forecast from NWS API"""
@@ -134,13 +134,15 @@ def fetch_series_markets(series_ticker):
     except Exception as e:
         return [], str(e)
 
-def find_todays_market(markets, series_ticker, date_suffix):
-    """Find specific day's market from series"""
-    target = f"{series_ticker.lower()}-{date_suffix}"
+def find_todays_markets(markets, series_ticker, date_suffix):
+    """Find all bracket markets for a specific day"""
+    prefix = f"{series_ticker}-{date_suffix}".upper()
+    found = []
     for m in markets:
-        if m.get("ticker", "").lower() == target:
-            return m
-    return None
+        ticker = m.get("ticker", "").upper()
+        if ticker.startswith(prefix):
+            found.append(m)
+    return found
 
 def parse_today_forecast(periods):
     """Extract today's high and low from NWS periods"""
@@ -176,8 +178,15 @@ st.subheader("Select City")
 city = st.selectbox("City", list(CITIES.keys()), label_visibility="collapsed")
 config = CITIES[city]
 
+# --- DATE SELECTION ---
 today = now_et.date()
-date_suffix = get_date_suffix(today)
+tomorrow = today + timedelta(days=1)
+
+date_option = st.radio("Select Date", ["Today", "Tomorrow"], horizontal=True)
+target_date = today if date_option == "Today" else tomorrow
+date_suffix = get_date_suffix(target_date)
+
+st.caption(f"Looking for: {target_date.strftime('%A, %B %d')} | Suffix: `{date_suffix}`")
 
 # --- NWS FORECAST ---
 st.subheader(f"📡 NWS Forecast — {city}")
@@ -214,74 +223,96 @@ else:
 # --- KALSHI MARKETS ---
 st.subheader("📊 Kalshi Markets")
 
-target_high = f"{config['high_series'].lower()}-{date_suffix}"
-target_low = f"{config['low_series'].lower()}-{date_suffix}"
-
 col_high, col_low = st.columns(2)
 
 with col_high:
     st.write("**HIGH Temp Market**")
-    st.caption(f"`{target_high}`")
+    st.caption(f"`{config['high_series']}-{date_suffix}-T##`")
     
     high_markets, err = fetch_series_markets(config["high_series"])
     if err:
         st.error(err)
     else:
-        market = find_todays_market(high_markets, config["high_series"], date_suffix)
-        if market:
-            title = market.get("title", "")
-            yes_bid = market.get("yes_bid", 0)
-            yes_ask = market.get("yes_ask", 0)
-            
-            st.write(f"**{title}**")
-            
-            if yes_bid and yes_ask:
-                mid = (yes_bid + yes_ask) / 2
-                spread = yes_ask - yes_bid
-                st.metric("Market Price", f"{mid:.0f}¢", delta=f"Spread: {spread}¢")
+        day_markets = find_todays_markets(high_markets, config["high_series"], date_suffix)
+        if day_markets:
+            st.success(f"✅ Found {len(day_markets)} brackets")
+            for market in sorted(day_markets, key=lambda x: x.get("ticker", "")):
+                ticker = market.get("ticker", "")
+                title = market.get("title", "")
+                yes_bid = market.get("yes_bid", 0)
+                yes_ask = market.get("yes_ask", 0)
                 
-                if spread > 15:
-                    st.warning("⚠️ Wide spread — reduce size or wait")
-            else:
-                st.caption("No bid/ask")
+                # Extract threshold from ticker (e.g., -T40 means 40°F)
+                threshold = ticker.split("-T")[-1] if "-T" in ticker else ""
+                
+                if yes_bid and yes_ask:
+                    mid = (yes_bid + yes_ask) / 2
+                    spread = yes_ask - yes_bid
+                    col_a, col_b = st.columns([2, 1])
+                    with col_a:
+                        st.write(f"**{threshold}°F+**")
+                    with col_b:
+                        st.write(f"{mid:.0f}¢ (spread {spread}¢)")
+                else:
+                    st.write(f"**{threshold}°F+** — no bid/ask")
         else:
-            st.warning("Market not found for today")
+            st.warning("No markets for this date")
             if high_markets:
-                st.caption("Available:")
-                for m in high_markets[:3]:
-                    st.code(m.get("ticker", ""))
+                st.caption("Available dates:")
+                shown = set()
+                for m in high_markets[:10]:
+                    t = m.get("ticker", "")
+                    # Extract date portion
+                    parts = t.split("-")
+                    if len(parts) >= 2:
+                        date_part = parts[1]
+                        if date_part not in shown:
+                            st.code(date_part)
+                            shown.add(date_part)
 
 with col_low:
     st.write("**LOW Temp Market**")
-    st.caption(f"`{target_low}`")
+    st.caption(f"`{config['low_series']}-{date_suffix}-T##`")
     
     low_markets, err = fetch_series_markets(config["low_series"])
     if err:
         st.error(err)
     else:
-        market = find_todays_market(low_markets, config["low_series"], date_suffix)
-        if market:
-            title = market.get("title", "")
-            yes_bid = market.get("yes_bid", 0)
-            yes_ask = market.get("yes_ask", 0)
-            
-            st.write(f"**{title}**")
-            
-            if yes_bid and yes_ask:
-                mid = (yes_bid + yes_ask) / 2
-                spread = yes_ask - yes_bid
-                st.metric("Market Price", f"{mid:.0f}¢", delta=f"Spread: {spread}¢")
+        day_markets = find_todays_markets(low_markets, config["low_series"], date_suffix)
+        if day_markets:
+            st.success(f"✅ Found {len(day_markets)} brackets")
+            for market in sorted(day_markets, key=lambda x: x.get("ticker", "")):
+                ticker = market.get("ticker", "")
+                title = market.get("title", "")
+                yes_bid = market.get("yes_bid", 0)
+                yes_ask = market.get("yes_ask", 0)
                 
-                if spread > 15:
-                    st.warning("⚠️ Wide spread — reduce size or wait")
-            else:
-                st.caption("No bid/ask")
+                # Extract threshold from ticker
+                threshold = ticker.split("-T")[-1] if "-T" in ticker else ""
+                
+                if yes_bid and yes_ask:
+                    mid = (yes_bid + yes_ask) / 2
+                    spread = yes_ask - yes_bid
+                    col_a, col_b = st.columns([2, 1])
+                    with col_a:
+                        st.write(f"**{threshold}°F or less**")
+                    with col_b:
+                        st.write(f"{mid:.0f}¢ (spread {spread}¢)")
+                else:
+                    st.write(f"**{threshold}°F or less** — no bid/ask")
         else:
-            st.warning("Market not found for today")
+            st.warning("No markets for this date")
             if low_markets:
-                st.caption("Available:")
-                for m in low_markets[:3]:
-                    st.code(m.get("ticker", ""))
+                st.caption("Available dates:")
+                shown = set()
+                for m in low_markets[:10]:
+                    t = m.get("ticker", "")
+                    parts = t.split("-")
+                    if len(parts) >= 2:
+                        date_part = parts[1]
+                        if date_part not in shown:
+                            st.code(date_part)
+                            shown.add(date_part)
 
 # --- EDGE ANALYSIS ---
 st.subheader("🎯 Edge Analysis")
