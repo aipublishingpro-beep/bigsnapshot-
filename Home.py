@@ -24,7 +24,7 @@ st.markdown("""
 </head>
 """, unsafe_allow_html=True)
 
-# ========== HIDE STREAMLIT UI + MOBILE RESPONSIVE ==========
+# ========== HIDE STREAMLIT UI ==========
 st.markdown("""<style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
@@ -55,209 +55,34 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ========== SESSION STATE ==========
-if 'show_apps' not in st.session_state:
-    st.session_state.show_apps = False
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
+if 'show_preview' not in st.session_state:
+    st.session_state.show_preview = False
 
 # ========== PASSWORD (CHANGE THIS) ==========
 BETA_PASSWORD = "BIGSNAP2026"
 
-# ========== LANDING PAGE ==========
-if not st.session_state.authenticated and not st.session_state.show_apps:
-    
-    # Hero
-    st.markdown("""
-    <div style="text-align: center; padding: 40px 20px;">
-        <h1 style="font-size: 3em; margin-bottom: 0; color: #fff;">Stop Switching Tabs.</h1>
-        <h1 style="font-size: 3em; margin-top: 0; color: #00d4ff;">Start Making Cleaner Decisions.</h1>
-        <p style="font-size: 1.3em; color: #888; max-width: 700px; margin: 20px auto;">
-            BigSnapshot is a decision-compression tool for serious sports bettors. It pulls the signals that matter into one screen—so you spend less time hunting and more time deciding.
-        </p>
-        <p style="color: #666; font-size: 1.1em;">No hype. No picks shoved in your face. Just clarity.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # CTA Buttons
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown("""
-        <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-            <a href="mailto:aipublishingpro@gmail.com?subject=BigSnapshot%20Beta%20Request&body=I%20want%20to%20join%20the%20BigSnapshot%20beta.%0A%0AMy%20name%3A%20%0AMarkets%20I%20trade%3A%20" 
-               style="background: #00ff88; color: #000; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 1.1em;">
-                📧 JOIN BETA
-            </a>
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("👀 PREVIEW APP", use_container_width=True):
-            st.session_state.show_apps = True
-            st.rerun()
-        st.caption("Preview the tools before signing up")
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # One Screen Section
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 16px; padding: 40px; margin: 40px 0;">
-        <h2 style="color: #fff; text-align: center; margin-bottom: 30px;">One Screen. One Flow. Zero Noise.</h2>
-        <p style="color: #aaa; text-align: center; max-width: 600px; margin: 0 auto 30px auto;">
-            Most bettors lose edge before they even place a bet—switching between odds, stats, line movement, news, and gut instinct. BigSnapshot fixes that.
-        </p>
-        <div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;">
-            <div style="text-align: center;">
-                <span style="font-size: 2em;">🎯</span>
-                <p style="color: #fff; margin: 10px 0 5px 0; font-weight: bold;">Where the edge is</p>
-                <p style="color: #888; font-size: 0.9em;">Clear signals, not noise</p>
-            </div>
-            <div style="text-align: center;">
-                <span style="font-size: 2em;">📊</span>
-                <p style="color: #fff; margin: 10px 0 5px 0; font-weight: bold;">Market agrees or resists</p>
-                <p style="color: #888; font-size: 0.9em;">Know before you commit</p>
-            </div>
-            <div style="text-align: center;">
-                <span style="font-size: 2em;">⚡</span>
-                <p style="color: #fff; margin: 10px 0 5px 0; font-weight: bold;">What deserves attention</p>
-                <p style="color: #888; font-size: 0.9em;">And what doesn't</p>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Benefits Grid
-    st.markdown("<h2 style='text-align: center; color: #fff; margin: 40px 0 30px 0;'>Why BigSnapshot Is Different</h2>", unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #00d4ff;">
-            <h3 style="color: #00d4ff; margin: 0 0 10px 0;">⏱️ Save Time on Every Slate</h3>
-            <p style="color: #aaa; margin: 0;">No bouncing between sportsbooks, stats sites, and Twitter. Scan an entire slate in seconds.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #00ff88;">
-            <h3 style="color: #00ff88; margin: 0 0 10px 0;">🧠 Decision Compression</h3>
-            <p style="color: #aaa; margin: 0;">Raw data distilled into clear signals. Analysis paralysis disappears. Your brain stays focused on sizing and discipline.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #ffaa00;">
-            <h3 style="color: #ffaa00; margin: 0 0 10px 0;">📈 Market Awareness</h3>
-            <p style="color: #aaa; margin: 0;">Instantly know if the market supports your view or pushes back. Aware before you commit—not after.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #ff6b6b;">
-            <h3 style="color: #ff6b6b; margin: 0 0 10px 0;">🛑 Stops You From Chasing</h3>
-            <p style="color: #aaa; margin: 0;">Late moves are obvious. Resistance is clearly flagged. The app naturally slows you down when chasing would hurt most.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #aa88ff;">
-            <h3 style="color: #aa88ff; margin: 0 0 10px 0;">🎚️ Discipline Built In</h3>
-            <p style="color: #aaa; margin: 0;">No BUY/SELL hype. No flashing alerts. No forced picks. Encourages restraint instead of impulsive action.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #ff88aa;">
-            <h3 style="color: #ff88aa; margin: 0 0 10px 0;">👁️ Early Signal Visibility</h3>
-            <p style="color: #aaa; margin: 0;">Spot early pressure before public noise takes over. Especially powerful in thinner markets.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #88ddff;">
-            <h3 style="color: #88ddff; margin: 0 0 10px 0;">✂️ Fewer Bad Bets</h3>
-            <p style="color: #aaa; margin: 0;">Doesn't create more bets—filters out the bad versions of good ideas. Edge quality improves without trading more.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #88ff88;">
-            <h3 style="color: #88ff88; margin: 0 0 10px 0;">🔒 Human-in-the-Loop</h3>
-            <p style="color: #aaa; margin: 0;">Doesn't bet for you. Doesn't override judgment. You stay in control at all times.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Result Section
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #0f3460, #1a1a2e); border-radius: 16px; padding: 40px; margin: 40px 0; text-align: center;">
-        <h2 style="color: #fff; margin-bottom: 20px;">The Result</h2>
-        <div style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; margin-bottom: 30px;">
-            <span style="color: #00ff88; font-size: 1.1em;">✓ Less second-guessing</span>
-            <span style="color: #00ff88; font-size: 1.1em;">✓ Less tilt</span>
-            <span style="color: #00ff88; font-size: 1.1em;">✓ Fewer mistakes</span>
-            <span style="color: #00ff88; font-size: 1.1em;">✓ More trust in your process</span>
-        </div>
-        <p style="color: #fff; font-size: 1.4em; font-weight: bold; margin: 0;">You don't bet more. You bet cleaner.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Bottom Line + CTA
-    st.markdown("""
-    <div style="text-align: center; padding: 40px 20px;">
-        <p style="color: #888; font-size: 1.2em; max-width: 600px; margin: 0 auto 30px auto;">
-            BigSnapshot doesn't help you chase wins. It helps you make fewer bad decisions.<br><br>
-            <span style="color: #fff; font-weight: bold;">That's where real edge comes from.</span>
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Beta Signup
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #1a472a, #0f3460); border-radius: 16px; padding: 40px; margin: 40px 0; text-align: center; border: 2px solid #00ff88;">
-        <h2 style="color: #00ff88; margin-bottom: 10px;">🚀 Join the Beta</h2>
-        <p style="color: #aaa; margin-bottom: 25px;">Get early access. Help shape the product. Lock in founder pricing.</p>
-        <a href="mailto:aipublishingpro@gmail.com?subject=BigSnapshot%20Beta%20Request&body=I%20want%20to%20join%20the%20BigSnapshot%20beta.%0A%0AMy%20name%3A%20%0AMarkets%20I%20trade%3A%20" 
-           style="background: #00ff88; color: #000; padding: 16px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 1.2em; display: inline-block;">
-            📧 REQUEST BETA ACCESS
-        </a>
-        <p style="color: #666; margin-top: 20px; font-size: 0.9em;">Click above to send an email request</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Final CTA
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("🚀 LAUNCH APP (PREVIEW)", use_container_width=True, type="primary", key="bottom_cta"):
-            st.session_state.show_apps = True
-            st.rerun()
-    
-    # Footer
-    st.markdown("""
-    <div style="text-align: center; padding: 40px 20px; margin-top: 40px; border-top: 1px solid #333;">
-        <p style="color: #666; font-size: 0.9em;">
-            Built for serious bettors. Not a pick app. Not a casino toy.<br>
-            📧 aipublishingpro@gmail.com
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+# ========== MAIN LOGIC ==========
 
-# ========== APP HUB ==========
-else:
-    # Check if preview mode (not authenticated) or full access
-    is_preview = not st.session_state.authenticated
+# Show app hub if authenticated OR preview mode
+if st.session_state.authenticated or st.session_state.show_preview:
     
-    # Header
-    if is_preview:
-        st.warning("👀 **PREVIEW MODE** — Join beta for full access")
-        if st.button("← Back to Home"):
-            st.session_state.show_apps = False
-            st.rerun()
-    else:
+    # Header based on mode
+    if st.session_state.authenticated:
         st.success("✅ **BETA ACCESS UNLOCKED** — Welcome!")
-        if st.button("🚪 Logout"):
-            st.session_state.authenticated = False
-            st.session_state.show_apps = False
-            st.rerun()
+        col1, col2 = st.columns([6, 1])
+        with col2:
+            if st.button("🚪 Logout"):
+                st.session_state.authenticated = False
+                st.rerun()
+    else:
+        st.warning("👀 **PREVIEW MODE** — Limited access. Join beta for full features!")
+        col1, col2 = st.columns([6, 1])
+        with col2:
+            if st.button("← Back"):
+                st.session_state.show_preview = False
+                st.rerun()
     
     st.title("📊 BigSnapshot")
     st.caption("Decision compression for serious bettors")
@@ -337,6 +162,100 @@ else:
     <div style="text-align: center; padding: 20px;">
         <p style="color: #666; font-size: 0.9em;">
             ⚠️ For entertainment only. Not financial advice.<br>
+            📧 aipublishingpro@gmail.com
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ========== LANDING PAGE ==========
+else:
+    # Hero
+    st.markdown("""
+    <div style="text-align: center; padding: 40px 20px;">
+        <h1 style="font-size: 3em; margin-bottom: 0; color: #fff;">Stop Switching Tabs.</h1>
+        <h1 style="font-size: 3em; margin-top: 0; color: #00d4ff;">Start Making Cleaner Decisions.</h1>
+        <p style="font-size: 1.3em; color: #888; max-width: 700px; margin: 20px auto;">
+            BigSnapshot is a decision-compression tool for serious sports bettors. It pulls the signals that matter into one screen—so you spend less time hunting and more time deciding.
+        </p>
+        <p style="color: #666; font-size: 1.1em;">No hype. No picks shoved in your face. Just clarity.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # JOIN BETA button
+    st.markdown("""
+    <div style="text-align: center; margin: 20px 0;">
+        <a href="mailto:aipublishingpro@gmail.com?subject=BigSnapshot%20Beta%20Request&body=I%20want%20to%20join%20the%20BigSnapshot%20beta.%0A%0AMy%20name%3A%20%0AMarkets%20I%20trade%3A%20" 
+           style="background: #00ff88; color: #000; padding: 16px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 1.2em;">
+            📧 JOIN BETA
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # PASSWORD LOGIN SECTION
+    st.markdown("""
+    <div style="text-align: center; margin: 30px 0 10px 0;">
+        <p style="color: #888; font-size: 1em;">🔐 Already a beta tester?</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        password_input = st.text_input("Password", type="password", placeholder="Enter your beta password", label_visibility="collapsed")
+        if st.button("🔓 UNLOCK ACCESS", use_container_width=True, type="primary"):
+            if password_input == BETA_PASSWORD:
+                st.session_state.authenticated = True
+                st.rerun()
+            elif password_input:
+                st.error("❌ Wrong password. Email us if you forgot it.")
+            else:
+                st.warning("Please enter your password")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # PREVIEW button
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("👀 PREVIEW APP (Limited)", use_container_width=True):
+            st.session_state.show_preview = True
+            st.rerun()
+        st.caption("Preview features before signing up")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Benefits section
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 16px; padding: 40px; margin: 40px 0;">
+        <h2 style="color: #fff; text-align: center; margin-bottom: 30px;">One Screen. One Flow. Zero Noise.</h2>
+        <p style="color: #aaa; text-align: center; max-width: 600px; margin: 0 auto 30px auto;">
+            Most bettors lose edge before they even place a bet—switching between odds, stats, line movement, news, and gut instinct. BigSnapshot fixes that.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;">
+            <div style="text-align: center;">
+                <span style="font-size: 2em;">🎯</span>
+                <p style="color: #fff; margin: 10px 0 5px 0; font-weight: bold;">Where the edge is</p>
+                <p style="color: #888; font-size: 0.9em;">Clear signals, not noise</p>
+            </div>
+            <div style="text-align: center;">
+                <span style="font-size: 2em;">📊</span>
+                <p style="color: #fff; margin: 10px 0 5px 0; font-weight: bold;">Market agrees or resists</p>
+                <p style="color: #888; font-size: 0.9em;">Know before you commit</p>
+            </div>
+            <div style="text-align: center;">
+                <span style="font-size: 2em;">⚡</span>
+                <p style="color: #fff; margin: 10px 0 5px 0; font-weight: bold;">What deserves attention</p>
+                <p style="color: #888; font-size: 0.9em;">And what doesn't</p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Footer
+    st.markdown("""
+    <div style="text-align: center; padding: 40px 20px; margin-top: 40px; border-top: 1px solid #333;">
+        <p style="color: #666; font-size: 0.9em;">
+            Built for serious bettors. Not a pick app. Not a casino toy.<br>
             📧 aipublishingpro@gmail.com
         </p>
     </div>
