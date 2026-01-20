@@ -10,6 +10,14 @@ import pytz
 
 st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
 
+# ============================================================
+# AUTH CHECK
+# ============================================================
+if 'authenticated' not in st.session_state or not st.session_state.authenticated:
+    st.warning("⚠️ Please log in from the Home page first.")
+    st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
+    st.stop()
+
 VERSION = "1.2"
 
 # ============================================================
@@ -402,6 +410,9 @@ def main():
     
     # Sidebar
     with st.sidebar:
+        st.page_link("Home.py", label="🏠 Home", use_container_width=True)
+        st.divider()
+        
         st.markdown("### Settings")
         
         city_code = st.selectbox(
