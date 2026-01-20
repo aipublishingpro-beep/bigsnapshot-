@@ -1,564 +1,606 @@
 import streamlit as st
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
-# ============================================
-# TEMPERATURE EDGE FINDER v1.0.1
-# ============================================
+# ============================================================
+# TEMP EDGE FINDER v1.2
+# NWS vs Kalshi Temperature Market Edge Detection
+# ============================================================
 
 st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
 
-# Hide Streamlit menu/footer/header
+VERSION = "1.2"
+
+# ============================================================
+# STYLING
+# ============================================================
+
 st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
 .stDeployButton {display: none;}
-[data-testid="stToolbar"] {display: none;}
+
+.edge-structural { background: #166534; color: white; padding: 0.5rem 1rem; border-radius: 8px; }
+.edge-marginal { background: #ca8a04; color: white; padding: 0.5rem 1rem; border-radius: 8px; }
+.edge-noise { background: #525252; color: white; padding: 0.5rem 1rem; border-radius: 8px; }
+.warning-box { background: #7c2d12; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
 </style>
 """, unsafe_allow_html=True)
 
-# GA4 Tracking
-st.markdown("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-NQKY5VQ376');
-</script>
-""", unsafe_allow_html=True)
+# ============================================================
+# CITY CONFIGURATIONS
+# ============================================================
 
-# ============================================
-# GATE CHECK - Uses shared gate from Home.py
-# ============================================
-if "gate_passed" not in st.session_state:
-    st.session_state.gate_passed = False
-
-if not st.session_state.gate_passed:
-    st.error("🚫 Access Denied")
-    st.warning("You must accept the terms on the Home page first.")
-    if st.button("👉 Go to Home Page"):
-        st.switch_page("Home.py")
-    st.stop()
-
-# ============================================
-# SIDEBAR
-# ============================================
-with st.sidebar:
-    st.header("⏰ BEST TIME TO BUY")
-    st.markdown("""
-    🟡 **6-8 AM** — Risky, forecast forming
-    
-    🟢 **8-10 AM** — BEST TIME!
-    
-    🔵 **10-12 PM** — Good, prices rising
-    
-    🔴 **12 PM+** — Late, prices baked in
-    """)
-    
-    st.divider()
-    
-    st.header("📖 STRATEGY")
-    st.markdown("""
-    1. Check **Market Forecast**
-    2. Compare to **NWS Forecast**
-    3. **BUY YES** on predicted bracket
-    4. Hold to settlement or sell early
-    """)
-    
-    st.divider()
-    
-    st.header("📊 SPREAD GUIDE")
-    st.markdown("""
-    🟢 **< 10¢** — Tight, can exit anytime
-    
-    🟡 **10-20¢** — Medium, harder to exit
-    
-    🔴 **> 20¢** — Wide, hold to settlement
-    
-    *Spread = Ask - Bid*
-    """)
-    
-    st.divider()
-    st.caption("v1.0.1 | High + Low Temps")
-
-# ============================================
-# CITY CONFIGS
-# ============================================
 CITIES = {
     "NYC": {
-        "name": "New York (Central Park)",
-        "tz": "America/New_York",
-        "high_ticker": "KXHIGHNY",
-        "low_ticker": "KXLOWTNYC",
+        "name": "New York City",
         "nws_station": "KNYC",
-        "nws_grid": ("OKX", 33, 37)
+        "nws_gridpoint": "OKX/33,37",
+        "kalshi_high": "KXHIGHNY",
+        "kalshi_low": "KXLOWNY",
+        "lat": 40.7128,
+        "lon": -74.0060,
     },
-    "Chicago": {
-        "name": "Chicago (O'Hare)",
-        "tz": "America/Chicago",
-        "high_ticker": "KXHIGHCHI",
-        "low_ticker": "KXLOWTCHI",
+    "CHI": {
+        "name": "Chicago",
         "nws_station": "KORD",
-        "nws_grid": ("LOT", 65, 76)
+        "nws_gridpoint": "LOT/76,73",
+        "kalshi_high": "KXHIGHCHI",
+        "kalshi_low": "KXLOWCHI",
+        "lat": 41.8781,
+        "lon": -87.6298,
     },
-    "LA": {
-        "name": "Los Angeles (LAX)",
-        "tz": "America/Los_Angeles",
-        "high_ticker": "KXHIGHLA",
-        "low_ticker": "KXLOWTLA",
-        "nws_station": "KLAX",
-        "nws_grid": ("LOX", 149, 48)
-    },
-    "Miami": {
+    "MIA": {
         "name": "Miami",
-        "tz": "America/New_York",
-        "high_ticker": "KXHIGHMIA",
-        "low_ticker": "KXLOWTMIA",
         "nws_station": "KMIA",
-        "nws_grid": ("MFL", 109, 65)
+        "nws_gridpoint": "MFL/109,50",
+        "kalshi_high": "KXHIGHMIA",
+        "kalshi_low": "KXLOWMIA",
+        "lat": 25.7617,
+        "lon": -80.1918,
     },
-    "Denver": {
+    "DEN": {
         "name": "Denver",
-        "tz": "America/Denver",
-        "high_ticker": "KXHIGHDEN",
-        "low_ticker": "KXLOWTDEN",
         "nws_station": "KDEN",
-        "nws_grid": ("BOU", 62, 60)
+        "nws_gridpoint": "BOU/62,60",
+        "kalshi_high": "KXHIGHDEN",
+        "kalshi_low": "KXLOWDEN",
+        "lat": 39.7392,
+        "lon": -104.9903,
     },
-    "Austin": {
-        "name": "Austin",
-        "tz": "America/Chicago",
-        "high_ticker": "KXHIGHAUS",
-        "low_ticker": "KXLOWTAUS",
-        "nws_station": "KAUS",
-        "nws_grid": ("EWX", 156, 91)
-    }
 }
 
-# ============================================
-# FUNCTIONS
-# ============================================
-def check_kalshi_market_exists(series_ticker):
-    """Check if Kalshi market exists and has today's contracts"""
-    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
-    try:
-        resp = requests.get(url, timeout=10)
-        if resp.status_code != 200:
-            return False
-        data = resp.json()
-        markets = data.get("markets", [])
-        if not markets:
-            return False
-        today_et = datetime.now(pytz.timezone('US/Eastern'))
-        today_str1 = today_et.strftime('%y%b%d').upper()
-        today_str2 = today_et.strftime('%b-%d').upper()
-        today_str3 = today_et.strftime('%Y-%m-%d')
-        for m in markets:
-            event_ticker = m.get("event_ticker", "").upper()
-            ticker = m.get("ticker", "").upper()
-            close_time = m.get("close_time", "")
-            if today_str1 in event_ticker or today_str1 in ticker or today_str2 in event_ticker or today_str3 in close_time[:10]:
-                return True
-        return False
-    except:
-        return False
+# ============================================================
+# API FUNCTIONS WITH CACHING
+# ============================================================
 
-def fetch_kalshi_brackets(series_ticker):
-    """Fetch live Kalshi temperature brackets"""
-    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
-    
+@st.cache_data(ttl=300)  # Cache 5 minutes
+def fetch_nws_forecast(gridpoint):
+    """Fetch NWS forecast with caching"""
+    url = f"https://api.weather.gov/gridpoints/{gridpoint}/forecast"
+    headers = {"User-Agent": "TempEdgeFinder/1.2 (contact@bigsnapshot.com)"}
     try:
-        resp = requests.get(url, timeout=10)
-        if resp.status_code != 200:
-            return None
-        
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        return {
+            "success": True,
+            "data": data,
+            "fetched_at": datetime.now(pytz.timezone("US/Eastern")).strftime("%I:%M %p ET"),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "fetched_at": None}
+
+@st.cache_data(ttl=300)  # Cache 5 minutes
+def fetch_nws_current(lat, lon):
+    """Fetch current conditions"""
+    url = f"https://api.weather.gov/points/{lat},{lon}/observations/latest"
+    headers = {"User-Agent": "TempEdgeFinder/1.2 (contact@bigsnapshot.com)"}
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        props = data.get("properties", {})
+        temp_c = props.get("temperature", {}).get("value")
+        if temp_c is not None:
+            temp_f = round(temp_c * 9/5 + 32)
+            return {"success": True, "temp_f": temp_f}
+        return {"success": False, "temp_f": None}
+    except:
+        return {"success": False, "temp_f": None}
+
+@st.cache_data(ttl=60)  # Cache 1 minute for prices
+def fetch_kalshi_brackets(series_ticker):
+    """Fetch Kalshi temperature brackets - UPDATED API URL"""
+    # Updated base URL per critic feedback
+    url = "https://trading-api.kalshi.com/trade-api/v2/markets"
+    params = {
+        "series_ticker": series_ticker,
+        "status": "open",
+        "limit": 50,
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
         data = resp.json()
         markets = data.get("markets", [])
-        
-        if not markets:
-            return None
-        
-        today_et = datetime.now(pytz.timezone('US/Eastern'))
-        today_str1 = today_et.strftime('%y%b%d').upper()
-        today_str2 = today_et.strftime('%b-%d').upper()
-        today_str3 = today_et.strftime('%Y-%m-%d')
-        
-        today_markets = []
-        for m in markets:
-            event_ticker = m.get("event_ticker", "").upper()
-            ticker = m.get("ticker", "").upper()
-            close_time = m.get("close_time", "")
-            
-            if today_str1 in event_ticker or today_str1 in ticker or today_str2 in event_ticker or today_str3 in close_time[:10]:
-                today_markets.append(m)
-        
-        if not today_markets:
-            return None
         
         brackets = []
-        for m in today_markets:
-            yes_ask = m.get("yes_ask", 0) or 0
-            yes_bid = m.get("yes_bid", 0) or 0
-            yes_price = yes_ask if yes_ask > 0 else yes_bid
-            spread = yes_ask - yes_bid if (yes_ask and yes_bid) else 0
-            
-            subtitle = m.get("subtitle", "") or m.get("title", "")
+        for m in markets:
             ticker = m.get("ticker", "")
-            event_ticker = m.get("event_ticker", "")
-            url = f"https://kalshi.com/events/{event_ticker}" if event_ticker else f"https://kalshi.com/markets/{ticker}"
+            title = m.get("title", "")
+            yes_ask = m.get("yes_ask", 50)
+            yes_bid = m.get("yes_bid", 50)
+            no_ask = m.get("no_ask", 50)
             
-            mid = None
-            range_text = subtitle
-            
-            if "or above" in subtitle.lower() or ">" in subtitle:
-                nums = [int(s) for s in subtitle.replace('°','').replace('>','').split() if s.lstrip('-').isdigit()]
-                if nums:
-                    mid = nums[0] + 2.5
-                    range_text = f"{nums[0]}° or above"
-            elif "or below" in subtitle.lower() or "<" in subtitle:
-                nums = [int(s) for s in subtitle.replace('°','').replace('<','').split() if s.lstrip('-').isdigit()]
-                if nums:
-                    mid = nums[0] - 2.5
-                    range_text = f"{nums[0]}° or below"
-            elif "to" in subtitle.lower() or "-" in subtitle:
-                nums = [int(s) for s in subtitle.replace('°','').replace('to',' ').replace('-',' ').split() if s.lstrip('-').isdigit()]
-                if len(nums) >= 2:
-                    mid = (nums[0] + nums[1]) / 2
-                    range_text = f"{nums[0]}° to {nums[1]}°"
+            # Calculate mid-price for fairer implied prob
+            if yes_bid and yes_ask:
+                mid_price = (yes_bid + yes_ask) / 2
             else:
-                nums = [int(s) for s in subtitle.replace('°','').split() if s.lstrip('-').isdigit()]
-                if nums:
-                    mid = nums[0]
-                    range_text = f"{nums[0]}°"
+                mid_price = yes_ask
+            
+            spread = abs(yes_ask - yes_bid) if yes_bid else 0
+            
+            # Parse temperature range from title
+            temp_range = parse_temp_range(title)
             
             brackets.append({
-                "range": range_text,
-                "yes": yes_price,
+                "ticker": ticker,
+                "title": title,
+                "range": temp_range,
                 "yes_ask": yes_ask,
                 "yes_bid": yes_bid,
+                "mid_price": mid_price,
                 "spread": spread,
-                "mid": mid,
-                "ticker": ticker,
-                "url": url
+                "no_ask": no_ask,
             })
         
-        brackets.sort(key=lambda x: x['mid'] if x['mid'] else 0)
-        return brackets
-    
+        return {"success": True, "brackets": brackets}
     except Exception as e:
-        return None
+        return {"success": False, "brackets": [], "error": str(e)}
 
-def fetch_nws_current(station):
-    """Fetch current temperature from NWS"""
-    url = f"https://api.weather.gov/stations/{station}/observations/latest"
-    try:
-        resp = requests.get(url, headers={"User-Agent": "TempEdgeFinder/1.0"}, timeout=10)
-        if resp.status_code == 200:
-            props = resp.json().get("properties", {})
-            temp_c = props.get("temperature", {}).get("value")
-            if temp_c is not None:
-                return round(temp_c * 9/5 + 32, 1)
-    except:
-        pass
-    return None
+def parse_temp_range(title):
+    """Extract temperature range from Kalshi title"""
+    import re
+    # Common patterns: "32°F or below", "33°F to 36°F", "50°F or above"
+    if "or below" in title.lower():
+        match = re.search(r'(\d+)', title)
+        if match:
+            return f"≤{match.group(1)}°F"
+    elif "or above" in title.lower():
+        match = re.search(r'(\d+)', title)
+        if match:
+            return f"≥{match.group(1)}°F"
+    else:
+        matches = re.findall(r'(\d+)', title)
+        if len(matches) >= 2:
+            return f"{matches[0]}-{matches[1]}°F"
+    return title[:30]
 
-def fetch_nws_forecast(grid):
-    """Fetch NWS forecast for high/low"""
-    office, x, y = grid
-    url = f"https://api.weather.gov/gridpoints/{office}/{x},{y}/forecast"
-    try:
-        resp = requests.get(url, headers={"User-Agent": "TempEdgeFinder/1.0"}, timeout=10)
-        if resp.status_code == 200:
-            periods = resp.json().get("properties", {}).get("periods", [])
-            high = None
-            low = None
-            for p in periods[:4]:
-                temp = p.get("temperature")
-                is_day = p.get("isDaytime", True)
-                if is_day and high is None:
+# ============================================================
+# EDGE CALCULATION ENGINE
+# ============================================================
+
+def extract_nws_temps(forecast_data, target_date):
+    """Extract high/low temps from NWS forecast for target date"""
+    periods = forecast_data.get("properties", {}).get("periods", [])
+    
+    high = None
+    low = None
+    high_uncertainty = 0
+    low_uncertainty = 0
+    
+    for period in periods:
+        name = period.get("name", "").lower()
+        temp = period.get("temperature")
+        start_time = period.get("startTime", "")
+        
+        # Check if this period matches target date
+        if target_date.strftime("%Y-%m-%d") in start_time:
+            if "night" in name or "tonight" in name:
+                low = temp
+            elif temp:
+                if high is None or temp > high:
                     high = temp
-                elif not is_day and low is None:
-                    low = temp
-            return high, low
-    except:
-        pass
-    return None, None
+                if "day" in name or "today" in name or "afternoon" in name:
+                    high = temp
+    
+    # Estimate uncertainty from forecast text (simplified)
+    # In production, parse probabilistic forecasts
+    for period in periods:
+        text = period.get("detailedForecast", "").lower()
+        if "uncertain" in text or "variable" in text or "changing" in text:
+            high_uncertainty = 3
+            low_uncertainty = 3
+    
+    return {
+        "high": high,
+        "low": low,
+        "high_uncertainty": high_uncertainty,
+        "low_uncertainty": low_uncertainty,
+    }
 
-def calc_market_forecast(brackets):
-    """Calculate market-implied forecast using weighted average"""
+def calc_market_implied(brackets):
+    """Calculate market-implied temperature using mid-prices"""
     if not brackets:
-        return None
+        return None, None, None
     
     total_prob = 0
-    weighted_sum = 0
+    weighted_temp = 0
     
     for b in brackets:
-        if b['mid'] is not None and b['yes'] > 0:
-            prob = b['yes'] / 100
-            total_prob += prob
-            weighted_sum += prob * b['mid']
+        prob = b["mid_price"] / 100
+        total_prob += prob
+        
+        # Extract midpoint of range
+        range_str = b["range"]
+        import re
+        nums = re.findall(r'\d+', range_str)
+        if len(nums) >= 2:
+            midpoint = (int(nums[0]) + int(nums[1])) / 2
+        elif len(nums) == 1:
+            midpoint = int(nums[0])
+        else:
+            continue
+        
+        weighted_temp += midpoint * prob
     
     if total_prob > 0:
-        return round(weighted_sum / total_prob)
-    return None
+        implied_temp = weighted_temp / total_prob
+    else:
+        implied_temp = None
+    
+    # Check for vig/illiquidity
+    vig_warning = None
+    if total_prob > 1.05:
+        vig_warning = f"High vig detected ({total_prob:.0%}) - spreads may be wide"
+    elif total_prob < 0.95:
+        vig_warning = f"Low liquidity ({total_prob:.0%}) - prices may be stale"
+    
+    return round(implied_temp, 1) if implied_temp else None, total_prob, vig_warning
 
-def get_buy_bracket(brackets):
-    """Get the bracket with highest YES probability"""
+def classify_edge(diff):
+    """Classify edge as structural, marginal, or noise"""
+    abs_diff = abs(diff) if diff else 0
+    if abs_diff >= 3:
+        return "STRUCTURAL", "edge-structural", "High-confidence edge detected"
+    elif abs_diff >= 2:
+        return "MARGINAL", "edge-marginal", "Possible edge - proceed with caution"
+    else:
+        return "NOISE", "edge-noise", "Within noise range - no actionable edge"
+
+def check_volatility(nws_temps):
+    """Check if forecast is too volatile to trade"""
+    uncertainty = max(
+        nws_temps.get("high_uncertainty", 0),
+        nws_temps.get("low_uncertainty", 0)
+    )
+    return uncertainty >= 3
+
+# ============================================================
+# TIME LOGIC
+# ============================================================
+
+def get_trading_window_status(now_et):
+    """Determine current trading window status"""
+    hour = now_et.hour
+    minute = now_et.minute
+    
+    if hour < 8:
+        return "PRE_WINDOW", "Markets open at 8 AM ET. Edge signals will appear then.", "info"
+    elif hour == 8 or (hour == 9 and minute <= 59) or (hour == 10 and minute == 0):
+        return "PRIME_WINDOW", "PRIME WINDOW: Best edge opportunity (8-10 AM ET)", "success"
+    elif hour >= 10 and hour < 11 and minute >= 30:
+        return "SOFT_WARNING", "Window closing soon. Edge decay accelerating.", "warning"
+    elif hour >= 11 and hour < 12:
+        return "LATE_WINDOW", "Late window. Edges mostly arbitraged. Proceed carefully.", "warning"
+    elif hour >= 12:
+        return "LOCKED", "Post-noon lockout. NWS updates incorporated. No actionable edges.", "error"
+    else:
+        return "ACTIVE", "Active trading window", "info"
+
+# ============================================================
+# UI COMPONENTS
+# ============================================================
+
+def render_header(now_et):
+    st.markdown(f"""
+    <div style='text-align: center; padding: 1rem 0;'>
+        <h1>🌡️ Temp Edge Finder</h1>
+        <p style='color: #888; font-size: 0.9rem;'>NWS vs Kalshi Temperature Market Edge Detection | v{VERSION}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_bracket_table(brackets, nws_temp, temp_type):
+    """Render brackets as visual progress bars"""
     if not brackets:
-        return None
-    return max(brackets, key=lambda b: b['yes'])
-
-def display_edge(nws_temp, market_temp):
-    """Display edge comparison"""
-    if nws_temp and market_temp:
-        diff = nws_temp - market_temp
-        if abs(diff) >= 2:
-            if diff > 0:
-                st.success(f"📈 **+{diff}° EDGE** — NWS forecast HIGHER than market")
-            else:
-                st.error(f"📉 **{diff}° EDGE** — NWS forecast LOWER than market")
-        elif abs(diff) >= 1:
-            st.info(f"📊 **{diff:+}° edge** — Small opportunity")
+        st.warning("No brackets available")
+        return
+    
+    st.markdown(f"**{temp_type} Brackets:**")
+    
+    for b in sorted(brackets, key=lambda x: x.get("mid_price", 0), reverse=True):
+        prob = b["mid_price"]
+        spread = b["spread"]
+        range_str = b["range"]
+        
+        # Color based on probability
+        if prob >= 70:
+            color = "#22c55e"  # Green
+        elif prob >= 40:
+            color = "#f59e0b"  # Orange
         else:
-            st.warning("⚖️ **No edge** — Market matches forecast")
+            color = "#ef4444"  # Red
+        
+        # Spread warning
+        spread_icon = "⚠️" if spread >= 10 else ""
+        
+        # Highlight if NWS points here
+        nws_highlight = ""
+        if nws_temp:
+            import re
+            nums = re.findall(r'\d+', range_str)
+            if len(nums) >= 2:
+                if int(nums[0]) <= nws_temp <= int(nums[1]):
+                    nws_highlight = "← NWS"
+            elif len(nums) == 1:
+                temp_val = int(nums[0])
+                if "≤" in range_str and nws_temp <= temp_val:
+                    nws_highlight = "← NWS"
+                elif "≥" in range_str and nws_temp >= temp_val:
+                    nws_highlight = "← NWS"
+        
+        st.markdown(f"""
+        <div style='margin-bottom: 0.5rem;'>
+            <div style='display: flex; justify-content: space-between; font-size: 0.85rem;'>
+                <span>{range_str} {spread_icon}</span>
+                <span style='color: {color};'>{prob:.0f}¢ {nws_highlight}</span>
+            </div>
+            <div style='background: #333; border-radius: 4px; height: 8px; overflow: hidden;'>
+                <div style='background: {color}; width: {prob}%; height: 100%;'></div>
+            </div>
+            <div style='font-size: 0.7rem; color: #666;'>Spread: {spread:.0f}¢ | Bid: {b['yes_bid']}¢ | Ask: {b['yes_ask']}¢</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-# ============================================
+def render_edge_signal(nws_temp, market_temp, temp_type, volatility_flag):
+    """Render edge signal with classification"""
+    if nws_temp is None or market_temp is None:
+        st.info(f"Insufficient data for {temp_type} edge calculation")
+        return
+    
+    diff = nws_temp - market_temp
+    label, css_class, description = classify_edge(diff)
+    
+    # Volatility gate
+    if volatility_flag:
+        st.warning(f"⚠️ Forecast volatility detected. {temp_type} edge downgraded to INFO only.")
+        label = "VOLATILE"
+        css_class = "edge-noise"
+        description = "Forecast unstable - wait for convergence"
+    
+    direction = "WARM" if diff > 0 else "COLD" if diff < 0 else "NEUTRAL"
+    
+    st.markdown(f"""
+    <div class='{css_class}'>
+        <strong>{temp_type} EDGE: {label}</strong><br>
+        <span style='font-size: 0.9rem;'>NWS: {nws_temp}°F | Market: {market_temp}°F | Diff: {diff:+.1f}°F {direction}</span><br>
+        <span style='font-size: 0.8rem; opacity: 0.8;'>{description}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ============================================================
 # MAIN APP
-# ============================================
-now = datetime.now(pytz.timezone('US/Eastern'))
-hour = now.hour
+# ============================================================
 
-# Determine if post-noon (action lock)
-is_post_noon = hour >= 12
-
-st.title("🌡️ TEMP EDGE FINDER")
-st.caption(f"Updated: {now.strftime('%I:%M %p ET')} | v1.0.1")
-
-# Trading window indicator
-if hour < 8:
-    st.warning("🟡 **Before 8 AM** — Forecast still forming. Prices cheapest but risky.")
-elif 8 <= hour < 10:
-    st.success("🎯 **8-10 AM** — BEST TIME TO BUY. Forecast stable, prices still cheap!")
-elif 10 <= hour < 12:
-    st.info("📈 **10 AM-12 PM** — Good entry. Forecast locked, prices rising.")
-else:
-    st.error("⚠️ **After 12 PM** — Late entry. Prices already reflect outcome.")
-    st.markdown("*Late entries historically underperform due to price convergence.*")
-    st.markdown("🔒 **Remaining edge today: LOW / NONE** — Session is read-only.")
-
-st.divider()
-
-# City selection
-city = st.selectbox("City", list(CITIES.keys()), format_func=lambda x: CITIES[x]['name'])
-cfg = CITIES[city]
-
-# Check if markets exist
-high_exists = check_kalshi_market_exists(cfg['high_ticker'])
-low_exists = check_kalshi_market_exists(cfg['low_ticker'])
-
-if not high_exists and not low_exists:
-    st.warning(f"⏳ **No temperature markets live yet for {cfg['name']}** — Markets typically open around 6-7 AM ET. Check back later!")
-    st.stop()
-
-# Fetch all data
-high_brackets = fetch_kalshi_brackets(cfg['high_ticker'])
-low_brackets = fetch_kalshi_brackets(cfg['low_ticker'])
-current_temp = fetch_nws_current(cfg['nws_station'])
-nws_high, nws_low = fetch_nws_forecast(cfg['nws_grid'])
-
-# Current conditions
-st.subheader("📡 CURRENT CONDITIONS")
-if current_temp:
-    st.markdown(f"### {current_temp}°F")
-    st.caption(f"Current reading from {cfg['nws_station']}")
-else:
-    st.warning("NWS current temp unavailable")
-
-st.divider()
-
-# ========== TWO COLUMNS: HIGH & LOW ==========
-col_high, col_low = st.columns(2)
-
-# ========== HIGH TEMP COLUMN ==========
-with col_high:
-    st.subheader("🔥 HIGH TEMP")
+def main():
+    eastern = pytz.timezone("US/Eastern")
+    now_et = datetime.now(eastern)
     
-    if not high_exists:
-        st.warning("⏳ HIGH temp market not live yet")
-    elif high_brackets:
-        market_high = calc_market_forecast(high_brackets)
-        high_buy = get_buy_bracket(high_brackets)
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            st.metric("NWS Forecast", f"{nws_high}°F" if nws_high else "—")
-        with c2:
-            st.metric("Market Implied", f"{market_high}°F" if market_high else "—")
-        
-        display_edge(nws_high, market_high)
-        
-        if high_buy:
-            spread = high_buy.get('spread', 0)
-            if high_buy['yes'] <= 85:
-                if spread >= 20:
-                    spread_color = "#FF4444"
-                    spread_warn = f"⚠️ WIDE SPREAD: {spread}¢ — Hold to settlement only!"
-                elif spread >= 10:
-                    spread_color = "#FFA500"
-                    spread_warn = f"⚡ Spread: {spread}¢ — Hard to exit early"
-                else:
-                    spread_color = "#32CD32"
-                    spread_warn = f"✅ Tight spread: {spread}¢"
-                
-                # Post-noon: grayed out with lock indicator
-                if is_post_noon:
-                    st.markdown(
-                        f'<div style="background-color: #555555; padding: 12px; border-radius: 8px; margin: 10px 0; opacity: 0.6;">'
-                        f'<span style="color: #AAAAAA; font-size: 18px; font-weight: bold;">🔒 {high_buy["range"]}</span><br>'
-                        f'<span style="color: #AAAAAA;">YES @ {high_buy["yes"]:.0f}¢ (bid: {high_buy.get("yes_bid", 0):.0f}¢)</span><br>'
-                        f'<span style="color: #888888; font-size: 12px;">Session locked — view only</span>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.markdown(
-                        f'<div style="background-color: #FF8C00; padding: 12px; border-radius: 8px; margin: 10px 0;">'
-                        f'<span style="color: white; font-size: 18px; font-weight: bold;">🎯 BUY YES: {high_buy["range"]}</span><br>'
-                        f'<span style="color: white;">YES @ {high_buy["yes"]:.0f}¢ (bid: {high_buy.get("yes_bid", 0):.0f}¢)</span><br>'
-                        f'<span style="color: {spread_color}; font-size: 12px;">{spread_warn}</span><br>'
-                        f'<a href="{high_buy["url"]}" target="_blank" style="color: #90EE90; font-weight: bold;">→ BUY ON KALSHI</a>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-            else:
-                st.warning(f"⚠️ No edge — {high_buy['range']} @ {high_buy['yes']:.0f}¢ (too expensive)")
-        
-        with st.expander("View All HIGH Brackets"):
-            for b in high_brackets:
-                is_buy = high_buy and b['range'] == high_buy['range']
-                spread = b.get('spread', 0)
-                spread_icon = "🔴" if spread >= 20 else "🟡" if spread >= 10 else "🟢"
-                if is_buy:
-                    st.markdown(f"**🎯 {b['range']}** — ASK {b['yes']:.0f}¢ / BID {b.get('yes_bid',0):.0f}¢ {spread_icon}")
-                else:
-                    st.write(f"{b['range']} — ASK {b['yes']:.0f}¢ / BID {b.get('yes_bid',0):.0f}¢ {spread_icon}")
-    else:
-        st.error("❌ No HIGH temp markets found for today")
-
-# ========== LOW TEMP COLUMN ==========
-with col_low:
-    st.subheader("❄️ LOW TEMP")
+    render_header(now_et)
     
-    if not low_exists:
-        st.warning("⏳ LOW temp market not live yet")
-    elif low_brackets:
-        market_low = calc_market_forecast(low_brackets)
-        low_buy = get_buy_bracket(low_brackets)
+    # Sidebar
+    with st.sidebar:
+        st.markdown("### Settings")
         
-        c1, c2 = st.columns(2)
-        with c1:
-            st.metric("NWS Forecast", f"{nws_low}°F" if nws_low else "—")
-        with c2:
-            st.metric("Market Implied", f"{market_low}°F" if market_low else "—")
+        city_code = st.selectbox(
+            "Select City",
+            options=list(CITIES.keys()),
+            format_func=lambda x: f"{CITIES[x]['name']} ({x})"
+        )
         
-        display_edge(nws_low, market_low)
+        target_date = st.date_input("Target Date", value=now_et.date() + timedelta(days=1))
         
-        if low_buy:
-            spread = low_buy.get('spread', 0)
-            if low_buy['yes'] <= 85:
-                if spread >= 20:
-                    spread_color = "#FF4444"
-                    spread_warn = f"⚠️ WIDE SPREAD: {spread}¢ — Hold to settlement only!"
-                elif spread >= 10:
-                    spread_color = "#FFA500"
-                    spread_warn = f"⚡ Spread: {spread}¢ — Hard to exit early"
-                else:
-                    spread_color = "#32CD32"
-                    spread_warn = f"✅ Tight spread: {spread}¢"
-                
-                # Post-noon: grayed out with lock indicator
-                if is_post_noon:
-                    st.markdown(
-                        f'<div style="background-color: #555555; padding: 12px; border-radius: 8px; margin: 10px 0; opacity: 0.6;">'
-                        f'<span style="color: #AAAAAA; font-size: 18px; font-weight: bold;">🔒 {low_buy["range"]}</span><br>'
-                        f'<span style="color: #AAAAAA;">YES @ {low_buy["yes"]:.0f}¢ (bid: {low_buy.get("yes_bid", 0):.0f}¢)</span><br>'
-                        f'<span style="color: #888888; font-size: 12px;">Session locked — view only</span>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.markdown(
-                        f'<div style="background-color: #1E90FF; padding: 12px; border-radius: 8px; margin: 10px 0;">'
-                        f'<span style="color: white; font-size: 18px; font-weight: bold;">🎯 BUY YES: {low_buy["range"]}</span><br>'
-                        f'<span style="color: white;">YES @ {low_buy["yes"]:.0f}¢ (bid: {low_buy.get("yes_bid", 0):.0f}¢)</span><br>'
-                        f'<span style="color: {spread_color}; font-size: 12px;">{spread_warn}</span><br>'
-                        f'<a href="{low_buy["url"]}" target="_blank" style="color: #90EE90; font-weight: bold;">→ BUY ON KALSHI</a>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-            else:
-                st.warning(f"⚠️ No edge — {low_buy['range']} @ {low_buy['yes']:.0f}¢ (too expensive)")
+        if st.button("🔄 Refresh Data"):
+            st.cache_data.clear()
+            st.rerun()
         
-        with st.expander("View All LOW Brackets"):
-            for b in low_brackets:
-                is_buy = low_buy and b['range'] == low_buy['range']
-                spread = b.get('spread', 0)
-                spread_icon = "🔴" if spread >= 20 else "🟡" if spread >= 10 else "🟢"
-                if is_buy:
-                    st.markdown(f"**🎯 {b['range']}** — ASK {b['yes']:.0f}¢ / BID {b.get('yes_bid',0):.0f}¢ {spread_icon}")
-                else:
-                    st.write(f"{b['range']} — ASK {b['yes']:.0f}¢ / BID {b.get('yes_bid',0):.0f}¢ {spread_icon}")
+        st.markdown("---")
+        st.markdown("### Trading Windows")
+        st.caption("🟢 8-10 AM: Prime window")
+        st.caption("🟡 10-11:30 AM: Decay begins")
+        st.caption("🟠 11:30 AM-12 PM: Late window")
+        st.caption("🔴 After 12 PM: Locked")
+        
+        st.markdown("---")
+        st.markdown("### Edge Classification")
+        st.caption("🟢 STRUCTURAL: ≥3°F diff")
+        st.caption("🟡 MARGINAL: 2-3°F diff")
+        st.caption("⚫ NOISE: <2°F diff")
+        
+        st.markdown("---")
+        st.markdown("[Kalshi Temp Markets](https://kalshi.com/markets/temperature)")
+        
+        st.markdown("---")
+        st.caption(f"v{VERSION}")
+    
+    city = CITIES[city_code]
+    
+    # Trading window status
+    status, message, status_type = get_trading_window_status(now_et)
+    
+    if status_type == "success":
+        st.success(f"🟢 {message}")
+    elif status_type == "warning":
+        st.warning(f"🟡 {message}")
+    elif status_type == "error":
+        st.error(f"🔴 {message}")
     else:
-        st.error("❌ No LOW temp markets found for today")
-
-# ============================================
-# HOW TO USE
-# ============================================
-st.divider()
-with st.expander("📖 How to Use This Tool"):
+        st.info(f"ℹ️ {message}")
+    
+    # Post-noon lockout
+    if status == "LOCKED":
+        st.markdown("""
+        <div class='warning-box'>
+            <strong>Post-Noon Lockout Active</strong><br>
+            NWS forecasts have been fully incorporated into market prices. 
+            Edge opportunities have closed for today. Check back tomorrow at 8 AM ET.
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Still show data but read-only
+        st.markdown("---")
+        st.markdown("### Current Data (Read-Only)")
+    
+    # Fetch data
+    col1, col2 = st.columns(2)
+    
+    # HIGH TEMP
+    with col1:
+        st.markdown("## 🔥 High Temperature")
+        
+        # Fetch NWS
+        nws_result = fetch_nws_forecast(city["nws_gridpoint"])
+        
+        if nws_result["success"]:
+            nws_temps = extract_nws_temps(nws_result["data"], target_date)
+            nws_high = nws_temps.get("high")
+            volatility_high = check_volatility(nws_temps)
+            
+            st.caption(f"Last NWS update: {nws_result['fetched_at']}")
+            
+            if nws_high:
+                st.metric("NWS Forecast High", f"{nws_high}°F")
+            else:
+                st.warning("NWS high temp not available for this date")
+        else:
+            st.error(f"NWS API error: {nws_result.get('error', 'Unknown')}")
+            nws_high = None
+            volatility_high = False
+        
+        # Fetch Kalshi
+        kalshi_result = fetch_kalshi_brackets(city["kalshi_high"])
+        
+        if kalshi_result["success"] and kalshi_result["brackets"]:
+            market_high, total_prob, vig_warning = calc_market_implied(kalshi_result["brackets"])
+            
+            if market_high:
+                st.metric("Market Implied High", f"{market_high}°F")
+            
+            if vig_warning:
+                st.caption(f"⚠️ {vig_warning}")
+            
+            # Edge signal
+            if status != "LOCKED":
+                render_edge_signal(nws_high, market_high, "HIGH", volatility_high)
+            
+            # Bracket breakdown
+            with st.expander("📊 Bracket Details"):
+                render_bracket_table(kalshi_result["brackets"], nws_high, "High")
+        else:
+            st.warning("No Kalshi high temp markets found. Markets may not be open yet.")
+    
+    # LOW TEMP
+    with col2:
+        st.markdown("## ❄️ Low Temperature")
+        
+        if nws_result["success"]:
+            nws_low = nws_temps.get("low")
+            volatility_low = check_volatility(nws_temps)
+            
+            st.caption(f"Last NWS update: {nws_result['fetched_at']}")
+            
+            if nws_low:
+                st.metric("NWS Forecast Low", f"{nws_low}°F")
+            else:
+                st.warning("NWS low temp not available for this date")
+        else:
+            nws_low = None
+            volatility_low = False
+        
+        # Fetch Kalshi
+        kalshi_low_result = fetch_kalshi_brackets(city["kalshi_low"])
+        
+        if kalshi_low_result["success"] and kalshi_low_result["brackets"]:
+            market_low, total_prob_low, vig_warning_low = calc_market_implied(kalshi_low_result["brackets"])
+            
+            if market_low:
+                st.metric("Market Implied Low", f"{market_low}°F")
+            
+            if vig_warning_low:
+                st.caption(f"⚠️ {vig_warning_low}")
+            
+            # Edge signal
+            if status != "LOCKED":
+                render_edge_signal(nws_low, market_low, "LOW", volatility_low)
+            
+            # Bracket breakdown
+            with st.expander("📊 Bracket Details"):
+                render_bracket_table(kalshi_low_result["brackets"], nws_low, "Low")
+        else:
+            st.warning("No Kalshi low temp markets found. Markets may not be open yet.")
+    
+    # Current conditions
+    st.markdown("---")
+    current = fetch_nws_current(city["lat"], city["lon"])
+    if current["success"] and current["temp_f"]:
+        st.markdown(f"**Current Temperature in {city['name']}:** {current['temp_f']}°F")
+        if nws_high:
+            room_to_high = nws_high - current["temp_f"]
+            st.caption(f"Room to forecasted high: {room_to_high:+}°F")
+    
+    # Strategy guide
+    st.markdown("---")
+    with st.expander("📖 Strategy Guide"):
+        st.markdown("""
+        **Why 8-10 AM ET is the prime window:**
+        - NWS issues overnight forecast updates
+        - Kalshi markets often lag behind by 1-3 hours
+        - By noon, arbitrageurs have closed most gaps
+        
+        **Edge classification:**
+        - **STRUCTURAL (≥3°F):** High-confidence. Market significantly mispriced.
+        - **MARGINAL (2-3°F):** Possible edge. Consider spread and liquidity.
+        - **NOISE (<2°F):** Within normal variance. No actionable edge.
+        
+        **Spread warnings:**
+        - ⚠️ appears when spread ≥10¢
+        - Wide spreads eat into edge profitability
+        - Prefer brackets with tighter spreads
+        
+        **Settlement note:**
+        Kalshi settles on the official NWS Daily Climate Report (CLI) from specific stations.
+        Other sources (AccuWeather, Weather.com) may differ — only CLI counts.
+        
+        **This tool does not simulate weather.** It identifies pricing lag relative to official forecasts.
+        """)
+    
+    # Disclaimer
+    st.markdown("---")
     st.markdown("""
-    **Temperature Edge Finder** compares NWS (National Weather Service) forecasts against Kalshi market prices to find trading opportunities.
+    <div style='background: #1a1a1a; padding: 1rem; border-radius: 8px; font-size: 0.75rem; color: #666;'>
+        <strong>Disclaimer:</strong> This tool is for informational and educational purposes only. 
+        Temperature prediction markets involve substantial risk of loss. NWS forecasts can change rapidly.
+        Not financial advice. Kalshi settlement uses official NWS CLI reports which may differ from app forecasts.
+        Past edge detection does not guarantee future results. Trade responsibly.
+    </div>
+    """, unsafe_allow_html=True)
     
-    **Step 1: Check the Time**
-    - Best results between 8-10 AM ET when forecasts are stable but prices haven't caught up
-    
-    **Step 2: Select Your City**
-    - Choose from NYC, Chicago, LA, Miami, Denver, or Austin
-    
-    **Step 3: Compare Forecasts**
-    - **NWS Forecast**: Official government weather prediction
-    - **Market Implied**: What Kalshi traders are pricing in
-    - **Edge**: Difference between the two
-    
-    **Step 4: Execute the Trade**
-    - If NWS forecast is HIGHER than market → Buy YES on higher brackets
-    - If NWS forecast is LOWER than market → Buy YES on lower brackets
-    - Click "BUY ON KALSHI" to place your trade
-    
-    **Step 5: Settlement**
-    - Markets settle based on the NWS Daily Climate Report
-    - HIGH temps settle after the day's high is recorded
-    - LOW temps settle after the overnight low is recorded
-    
-    **Spread Warning**
-    - 🟢 < 10¢ spread: Easy to exit anytime
-    - 🟡 10-20¢ spread: Harder to exit, consider holding
-    - 🔴 > 20¢ spread: Hold to settlement recommended
-    
-    **Post-Noon Lock**
-    - After 12 PM ET, action buttons are disabled
-    - Data remains visible for transparency
-    - Late entries typically have minimal edge
-    """)
+    # Timestamp
+    st.caption(f"🕐 {now_et.strftime('%I:%M %p ET')} | 📅 {now_et.strftime('%B %d, %Y')}")
 
-# ============================================
-# FOOTER
-# ============================================
-st.divider()
-st.caption("⚠️ For educational purposes only. Not financial advice. Settlement based on NWS Daily Climate Report.")
-st.caption("📧 Contact: aipublishingpro@gmail.com")
-st.caption("v1.0.1 | Temperature Edge Finder")
+if __name__ == "__main__":
+    main()
