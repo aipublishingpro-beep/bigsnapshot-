@@ -1,13 +1,18 @@
 import streamlit as st
 
-# ============================================================
-# PAGE CONFIG
-# ============================================================
 st.set_page_config(
     page_title="BigSnapshot | Prediction Market Edge Finder",
     page_icon="📊",
     layout="wide"
 )
+
+# ============================================================
+# GA4 TRACKING
+# ============================================================
+st.markdown("""
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
+<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
+""", unsafe_allow_html=True)
 
 # ============================================================
 # SESSION STATE
@@ -35,57 +40,11 @@ st.markdown("""
     .stApp {
         background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%);
     }
-    
-    .app-card {
-        display: block;
-        background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
-        border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 15px;
-        border: 1px solid #333;
-        transition: transform 0.2s, border-color 0.2s;
-        text-decoration: none;
-        cursor: pointer;
-    }
-    
-    .app-card:hover {
-        transform: translateY(-4px);
-        border-color: #4dabf7;
-        box-shadow: 0 8px 25px rgba(77, 171, 247, 0.2);
-    }
-    
-    .app-card-disabled {
-        display: block;
-        background: linear-gradient(135deg, #1a1a24 0%, #22222e 100%);
-        border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 15px;
-        border: 1px solid #2a2a2a;
-        opacity: 0.6;
-    }
-    
-    .status-live {
-        background: #00c853;
-        color: #000;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 700;
-    }
-    
-    .status-soon {
-        background: #555;
-        color: #fff;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 700;
-    }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# LOGIN PAGE (if not authenticated)
+# LOGIN PAGE
 # ============================================================
 if not st.session_state.authenticated:
     st.markdown("""
@@ -103,7 +62,6 @@ if not st.session_state.authenticated:
     </div>
     """, unsafe_allow_html=True)
     
-    # Beta signup callout
     st.markdown("""
     <div style="max-width: 500px; margin: 30px auto; padding: 30px;
                 background: linear-gradient(135deg, #1a3a2a 0%, #2a4a3a 100%);
@@ -122,7 +80,6 @@ if not st.session_state.authenticated:
     </div>
     """, unsafe_allow_html=True)
     
-    # Password entry
     st.markdown("""
     <div style="max-width: 400px; margin: 30px auto; text-align: center;">
         <p style="color: #888; font-size: 14px; margin-bottom: 15px;">
@@ -151,64 +108,109 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ============================================================
-# AUTHENTICATED - SHOW APP HUB
+# AUTHENTICATED - APP HUB
 # ============================================================
 st.markdown("""
-<div style="text-align: center; padding: 60px 20px 40px 20px;">
-    <div style="font-size: 70px; margin-bottom: 15px;">📊</div>
-    <h1 style="font-size: 52px; font-weight: 800; color: #fff; margin-bottom: 10px;">
+<div style="text-align: center; padding: 40px 20px 20px 20px;">
+    <div style="font-size: 60px; margin-bottom: 10px;">📊</div>
+    <h1 style="font-size: 48px; font-weight: 800; color: #fff; margin-bottom: 5px;">
         BigSnapshot
     </h1>
-    <p style="color: #888; font-size: 20px; margin-bottom: 10px;">
+    <p style="color: #888; font-size: 18px;">
         Prediction Market Edge Finder
     </p>
-    <p style="color: #555; font-size: 14px;">
-        Structural analysis for Kalshi markets
-    </p>
 </div>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# CLICKABLE APP CARDS
-# ============================================================
-st.markdown("""
-<div style="max-width: 900px; margin: 0 auto; padding: 0 20px;">
-    <p style="color: #888; font-size: 13px; margin-bottom: 20px; text-align: center;">
-        CLICK A CARD TO OPEN
-    </p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("---")
 
-col1, col2 = st.columns(2)
+# ============================================================
+# APP CARDS - ROW 1
+# ============================================================
+col1, col2, col3 = st.columns(3)
 
 with col1:
-    # NFL
-    if st.button("🏈  NFL Edge Finder  •  LIVE", use_container_width=True, key="nfl_btn"):
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#1a1a2e,#0a0a1e);padding:30px;border-radius:20px;border:2px solid #00aa00;text-align:center;min-height:200px;margin-bottom:10px'>
+        <div style='font-size:3.5em'>🏈</div>
+        <div style='font-size:1.5em;color:#00aa00;font-weight:bold;margin-top:15px'>NFL Edge Finder</div>
+        <div style='color:#888;margin-top:10px;font-size:0.9em'>10-Factor Model</div>
+        <div style='margin-top:15px'><span style='background:#00aa00;color:#000;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>LIVE</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("🏈 Open NFL", use_container_width=True, key="nfl_btn"):
         st.switch_page("pages/1_NFL.py")
-    
-    # NHL
-    if st.button("🏒  NHL Edge Finder  •  LIVE", use_container_width=True, key="nhl_btn"):
-        st.switch_page("pages/3_NHL.py")
-    
-    # Temp
-    if st.button("🌡️  Temp Edge Finder  •  LIVE", use_container_width=True, key="temp_btn"):
-        st.switch_page("pages/5_Temp.py")
 
 with col2:
-    # NBA
-    if st.button("🏀  NBA Edge Finder  •  LIVE", use_container_width=True, key="nba_btn"):
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#1a2e1a,#0a1e0a);padding:30px;border-radius:20px;border:2px solid #ff6600;text-align:center;min-height:200px;margin-bottom:10px'>
+        <div style='font-size:3.5em'>🏀</div>
+        <div style='font-size:1.5em;color:#ff6600;font-weight:bold;margin-top:15px'>NBA Edge Finder</div>
+        <div style='color:#888;margin-top:10px;font-size:0.9em'>12-Factor Model</div>
+        <div style='margin-top:15px'><span style='background:#ff6600;color:#000;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>LIVE</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("🏀 Open NBA", use_container_width=True, key="nba_btn"):
         st.switch_page("pages/2_NBA.py")
-    
-    # MLB - disabled
-    st.button("⚾  MLB Edge Finder  •  COMING SOON", use_container_width=True, key="mlb_btn", disabled=True)
-    
-    # Politics - disabled
-    st.button("🗳️  Politics Edge Finder  •  COMING SOON", use_container_width=True, key="pol_btn", disabled=True)
+
+with col3:
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#1a1a2e,#0a0a1e);padding:30px;border-radius:20px;border:2px solid #4dabf7;text-align:center;min-height:200px;margin-bottom:10px'>
+        <div style='font-size:3.5em'>🏒</div>
+        <div style='font-size:1.5em;color:#4dabf7;font-weight:bold;margin-top:15px'>NHL Edge Finder</div>
+        <div style='color:#888;margin-top:10px;font-size:0.9em'>10-Factor Model</div>
+        <div style='margin-top:15px'><span style='background:#4dabf7;color:#000;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>LIVE</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("🏒 Open NHL", use_container_width=True, key="nhl_btn"):
+        st.switch_page("pages/3_NHL.py")
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ============================================================
+# APP CARDS - ROW 2
+# ============================================================
+col4, col5, col6 = st.columns(3)
+
+with col4:
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#2e1a2e,#1e0a1e);padding:30px;border-radius:20px;border:2px solid #e040fb;text-align:center;min-height:200px;margin-bottom:10px'>
+        <div style='font-size:3.5em'>🌡️</div>
+        <div style='font-size:1.5em;color:#e040fb;font-weight:bold;margin-top:15px'>Temp Edge Finder</div>
+        <div style='color:#888;margin-top:10px;font-size:0.9em'>NWS vs Kalshi</div>
+        <div style='margin-top:15px'><span style='background:#e040fb;color:#000;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>LIVE</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("🌡️ Open Temp", use_container_width=True, key="temp_btn"):
+        st.switch_page("pages/5_Temp.py")
+
+with col5:
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#2e2e1a,#1e1e0a);padding:30px;border-radius:20px;border:2px solid #555;text-align:center;min-height:200px;opacity:0.6;margin-bottom:10px'>
+        <div style='font-size:3.5em'>⚾</div>
+        <div style='font-size:1.5em;color:#888;font-weight:bold;margin-top:15px'>MLB Edge Finder</div>
+        <div style='color:#666;margin-top:10px;font-size:0.9em'>Coming Soon</div>
+        <div style='margin-top:15px'><span style='background:#555;color:#fff;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>SOON</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.button("⚾ Coming Soon", use_container_width=True, disabled=True, key="mlb_btn")
+
+with col6:
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#2e2e1a,#1e1e0a);padding:30px;border-radius:20px;border:2px solid #555;text-align:center;min-height:200px;opacity:0.6;margin-bottom:10px'>
+        <div style='font-size:3.5em'>🗳️</div>
+        <div style='font-size:1.5em;color:#888;font-weight:bold;margin-top:15px'>Politics Edge Finder</div>
+        <div style='color:#666;margin-top:10px;font-size:0.9em'>Coming Summer 2026</div>
+        <div style='margin-top:15px'><span style='background:#555;color:#fff;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>SOON</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.button("🗳️ Coming Soon", use_container_width=True, disabled=True, key="pol_btn")
+
+st.markdown("---")
 
 # ============================================================
 # HOW IT WORKS
 # ============================================================
-st.markdown("<br>", unsafe_allow_html=True)
 st.markdown("""
 <div style="max-width: 800px; margin: 40px auto; padding: 30px; 
             background: linear-gradient(135deg, #1a2a3a 0%, #2a3a4a 100%);
@@ -242,7 +244,7 @@ st.markdown("""
         ⚠️ For entertainment and analysis only. Not financial advice.
     </p>
     <p style="font-size: 11px;">
-        BigSnapshot © 2026 | bigsnapshot.com
+        📧 aipublishingpro@gmail.com | bigsnapshot.com
     </p>
 </div>
 """, unsafe_allow_html=True)
