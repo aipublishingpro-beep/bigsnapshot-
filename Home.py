@@ -139,7 +139,8 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# App Cards
+# Active App Cards
+st.markdown("### 🎯 Live Tools")
 st.markdown("""
 <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; padding: 20px;">
     <div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; padding: 30px; width: 280px; text-align: center; border: 1px solid #3a4a6a;">
@@ -173,6 +174,39 @@ with col4:
         st.switch_page("pages/3_Temp.py")
 
 # Logout
+st.markdown("---")
+
+# Coming Soon Cards
+st.markdown("### 🚧 Coming Soon")
+st.markdown("""
+<div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+        <div style="font-size: 40px; margin-bottom: 10px;">🏒</div>
+        <h4 style="color: #888; margin-bottom: 5px;">NHL</h4>
+    </div>
+    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+        <div style="font-size: 40px; margin-bottom: 10px;">⚾</div>
+        <h4 style="color: #888; margin-bottom: 5px;">MLB</h4>
+    </div>
+    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+        <div style="font-size: 40px; margin-bottom: 10px;">⚽</div>
+        <h4 style="color: #888; margin-bottom: 5px;">Soccer</h4>
+    </div>
+    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+        <div style="font-size: 40px; margin-bottom: 10px;">🏛️</div>
+        <h4 style="color: #888; margin-bottom: 5px;">Politics</h4>
+    </div>
+    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+        <div style="font-size: 40px; margin-bottom: 10px;">📈</div>
+        <h4 style="color: #888; margin-bottom: 5px;">Economics</h4>
+    </div>
+    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+        <div style="font-size: 40px; margin-bottom: 10px;">🎬</div>
+        <h4 style="color: #888; margin-bottom: 5px;">Entertainment</h4>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
 st.markdown("---")
 col1, col2, col3 = st.columns([1, 1, 1])
 with col2:
