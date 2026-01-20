@@ -32,8 +32,6 @@ st.markdown("""
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-NQKY5VQ376');</script>
 """, unsafe_allow_html=True)
 
-# ========== NO GATE (Home.py handles authentication) ==========
-
 # ========== SIDEBAR LEGENDS ==========
 with st.sidebar:
     st.header("🎯 ML Signal Legend")
@@ -45,6 +43,17 @@ with st.sidebar:
     🟡 **LEAN** → 5.5-6.4
     
     ⚪ **WEAK / NO EDGE** → Below 5.5
+    """)
+    
+    st.divider()
+    
+    st.header("📊 Market Pressure")
+    st.markdown("""
+    🟢 **CONFIRMING** → Market agrees
+    
+    🟡 **NEUTRAL** → No clear flow
+    
+    🔴 **FADING** → Market disagrees
     """)
     
     st.divider()
@@ -74,7 +83,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v15.58 | 8-Factor ML")
+    st.caption("v16.0 | 8-Factor ML + Market Pressure")
 
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
@@ -121,7 +130,7 @@ KALSHI_CODES = {
     "Utah": "UTA", "Washington": "WAS"
 }
 
-# ========== TEAM STATS (8-FACTOR ML DATA) ==========
+# ========== TEAM STATS (8-FACTOR ML DATA - WEIGHTS HIDDEN) ==========
 TEAM_STATS = {
     "Atlanta": {"net_rtg": -3.2, "def_rank": 26, "home_win_pct": 0.52, "lat": 33.757, "lon": -84.396},
     "Boston": {"net_rtg": 9.8, "def_rank": 4, "home_win_pct": 0.76, "lat": 42.366, "lon": -71.062},
@@ -207,18 +216,74 @@ def calc_distance_miles(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return R * c
 
-# ========== KALSHI MARKET CHECK ==========
-@st.cache_data(ttl=300)
-def check_kalshi_market_exists(ticker):
+# ========== KALSHI MARKET FUNCTIONS ==========
+@st.cache_data(ttl=120)
+def fetch_kalshi_market(ticker):
     try:
         url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker.upper()}"
         resp = requests.get(url, timeout=5)
         if resp.status_code == 200:
             data = resp.json()
-            return data.get("market") is not None
-        return False
+            market = data.get("market", {})
+            if market:
+                return {
+                    "yes_price": market.get("yes_bid", 0),
+                    "no_price": market.get("no_bid", 0),
+                    "last_price": market.get("last_price", 0),
+                    "volume": market.get("volume", 0),
+                    "open_interest": market.get("open_interest", 0),
+                    "exists": True
+                }
+        return {"exists": False}
     except:
-        return False
+        return {"exists": False}
+
+@st.cache_data(ttl=300)
+def fetch_kalshi_history(ticker):
+    try:
+        url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker.upper()}/history"
+        params = {"limit": 50}
+        resp = requests.get(url, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("history", [])
+        return []
+    except:
+        return []
+
+def calc_market_pressure(ticker, pick_team, home_team):
+    market = fetch_kalshi_market(ticker)
+    if not market.get("exists"):
+        return None, "NO DATA", "#888888"
+    
+    history = fetch_kalshi_history(ticker)
+    if len(history) < 2:
+        return market, "NEUTRAL", "#ffaa00"
+    
+    recent_prices = [h.get("yes_price", 50) for h in history[:10]]
+    older_prices = [h.get("yes_price", 50) for h in history[10:20]] if len(history) > 10 else recent_prices
+    
+    avg_recent = sum(recent_prices) / len(recent_prices) if recent_prices else 50
+    avg_older = sum(older_prices) / len(older_prices) if older_prices else 50
+    
+    price_move = avg_recent - avg_older
+    
+    pick_is_home = pick_team == home_team
+    
+    if pick_is_home:
+        if price_move > 3:
+            return market, "CONFIRMING", "#00ff00"
+        elif price_move < -3:
+            return market, "FADING", "#ff4444"
+        else:
+            return market, "NEUTRAL", "#ffaa00"
+    else:
+        if price_move < -3:
+            return market, "CONFIRMING", "#00ff00"
+        elif price_move > 3:
+            return market, "FADING", "#ff4444"
+        else:
+            return market, "NEUTRAL", "#ffaa00"
 
 # ========== FETCH ESPN GAMES ==========
 @st.cache_data(ttl=60)
@@ -305,7 +370,7 @@ def fetch_espn_injuries():
         pass
     return injuries
 
-# ========== 8-FACTOR ML SCORING (AUTHORITATIVE) ==========
+# ========== 8-FACTOR ML SCORING (WEIGHTS HIDDEN) ==========
 def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
     away_stats = TEAM_STATS.get(away_team, {})
     home_stats = TEAM_STATS.get(home_team, {})
@@ -315,82 +380,88 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
     
     score_home = 0.0
     score_away = 0.0
-    reasons = []
+    factors = []
     
     away_b2b = away_team in yesterday_teams
     home_b2b = home_team in yesterday_teams
     
     if away_b2b and not home_b2b:
         score_home += 1.0
-        reasons.append("Away B2B +1")
+        factors.append(("🛏️", "Rest Edge"))
     elif home_b2b and not away_b2b:
         score_away += 1.0
-        reasons.append("Home B2B +1")
+        factors.append(("🛏️", "Rest Edge"))
     
     net_diff = home_stats.get("net_rtg", 0) - away_stats.get("net_rtg", 0)
-    
     if net_diff > 5:
         score_home += 1.0
-        reasons.append(f"Net +{net_diff:.1f} → Home +1")
+        factors.append(("📊", "Net Rating"))
     elif net_diff < -5:
         score_away += 1.0
-        reasons.append(f"Net {net_diff:.1f} → Away +1")
+        factors.append(("📊", "Net Rating"))
     
     home_def_rank = home_stats.get("def_rank", 15)
     away_def_rank = away_stats.get("def_rank", 15)
-    
     if home_def_rank <= 5:
         score_home += 1.0
-        reasons.append(f"Home DEF #{home_def_rank} +1")
+        factors.append(("🛡️", "Elite Defense"))
     if away_def_rank <= 5:
         score_away += 1.0
-        reasons.append(f"Away DEF #{away_def_rank} +1")
+        factors.append(("🛡️", "Elite Defense"))
     
     score_home += 1.0
-    reasons.append("Home Court +1")
+    factors.append(("🏠", "Home Court"))
     
     def calc_injury_score(team, team_injuries):
         stars = STAR_PLAYERS.get(team, [])
         total = 0.0
+        star_out = None
         for inj in team_injuries:
             name = inj.get("name", "").lower()
             status = inj.get("status", "").lower()
             is_star = any(s.lower() in name for s in stars)
             if "out" in status:
                 total += 4.0 if is_star else 1.0
+                if is_star and not star_out:
+                    star_out = inj.get("name", "")
             elif "gtd" in status or "questionable" in status or "doubtful" in status:
                 total += 2.5 if is_star else 0.5
-        return total
+        return total, star_out
     
-    away_inj_score = calc_injury_score(away_team, injuries.get(away_team, []))
-    home_inj_score = calc_injury_score(home_team, injuries.get(home_team, []))
+    away_inj_score, away_star_out = calc_injury_score(away_team, injuries.get(away_team, []))
+    home_inj_score, home_star_out = calc_injury_score(home_team, injuries.get(home_team, []))
     inj_diff = away_inj_score - home_inj_score
     
     if inj_diff > 3:
         score_home += 1.0
-        reasons.append(f"Inj diff +{inj_diff:.1f} → Home +1")
+        if away_star_out:
+            factors.append(("🏥", f"{away_star_out.split()[-1]} OUT"))
+        else:
+            factors.append(("🏥", "Injury Edge"))
     elif inj_diff < -3:
         score_away += 1.0
-        reasons.append(f"Inj diff {inj_diff:.1f} → Away +1")
+        if home_star_out:
+            factors.append(("🏥", f"{home_star_out.split()[-1]} OUT"))
+        else:
+            factors.append(("🏥", "Injury Edge"))
     
     away_lat = away_stats.get("lat", 0)
     away_lon = away_stats.get("lon", 0)
     home_lat = home_stats.get("lat", 0)
     home_lon = home_stats.get("lon", 0)
-    
     distance = calc_distance_miles(away_lat, away_lon, home_lat, home_lon)
     if distance > 2000:
         score_home += 1.0
-        reasons.append(f"Travel {distance:.0f}mi +1")
+        factors.append(("✈️", "Travel"))
     
     home_win_pct = home_stats.get("home_win_pct", 0.5)
     if home_win_pct > 0.65:
         score_home += 0.8
-        reasons.append(f"Home {home_win_pct*100:.0f}% +0.8")
+        factors.append(("🔥", "Home Dominance"))
     
     if home_team == "Denver":
         score_home += 1.0
-        reasons.append("Denver Alt +1")
+        factors.append(("🏔️", "Altitude"))
     
     total = score_home + score_away
     if total == 0:
@@ -400,9 +471,9 @@ def calc_ml_score(away_team, home_team, injuries, yesterday_teams):
     away_final = (score_away / total) * 10
     
     if home_final >= away_final:
-        return home_team, round(home_final, 1), reasons
+        return home_team, round(home_final, 1), factors
     else:
-        return away_team, round(away_final, 1), reasons
+        return away_team, round(away_final, 1), factors
 
 def get_signal_tier(score):
     if score >= 8.0:
@@ -412,7 +483,7 @@ def get_signal_tier(score):
     elif score >= 5.5:
         return "🟡 LEAN", "#ffff00"
     else:
-        return "⚪ WEAK / NO EDGE", "#888888"
+        return "⚪ WEAK", "#888888"
 
 # ========== FETCH DATA ==========
 games = fetch_espn_scores(date_key=today_str)
@@ -430,7 +501,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # ========== HEADER ==========
 st.title("🎯 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.58")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v16.0")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -447,45 +518,22 @@ ml_results = []
 for gk in game_list:
     g = games[gk]
     away, home = g['away_team'], g['home_team']
-    pick, score, reasons = calc_ml_score(away, home, injuries, yesterday_teams)
+    pick, score, factors = calc_ml_score(away, home, injuries, yesterday_teams)
     
     if pick:
-        reason_parts = []
-        for r in reasons:
-            if "B2B" in r:
-                reason_parts.append("🛏️ B2B")
-            elif "DEF #" in r:
-                rank = r.split("#")[1].split()[0]
-                reason_parts.append(f"🛡️ #{rank} DEF")
-            elif "Travel" in r:
-                miles = r.split()[1]
-                reason_parts.append(f"✈️ {miles}")
-            elif "Inj diff" in r:
-                team_inj = injuries.get(away if pick == home else home, [])
-                stars = STAR_PLAYERS.get(away if pick == home else home, [])
-                for inj in team_inj:
-                    name = inj.get("name", "")
-                    status = inj.get("status", "").lower()
-                    is_star = any(s.lower() in name.lower() for s in stars)
-                    if is_star and "out" in status:
-                        short_name = name.split()[-1][:4] if len(name.split()) > 1 else name[:4]
-                        first_name = name.split()[0][:5] if name.split() else ""
-                        reason_parts.append(f"🏥 {first_name} {short_name} OUT")
-                        break
-            elif "Home " in r and "%" in r:
-                pct = r.split()[1]
-                reason_parts.append(f"🏠 {pct}")
-            elif "Denver Alt" in r:
-                reason_parts.append("🏔️ Denver")
-            elif "Net " in r:
-                reason_parts.append("📊 Net+")
+        pick_code = KALSHI_CODES.get(pick, "XXX")
+        date_code = now.strftime("%y%b%d").upper()
+        away_code = KALSHI_CODES.get(away, "XXX")
+        home_code = KALSHI_CODES.get(home, "XXX")
+        ticker = f"KXNBAGAME-{date_code}{away_code}{home_code}"
         
-        home_stats_display = TEAM_STATS.get(home, {})
-        home_pct = int(home_stats_display.get("home_win_pct", 0.5) * 100)
+        market, pressure_label, pressure_color = calc_market_pressure(ticker, pick, home)
         
         ml_results.append({
-            "game": gk, "pick": pick, "score": score, "reasons": reason_parts,
-            "away": away, "home": home, "status": g['status_type'], "home_pct": home_pct
+            "game": gk, "pick": pick, "score": score, "factors": factors,
+            "away": away, "home": home, "status": g['status_type'],
+            "ticker": ticker, "market": market,
+            "pressure_label": pressure_label, "pressure_color": pressure_color
         })
 
 ml_results.sort(key=lambda x: x['score'], reverse=True)
@@ -501,18 +549,15 @@ if ml_results:
         else:
             border_color = "#888888"
         
-        reason_str = " • ".join(r['reasons'][:3]) if r['reasons'] else ""
-        if reason_str:
-            reason_str = " " + reason_str
-        
+        factor_icons = " ".join([f[0] for f in r['factors'][:4]])
         opponent = r['away'] if r['pick'] == r['home'] else r['home']
-        
         pick_code = KALSHI_CODES.get(r['pick'], "XXX")
-        date_code = now.strftime("%y%b%d").upper()
-        away_code = KALSHI_CODES.get(r['away'], "XXX")
-        home_code = KALSHI_CODES.get(r['home'], "XXX")
-        ticker = f"KXNBAGAME-{date_code}{away_code}{home_code}"
-        kalshi_url = f"https://kalshi.com/markets/{ticker.lower()}"
+        kalshi_url = f"https://kalshi.com/markets/{r['ticker'].lower()}"
+        
+        market_info = ""
+        if r['market'] and r['market'].get('exists'):
+            yes_price = r['market'].get('yes_price', 0)
+            market_info = f" | {yes_price}¢"
         
         st.markdown(f"""
         <div style="display: flex; align-items: center; background: #1a1a2e; border-left: 4px solid {border_color}; padding: 12px 16px; margin-bottom: 8px; border-radius: 4px;">
@@ -520,13 +565,29 @@ if ml_results:
                 <span style="font-weight: bold; color: white;">{r['pick']}</span>
                 <span style="color: #888;"> vs {opponent}</span>
                 <span style="color: {border_color}; font-weight: bold; margin-left: 8px;">{r['score']}/10</span>
-                <span style="color: #888; font-size: 0.9em;">{reason_str} • 🏠 {r['home_pct']}%</span>
+                <span style="color: #888; font-size: 0.9em;"> {factor_icons}</span>
+                <span style="background: {r['pressure_color']}22; color: {r['pressure_color']}; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 8px;">{r['pressure_label']}{market_info}</span>
             </div>
             <div>
                 <a href="{kalshi_url}" target="_blank" style="background: #00aa00; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-weight: bold;">BUY {pick_code}</a>
             </div>
         </div>
         """, unsafe_allow_html=True)
+        
+        with st.expander(f"📈 {r['pick']} Line Movement", expanded=False):
+            history = fetch_kalshi_history(r['ticker'])
+            if history and len(history) > 1:
+                import pandas as pd
+                df = pd.DataFrame(history)
+                if 'yes_price' in df.columns and 'ts' in df.columns:
+                    df['time'] = pd.to_datetime(df['ts'], unit='s')
+                    df = df.sort_values('time')
+                    st.line_chart(df.set_index('time')['yes_price'], use_container_width=True)
+                    st.caption(f"Volume: {r['market'].get('volume', 'N/A')} | OI: {r['market'].get('open_interest', 'N/A')}")
+                else:
+                    st.info("Chart data unavailable")
+            else:
+                st.info("No price history available")
     
     st.markdown(f"""
     <div style="text-align: center; margin-top: 16px;">
@@ -593,7 +654,6 @@ st.caption(f"🏀 {len(games)} games | {live_count} live")
 
 if cushion_data:
     for cd in cushion_data:
-        # Pace label and color
         if cd['pace'] < 4.5:
             pace_label, pace_color = "SLOW", "#00ff00"
             pace_icon = "✅"
@@ -607,7 +667,6 @@ if cushion_data:
             pace_label, pace_color = "SHOOTOUT", "#ff4444"
             pace_icon = "🔴"
         
-        # Cushion color
         if cd['cushion'] >= 15:
             cush_color = "#00ff00"
         elif cd['cushion'] >= 10:
@@ -798,15 +857,106 @@ else:
 st.divider()
 
 # ========== HOW TO USE ==========
-st.subheader("📖 How to Use")
-st.markdown("""
-**ML PICKS** — Moneyline recommendations based on 8-factor model  
-**CUSHION SCANNER** — Find live totals with big cushion to bet line  
-**PACE SCANNER** — Track scoring pace to project final totals  
-**INJURY REPORT** — Star player injuries affecting today's games  
-**POSITION TRACKER** — Track your bets and see live P&L
+st.subheader("📖 How to Use NBA Edge Finder")
 
-📧 Feedback: **aipublishingpro@gmail.com**
-""")
+with st.expander("🎯 ML Picks — Moneyline Strategy", expanded=False):
+    st.markdown("""
+    **What it does:** Analyzes 8 factors to find moneyline value on Kalshi NBA markets.
+    
+    **The 8 Factors:**
+    - 🛏️ **Rest Edge** — Back-to-back detection (tired teams lose)
+    - 📊 **Net Rating** — Offensive minus defensive efficiency differential
+    - 🛡️ **Elite Defense** — Top 5 defensive teams get bonus
+    - 🏠 **Home Court** — Built-in home advantage
+    - 🏥 **Injury Impact** — Star player availability weighted heavily
+    - ✈️ **Travel Fatigue** — Cross-country trips (2000+ miles) penalized
+    - 🔥 **Home Dominance** — Teams with 65%+ home win rate
+    - 🏔️ **Altitude** — Denver's 5280ft advantage
+    
+    **Signal Tiers:**
+    - 🟢 **STRONG BUY (8.0+)** — Multiple factors aligned, high confidence
+    - 🔵 **BUY (6.5-7.9)** — Good edge, worth sizing up
+    - 🟡 **LEAN (5.5-6.4)** — Slight edge, smaller position
+    - ⚪ **WEAK (<5.5)** — No clear edge, pass or fade
+    
+    **Market Pressure:**
+    - 🟢 **CONFIRMING** — Kalshi price moving toward our pick
+    - 🟡 **NEUTRAL** — No clear money flow
+    - 🔴 **FADING** — Market disagrees (caution or contrarian opportunity)
+    
+    **Best Practice:** Wait for 🟢 STRONG BUY + 🟢 CONFIRMING for highest conviction plays.
+    """)
 
-st.caption("⚠️ For entertainment only. Not financial advice. v15.58")
+with st.expander("🎯 Cushion Scanner — Live Totals Strategy", expanded=False):
+    st.markdown("""
+    **What it does:** Finds live games where the projected total has a big cushion to available Kalshi lines.
+    
+    **How it works:**
+    1. Calculates current scoring pace (points per minute)
+    2. Projects final total based on pace × 48 minutes
+    3. Finds the 2nd available threshold above/below projection
+    4. Shows cushion (buffer between projection and bet line)
+    
+    **Cushion Guide:**
+    - **+15 or more** → 🟢 Safe cushion, high confidence
+    - **+10 to +14** → 🔵 Good cushion, solid bet
+    - **+6 to +9** → 🟡 Thin cushion, proceed with caution
+    - **Below +6** → 🔴 No edge, don't chase
+    
+    **Pace Warning System:**
+    - 🟢 **SLOW (<4.5/min)** — Safe for NO bets
+    - 🟡 **AVG (4.5-4.8/min)** — Normal pace
+    - 🟠 **FAST (4.8-5.2/min)** — Caution on NO bets
+    - 🔴 **SHOOTOUT (>5.2/min)** — Avoid NO, consider YES
+    
+    **Best Practice:** Look for +10 cushion minimum with 🟢 SLOW pace for NO bets.
+    """)
+
+with st.expander("🔥 Pace Scanner — Totals Projection", expanded=False):
+    st.markdown("""
+    **What it does:** Shows real-time scoring pace for all live games to identify totals opportunities.
+    
+    **How to read it:**
+    - **Pace** = Total points ÷ Minutes played
+    - **Projection** = Pace × 48 (regulation minutes)
+    
+    **Strategy:**
+    - Games starting SLOW often stay slow (defensive matchups)
+    - Games starting FAST can explode (track for YES opportunities)
+    - Compare projection to Kalshi lines for edge
+    
+    **Pro tip:** Sort by pace to quickly find slowest/fastest games.
+    """)
+
+with st.expander("🏥 Injury Report — Impact Analysis", expanded=False):
+    st.markdown("""
+    **What it does:** Shows all injuries for today's teams, weighted by star impact.
+    
+    **Star Ratings:**
+    - ⭐⭐⭐ = Franchise player (massive impact)
+    - ⭐⭐ = All-star caliber (significant impact)
+    - No stars = Role player (minimal impact)
+    
+    **Status Codes:**
+    - **OUT** — Confirmed not playing
+    - **GTD** — Game-time decision (50/50)
+    - **DTD** — Day-to-day (likely out)
+    
+    **How ML Picks use injuries:** Star player OUT adds major weight to opposing team. Check injury report before placing bets.
+    """)
+
+with st.expander("📊 Position Tracker — Trade Management", expanded=False):
+    st.markdown("""
+    **What it does:** Track your Kalshi positions and calculate P&L.
+    
+    **How to use:**
+    1. Click "Add Position" after entering a trade
+    2. Enter the game, your pick, entry price, and contracts
+    3. View your cost basis and track results
+    
+    **Pro tip:** Use this to manage position sizing across multiple games.
+    """)
+
+st.divider()
+
+st.caption("⚠️ For entertainment only. Not financial advice. v16.0 | 8-Factor ML + Market Pressure")
