@@ -3,6 +3,7 @@ import requests
 from datetime import datetime, timedelta
 import pytz
 import time
+import json
 
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
 
@@ -24,6 +25,23 @@ if 'authenticated' not in st.session_state or not st.session_state.authenticated
 
 # ========== DAILY DATE KEY ==========
 today_str = datetime.now(pytz.timezone("US/Eastern")).strftime("%Y-%m-%d")
+
+# ========== POSITION PERSISTENCE ==========
+POSITIONS_FILE = "positions.json"
+
+def load_positions():
+    try:
+        with open(POSITIONS_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_positions(positions):
+    try:
+        with open(POSITIONS_FILE, 'w') as f:
+            json.dump(positions, f)
+    except:
+        pass
 
 # Fixed CSS
 st.markdown("""
@@ -65,7 +83,7 @@ div[role="radiogroup"] label:nth-of-type(2) span {
 if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
 if "positions" not in st.session_state:
-    st.session_state.positions = []
+    st.session_state.positions = load_positions()
 if "selected_side" not in st.session_state:
     st.session_state.selected_side = "NO"
 if "selected_threshold" not in st.session_state:
@@ -182,7 +200,7 @@ with st.sidebar:
 | 10 | 🆚 H2H Edge | +0.5 |
 """)
     st.divider()
-    st.caption("v15.44 SIGNAL")
+    st.caption("v15.45 SIGNAL")
 
 # ========== TEAM DATA ==========
 TEAM_ABBREVS = {
@@ -523,12 +541,125 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 st.title("🏀 NBA EDGE FINDER")
 
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.44")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.45")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
 if hdr3.button("🔄 Refresh", use_container_width=True):
     st.rerun()
+
+# ========== ACTIVE POSITIONS ==========
+st.subheader("📈 ACTIVE POSITIONS")
+
+if st.session_state.positions:
+    for idx, pos in enumerate(st.session_state.positions):
+        game_key = pos['game']
+        g = games.get(game_key)
+        price = pos.get('price', 50)
+        contracts = pos.get('contracts', 1)
+        cost = pos.get('cost', round(price * contracts / 100, 2))
+        pos_type = pos.get('type', 'totals')
+        potential_win = round((100 - price) * contracts / 100, 2)
+        
+        if g:
+            total = g['total']
+            mins = get_minutes_played(g['period'], g['clock'], g['status_type'])
+            is_final = g['status_type'] == "STATUS_FINAL"
+            game_status = "FINAL" if is_final else f"Q{g['period']} {g['clock']}"
+            
+            if pos_type == 'ml':
+                pick = pos.get('pick', '')
+                parts = game_key.split("@")
+                away_team, home_team = parts[0], parts[1]
+                home_score, away_score = g['home_score'], g['away_score']
+                pick_score = home_score if pick == home_team else away_score
+                opp_score = away_score if pick == home_team else home_score
+                lead = pick_score - opp_score
+                
+                if is_final:
+                    won = pick_score > opp_score
+                    if won:
+                        status_label, status_color = "✅ WON", "#00ff00"
+                    else:
+                        status_label, status_color = "❌ LOST", "#ff0000"
+                elif lead >= 15:
+                    status_label, status_color = "🟢 CRUISING", "#00ff00"
+                elif lead >= 8:
+                    status_label, status_color = "🟢 LEADING", "#00cc00"
+                elif lead >= 1:
+                    status_label, status_color = "🟡 AHEAD", "#ffff00"
+                elif lead >= -5:
+                    status_label, status_color = "🟠 CLOSE", "#ff8800"
+                else:
+                    status_label, status_color = "🔴 BEHIND", "#ff0000"
+                
+                pos_col, del_col = st.columns([10, 1])
+                with pos_col:
+                    st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#1a1a2e,#0f0f1a);padding:10px;margin-bottom:4px;border-radius:8px;border-left:4px solid {status_color}">
+                    <div><b style="color:#fff">ML: {pick}</b> <span style="color:#666">({game_key.replace('@',' @ ')})</span></div>
+                    <div style="display:flex;gap:15px;align-items:center">
+                    <span style="color:#888">{game_status}</span>
+                    <span style="color:#fff">{pick_score}-{opp_score}</span>
+                    <span style="color:{status_color};font-weight:bold">{status_label}</span>
+                    <span style="color:#888">{contracts}@{price}¢</span>
+                    </div></div>""", unsafe_allow_html=True)
+                with del_col:
+                    if st.button("🗑️", key=f"del_{idx}"):
+                        st.session_state.positions.pop(idx)
+                        save_positions(st.session_state.positions)
+                        st.rerun()
+            else:
+                side = pos.get('side', 'NO')
+                threshold = pos.get('threshold', 225.5)
+                cushion = threshold - total if side == "NO" else total - threshold
+                
+                if is_final:
+                    won = (side == "NO" and total < threshold) or (side == "YES" and total > threshold)
+                    if won:
+                        status_label, status_color = "✅ WON", "#00ff00"
+                    else:
+                        status_label, status_color = "❌ LOST", "#ff0000"
+                elif cushion >= 15:
+                    status_label, status_color = "🟢 VERY SAFE", "#00ff00"
+                elif cushion >= 8:
+                    status_label, status_color = "🟢 LOOKING GOOD", "#00cc00"
+                elif cushion >= 3:
+                    status_label, status_color = "🟡 ON TRACK", "#ffff00"
+                elif cushion >= -3:
+                    status_label, status_color = "🟠 WARNING", "#ff8800"
+                else:
+                    status_label, status_color = "🔴 AT RISK", "#ff0000"
+                
+                pos_col, del_col = st.columns([10, 1])
+                with pos_col:
+                    st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#1a1a2e,#0f0f1a);padding:10px;margin-bottom:4px;border-radius:8px;border-left:4px solid {status_color}">
+                    <div><b style="color:#fff">{side} {threshold}</b> <span style="color:#666">({game_key.replace('@',' @ ')})</span></div>
+                    <div style="display:flex;gap:15px;align-items:center">
+                    <span style="color:#888">{game_status}</span>
+                    <span style="color:#fff">Total: {total}</span>
+                    <span style="color:{status_color};font-weight:bold">{status_label} ({'+' if cushion >= 0 else ''}{cushion:.0f})</span>
+                    <span style="color:#888">{contracts}@{price}¢</span>
+                    </div></div>""", unsafe_allow_html=True)
+                with del_col:
+                    if st.button("🗑️", key=f"del_{idx}"):
+                        st.session_state.positions.pop(idx)
+                        save_positions(st.session_state.positions)
+                        st.rerun()
+        else:
+            st.warning(f"Game not found: {game_key}")
+            if st.button("🗑️ Remove", key=f"del_missing_{idx}"):
+                st.session_state.positions.pop(idx)
+                save_positions(st.session_state.positions)
+                st.rerun()
+    
+    if st.button("🗑️ Clear All Positions", use_container_width=True):
+        st.session_state.positions = []
+        save_positions(st.session_state.positions)
+        st.rerun()
+else:
+    st.info("No positions tracked — add from ML PICKS or form below")
+
+st.divider()
 
 # ========== INJURY REPORT ==========
 st.subheader("🏥 INJURY REPORT")
@@ -581,7 +712,95 @@ for r in ml_results:
     if r["score"] < 5.5: continue
     kalshi_url = build_kalshi_ml_url(r["away"], r["home"])
     reasons = " • ".join(r["reasons"])
-    st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:6px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {r['color']}"><div><b style="color:#fff">{r['pick']}</b> <span style="color:#666">vs {r['away'] if r['pick']==r['home'] else r['home']}</span> <span style="color:#38bdf8">{r['score']}/10</span> <span style="color:#777;font-size:0.8em">{reasons}</span></div><a href="{kalshi_url}" target="_blank" style="background:#16a34a;color:#fff;padding:4px 10px;border-radius:5px;font-size:0.8em;text-decoration:none;font-weight:600">BUY {r['pick']}</a></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:6px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {r['color']}"><div><b style="color:#fff">{r['pick']}</b> <span style="color:#666">vs {r['away'] if r['pick']==r['home'] else r['home']}</span> <span style="color:#38bdf8">{r['score']}/10</span> <span style="color:#777;font-size:0.8em">{reasons}</span></div><a href="{kalshi_url}" target="_blank" style="background:#16a34a;color:#fff;padding:4px 10px;border-radius:5px;font-size:0.8em;text-decoration:none;font-weight:600">BUY {r['pick'][:3].upper()}</a></div>""", unsafe_allow_html=True)
+
+# ========== ADD ALL PICKS BUTTON ==========
+strong_picks = [r for r in ml_results if r["score"] >= 6.5]
+if strong_picks:
+    if st.button(f"➕ Add {len(strong_picks)} Picks", use_container_width=True):
+        added = 0
+        for r in strong_picks:
+            game_key = f"{r['away']}@{r['home']}"
+            already_tracked = any(p.get('game') == game_key and p.get('type') == 'ml' and p.get('pick') == r['pick'] for p in st.session_state.positions)
+            if not already_tracked:
+                st.session_state.positions.append({
+                    "game": game_key,
+                    "type": "ml",
+                    "pick": r['pick'],
+                    "price": 50,
+                    "contracts": 1,
+                    "cost": 0.50,
+                    "score": r['score'],
+                    "added_at": now.strftime("%a %I:%M %p")
+                })
+                added += 1
+        if added > 0:
+            save_positions(st.session_state.positions)
+            st.success(f"✅ Added {added} picks")
+            st.rerun()
+
+st.divider()
+
+# ========== ADD POSITION ==========
+st.subheader("➕ ADD POSITION")
+
+game_options = ["Select..."] + [gk.replace("@", " @ ") for gk in game_list]
+selected_game = st.selectbox("Game", game_options)
+
+if selected_game != "Select...":
+    parts = selected_game.replace(" @ ", "@").split("@")
+    st.link_button("🔗 View on Kalshi", build_kalshi_ml_url(parts[0], parts[1]), use_container_width=True)
+
+market_type = st.radio("Type", ["Moneyline (Winner)", "Totals (Over/Under)"], horizontal=True)
+
+p1, p2, p3 = st.columns(3)
+
+with p1:
+    if selected_game != "Select..." and market_type == "Moneyline (Winner)":
+        parts = selected_game.replace(" @ ", "@").split("@")
+        st.session_state.selected_ml_pick = st.radio("Pick", [parts[1], parts[0]], horizontal=True)
+    elif market_type == "Totals (Over/Under)":
+        st.session_state.selected_side = st.radio("Side", ["NO", "YES"], horizontal=True)
+
+with p2:
+    if market_type == "Totals (Over/Under)":
+        st.session_state.selected_threshold = st.number_input("Line", min_value=180.0, max_value=280.0, value=225.5, step=0.5)
+
+price_paid = p3.number_input("Price ¢", min_value=1, max_value=99, value=50)
+contracts = st.number_input("Contracts", min_value=1, value=1)
+
+if st.button("✅ ADD POSITION", use_container_width=True, type="primary"):
+    if selected_game == "Select...":
+        st.error("Select a game first!")
+    else:
+        game_key = selected_game.replace(" @ ", "@")
+        parts = game_key.split("@")
+        if market_type == "Moneyline (Winner)":
+            if st.session_state.selected_ml_pick is None:
+                st.error("Pick a team first!")
+            else:
+                st.session_state.positions.append({
+                    "game": game_key,
+                    "type": "ml",
+                    "pick": st.session_state.selected_ml_pick,
+                    "price": price_paid,
+                    "contracts": contracts,
+                    "cost": round(price_paid * contracts / 100, 2)
+                })
+                save_positions(st.session_state.positions)
+                st.rerun()
+        else:
+            st.session_state.positions.append({
+                "game": game_key,
+                "type": "totals",
+                "side": st.session_state.selected_side,
+                "threshold": st.session_state.selected_threshold,
+                "price": price_paid,
+                "contracts": contracts,
+                "cost": round(price_paid * contracts / 100, 2)
+            })
+            save_positions(st.session_state.positions)
+            st.rerun()
 
 st.divider()
 
@@ -719,4 +938,4 @@ else:
     st.info("No games today")
 
 st.divider()
-st.caption("⚠️ Entertainment only. Not financial advice. v15.44")
+st.caption("⚠️ Entertainment only. Not financial advice. v15.45")
