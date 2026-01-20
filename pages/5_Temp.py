@@ -175,7 +175,23 @@ st.caption(f"Current time: {now_et.strftime('%I:%M %p ET')} | Today: {now_et.str
 
 # --- CITY SELECTOR ---
 st.subheader("Select City")
-city = st.selectbox("City", list(CITIES.keys()), label_visibility="collapsed")
+
+# Get default from URL params, fallback to NYC
+city_list = list(CITIES.keys())
+default_city = st.query_params.get("city", "New York City")
+if default_city not in city_list:
+    default_city = "New York City"
+default_index = city_list.index(default_city)
+
+col_city, col_default = st.columns([3, 1])
+with col_city:
+    city = st.selectbox("City", city_list, index=default_index, label_visibility="collapsed")
+with col_default:
+    if st.button("⭐ Set as Default"):
+        st.query_params["city"] = city
+        st.success(f"✓ Saved!")
+        st.caption("Bookmark this page")
+
 config = CITIES[city]
 
 # --- DATE SELECTION ---
