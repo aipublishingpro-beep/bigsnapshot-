@@ -1,3 +1,27 @@
+import streamlit as st
+
+st.set_page_config(
+    page_title="BigSnapshot | Prediction Market Edge Finder",
+    page_icon="📊",
+    layout="wide"
+)
+
+# ============================================================
+# GA4 TRACKING
+# ============================================================
+st.markdown("""
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
+<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# SESSION STATE
+# ============================================================
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None
+
 # ============================================================
 # PASSWORD CONFIG - PAID ACCESS ONLY
 # ============================================================
@@ -13,7 +37,21 @@ VALID_PASSWORDS = {
 STRIPE_LINK = "https://buy.stripe.com/14A00lcgHe9oaIodx65Rm00"
 
 # ============================================================
-# LOGIN PAGE (REPLACE YOUR EXISTING LOGIN SECTION)
+# CUSTOM CSS
+# ============================================================
+st.markdown("""
+<style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stApp {
+        background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# LOGIN PAGE
 # ============================================================
 if not st.session_state.authenticated:
     st.markdown("""
@@ -89,3 +127,57 @@ if not st.session_state.authenticated:
         """, unsafe_allow_html=True)
     
     st.stop()
+
+# ============================================================
+# AUTHENTICATED - SHOW APP HUB
+# ============================================================
+st.markdown("""
+<div style="text-align: center; padding: 60px 20px 40px 20px;">
+    <div style="font-size: 70px; margin-bottom: 15px;">📊</div>
+    <h1 style="font-size: 52px; font-weight: 800; color: #fff; margin-bottom: 10px;">BigSnapshot</h1>
+    <p style="color: #888; font-size: 20px; margin-bottom: 10px;">Prediction Market Edge Finder</p>
+    <p style="color: #555; font-size: 14px;">Structural analysis for Kalshi markets</p>
+</div>
+""", unsafe_allow_html=True)
+
+# App Cards
+st.markdown("""
+<div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; padding: 30px; width: 280px; text-align: center; border: 1px solid #3a4a6a;">
+        <div style="font-size: 50px; margin-bottom: 15px;">🏀</div>
+        <h3 style="color: #fff; margin-bottom: 10px;">NBA Edge Finder</h3>
+        <p style="color: #888; font-size: 14px;">12-factor analysis for NBA markets</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 30px; width: 280px; text-align: center; border: 1px solid #4a5a4a;">
+        <div style="font-size: 50px; margin-bottom: 15px;">🏈</div>
+        <h3 style="color: #fff; margin-bottom: 10px;">NFL Edge Finder</h3>
+        <p style="color: #888; font-size: 14px;">10-factor analysis for NFL markets</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #3a2a2a 0%, #4a3a3a 100%); border-radius: 16px; padding: 30px; width: 280px; text-align: center; border: 1px solid #5a4a4a;">
+        <div style="font-size: 50px; margin-bottom: 15px;">🌡️</div>
+        <h3 style="color: #fff; margin-bottom: 10px;">Temp Edge Finder</h3>
+        <p style="color: #888; font-size: 14px;">Weather market analysis</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Navigation buttons
+col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
+with col2:
+    if st.button("🏀 Open NBA", use_container_width=True):
+        st.switch_page("pages/2_NBA.py")
+with col3:
+    if st.button("🏈 Open NFL", use_container_width=True):
+        st.switch_page("pages/1_NFL.py")
+with col4:
+    if st.button("🌡️ Open Temp", use_container_width=True):
+        st.switch_page("pages/3_Temp.py")
+
+# Logout
+st.markdown("---")
+col1, col2, col3 = st.columns([1, 1, 1])
+with col2:
+    if st.button("🚪 Logout", use_container_width=True):
+        st.session_state.authenticated = False
+        st.session_state.user_type = None
+        st.rerun()
