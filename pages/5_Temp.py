@@ -243,40 +243,80 @@ def fetch_nws_current(lat, lon):
         return {"success": False, "temp_f": None}
 
 @st.cache_data(ttl=60)
-def fetch_kalshi_brackets(series_ticker):
-    url = "https://trading-api.kalshi.com/trade-api/v2/markets"
-    params = {"series_ticker": series_ticker, "status": "open", "limit": 50}
-    try:
-        resp = requests.get(url, params=params, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        markets = data.get("markets", [])
-        brackets = []
-        for m in markets:
-            ticker = m.get("ticker", "")
-            title = m.get("title", "")
-            yes_ask = m.get("yes_ask", 50)
-            yes_bid = m.get("yes_bid", 50)
-            no_ask = m.get("no_ask", 50)
-            if yes_bid and yes_ask:
-                mid_price = (yes_bid + yes_ask) / 2
-            else:
-                mid_price = yes_ask
-            spread = abs(yes_ask - yes_bid) if yes_bid else 0
-            temp_range = parse_temp_range(title)
-            brackets.append({
-                "ticker": ticker,
-                "title": title,
-                "range": temp_range,
-                "yes_ask": yes_ask,
-                "yes_bid": yes_bid,
-                "mid_price": mid_price,
-                "spread": spread,
-                "no_ask": no_ask,
-            })
-        return {"success": True, "brackets": brackets}
-    except Exception as e:
-        return {"success": False, "brackets": [], "error": str(e)}
+def fetch_kalshi_brackets(series_ticker, target_date):
+    """Fetch Kalshi temperature brackets - tries multiple API approaches"""
+    
+    # Format date for ticker (e.g., 21JAN26)
+    date_str = target_date.strftime("%d%b%y").upper()
+    
+    # Try multiple ticker formats (Kalshi has changed these over time)
+    ticker_variants = [
+        series_ticker,                           # KXHIGHNY
+        series_ticker.replace("KX", ""),         # HIGHNY
+        series_ticker.replace("KXHIGH", "HIGH"), # HIGHNY
+        series_ticker.replace("KXLOW", "LOW"),   # LOWNY
+    ]
+    
+    for ticker in ticker_variants:
+        urls_to_try = [
+            f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={ticker}",
+            f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={ticker}&status=open",
+            f"https://trading-api.kalshi.com/trade-api/v2/markets?series_ticker={ticker}&status=open&limit=50",
+        ]
+        
+        for url in urls_to_try:
+            try:
+                resp = requests.get(url, timeout=10)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    markets = data.get("markets", [])
+                    
+                    # Filter for target date if we got results
+                    if markets:
+                        filtered = []
+                        for m in markets:
+                            m_ticker = m.get("ticker", "")
+                            # Check if market is for our target date
+                            if date_str in m_ticker:
+                                filtered.append(m)
+                        
+                        if filtered:
+                            markets = filtered
+                    
+                    if markets:
+                        brackets = []
+                        for m in markets:
+                            m_ticker = m.get("ticker", "")
+                            title = m.get("title", "")
+                            yes_ask = m.get("yes_ask") or m.get("yes_price") or 50
+                            yes_bid = m.get("yes_bid") or 50
+                            no_ask = m.get("no_ask") or 50
+                            
+                            if yes_bid and yes_ask:
+                                mid_price = (yes_bid + yes_ask) / 2
+                            else:
+                                mid_price = yes_ask if yes_ask else 50
+                            
+                            spread = abs(yes_ask - yes_bid) if (yes_bid and yes_ask) else 0
+                            temp_range = parse_temp_range(title)
+                            
+                            brackets.append({
+                                "ticker": m_ticker,
+                                "title": title,
+                                "range": temp_range,
+                                "yes_ask": yes_ask,
+                                "yes_bid": yes_bid,
+                                "mid_price": mid_price,
+                                "spread": spread,
+                                "no_ask": no_ask,
+                            })
+                        
+                        if brackets:
+                            return {"success": True, "brackets": brackets}
+            except:
+                continue
+    
+    return {"success": False, "brackets": [], "error": "No markets found"}
 
 def parse_temp_range(title):
     import re
@@ -515,7 +555,7 @@ with col1:
         nws_high = None
         volatility_high = False
     
-    kalshi_result = fetch_kalshi_brackets(city["kalshi_high"])
+    kalshi_result = fetch_kalshi_brackets(city["kalshi_high"], target_date)
     if kalshi_result["success"] and kalshi_result["brackets"]:
         market_high, total_prob, vig_warning = calc_market_implied(kalshi_result["brackets"])
         if market_high:
@@ -527,7 +567,8 @@ with col1:
         with st.expander("📊 Bracket Details"):
             render_bracket_table(kalshi_result["brackets"], nws_high, "High")
     else:
-        st.warning("No Kalshi high temp markets found")
+        st.warning(f"No Kalshi high temp markets found for {city['name']} on {target_date}")
+        st.caption("💡 Try NYC — it typically has the most active temperature markets")
 
 with col2:
     st.markdown("## ❄️ Low Temperature")
@@ -543,7 +584,7 @@ with col2:
         nws_low = None
         volatility_low = False
     
-    kalshi_low_result = fetch_kalshi_brackets(city["kalshi_low"])
+    kalshi_low_result = fetch_kalshi_brackets(city["kalshi_low"], target_date)
     if kalshi_low_result["success"] and kalshi_low_result["brackets"]:
         market_low, total_prob_low, vig_warning_low = calc_market_implied(kalshi_low_result["brackets"])
         if market_low:
@@ -555,13 +596,18 @@ with col2:
         with st.expander("📊 Bracket Details"):
             render_bracket_table(kalshi_low_result["brackets"], nws_low, "Low")
     else:
-        st.warning("No Kalshi low temp markets found")
+        st.warning(f"No Kalshi low temp markets found for {city['name']} on {target_date}")
 
 # Current temp
 st.markdown("---")
 current = fetch_nws_current(city["lat"], city["lon"])
 if current["success"] and current["temp_f"]:
     st.markdown(f"**Current Temperature in {city['name']}:** {current['temp_f']}°F")
+
+# Debug / verification link
+st.markdown("---")
+st.markdown(f"🔗 [Check Kalshi Temperature Markets](https://kalshi.com/markets?category=weather)")
+st.caption("If you see markets on Kalshi but not here, the ticker format may have changed. Report to support.")
 
 st.markdown("---")
 st.caption(f"⚠️ For entertainment only. Not financial advice. | 🕐 {now_et.strftime('%I:%M %p ET')}")
