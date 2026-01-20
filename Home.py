@@ -1,180 +1,294 @@
 import streamlit as st
-from datetime import datetime
-import pytz
 
-st.set_page_config(page_title="Big Snapshot", page_icon="📊", layout="wide")
+st.set_page_config(page_title="BigSnapshot", page_icon="📊", layout="wide")
 
-# ========== HIDE STREAMLIT STUFF ==========
+# ========== HIDE STREAMLIT UI ==========
 st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
 .stDeployButton {display: none;}
-[data-testid="stSidebarNav"] {display: none;}
+[data-testid="stToolbar"] {display: none;}
+[data-testid="stSidebar"] {display: none;}
+.block-container {padding-top: 2rem;}
 </style>
 """, unsafe_allow_html=True)
 
-# ========== GA4 TRACKING ==========
+# ========== GA4 ==========
 st.markdown("""
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
-<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-NQKY5VQ376');</script>
 """, unsafe_allow_html=True)
 
-# ========== PASSWORD SYSTEM ==========
-VALID_PASSWORDS = {
-    "WILLIE1228": "Owner",
-    "BETAUSER": "Beta Tester",
-}
+# ========== SESSION STATE ==========
+if 'show_apps' not in st.session_state:
+    st.session_state.show_apps = False
 
-# ========== INIT SESSION STATE ==========
-if "gate_passed" not in st.session_state:
-    st.session_state.gate_passed = False
-if "user_role" not in st.session_state:
-    st.session_state.user_role = None
-
-eastern = pytz.timezone("US/Eastern")
-now = datetime.now(eastern)
-
-# ========== LOGIN SCREEN ==========
-if not st.session_state.gate_passed:
-    st.title("📊 BIG SNAPSHOT")
-    st.subheader("Sports & Weather Analytics for Kalshi")
+# ========== LANDING PAGE ==========
+if not st.session_state.show_apps:
     
-    st.markdown("---")
+    # Hero
+    st.markdown("""
+    <div style="text-align: center; padding: 40px 20px;">
+        <h1 style="font-size: 3em; margin-bottom: 0; color: #fff;">Stop Switching Tabs.</h1>
+        <h1 style="font-size: 3em; margin-top: 0; color: #00d4ff;">Start Making Cleaner Decisions.</h1>
+        <p style="font-size: 1.3em; color: #888; max-width: 700px; margin: 20px auto;">
+            BigSnapshot is a decision-compression tool for serious sports bettors. It pulls the signals that matter into one screen—so you spend less time hunting and more time deciding.
+        </p>
+        <p style="color: #666; font-size: 1.1em;">No hype. No picks shoved in your face. Just clarity.</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    password_input = st.text_input("Enter Access Code:", type="password", key="pwd")
-    
-    if st.button("🔓 Enter", type="primary", use_container_width=True):
-        if password_input.upper() in VALID_PASSWORDS:
-            st.session_state.gate_passed = True
-            st.session_state.user_role = VALID_PASSWORDS[password_input.upper()]
+    # CTA Buttons
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("""
+        <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+            <a href="mailto:aipublishingpro@gmail.com?subject=BigSnapshot%20Beta%20Request&body=I%20want%20to%20join%20the%20BigSnapshot%20beta.%0A%0AMy%20name%3A%20%0AMarkets%20I%20trade%3A%20" 
+               style="background: #00ff88; color: #000; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 1.1em;">
+                📧 JOIN BETA
+            </a>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("👀 PREVIEW APP", use_container_width=True):
+            st.session_state.show_apps = True
             st.rerun()
-        elif password_input:
-            st.error("❌ Invalid access code")
+        st.caption("Preview the tools before signing up")
     
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
     
-    # Beta signup callout
+    # One Screen Section
     st.markdown("""
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:20px;text-align:center;border:2px solid #ffd700;margin-top:20px">
-        <h3 style="color:#ffd700;margin:0">🚀 Want Beta Access?</h3>
-        <p style="color:#fff;margin:10px 0">Get early access to all Edge Finder tools</p>
-        <p style="color:#888;font-size:0.9em">Email: <strong>aipublishingpro@gmail.com</strong></p>
+    <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 16px; padding: 40px; margin: 40px 0;">
+        <h2 style="color: #fff; text-align: center; margin-bottom: 30px;">One Screen. One Flow. Zero Noise.</h2>
+        <p style="color: #aaa; text-align: center; max-width: 600px; margin: 0 auto 30px auto;">
+            Most bettors lose edge before they even place a bet—switching between odds, stats, line movement, news, and gut instinct. BigSnapshot fixes that.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;">
+            <div style="text-align: center;">
+                <span style="font-size: 2em;">🎯</span>
+                <p style="color: #fff; margin: 10px 0 5px 0; font-weight: bold;">Where the edge is</p>
+                <p style="color: #888; font-size: 0.9em;">Clear signals, not noise</p>
+            </div>
+            <div style="text-align: center;">
+                <span style="font-size: 2em;">📊</span>
+                <p style="color: #fff; margin: 10px 0 5px 0; font-weight: bold;">Market agrees or resists</p>
+                <p style="color: #888; font-size: 0.9em;">Know before you commit</p>
+            </div>
+            <div style="text-align: center;">
+                <span style="font-size: 2em;">⚡</span>
+                <p style="color: #fff; margin: 10px 0 5px 0; font-weight: bold;">What deserves attention</p>
+                <p style="color: #888; font-size: 0.9em;">And what doesn't</p>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
-    st.stop()
-
-# ========== LOGGED IN - SHOW DASHBOARD ==========
-st.title("📊 BIG SNAPSHOT")
-st.caption(f"Logged in as: {st.session_state.user_role}")
-
-st.markdown("---")
-st.subheader("Select an Edge Finder:")
-
-# ========== ROW 1: NBA, NFL, NHL ==========
-col1, col2, col3 = st.columns(3)
-
-with col1:
+    # Benefits Grid
+    st.markdown("<h2 style='text-align: center; color: #fff; margin: 40px 0 30px 0;'>Why BigSnapshot Is Different</h2>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #00d4ff;">
+            <h3 style="color: #00d4ff; margin: 0 0 10px 0;">⏱️ Save Time on Every Slate</h3>
+            <p style="color: #aaa; margin: 0;">No bouncing between sportsbooks, stats sites, and Twitter. Scan an entire slate in seconds.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #00ff88;">
+            <h3 style="color: #00ff88; margin: 0 0 10px 0;">🧠 Decision Compression</h3>
+            <p style="color: #aaa; margin: 0;">Raw data distilled into clear signals. Analysis paralysis disappears. Your brain stays focused on sizing and discipline.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #ffaa00;">
+            <h3 style="color: #ffaa00; margin: 0 0 10px 0;">📈 Market Awareness</h3>
+            <p style="color: #aaa; margin: 0;">Instantly know if the market supports your view or pushes back. Aware before you commit—not after.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #ff6b6b;">
+            <h3 style="color: #ff6b6b; margin: 0 0 10px 0;">🛑 Stops You From Chasing</h3>
+            <p style="color: #aaa; margin: 0;">Late moves are obvious. Resistance is clearly flagged. The app naturally slows you down when chasing would hurt most.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #aa88ff;">
+            <h3 style="color: #aa88ff; margin: 0 0 10px 0;">🎚️ Discipline Built In</h3>
+            <p style="color: #aaa; margin: 0;">No BUY/SELL hype. No flashing alerts. No forced picks. Encourages restraint instead of impulsive action.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #ff88aa;">
+            <h3 style="color: #ff88aa; margin: 0 0 10px 0;">👁️ Early Signal Visibility</h3>
+            <p style="color: #aaa; margin: 0;">Spot early pressure before public noise takes over. Especially powerful in thinner markets.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #88ddff;">
+            <h3 style="color: #88ddff; margin: 0 0 10px 0;">✂️ Fewer Bad Bets</h3>
+            <p style="color: #aaa; margin: 0;">Doesn't create more bets—filters out the bad versions of good ideas. Edge quality improves without trading more.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #88ff88;">
+            <h3 style="color: #88ff88; margin: 0 0 10px 0;">🔒 Human-in-the-Loop</h3>
+            <p style="color: #aaa; margin: 0;">Doesn't bet for you. Doesn't override judgment. You stay in control at all times.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Result Section
     st.markdown("""
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #00ff00;min-height:280px">
-        <div style="font-size:3em;margin-bottom:10px">🏀</div>
-        <h3 style="color:#fff;margin:0">NBA Edge Finder</h3>
-        <p style="color:#888;font-size:0.9em;margin:10px 0">8-Factor ML Model</p>
-        <p style="color:#00ff00;font-weight:bold">✅ LIVE</p>
+    <div style="background: linear-gradient(135deg, #0f3460, #1a1a2e); border-radius: 16px; padding: 40px; margin: 40px 0; text-align: center;">
+        <h2 style="color: #fff; margin-bottom: 20px;">The Result</h2>
+        <div style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; margin-bottom: 30px;">
+            <span style="color: #00ff88; font-size: 1.1em;">✓ Less second-guessing</span>
+            <span style="color: #00ff88; font-size: 1.1em;">✓ Less tilt</span>
+            <span style="color: #00ff88; font-size: 1.1em;">✓ Fewer mistakes</span>
+            <span style="color: #00ff88; font-size: 1.1em;">✓ More trust in your process</span>
+        </div>
+        <p style="color: #fff; font-size: 1.4em; font-weight: bold; margin: 0;">You don't bet more. You bet cleaner.</p>
     </div>
     """, unsafe_allow_html=True)
-    st.page_link("pages/2_NBA.py", label="Open NBA", use_container_width=True)
-
-with col2:
+    
+    # Bottom Line + CTA
     st.markdown("""
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #00aaff;min-height:280px">
-        <div style="font-size:3em;margin-bottom:10px">🏈</div>
-        <h3 style="color:#fff;margin:0">NFL Edge Finder</h3>
-        <p style="color:#888;font-size:0.9em;margin:10px 0">10-Factor ML Model</p>
-        <p style="color:#00ff00;font-weight:bold">✅ LIVE</p>
+    <div style="text-align: center; padding: 40px 20px;">
+        <p style="color: #888; font-size: 1.2em; max-width: 600px; margin: 0 auto 30px auto;">
+            BigSnapshot doesn't help you chase wins. It helps you make fewer bad decisions.<br><br>
+            <span style="color: #fff; font-weight: bold;">That's where real edge comes from.</span>
+        </p>
     </div>
     """, unsafe_allow_html=True)
-    st.page_link("pages/1_NFL.py", label="Open NFL", use_container_width=True)
-
-with col3:
+    
+    # Beta Signup
     st.markdown("""
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #00ccff;min-height:280px">
-        <div style="font-size:3em;margin-bottom:10px">🏒</div>
-        <h3 style="color:#fff;margin:0">NHL Edge Finder</h3>
-        <p style="color:#888;font-size:0.9em;margin:10px 0">7-Factor Goalie Model</p>
-        <p style="color:#00ff00;font-weight:bold">✅ LIVE</p>
+    <div style="background: linear-gradient(135deg, #1a472a, #0f3460); border-radius: 16px; padding: 40px; margin: 40px 0; text-align: center; border: 2px solid #00ff88;">
+        <h2 style="color: #00ff88; margin-bottom: 10px;">🚀 Join the Beta</h2>
+        <p style="color: #aaa; margin-bottom: 25px;">Get early access. Help shape the product. Lock in founder pricing.</p>
+        <a href="mailto:aipublishingpro@gmail.com?subject=BigSnapshot%20Beta%20Request&body=I%20want%20to%20join%20the%20BigSnapshot%20beta.%0A%0AMy%20name%3A%20%0AMarkets%20I%20trade%3A%20" 
+           style="background: #00ff88; color: #000; padding: 16px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 1.2em; display: inline-block;">
+            📧 REQUEST BETA ACCESS
+        </a>
+        <p style="color: #666; margin-top: 20px; font-size: 0.9em;">Click above to send an email request</p>
     </div>
     """, unsafe_allow_html=True)
-    st.page_link("pages/3_NHL.py", label="Open NHL", use_container_width=True)
-
-# ========== ROW 2: Temp, MLB, Politics ==========
-st.markdown("<br>", unsafe_allow_html=True)
-col4, col5, col6 = st.columns(3)
-
-with col4:
+    
+    # Final CTA
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("🚀 LAUNCH APP (PREVIEW)", use_container_width=True, type="primary", key="bottom_cta"):
+            st.session_state.show_apps = True
+            st.rerun()
+    
+    # Footer
     st.markdown("""
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #ff6600;min-height:280px">
-        <div style="font-size:3em;margin-bottom:10px">🌡️</div>
-        <h3 style="color:#fff;margin:0">Temp Edge Finder</h3>
-        <p style="color:#888;font-size:0.9em;margin:10px 0">NWS Forecast Model</p>
-        <p style="color:#00ff00;font-weight:bold">✅ LIVE</p>
+    <div style="text-align: center; padding: 40px 20px; margin-top: 40px; border-top: 1px solid #333;">
+        <p style="color: #666; font-size: 0.9em;">
+            Built for serious bettors. Not a pick app. Not a casino toy.<br>
+            📧 aipublishingpro@gmail.com
+        </p>
     </div>
     """, unsafe_allow_html=True)
-    st.page_link("pages/5_Temp.py", label="Open Temp", use_container_width=True)
 
-with col5:
-    st.markdown("""
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #ff4444;min-height:280px">
-        <div style="font-size:3em;margin-bottom:10px">⚾</div>
-        <h3 style="color:#fff;margin:0">MLB Edge Finder</h3>
-        <p style="color:#888;font-size:0.9em;margin:10px 0">Pitcher Matchup Model</p>
-        <p style="color:#ffd700;font-weight:bold">🚀 MARCH 2026</p>
-    </div>
-    """, unsafe_allow_html=True)
-    st.page_link("pages/4_MLB.py", label="Coming Soon", use_container_width=True)
-
-with col6:
-    st.markdown("""
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:25px;text-align:center;border-left:4px solid #9933ff;min-height:280px">
-        <div style="font-size:3em;margin-bottom:10px">🏛️</div>
-        <h3 style="color:#fff;margin:0">Politics Edge</h3>
-        <p style="color:#888;font-size:0.9em;margin:10px 0">Structural Analysis</p>
-        <p style="color:#ffd700;font-weight:bold">🚀 COMING SOON</p>
-    </div>
-    """, unsafe_allow_html=True)
-    st.page_link("pages/6_Politics.py", label="Coming Soon", use_container_width=True)
-
-# ========== HOW IT WORKS ==========
-st.markdown("---")
-st.subheader("How It Works")
-st.markdown("""
-1. **Select an Edge Finder** — Choose NBA, NFL, NHL, or Temperature markets
-2. **Review the signals** — Our models identify mispriced Kalshi contracts  
-3. **Click BUY** — Direct links to Kalshi order pages
-4. **Track positions** — Monitor your active trades in real-time
-""")
-
-# ========== BETA SIGNUP ==========
-st.markdown("---")
-st.markdown("""
-<div style="background:linear-gradient(135deg,#2d1f3d,#1a1a2e);border-radius:12px;padding:25px;text-align:center;border:2px solid #ffd700">
-    <h3 style="color:#ffd700;margin:0">🚀 Enjoying the Beta?</h3>
-    <p style="color:#fff;margin:15px 0">Share feedback or invite friends to join</p>
-    <p style="color:#888">Email: <strong>aipublishingpro@gmail.com</strong></p>
-</div>
-""", unsafe_allow_html=True)
-
-# ========== FOOTER ==========
-st.markdown("---")
-col1, col2 = st.columns(2)
-with col1:
-    st.caption(f"🕐 {now.strftime('%I:%M %p ET')} | 📅 {now.strftime('%B %d, %Y')}")
-with col2:
-    if st.button("🚪 Logout", use_container_width=True):
-        st.session_state.gate_passed = False
-        st.session_state.user_role = None
+# ========== APP HUB ==========
+else:
+    # Back button
+    if st.button("← Back to Home"):
+        st.session_state.show_apps = False
         st.rerun()
-
-st.caption("⚠️ Educational analysis only. Not financial advice. | bigsnapshot.com")
+    
+    st.title("📊 BigSnapshot")
+    st.caption("Decision compression for serious bettors")
+    
+    st.divider()
+    
+    # App Cards
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #333;">
+            <span style="font-size: 3em;">🏈</span>
+            <h3 style="color: #fff; margin: 15px 0 10px 0;">NFL Edge Finder</h3>
+            <p style="color: #888; font-size: 0.9em;">10-factor ML + Market Pressure</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.link_button("Launch NFL →", "/NFL", use_container_width=True)
+    
+    with col2:
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #333;">
+            <span style="font-size: 3em;">🏀</span>
+            <h3 style="color: #fff; margin: 15px 0 10px 0;">NBA Edge Finder</h3>
+            <p style="color: #888; font-size: 0.9em;">8-factor ML + Market Pressure</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.link_button("Launch NBA →", "/NBA", use_container_width=True)
+    
+    with col3:
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #333;">
+            <span style="font-size: 3em;">🏒</span>
+            <h3 style="color: #fff; margin: 15px 0 10px 0;">NHL Edge Finder</h3>
+            <p style="color: #888; font-size: 0.9em;">10-factor ML + Market Pressure</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.link_button("Launch NHL →", "/NHL", use_container_width=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col4, col5, col6 = st.columns(3)
+    
+    with col4:
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #333;">
+            <span style="font-size: 3em;">⚾</span>
+            <h3 style="color: #fff; margin: 15px 0 10px 0;">MLB Edge Finder</h3>
+            <p style="color: #888; font-size: 0.9em;">Pitcher matchups + Weather</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.link_button("Launch MLB →", "/MLB", use_container_width=True)
+    
+    with col5:
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #333;">
+            <span style="font-size: 3em;">🌡️</span>
+            <h3 style="color: #fff; margin: 15px 0 10px 0;">Temp Edge Finder</h3>
+            <p style="color: #888; font-size: 0.9em;">NWS forecast vs Kalshi pricing</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.link_button("Launch Temp →", "/Temp", use_container_width=True)
+    
+    with col6:
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #333;">
+            <span style="font-size: 3em;">🗳️</span>
+            <h3 style="color: #fff; margin: 15px 0 10px 0;">Politics Edge</h3>
+            <p style="color: #888; font-size: 0.9em;">Coming Soon</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.button("Coming Soon", use_container_width=True, disabled=True)
+    
+    st.divider()
+    
+    st.markdown("""
+    <div style="text-align: center; padding: 20px;">
+        <p style="color: #666; font-size: 0.9em;">
+            ⚠️ For entertainment only. Not financial advice.<br>
+            📧 aipublishingpro@gmail.com
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
