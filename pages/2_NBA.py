@@ -83,7 +83,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v16.0 | 8-Factor ML + Market Pressure")
+    st.caption("v16.1 | 8-Factor ML + Market Pressure")
 
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
@@ -119,15 +119,16 @@ TEAM_ABBREVS = {
     "Utah Jazz": "Utah", "Washington Wizards": "Washington"
 }
 
+# KALSHI CODES - lowercase for ticker format
 KALSHI_CODES = {
-    "Atlanta": "ATL", "Boston": "BOS", "Brooklyn": "BKN", "Charlotte": "CHA",
-    "Chicago": "CHI", "Cleveland": "CLE", "Dallas": "DAL", "Denver": "DEN",
-    "Detroit": "DET", "Golden State": "GSW", "Houston": "HOU", "Indiana": "IND",
-    "LA Clippers": "LAC", "LA Lakers": "LAL", "Memphis": "MEM", "Miami": "MIA",
-    "Milwaukee": "MIL", "Minnesota": "MIN", "New Orleans": "NOP", "New York": "NYK",
-    "Oklahoma City": "OKC", "Orlando": "ORL", "Philadelphia": "PHI", "Phoenix": "PHX",
-    "Portland": "POR", "Sacramento": "SAC", "San Antonio": "SAS", "Toronto": "TOR",
-    "Utah": "UTA", "Washington": "WAS"
+    "Atlanta": "atl", "Boston": "bos", "Brooklyn": "bkn", "Charlotte": "cha",
+    "Chicago": "chi", "Cleveland": "cle", "Dallas": "dal", "Denver": "den",
+    "Detroit": "det", "Golden State": "gsw", "Houston": "hou", "Indiana": "ind",
+    "LA Clippers": "lac", "LA Lakers": "lal", "Memphis": "mem", "Miami": "mia",
+    "Milwaukee": "mil", "Minnesota": "min", "New Orleans": "nop", "New York": "nyk",
+    "Oklahoma City": "okc", "Orlando": "orl", "Philadelphia": "phi", "Phoenix": "phx",
+    "Portland": "por", "Sacramento": "sac", "San Antonio": "sas", "Toronto": "tor",
+    "Utah": "uta", "Washington": "was"
 }
 
 # ========== TEAM STATS (8-FACTOR ML DATA - WEIGHTS HIDDEN) ==========
@@ -216,11 +217,22 @@ def calc_distance_miles(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return R * c
 
+def build_kalshi_ticker(away_team, home_team, game_date):
+    """Build Kalshi ticker in correct format: kxnbagame-25jan20dalnyk"""
+    date_code = game_date.strftime("%y%b%d").lower()
+    away_code = KALSHI_CODES.get(away_team, "xxx")
+    home_code = KALSHI_CODES.get(home_team, "xxx")
+    return f"kxnbagame-{date_code}{away_code}{home_code}"
+
+def build_kalshi_url(ticker):
+    """Build full Kalshi URL with correct path"""
+    return f"https://kalshi.com/markets/kxnbagame/professional-basketball-game/{ticker}"
+
 # ========== KALSHI MARKET FUNCTIONS ==========
 @st.cache_data(ttl=120)
 def fetch_kalshi_market(ticker):
     try:
-        url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker.upper()}"
+        url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker}"
         resp = requests.get(url, timeout=5)
         if resp.status_code == 200:
             data = resp.json()
@@ -241,7 +253,7 @@ def fetch_kalshi_market(ticker):
 @st.cache_data(ttl=300)
 def fetch_kalshi_history(ticker):
     try:
-        url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker.upper()}/history"
+        url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker}/history"
         params = {"limit": 50}
         resp = requests.get(url, params=params, timeout=5)
         if resp.status_code == 200:
@@ -501,7 +513,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # ========== HEADER ==========
 st.title("🎯 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v16.0")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v16.1")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -521,12 +533,7 @@ for gk in game_list:
     pick, score, factors = calc_ml_score(away, home, injuries, yesterday_teams)
     
     if pick:
-        pick_code = KALSHI_CODES.get(pick, "XXX")
-        date_code = now.strftime("%y%b%d").upper()
-        away_code = KALSHI_CODES.get(away, "XXX")
-        home_code = KALSHI_CODES.get(home, "XXX")
-        ticker = f"KXNBAGAME-{date_code}{away_code}{home_code}"
-        
+        ticker = build_kalshi_ticker(away, home, now)
         market, pressure_label, pressure_color = calc_market_pressure(ticker, pick, home)
         
         ml_results.append({
@@ -551,8 +558,8 @@ if ml_results:
         
         factor_icons = " ".join([f[0] for f in r['factors'][:4]])
         opponent = r['away'] if r['pick'] == r['home'] else r['home']
-        pick_code = KALSHI_CODES.get(r['pick'], "XXX")
-        kalshi_url = f"https://kalshi.com/markets/{r['ticker'].lower()}"
+        pick_code = KALSHI_CODES.get(r['pick'], "xxx").upper()
+        kalshi_url = build_kalshi_url(r['ticker'])
         
         market_info = ""
         if r['market'] and r['market'].get('exists'):
@@ -959,4 +966,4 @@ with st.expander("📊 Position Tracker — Trade Management", expanded=False):
 
 st.divider()
 
-st.caption("⚠️ For entertainment only. Not financial advice. v16.0 | 8-Factor ML + Market Pressure")
+st.caption("⚠️ For entertainment only. Not financial advice. v16.1 | 8-Factor ML + Market Pressure")
