@@ -194,20 +194,25 @@ if not st.session_state.authenticated:
     st.markdown("### 🎯 Live Tools")
     st.markdown("""
     <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; padding: 30px; width: 250px; text-align: center; border: 1px solid #3a4a6a;">
-            <div style="font-size: 50px; margin-bottom: 15px;">🏀</div>
+        <div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #3a4a6a;">
+            <div style="font-size: 45px; margin-bottom: 15px;">🏀</div>
             <h3 style="color: #fff; margin-bottom: 10px;">NBA Edge Finder</h3>
-            <p style="color: #888; font-size: 14px;">12-factor analysis for NBA markets</p>
+            <p style="color: #888; font-size: 13px;">12-factor analysis</p>
         </div>
-        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 30px; width: 250px; text-align: center; border: 1px solid #4a5a4a;">
-            <div style="font-size: 50px; margin-bottom: 15px;">🏈</div>
+        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4a5a4a;">
+            <div style="font-size: 45px; margin-bottom: 15px;">🏈</div>
             <h3 style="color: #fff; margin-bottom: 10px;">NFL Edge Finder</h3>
-            <p style="color: #888; font-size: 14px;">10-factor analysis for NFL markets</p>
+            <p style="color: #888; font-size: 13px;">10-factor analysis</p>
         </div>
-        <div style="background: linear-gradient(135deg, #3a2a2a 0%, #4a3a3a 100%); border-radius: 16px; padding: 30px; width: 250px; text-align: center; border: 1px solid #5a4a4a;">
-            <div style="font-size: 50px; margin-bottom: 15px;">🌡️</div>
+        <div style="background: linear-gradient(135deg, #2a2a3a 0%, #3a3a4a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4a4a5a;">
+            <div style="font-size: 45px; margin-bottom: 15px;">🏒</div>
+            <h3 style="color: #fff; margin-bottom: 10px;">NHL Edge Finder</h3>
+            <p style="color: #888; font-size: 13px;">7-factor analysis</p>
+        </div>
+        <div style="background: linear-gradient(135deg, #3a2a2a 0%, #4a3a3a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #5a4a4a;">
+            <div style="font-size: 45px; margin-bottom: 15px;">🌡️</div>
             <h3 style="color: #fff; margin-bottom: 10px;">Temp Edge Finder</h3>
-            <p style="color: #888; font-size: 14px;">Weather market analysis</p>
+            <p style="color: #888; font-size: 13px;">Weather analysis</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -216,10 +221,6 @@ if not st.session_state.authenticated:
     st.markdown("### 🚧 Coming Soon")
     st.markdown("""
     <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
-            <div style="font-size: 35px; margin-bottom: 8px;">🏒</div>
-            <h4 style="color: #888; margin: 0;">NHL</h4>
-        </div>
         <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
             <div style="font-size: 35px; margin-bottom: 8px;">⚾</div>
             <h4 style="color: #888; margin: 0;">MLB</h4>
@@ -327,26 +328,31 @@ st.markdown("""
 st.markdown("### 🎯 Live Tools")
 st.markdown("""
 <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; padding: 30px; width: 280px; text-align: center; border: 1px solid #3a4a6a;">
-        <div style="font-size: 50px; margin-bottom: 15px;">🏀</div>
+    <div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #3a4a6a;">
+        <div style="font-size: 45px; margin-bottom: 15px;">🏀</div>
         <h3 style="color: #fff; margin-bottom: 10px;">NBA Edge Finder</h3>
-        <p style="color: #888; font-size: 14px;">12-factor analysis for NBA markets</p>
+        <p style="color: #888; font-size: 13px;">12-factor analysis</p>
     </div>
-    <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 30px; width: 280px; text-align: center; border: 1px solid #4a5a4a;">
-        <div style="font-size: 50px; margin-bottom: 15px;">🏈</div>
+    <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4a5a4a;">
+        <div style="font-size: 45px; margin-bottom: 15px;">🏈</div>
         <h3 style="color: #fff; margin-bottom: 10px;">NFL Edge Finder</h3>
-        <p style="color: #888; font-size: 14px;">10-factor analysis for NFL markets</p>
+        <p style="color: #888; font-size: 13px;">10-factor analysis</p>
     </div>
-    <div style="background: linear-gradient(135deg, #3a2a2a 0%, #4a3a3a 100%); border-radius: 16px; padding: 30px; width: 280px; text-align: center; border: 1px solid #5a4a4a;">
-        <div style="font-size: 50px; margin-bottom: 15px;">🌡️</div>
+    <div style="background: linear-gradient(135deg, #2a2a3a 0%, #3a3a4a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4a4a5a;">
+        <div style="font-size: 45px; margin-bottom: 15px;">🏒</div>
+        <h3 style="color: #fff; margin-bottom: 10px;">NHL Edge Finder</h3>
+        <p style="color: #888; font-size: 13px;">7-factor analysis</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #3a2a2a 0%, #4a3a3a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #5a4a4a;">
+        <div style="font-size: 45px; margin-bottom: 15px;">🌡️</div>
         <h3 style="color: #fff; margin-bottom: 10px;">Temp Edge Finder</h3>
-        <p style="color: #888; font-size: 14px;">Weather market analysis</p>
+        <p style="color: #888; font-size: 13px;">Weather analysis</p>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # Navigation buttons
-col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
+col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1, 1, 1, 1])
 with col2:
     if st.button("🏀 Open NBA", use_container_width=True):
         st.switch_page("pages/2_NBA.py")
@@ -354,8 +360,11 @@ with col3:
     if st.button("🏈 Open NFL", use_container_width=True):
         st.switch_page("pages/1_NFL.py")
 with col4:
+    if st.button("🏒 Open NHL", use_container_width=True):
+        st.switch_page("pages/3_NHL.py")
+with col5:
     if st.button("🌡️ Open Temp", use_container_width=True):
-        st.switch_page("pages/3_Temp.py")
+        st.switch_page("pages/5_Temp.py")
 
 st.markdown("---")
 
@@ -363,27 +372,23 @@ st.markdown("---")
 st.markdown("### 🚧 Coming Soon")
 st.markdown("""
 <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
-        <div style="font-size: 40px; margin-bottom: 10px;">🏒</div>
-        <h4 style="color: #888; margin-bottom: 5px;">NHL</h4>
-    </div>
-    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 180px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
         <div style="font-size: 40px; margin-bottom: 10px;">⚾</div>
         <h4 style="color: #888; margin-bottom: 5px;">MLB</h4>
     </div>
-    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 180px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
         <div style="font-size: 40px; margin-bottom: 10px;">⚽</div>
         <h4 style="color: #888; margin-bottom: 5px;">Soccer</h4>
     </div>
-    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 180px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
         <div style="font-size: 40px; margin-bottom: 10px;">🏛️</div>
         <h4 style="color: #888; margin-bottom: 5px;">Politics</h4>
     </div>
-    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 180px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
         <div style="font-size: 40px; margin-bottom: 10px;">📈</div>
         <h4 style="color: #888; margin-bottom: 5px;">Economics</h4>
     </div>
-    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 200px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+    <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 16px; padding: 25px; width: 180px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
         <div style="font-size: 40px; margin-bottom: 10px;">🎬</div>
         <h4 style="color: #888; margin-bottom: 5px;">Entertainment</h4>
     </div>
