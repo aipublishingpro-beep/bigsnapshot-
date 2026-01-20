@@ -70,7 +70,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v16.5 | 8-Factor ML")
+    st.caption("v16.6 | 8-Factor ML")
 
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
@@ -212,8 +212,8 @@ def build_kalshi_ticker(away_team, home_team, game_date):
     return f"kxnbagame-{date_code}{away_code}{home_code}"
 
 def build_kalshi_url(ticker):
-    """Build Kalshi URL - short format goes directly to order book"""
-    return f"https://kalshi.com/markets/{ticker}"
+    """Build Kalshi URL - full path format"""
+    return f"https://kalshi.com/markets/kxnbagame/professional-basketball-game/{ticker}"
 
 # ========== FETCH ESPN GAMES ==========
 @st.cache_data(ttl=60)
@@ -431,7 +431,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # ========== HEADER ==========
 st.title("🎯 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v16.5")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v16.6")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -860,4 +860,4 @@ with st.expander("📊 Position Tracker — Trade Management", expanded=False):
 
 st.divider()
 
-st.caption("⚠️ For entertainment only. Not financial advice. v16.5 | 8-Factor ML")
+st.caption("⚠️ For entertainment only. Not financial advice. v16.6 | 8-Factor ML")
