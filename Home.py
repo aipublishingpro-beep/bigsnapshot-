@@ -110,9 +110,9 @@ with col1:
                 <span style="font-size: 28px;">🏒</span>
                 <span style="font-size: 20px; font-weight: 700; color: #fff; margin-left: 12px;">NHL Edge Finder</span>
             </div>
-            <span class="status-soon">COMING SOON</span>
+            <span class="status-live">LIVE</span>
         </div>
-        <p style="color: #888; font-size: 14px; margin-top: 12px;">Launching for 2025-26 playoffs</p>
+        <p style="color: #888; font-size: 14px; margin-top: 12px;">Game spreads, totals, player props</p>
     </div>
     """, unsafe_allow_html=True)
     
