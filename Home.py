@@ -61,7 +61,7 @@ if 'show_preview' not in st.session_state:
     st.session_state.show_preview = False
 
 # ========== PASSWORD (CHANGE THIS) ==========
-BETA_PASSWORD = "BIGSNAP2026"
+BETA_PASSWORD = "betauser"
 
 # ========== MAIN LOGIC ==========
 
@@ -204,7 +204,7 @@ else:
     with col2:
         password_input = st.text_input("Password", type="password", placeholder="Enter your beta password", label_visibility="collapsed")
         if st.button("🔓 UNLOCK ACCESS", use_container_width=True, type="primary"):
-            if password_input == BETA_PASSWORD:
+            if password_input.lower() == BETA_PASSWORD.lower():
                 st.session_state.authenticated = True
                 st.rerun()
             elif password_input:
