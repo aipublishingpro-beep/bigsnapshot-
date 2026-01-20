@@ -285,20 +285,18 @@ def check_volatility(nws_temps):
 # ============================================================
 
 def get_trading_window_status(now_et):
-    """Determine current trading window status"""
+    """Determine current trading window status - NO LOCKOUT, just guidance"""
     hour = now_et.hour
     minute = now_et.minute
     
     if hour < 8:
-        return "PRE_WINDOW", "Markets open at 8 AM ET. Edge signals will appear then.", "info"
+        return "PRE_WINDOW", "Markets typically open ~8 AM ET. Best edges appear early.", "info"
     elif hour == 8 or (hour == 9 and minute <= 59) or (hour == 10 and minute == 0):
         return "PRIME_WINDOW", "PRIME WINDOW: Best edge opportunity (8-10 AM ET)", "success"
-    elif hour >= 10 and hour < 11 and minute >= 30:
-        return "SOFT_WARNING", "Window closing soon. Edge decay accelerating.", "warning"
-    elif hour >= 11 and hour < 12:
-        return "LATE_WINDOW", "Late window. Edges mostly arbitraged. Proceed carefully.", "warning"
+    elif hour >= 10 and hour < 12:
+        return "LATE_WINDOW", "Late window. Edges may be smaller. Check spreads carefully.", "warning"
     elif hour >= 12:
-        return "LOCKED", "Post-noon lockout. NWS updates incorporated. No actionable edges.", "error"
+        return "POST_NOON", "Post-noon. Most edges arbitraged, but opportunities can still exist.", "info"
     else:
         return "ACTIVE", "Active trading window", "info"
 
@@ -451,19 +449,14 @@ def main():
     else:
         st.info(f"ℹ️ {message}")
     
-    # Post-noon lockout
-    if status == "LOCKED":
+    # Post-noon note (informational only, no lockout)
+    if status == "POST_NOON":
         st.markdown("""
-        <div class='warning-box'>
-            <strong>Post-Noon Lockout Active</strong><br>
-            NWS forecasts have been fully incorporated into market prices. 
-            Edge opportunities have closed for today. Check back tomorrow at 8 AM ET.
+        <div style='background: #1e3a5f; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;'>
+            <strong>ℹ️ Post-Noon Note:</strong> Most NWS updates have been incorporated into prices by now. 
+            Edges are typically smaller, but late forecast shifts can still create opportunities.
         </div>
         """, unsafe_allow_html=True)
-        
-        # Still show data but read-only
-        st.markdown("---")
-        st.markdown("### Current Data (Read-Only)")
     
     # Fetch data
     col1, col2 = st.columns(2)
