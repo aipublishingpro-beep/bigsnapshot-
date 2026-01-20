@@ -15,39 +15,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# ============================================================
-# PASSWORD PROTECTION
-# ============================================================
-def check_password():
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-    
-    if st.session_state.authenticated:
-        return True
-    
-    st.markdown("""
-    <div style="max-width: 400px; margin: 100px auto; padding: 40px; 
-                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
-                border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-        <h1 style="text-align: center; color: #fff; margin-bottom: 10px;">🗳️</h1>
-        <h2 style="text-align: center; color: #fff; margin-bottom: 30px;">Politics Edge Finder</h2>
-        <p style="text-align: center; color: #888; margin-bottom: 30px;">Beta Access Required</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        password = st.text_input("Enter Password", type="password", key="pwd_input")
-        if st.button("Access", use_container_width=True):
-            if password.lower() == "betauser":
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("Invalid password")
-    return False
 
-if not check_password():
-    st.stop()
 
 # ============================================================
 # CUSTOM CSS
