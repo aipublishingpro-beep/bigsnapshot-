@@ -6,6 +6,17 @@ st.set_page_config(
     layout="wide"
 )
 
+# ============================================================
+# AUTH CHECK
+# ============================================================
+if 'authenticated' not in st.session_state or not st.session_state.authenticated:
+    st.warning("⚠️ Please log in from the Home page first.")
+    st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
+    st.stop()
+
+# ============================================================
+# CUSTOM CSS
+# ============================================================
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
@@ -17,6 +28,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ============================================================
+# COMING SOON PAGE
+# ============================================================
 st.markdown("""
 <div style="text-align: center; padding: 80px 20px;">
     <div style="font-size: 80px; margin-bottom: 20px;">🗳️</div>
