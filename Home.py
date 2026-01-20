@@ -37,17 +37,31 @@ st.markdown("""
     }
     
     .app-card {
+        display: block;
         background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
         border-radius: 16px;
         padding: 24px;
         margin-bottom: 15px;
         border: 1px solid #333;
         transition: transform 0.2s, border-color 0.2s;
+        text-decoration: none;
+        cursor: pointer;
     }
     
     .app-card:hover {
-        transform: translateY(-2px);
+        transform: translateY(-4px);
         border-color: #4dabf7;
+        box-shadow: 0 8px 25px rgba(77, 171, 247, 0.2);
+    }
+    
+    .app-card-disabled {
+        display: block;
+        background: linear-gradient(135deg, #1a1a24 0%, #22222e 100%);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 15px;
+        border: 1px solid #2a2a2a;
+        opacity: 0.6;
     }
     
     .status-live {
@@ -155,12 +169,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# APP GRID
+# CLICKABLE APP CARDS
 # ============================================================
 st.markdown("""
 <div style="max-width: 900px; margin: 0 auto; padding: 0 20px;">
     <p style="color: #888; font-size: 13px; margin-bottom: 20px; text-align: center;">
-        SELECT A MARKET CATEGORY FROM THE SIDEBAR
+        CLICK A CARD TO OPEN
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -168,9 +182,9 @@ st.markdown("""
 col1, col2 = st.columns(2)
 
 with col1:
-    # NFL
+    # NFL - CLICKABLE
     st.markdown("""
-    <div class="app-card">
+    <a href="/NFL" class="app-card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <span style="font-size: 28px;">🏈</span>
@@ -179,12 +193,12 @@ with col1:
             <span class="status-live">LIVE</span>
         </div>
         <p style="color: #888; font-size: 14px; margin-top: 12px;">Game spreads, totals, player props</p>
-    </div>
+    </a>
     """, unsafe_allow_html=True)
     
-    # NHL
+    # NHL - CLICKABLE
     st.markdown("""
-    <div class="app-card">
+    <a href="/NHL" class="app-card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <span style="font-size: 28px;">🏒</span>
@@ -193,12 +207,12 @@ with col1:
             <span class="status-live">LIVE</span>
         </div>
         <p style="color: #888; font-size: 14px; margin-top: 12px;">Game spreads, totals, player props</p>
-    </div>
+    </a>
     """, unsafe_allow_html=True)
     
-    # Temp
+    # Temp - CLICKABLE
     st.markdown("""
-    <div class="app-card">
+    <a href="/Temp" class="app-card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <span style="font-size: 28px;">🌡️</span>
@@ -207,13 +221,13 @@ with col1:
             <span class="status-live">LIVE</span>
         </div>
         <p style="color: #888; font-size: 14px; margin-top: 12px;">Daily temperature forecasts vs markets</p>
-    </div>
+    </a>
     """, unsafe_allow_html=True)
 
 with col2:
-    # NBA
+    # NBA - CLICKABLE
     st.markdown("""
-    <div class="app-card">
+    <a href="/NBA" class="app-card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <span style="font-size: 28px;">🏀</span>
@@ -222,12 +236,12 @@ with col2:
             <span class="status-live">LIVE</span>
         </div>
         <p style="color: #888; font-size: 14px; margin-top: 12px;">12-factor scoring model, live odds</p>
-    </div>
+    </a>
     """, unsafe_allow_html=True)
     
-    # MLB
+    # MLB - DISABLED
     st.markdown("""
-    <div class="app-card">
+    <div class="app-card-disabled">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <span style="font-size: 28px;">⚾</span>
@@ -239,9 +253,9 @@ with col2:
     </div>
     """, unsafe_allow_html=True)
     
-    # Politics
+    # Politics - DISABLED
     st.markdown("""
-    <div class="app-card">
+    <div class="app-card-disabled">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <span style="font-size: 28px;">🗳️</span>
