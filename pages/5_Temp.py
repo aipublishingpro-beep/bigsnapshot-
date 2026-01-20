@@ -459,6 +459,9 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # SIDEBAR
+def clear_cache():
+    st.cache_data.clear()
+
 with st.sidebar:
     st.page_link("Home.py", label="🏠 Home", use_container_width=True)
     st.divider()
@@ -466,9 +469,10 @@ with st.sidebar:
     city_code = st.selectbox(
         "Select City",
         options=list(CITIES.keys()),
-        format_func=lambda x: f"{CITIES[x]['name']} ({x})"
+        format_func=lambda x: f"{CITIES[x]['name']} ({x})",
+        on_change=clear_cache
     )
-    target_date = st.date_input("Target Date", value=now_et.date() + timedelta(days=1))
+    target_date = st.date_input("Target Date", value=now_et.date() + timedelta(days=1), on_change=clear_cache)
     if st.button("🔄 Refresh Data"):
         st.cache_data.clear()
         st.rerun()
