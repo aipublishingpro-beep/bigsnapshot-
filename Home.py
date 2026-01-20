@@ -151,10 +151,10 @@ if st.session_state.authenticated or st.session_state.show_preview:
         <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #333;">
             <span style="font-size: 3em;">🗳️</span>
             <h3 style="color: #fff; margin: 15px 0 10px 0;">Politics Edge</h3>
-            <p style="color: #888; font-size: 0.9em;">Coming Soon</p>
+            <p style="color: #888; font-size: 0.9em;">Structural Analysis</p>
         </div>
         """, unsafe_allow_html=True)
-        st.button("Coming Soon", use_container_width=True, disabled=True)
+        st.link_button("Launch Politics →", "/Politics", use_container_width=True)
     
     st.divider()
     
