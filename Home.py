@@ -38,6 +38,18 @@ ACCESS_PASSWORD = "SNAPCRACKLE2026"
 PAID_TOKEN = "thankyou"
 
 # ============================================================
+# DETECT STRIPE REDIRECT (query params)
+# ============================================================
+# SECURITY NOTE: Query params can be spoofed. This is acceptable
+# ONLY for flow testing. Production version will require:
+# - Stripe webhook verification OR
+# - Email-based magic link OR
+# - Token validation
+query_params = st.query_params
+from_payment = query_params.get("paid") in ["true", PAID_TOKEN]
+is_production_token = query_params.get("paid") == PAID_TOKEN
+
+# ============================================================
 # CUSTOM CSS
 # ============================================================
 st.markdown("""
@@ -70,29 +82,30 @@ if not st.session_state.authenticated:
     </div>
     """, unsafe_allow_html=True)
     
-    # ============ STRIPE BUY BUTTON (TOP) ============
-    st.markdown(
-        f"""
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="{STRIPE_LINK}" target="_blank">
-                <button style="
-                    background-color:#22c55e;
-                    color:black;
-                    padding:16px 40px;
-                    border:none;
-                    border-radius:10px;
-                    font-size:18px;
-                    font-weight:700;
-                    cursor:pointer;
-                ">
-                    🔓 Unlock Early Access – $49.99
-                </button>
-            </a>
-            <p style="color: #888; font-size: 13px; margin-top: 12px;">One-time payment. Refund available if not a fit.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    # ============ STRIPE BUY BUTTON (TOP) - hide if coming from payment ============
+    if not from_payment:
+        st.markdown(
+            f"""
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{STRIPE_LINK}" target="_blank">
+                    <button style="
+                        background-color:#22c55e;
+                        color:black;
+                        padding:16px 40px;
+                        border:none;
+                        border-radius:10px;
+                        font-size:18px;
+                        font-weight:700;
+                        cursor:pointer;
+                    ">
+                        🔓 Unlock Early Access – $49.99
+                    </button>
+                </a>
+                <p style="color: #888; font-size: 13px; margin-top: 12px;">One-time payment. Refund available if not a fit.</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     
     # ============ ONE SCREEN SECTION ============
     st.markdown("""
@@ -256,29 +269,30 @@ if not st.session_state.authenticated:
     </div>
     """, unsafe_allow_html=True)
     
-    # Second Stripe Button
-    st.markdown(
-        f"""
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="{STRIPE_LINK}" target="_blank">
-                <button style="
-                    background-color:#22c55e;
-                    color:black;
-                    padding:16px 40px;
-                    border:none;
-                    border-radius:10px;
-                    font-size:18px;
-                    font-weight:700;
-                    cursor:pointer;
-                ">
-                    🔓 Unlock Early Access – $49.99
-                </button>
-            </a>
-            <p style="color: #888; font-size: 13px; margin-top: 12px;">One-time payment. Refund available if not a fit.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    # Second Stripe Button - hide if coming from payment
+    if not from_payment:
+        st.markdown(
+            f"""
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{STRIPE_LINK}" target="_blank">
+                    <button style="
+                        background-color:#22c55e;
+                        color:black;
+                        padding:16px 40px;
+                        border:none;
+                        border-radius:10px;
+                        font-size:18px;
+                        font-weight:700;
+                        cursor:pointer;
+                    ">
+                        🔓 Unlock Early Access – $49.99
+                    </button>
+                </a>
+                <p style="color: #888; font-size: 13px; margin-top: 12px;">One-time payment. Refund available if not a fit.</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     
     st.markdown("---")
     
