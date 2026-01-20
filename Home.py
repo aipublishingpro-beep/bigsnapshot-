@@ -27,8 +27,7 @@ if 'user_type' not in st.session_state:
 # ============================================================
 VALID_PASSWORDS = {
     "WILLIE1228": "Owner",
-    # Add paid subscribers here after Stripe payment:
-    # "PAID-001": "Subscriber Name",
+    "SNAPCRACKLE2026": "Paid Subscriber",
 }
 
 # ============================================================
