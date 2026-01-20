@@ -69,6 +69,41 @@ st.markdown("""
 # ============================================================
 if not st.session_state.authenticated:
     
+    # ============ PAID USER FLOW - SKIP TO PASSWORD ============
+    if from_payment:
+        st.markdown("""
+        <div style="text-align: center; padding: 50px 20px 20px 20px;">
+            <div style="font-size: 60px; margin-bottom: 15px;">📊</div>
+            <h1 style="font-size: 2.5em; color: #fff;">BigSnapshot</h1>
+            <p style="color: #888; font-size: 1.1em;">Prediction Market Edge Finder</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.success("✅ Payment received. Enter your access password below.")
+        
+        # Reveal password only with production token
+        if is_production_token:
+            st.markdown("### 🔑 Your access password:")
+            st.code(ACCESS_PASSWORD)
+        
+        st.markdown("---")
+        
+        # Password entry
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            password_input = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter password")
+            if st.button("🔓 UNLOCK", use_container_width=True, type="primary"):
+                if password_input.upper() in VALID_PASSWORDS:
+                    st.session_state.authenticated = True
+                    st.session_state.user_type = VALID_PASSWORDS[password_input.upper()]
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid password")
+        
+        st.stop()
+    
+    # ============ REGULAR MARKETING FLOW ============
+    
     # ============ HERO ============
     st.markdown("""
     <div style="text-align: center; padding: 50px 20px 20px 20px;">
