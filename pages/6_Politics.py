@@ -406,7 +406,7 @@ for market in markets:
                 showlegend=False
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key=f"chart_{ticker}")
             
             col1, col2, col3 = st.columns(3)
             with col1:
