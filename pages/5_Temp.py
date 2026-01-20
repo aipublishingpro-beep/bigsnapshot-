@@ -234,33 +234,73 @@ with col_high:
     else:
         day_markets = find_todays_markets(high_markets, config["high_series"], date_suffix)
         if day_markets:
-            st.success(f"✅ Found {len(day_markets)} brackets")
+            # Header
+            st.markdown("""
+            <div style="display:flex; padding:8px 0; border-bottom:1px solid #444;">
+                <div style="flex:2; font-weight:bold;">Bracket</div>
+                <div style="flex:1; font-weight:bold; text-align:center;">Chance</div>
+                <div style="flex:1; font-weight:bold; text-align:center;">Yes</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
             for market in sorted(day_markets, key=lambda x: x.get("ticker", "")):
-                ticker = market.get("ticker", "")
-                title = market.get("title", "No title")
+                title = market.get("title", "")
                 yes_bid = market.get("yes_bid", 0)
                 yes_ask = market.get("yes_ask", 0)
                 
+                # Extract bracket range
+                bracket = title
+                low_temp, high_temp = None, None
+                if "be " in title and "°" in title:
+                    try:
+                        part = title.split("be ")[1].split(" on")[0]
+                        if "-" in part:
+                            nums = part.replace("°", "").split("-")
+                            low_temp, high_temp = int(nums[0]), int(nums[1])
+                            bracket = f"{nums[0]}° to {nums[1]}°"
+                        elif "<" in part:
+                            num = int(part.replace("<", "").replace("°", ""))
+                            high_temp = num - 1
+                            bracket = f"{num}° or below"
+                        elif ">" in part:
+                            num = int(part.replace(">", "").replace("°", ""))
+                            low_temp = num + 1
+                            bracket = f"{num}° or above"
+                    except:
+                        bracket = title[:30]
+                
+                # Check if NWS forecast falls in this bracket
+                is_pick = False
+                if nws_high and low_temp is not None and high_temp is not None:
+                    if low_temp <= nws_high <= high_temp:
+                        is_pick = True
+                elif nws_high and high_temp is not None and low_temp is None:
+                    if nws_high <= high_temp:
+                        is_pick = True
+                elif nws_high and low_temp is not None and high_temp is None:
+                    if nws_high >= low_temp:
+                        is_pick = True
+                
                 if yes_bid and yes_ask:
                     mid = (yes_bid + yes_ask) / 2
-                    spread = yes_ask - yes_bid
-                    spread_warn = " ⚠️" if spread > 15 else ""
-                    st.write(f"**{title}** → {mid:.0f}¢ (spread {spread}¢){spread_warn}")
+                    chance = f"{mid:.0f}%" if mid > 1 else "<1%"
+                    yes_price = f"{yes_ask}¢"
                 else:
-                    st.write(f"**{title}** → no bid/ask")
+                    chance = "<1%"
+                    yes_price = "—"
+                
+                bg_color = "#e67e22" if is_pick else "transparent"
+                text_color = "#000" if is_pick else "#fff"
+                
+                st.markdown(f"""
+                <div style="display:flex; padding:10px 8px; background:{bg_color}; border-radius:4px; margin:2px 0;">
+                    <div style="flex:2; color:{text_color};">{bracket}</div>
+                    <div style="flex:1; text-align:center; color:{text_color};">{chance}</div>
+                    <div style="flex:1; text-align:center; color:{text_color};">{yes_price}</div>
+                </div>
+                """, unsafe_allow_html=True)
         else:
             st.warning("No markets for this date")
-            if high_markets:
-                st.caption("Available dates:")
-                shown = set()
-                for m in high_markets[:10]:
-                    t = m.get("ticker", "")
-                    parts = t.split("-")
-                    if len(parts) >= 2:
-                        date_part = parts[1]
-                        if date_part not in shown:
-                            st.code(date_part)
-                            shown.add(date_part)
 
 with col_low:
     st.write("**LOW Temp Market**")
@@ -271,33 +311,73 @@ with col_low:
     else:
         day_markets = find_todays_markets(low_markets, config["low_series"], date_suffix)
         if day_markets:
-            st.success(f"✅ Found {len(day_markets)} brackets")
+            # Header
+            st.markdown("""
+            <div style="display:flex; padding:8px 0; border-bottom:1px solid #444;">
+                <div style="flex:2; font-weight:bold;">Bracket</div>
+                <div style="flex:1; font-weight:bold; text-align:center;">Chance</div>
+                <div style="flex:1; font-weight:bold; text-align:center;">Yes</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
             for market in sorted(day_markets, key=lambda x: x.get("ticker", "")):
-                ticker = market.get("ticker", "")
-                title = market.get("title", "No title")
+                title = market.get("title", "")
                 yes_bid = market.get("yes_bid", 0)
                 yes_ask = market.get("yes_ask", 0)
                 
+                # Extract bracket range
+                bracket = title
+                low_temp, high_temp = None, None
+                if "be " in title and "°" in title:
+                    try:
+                        part = title.split("be ")[1].split(" on")[0]
+                        if "-" in part:
+                            nums = part.replace("°", "").split("-")
+                            low_temp, high_temp = int(nums[0]), int(nums[1])
+                            bracket = f"{nums[0]}° to {nums[1]}°"
+                        elif "<" in part:
+                            num = int(part.replace("<", "").replace("°", ""))
+                            high_temp = num - 1
+                            bracket = f"{num}° or below"
+                        elif ">" in part:
+                            num = int(part.replace(">", "").replace("°", ""))
+                            low_temp = num + 1
+                            bracket = f"{num}° or above"
+                    except:
+                        bracket = title[:30]
+                
+                # Check if NWS forecast falls in this bracket
+                is_pick = False
+                if nws_low and low_temp is not None and high_temp is not None:
+                    if low_temp <= nws_low <= high_temp:
+                        is_pick = True
+                elif nws_low and high_temp is not None and low_temp is None:
+                    if nws_low <= high_temp:
+                        is_pick = True
+                elif nws_low and low_temp is not None and high_temp is None:
+                    if nws_low >= low_temp:
+                        is_pick = True
+                
                 if yes_bid and yes_ask:
                     mid = (yes_bid + yes_ask) / 2
-                    spread = yes_ask - yes_bid
-                    spread_warn = " ⚠️" if spread > 15 else ""
-                    st.write(f"**{title}** → {mid:.0f}¢ (spread {spread}¢){spread_warn}")
+                    chance = f"{mid:.0f}%" if mid > 1 else "<1%"
+                    yes_price = f"{yes_ask}¢"
                 else:
-                    st.write(f"**{title}** → no bid/ask")
+                    chance = "<1%"
+                    yes_price = "—"
+                
+                bg_color = "#e67e22" if is_pick else "transparent"
+                text_color = "#000" if is_pick else "#fff"
+                
+                st.markdown(f"""
+                <div style="display:flex; padding:10px 8px; background:{bg_color}; border-radius:4px; margin:2px 0;">
+                    <div style="flex:2; color:{text_color};">{bracket}</div>
+                    <div style="flex:1; text-align:center; color:{text_color};">{chance}</div>
+                    <div style="flex:1; text-align:center; color:{text_color};">{yes_price}</div>
+                </div>
+                """, unsafe_allow_html=True)
         else:
             st.warning("No markets for this date")
-            if low_markets:
-                st.caption("Available dates:")
-                shown = set()
-                for m in low_markets[:10]:
-                    t = m.get("ticker", "")
-                    parts = t.split("-")
-                    if len(parts) >= 2:
-                        date_part = parts[1]
-                        if date_part not in shown:
-                            st.code(date_part)
-                            shown.add(date_part)
 
 # --- EDGE ANALYSIS ---
 st.subheader("🎯 Edge Analysis")
