@@ -446,9 +446,10 @@ for market in markets:
             )
             st.plotly_chart(fig, use_container_width=True)
     
-    # Kalshi link - use full ticker, never parse/split
-    kalshi_url = f"https://kalshi.com/markets/{ticker}"
-    st.markdown(f"[View on Kalshi →]({kalshi_url})", unsafe_allow_html=True)
+    # Kalshi link - only show for real markets, not demo
+    if not ticker.startswith("DEMO"):
+        kalshi_url = f"https://kalshi.com/markets?search={ticker}"
+        st.markdown(f"[View on Kalshi →]({kalshi_url})")
     st.markdown("")
 
 # ============================================================
