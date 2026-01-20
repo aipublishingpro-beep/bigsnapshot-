@@ -438,96 +438,95 @@ with col_low:
         else:
             st.warning("No markets for this date")
 
+# --- 7-DAY OVERVIEW (Owner Only) ---
+if is_owner:
+    st.subheader("📅 7-DAY EDGE OVERVIEW")
+    st.markdown("**Your weekly edge — see every bracket before markets open**")
+    
+    # Build 7-day forecast table
+    week_data = []
+    for i in range(7):
+        day_date = today + timedelta(days=i)
+        day_high, day_low = parse_forecast_for_date(periods, day_date)
+        
+        # Market status
+        if i == 0:
+            status = "🟢 OPEN"
+        elif i == 1:
+            status = "🟢 2AM"
+        else:
+            status = f"🟡 {i-1}d"
+        
+        week_data.append({
+            "day": day_date.strftime("%a"),
+            "date": day_date.strftime("%b %d"),
+            "high": day_high,
+            "low": day_low,
+            "status": status
+        })
+    
+    # Display as table
+    st.markdown("""
+    <style>
+    .week-table { width: 100%; border-collapse: collapse; }
+    .week-table th, .week-table td { padding: 12px 8px; text-align: center; border-bottom: 1px solid #333; }
+    .week-table th { background: #1a1a1a; color: #888; font-size: 12px; }
+    .week-table td { font-size: 14px; }
+    .bracket-cell { background: #e67e22; color: #000; border-radius: 4px; padding: 4px 8px; font-weight: bold; }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    table_html = """
+    <table class="week-table">
+        <tr>
+            <th>DAY</th>
+            <th>DATE</th>
+            <th>HIGH</th>
+            <th>HIGH BRACKET</th>
+            <th>LOW</th>
+            <th>LOW BRACKET</th>
+            <th>MARKET</th>
+        </tr>
+    """
+    
+    for d in week_data:
+        high_str = f"{d['high']}°F" if d['high'] else "—"
+        low_str = f"{d['low']}°F" if d['low'] else "—"
+        
+        # Calculate brackets (2-degree ranges)
+        if d['high']:
+            h = d['high']
+            high_bracket = f"<span class='bracket-cell'>{h-1}° to {h}°</span>"
+        else:
+            high_bracket = "—"
+        
+        if d['low']:
+            l = d['low']
+            low_bracket = f"<span class='bracket-cell'>{l}° to {l+1}°</span>"
+        else:
+            low_bracket = "—"
+        
+        table_html += f"""
+        <tr>
+            <td><strong>{d['day']}</strong></td>
+            <td>{d['date']}</td>
+            <td>{high_str}</td>
+            <td>{high_bracket}</td>
+            <td>{low_str}</td>
+            <td>{low_bracket}</td>
+            <td>{d['status']}</td>
+        </tr>
+        """
+    
+    table_html += "</table>"
+    st.markdown(table_html, unsafe_allow_html=True)
+    
+    st.caption("🔥 Orange = Your target bracket | 🟢 = Market open | 🟡 = Days until market opens")
+    st.divider()
+
 # --- EDGE ANALYSIS ---
 st.subheader("🎯 Edge Analysis")
 st.caption("Kalshi settlements reference NWS Daily Climate Report. Other sources are informational only.")
-
-# --- 7-DAY OVERVIEW (Owner Only) ---
-if is_owner:
-    with st.expander("📅 **7-DAY EDGE OVERVIEW** (Owner Only)", expanded=False):
-        st.markdown("**Your weekly edge — see every bracket before markets open**")
-        st.divider()
-        
-        # Build 7-day forecast table
-        week_data = []
-        for i in range(7):
-            day_date = today + timedelta(days=i)
-            day_high, day_low = parse_forecast_for_date(periods, day_date)
-            
-            # Market status
-            if i == 0:
-                status = "🟢 OPEN"
-            elif i == 1:
-                status = "🟢 2AM"
-            else:
-                status = f"🟡 {i-1}d"
-            
-            week_data.append({
-                "day": day_date.strftime("%a"),
-                "date": day_date.strftime("%b %d"),
-                "high": day_high,
-                "low": day_low,
-                "status": status
-            })
-        
-        # Display as table
-        st.markdown("""
-        <style>
-        .week-table { width: 100%; border-collapse: collapse; }
-        .week-table th, .week-table td { padding: 12px 8px; text-align: center; border-bottom: 1px solid #333; }
-        .week-table th { background: #1a1a1a; color: #888; font-size: 12px; }
-        .week-table td { font-size: 14px; }
-        .bracket-cell { background: #e67e22; color: #000; border-radius: 4px; padding: 4px 8px; font-weight: bold; }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        table_html = """
-        <table class="week-table">
-            <tr>
-                <th>DAY</th>
-                <th>DATE</th>
-                <th>HIGH</th>
-                <th>HIGH BRACKET</th>
-                <th>LOW</th>
-                <th>LOW BRACKET</th>
-                <th>MARKET</th>
-            </tr>
-        """
-        
-        for d in week_data:
-            high_str = f"{d['high']}°F" if d['high'] else "—"
-            low_str = f"{d['low']}°F" if d['low'] else "—"
-            
-            # Calculate brackets (2-degree ranges)
-            if d['high']:
-                h = d['high']
-                high_bracket = f"<span class='bracket-cell'>{h-1}° to {h}°</span>"
-            else:
-                high_bracket = "—"
-            
-            if d['low']:
-                l = d['low']
-                low_bracket = f"<span class='bracket-cell'>{l}° to {l+1}°</span>"
-            else:
-                low_bracket = "—"
-            
-            table_html += f"""
-            <tr>
-                <td><strong>{d['day']}</strong></td>
-                <td>{d['date']}</td>
-                <td>{high_str}</td>
-                <td>{high_bracket}</td>
-                <td>{low_str}</td>
-                <td>{low_bracket}</td>
-                <td>{d['status']}</td>
-            </tr>
-            """
-        
-        table_html += "</table>"
-        st.markdown(table_html, unsafe_allow_html=True)
-        
-        st.divider()
-        st.caption("🔥 Orange = Your target bracket | 🟢 = Market open | 🟡 = Days until market opens")
 
 # --- DEBUG ---
 with st.expander("🔧 Debug"):
