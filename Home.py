@@ -40,75 +40,6 @@ st.markdown("""
     .stApp {
         background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%);
     }
-    
-    .card-link {
-        text-decoration: none !important;
-        display: block;
-    }
-    
-    .card {
-        padding: 30px;
-        border-radius: 20px;
-        text-align: center;
-        min-height: 220px;
-        transition: transform 0.2s, box-shadow 0.2s;
-        cursor: pointer;
-    }
-    
-    .card:hover {
-        transform: translateY(-5px);
-    }
-    
-    .card-nfl {
-        background: linear-gradient(135deg, #1a1a2e, #0a0a1e);
-        border: 2px solid #00aa00;
-    }
-    .card-nfl:hover { box-shadow: 0 10px 30px rgba(0, 170, 0, 0.3); }
-    
-    .card-nba {
-        background: linear-gradient(135deg, #1a2e1a, #0a1e0a);
-        border: 2px solid #ff6600;
-    }
-    .card-nba:hover { box-shadow: 0 10px 30px rgba(255, 102, 0, 0.3); }
-    
-    .card-nhl {
-        background: linear-gradient(135deg, #1a1a2e, #0a0a1e);
-        border: 2px solid #4dabf7;
-    }
-    .card-nhl:hover { box-shadow: 0 10px 30px rgba(77, 171, 247, 0.3); }
-    
-    .card-temp {
-        background: linear-gradient(135deg, #2e1a2e, #1e0a1e);
-        border: 2px solid #e040fb;
-    }
-    .card-temp:hover { box-shadow: 0 10px 30px rgba(224, 64, 251, 0.3); }
-    
-    .card-disabled {
-        background: linear-gradient(135deg, #2e2e1a, #1e1e0a);
-        border: 2px solid #555;
-        opacity: 0.6;
-    }
-    
-    .card-icon { font-size: 3.5em; }
-    .card-title { font-size: 1.5em; font-weight: bold; margin-top: 15px; }
-    .card-subtitle { color: #888; margin-top: 10px; font-size: 0.9em; }
-    
-    .badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 0.75em;
-        font-weight: 700;
-        margin-top: 15px;
-    }
-    .badge-live { background: #00c853; color: #000; }
-    .badge-soon { background: #555; color: #fff; }
-    
-    .title-nfl { color: #00aa00; }
-    .title-nba { color: #ff6600; }
-    .title-nhl { color: #4dabf7; }
-    .title-temp { color: #e040fb; }
-    .title-disabled { color: #888; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -169,70 +100,86 @@ st.markdown("""
 st.markdown("---")
 
 # ============================================================
-# CLICKABLE CARDS - ROW 1
+# APP CARDS - ROW 1
 # ============================================================
-st.markdown("""
-<div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; padding: 0 20px;">
-    <a href="/NFL" target="_self" class="card-link" style="flex: 1; min-width: 280px; max-width: 350px;">
-        <div class="card card-nfl">
-            <div class="card-icon">🏈</div>
-            <div class="card-title title-nfl">NFL Edge Finder</div>
-            <div class="card-subtitle">10-Factor Model</div>
-            <div><span class="badge badge-live">LIVE</span></div>
-        </div>
-    </a>
-    <a href="/NBA" target="_self" class="card-link" style="flex: 1; min-width: 280px; max-width: 350px;">
-        <div class="card card-nba">
-            <div class="card-icon">🏀</div>
-            <div class="card-title title-nba">NBA Edge Finder</div>
-            <div class="card-subtitle">12-Factor Model</div>
-            <div><span class="badge badge-live">LIVE</span></div>
-        </div>
-    </a>
-    <a href="/NHL" target="_self" class="card-link" style="flex: 1; min-width: 280px; max-width: 350px;">
-        <div class="card card-nhl">
-            <div class="card-icon">🏒</div>
-            <div class="card-title title-nhl">NHL Edge Finder</div>
-            <div class="card-subtitle">10-Factor Model</div>
-            <div><span class="badge badge-live">LIVE</span></div>
-        </div>
-    </a>
-</div>
-""", unsafe_allow_html=True)
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#1a1a2e,#0a0a1e);padding:30px;border-radius:20px;border:2px solid #00aa00;text-align:center;min-height:200px;margin-bottom:10px'>
+        <div style='font-size:3.5em'>🏈</div>
+        <div style='font-size:1.5em;color:#00aa00;font-weight:bold;margin-top:15px'>NFL Edge Finder</div>
+        <div style='color:#888;margin-top:10px;font-size:0.9em'>10-Factor Model</div>
+        <div style='margin-top:15px'><span style='background:#00aa00;color:#000;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>LIVE</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("🏈 Open NFL", use_container_width=True, key="nfl_btn"):
+        st.switch_page("pages/1_NFL.py")
+
+with col2:
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#1a2e1a,#0a1e0a);padding:30px;border-radius:20px;border:2px solid #ff6600;text-align:center;min-height:200px;margin-bottom:10px'>
+        <div style='font-size:3.5em'>🏀</div>
+        <div style='font-size:1.5em;color:#ff6600;font-weight:bold;margin-top:15px'>NBA Edge Finder</div>
+        <div style='color:#888;margin-top:10px;font-size:0.9em'>12-Factor Model</div>
+        <div style='margin-top:15px'><span style='background:#ff6600;color:#000;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>LIVE</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("🏀 Open NBA", use_container_width=True, key="nba_btn"):
+        st.switch_page("pages/2_NBA.py")
+
+with col3:
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#1a1a2e,#0a0a1e);padding:30px;border-radius:20px;border:2px solid #4dabf7;text-align:center;min-height:200px;margin-bottom:10px'>
+        <div style='font-size:3.5em'>🏒</div>
+        <div style='font-size:1.5em;color:#4dabf7;font-weight:bold;margin-top:15px'>NHL Edge Finder</div>
+        <div style='color:#888;margin-top:10px;font-size:0.9em'>10-Factor Model</div>
+        <div style='margin-top:15px'><span style='background:#4dabf7;color:#000;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>LIVE</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("🏒 Open NHL", use_container_width=True, key="nhl_btn"):
+        st.switch_page("pages/3_NHL.py")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ============================================================
-# CLICKABLE CARDS - ROW 2
+# APP CARDS - ROW 2
 # ============================================================
-st.markdown("""
-<div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; padding: 0 20px;">
-    <a href="/Temp" target="_self" class="card-link" style="flex: 1; min-width: 280px; max-width: 350px;">
-        <div class="card card-temp">
-            <div class="card-icon">🌡️</div>
-            <div class="card-title title-temp">Temp Edge Finder</div>
-            <div class="card-subtitle">NWS vs Kalshi</div>
-            <div><span class="badge badge-live">LIVE</span></div>
-        </div>
-    </a>
-    <div style="flex: 1; min-width: 280px; max-width: 350px;">
-        <div class="card card-disabled">
-            <div class="card-icon">⚾</div>
-            <div class="card-title title-disabled">MLB Edge Finder</div>
-            <div class="card-subtitle">Coming Soon</div>
-            <div><span class="badge badge-soon">SOON</span></div>
-        </div>
+col4, col5, col6 = st.columns(3)
+
+with col4:
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#2e1a2e,#1e0a1e);padding:30px;border-radius:20px;border:2px solid #e040fb;text-align:center;min-height:200px;margin-bottom:10px'>
+        <div style='font-size:3.5em'>🌡️</div>
+        <div style='font-size:1.5em;color:#e040fb;font-weight:bold;margin-top:15px'>Temp Edge Finder</div>
+        <div style='color:#888;margin-top:10px;font-size:0.9em'>NWS vs Kalshi</div>
+        <div style='margin-top:15px'><span style='background:#e040fb;color:#000;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>LIVE</span></div>
     </div>
-    <div style="flex: 1; min-width: 280px; max-width: 350px;">
-        <div class="card card-disabled">
-            <div class="card-icon">🗳️</div>
-            <div class="card-title title-disabled">Politics Edge Finder</div>
-            <div class="card-subtitle">Coming Summer 2026</div>
-            <div><span class="badge badge-soon">SOON</span></div>
-        </div>
+    """, unsafe_allow_html=True)
+    if st.button("🌡️ Open Temp", use_container_width=True, key="temp_btn"):
+        st.switch_page("pages/5_Temp.py")
+
+with col5:
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#2e2e1a,#1e1e0a);padding:30px;border-radius:20px;border:2px solid #555;text-align:center;min-height:200px;opacity:0.6;margin-bottom:10px'>
+        <div style='font-size:3.5em'>⚾</div>
+        <div style='font-size:1.5em;color:#888;font-weight:bold;margin-top:15px'>MLB Edge Finder</div>
+        <div style='color:#666;margin-top:10px;font-size:0.9em'>Coming Soon</div>
+        <div style='margin-top:15px'><span style='background:#555;color:#fff;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>SOON</span></div>
     </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+    st.button("⚾ Coming Soon", use_container_width=True, disabled=True, key="mlb_btn")
+
+with col6:
+    st.markdown("""
+    <div style='background:linear-gradient(135deg,#2e2e1a,#1e1e0a);padding:30px;border-radius:20px;border:2px solid #555;text-align:center;min-height:200px;opacity:0.6;margin-bottom:10px'>
+        <div style='font-size:3.5em'>🗳️</div>
+        <div style='font-size:1.5em;color:#888;font-weight:bold;margin-top:15px'>Politics Edge Finder</div>
+        <div style='color:#666;margin-top:10px;font-size:0.9em'>Coming Summer 2026</div>
+        <div style='margin-top:15px'><span style='background:#555;color:#fff;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:700'>SOON</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.button("🗳️ Coming Soon", use_container_width=True, disabled=True, key="pol_btn")
 
 st.markdown("---")
 
