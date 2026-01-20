@@ -908,7 +908,119 @@ def main():
     # Main content
     games = get_mock_games()
     
-    # Edge summary at top
+    # ============================================================
+    # 🎯 ML PICKS SECTION (NBA-STYLE)
+    # ============================================================
+    st.subheader("🎯 ML PICKS")
+    
+    ml_picks = []
+    for game in games:
+        away = game["away_team"]
+        home = game["home_team"]
+        
+        away_edge = calculate_total_edge(game, "away")
+        home_edge = calculate_total_edge(game, "home")
+        
+        away_model_prob, home_model_prob = calculate_model_probability(
+            away_edge["total"], home_edge["total"]
+        )
+        
+        away_edge_info = detect_edge(game["away_kalshi"], away_model_prob, edge_threshold)
+        home_edge_info = detect_edge(game["home_kalshi"], home_model_prob, edge_threshold)
+        
+        # Build factors list
+        def get_factors(game, team):
+            factors = []
+            if team == "away":
+                if game["home_b2b"]: factors.append("🛏️ Opp B2B")
+                if game["away_goalie"] == "starter" and game["home_goalie"] == "backup": factors.append("🥅 Goalie Edge")
+                if game["away_rest"] > game["home_rest"]: factors.append(f"😴 +{game['away_rest']-game['home_rest']}d Rest")
+            else:
+                if game["away_b2b"]: factors.append("🛏️ Opp B2B")
+                if game["home_goalie"] == "starter" and game["away_goalie"] == "backup": factors.append("🥅 Goalie Edge")
+                if game["home_rest"] > game["away_rest"]: factors.append(f"😴 +{game['home_rest']-game['away_rest']}d Rest")
+                factors.append("🏠 Home Ice")
+            return factors
+        
+        # Kalshi URL
+        kalshi_url = f"https://kalshi.com/?search=nhl+{away.lower()}+{home.lower()}"
+        
+        if away_edge_info["edge"]:
+            score = min(10, 5 + away_edge_info["diff"] / 3)
+            ml_picks.append({
+                "pick": away,
+                "opponent": home,
+                "score": round(score, 1),
+                "edge_cents": away_edge_info["diff"],
+                "factors": get_factors(game, "away"),
+                "kalshi_url": kalshi_url,
+                "game_time": game["game_time"]
+            })
+        
+        if home_edge_info["edge"]:
+            score = min(10, 5 + home_edge_info["diff"] / 3)
+            ml_picks.append({
+                "pick": home,
+                "opponent": away,
+                "score": round(score, 1),
+                "edge_cents": home_edge_info["diff"],
+                "factors": get_factors(game, "home"),
+                "kalshi_url": kalshi_url,
+                "game_time": game["game_time"]
+            })
+    
+    # Sort by score descending
+    ml_picks.sort(key=lambda x: x["score"], reverse=True)
+    
+    if ml_picks:
+        for pick in ml_picks:
+            # Color based on score
+            if pick["score"] >= 8.0:
+                border_color = "#00ff00"
+                score_color = "#00ff00"
+            elif pick["score"] >= 6.5:
+                border_color = "#00aaff"
+                score_color = "#00aaff"
+            elif pick["score"] >= 5.5:
+                border_color = "#ffff00"
+                score_color = "#ffff00"
+            else:
+                border_color = "#888888"
+                score_color = "#888888"
+            
+            factors_str = " • ".join(pick["factors"][:4]) if pick["factors"] else ""
+            
+            st.markdown(f"""
+            <div style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #0f172a, #020617); padding: 10px 15px; margin-bottom: 6px; border-radius: 8px; border-left: 4px solid {border_color};">
+                <div>
+                    <span style="font-weight: bold; color: #fff;">{pick['pick']}</span>
+                    <span style="color: #666;"> vs {pick['opponent']}</span>
+                    <span style="color: {score_color}; font-weight: bold; margin-left: 10px;">{pick['score']}/10</span>
+                    <span style="color: #888; font-size: 0.85em; margin-left: 10px;">{factors_str}</span>
+                </div>
+                <a href="{pick['kalshi_url']}" target="_blank" style="text-decoration: none;">
+                    <button style="background-color: #16a34a; color: white; padding: 6px 14px; border: none; border-radius: 6px; font-size: 0.85em; font-weight: 600; cursor: pointer;">
+                        BUY {pick['pick']}
+                    </button>
+                </a>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Add all picks button
+        if len(ml_picks) > 1:
+            st.markdown(f"""
+            <div style="text-align: center; margin-top: 10px;">
+                <button style="background: transparent; border: 1px solid #333; color: #888; padding: 8px 20px; border-radius: 6px; cursor: pointer;">
+                    ➕ Add {len(ml_picks)} Picks
+                </button>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No ML picks at current threshold. Adjust threshold or wait for better edges.")
+    
+    st.divider()
+    
+    # Edge summary at top (legacy - can remove if desired)
     edges = render_edge_summary(games)
     
     if edges:
