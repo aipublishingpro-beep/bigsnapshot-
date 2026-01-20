@@ -783,30 +783,6 @@ def render_game_card(game):
                 render_line_movement_chart(game, "away", away)
             with chart_col2:
                 render_line_movement_chart(game, "home", home)
-        
-        # Factor breakdown expander (UNCHANGED)
-        with st.expander("📊 Factor Breakdown"):
-            fcol1, fcol2 = st.columns(2)
-            
-            with fcol1:
-                st.markdown(f"**{away} Factors:**")
-                st.caption(f"🥅 Goalie: {away_edge['goalie']:+.2f}")
-                st.caption(f"😴 Fatigue: {away_edge['fatigue']:+.2f}")
-                st.caption(f"🏠 Home Ice: {away_edge['home_ice']:+.2f}")
-                st.caption(f"📈 Form: {away_edge['form']:+.2f}")
-                st.caption(f"⚡ Special Teams: {away_edge['special_teams']:+.2f}")
-                st.caption(f"📊 xG: {away_edge['xg']:+.2f}")
-                st.caption(f"🔄 H2H: {away_edge['h2h']:+.2f}")
-            
-            with fcol2:
-                st.markdown(f"**{home} Factors:**")
-                st.caption(f"🥅 Goalie: {home_edge['goalie']:+.2f}")
-                st.caption(f"😴 Fatigue: {home_edge['fatigue']:+.2f}")
-                st.caption(f"🏠 Home Ice: {home_edge['home_ice']:+.2f}")
-                st.caption(f"📈 Form: {home_edge['form']:+.2f}")
-                st.caption(f"⚡ Special Teams: {home_edge['special_teams']:+.2f}")
-                st.caption(f"📊 xG: {home_edge['xg']:+.2f}")
-                st.caption(f"🔄 H2H: {home_edge['h2h']:+.2f}")
 
 def render_edge_summary(games):
     """Render summary of all edges detected with Market Pressure"""
@@ -873,21 +849,10 @@ def main():
         show_all_games = st.checkbox("Show games without edges", value=True)
         
         st.markdown("---")
-        st.markdown("### 📊 Factors Weighted")
-        st.caption("🥅 Goalie Matchup: 1.5x")
-        st.caption("😴 Fatigue/Rest: 1.2x")
-        st.caption("🏠 Home Ice: 1.0x")
-        st.caption("📈 Recent Form: 1.0x")
-        st.caption("📊 Expected Goals: 1.0x")
-        st.caption("⚡ Special Teams: 0.8x")
-        st.caption("🔄 Head-to-Head: 0.5x")
-        
-        st.markdown("---")
-        st.markdown("### 📈 Market Pressure (v1.1)")
+        st.markdown("### 📈 Market Pressure Guide")
         st.caption("↑ Sharp Support = CONFIRMED")
         st.caption("→ Neutral = MODEL ONLY")
         st.caption("↓ Sharp Resistance = CAUTION")
-        st.caption("*Based on Kalshi line movement*")
         
         st.markdown("---")
         st.markdown("### 🔗 Quick Links")
@@ -935,6 +900,52 @@ def main():
         
         if show_all_games or has_edge:
             render_game_card(game)
+    
+    # How to Use Guide
+    st.markdown("---")
+    with st.expander("📖 How to Use This App"):
+        st.markdown("""
+        **Understanding Edge Signals:**
+        - **🟢 +X¢** = Model sees value. Kalshi price is lower than model probability suggests.
+        - **⚪ No Edge** = Model and market are aligned. No actionable opportunity.
+        
+        **Understanding Market Pressure:**
+        - **↑ Sharp Support** = Line moved TOWARD model pick. Smart money agrees. Status: CONFIRMED
+        - **→ Neutral** = Minimal line movement (<8¢). No confirmation either way. Status: MODEL ONLY
+        - **↓ Sharp Resistance** = Line moved AGAINST model pick. Proceed with caution. Status: CAUTION
+        
+        **Reading the Line Movement Chart:**
+        - Click "View Market Movement" to expand the chart
+        - **Early smooth moves** (first few hours) = Sharp/smart money action
+        - **Late jagged moves** (close to game time) = Public/casual money action
+        - Chart is for context only — it does NOT affect edge scores
+        
+        **Key Factors We Analyze:**
+        - Goalie matchups (starter vs backup)
+        - Back-to-back fatigue and rest days
+        - Home ice advantage
+        - Recent team form
+        - Expected goals metrics
+        - Special teams performance
+        - Head-to-head history
+        
+        **Best Practices:**
+        1. Prioritize CONFIRMED edges (model + market agree)
+        2. Be cautious with CAUTION status (market disagrees with model)
+        3. MODEL ONLY edges are valid but unconfirmed
+        4. Check goalie status — backup goalies swing NHL games significantly
+        5. Back-to-back games are real fatigue factors in hockey
+        
+        **Timing Tips:**
+        - Markets are most inefficient early (overnight, early morning)
+        - Edges shrink as game time approaches
+        - Goalie confirmations often come day-of — watch for late value
+        
+        **Important Notes:**
+        - Line movement data is based on Kalshi prices
+        - This tool identifies opportunities — it does not guarantee outcomes
+        - Always check Kalshi market rules before trading
+        """)
     
     # Disclaimers
     st.markdown("---")
