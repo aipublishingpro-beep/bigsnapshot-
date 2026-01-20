@@ -10,6 +10,20 @@ st.set_page_config(
 )
 
 # ============================================================
+# SESSION STATE
+# ============================================================
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+# ============================================================
+# PASSWORD CONFIG
+# ============================================================
+VALID_PASSWORDS = {
+    "WILLIE1228": "Owner",
+    "BETAUSER": "Beta Tester",
+}
+
+# ============================================================
 # CUSTOM CSS
 # ============================================================
 st.markdown("""
@@ -57,7 +71,73 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# HEADER
+# LOGIN PAGE (if not authenticated)
+# ============================================================
+if not st.session_state.authenticated:
+    st.markdown("""
+    <div style="text-align: center; padding: 60px 20px 30px 20px;">
+        <div style="font-size: 70px; margin-bottom: 15px;">📊</div>
+        <h1 style="font-size: 52px; font-weight: 800; color: #fff; margin-bottom: 10px;">
+            BigSnapshot
+        </h1>
+        <p style="color: #888; font-size: 20px; margin-bottom: 10px;">
+            Prediction Market Edge Finder
+        </p>
+        <p style="color: #555; font-size: 14px;">
+            Structural analysis for Kalshi markets
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Beta signup callout
+    st.markdown("""
+    <div style="max-width: 500px; margin: 30px auto; padding: 30px;
+                background: linear-gradient(135deg, #1a3a2a 0%, #2a4a3a 100%);
+                border-radius: 16px; border: 1px solid #3a5a4a; text-align: center;">
+        <p style="color: #00c853; font-size: 18px; font-weight: 700; margin-bottom: 10px;">
+            🚀 NOW IN PRIVATE BETA
+        </p>
+        <p style="color: #ccc; font-size: 14px; margin-bottom: 20px;">
+            Want access? Email us to request a beta invite.
+        </p>
+        <a href="mailto:aipublishingpro@gmail.com?subject=BigSnapshot%20Beta%20Request&body=I%20would%20like%20to%20join%20the%20BigSnapshot%20beta%20program."
+           style="display: inline-block; background: #00c853; color: #000; padding: 12px 30px;
+                  border-radius: 8px; font-weight: 700; text-decoration: none; font-size: 14px;">
+            📧 REQUEST BETA ACCESS
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Password entry
+    st.markdown("""
+    <div style="max-width: 400px; margin: 30px auto; text-align: center;">
+        <p style="color: #888; font-size: 14px; margin-bottom: 15px;">
+            Already a beta tester? Enter your password:
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        password_input = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter password")
+        if st.button("🔓 UNLOCK", use_container_width=True, type="primary"):
+            if password_input.upper() in VALID_PASSWORDS:
+                st.session_state.authenticated = True
+                st.session_state.user_type = VALID_PASSWORDS[password_input.upper()]
+                st.rerun()
+            else:
+                st.error("❌ Invalid password")
+        
+        st.markdown("""
+        <p style="color: #555; font-size: 11px; margin-top: 20px; text-align: center;">
+            Contact aipublishingpro@gmail.com for access
+        </p>
+        """, unsafe_allow_html=True)
+    
+    st.stop()
+
+# ============================================================
+# AUTHENTICATED - SHOW APP HUB
 # ============================================================
 st.markdown("""
 <div style="text-align: center; padding: 60px 20px 40px 20px;">
@@ -80,7 +160,7 @@ st.markdown("""
 st.markdown("""
 <div style="max-width: 900px; margin: 0 auto; padding: 0 20px;">
     <p style="color: #888; font-size: 13px; margin-bottom: 20px; text-align: center;">
-        SELECT A MARKET CATEGORY
+        SELECT A MARKET CATEGORY FROM THE SIDEBAR
     </p>
 </div>
 """, unsafe_allow_html=True)
