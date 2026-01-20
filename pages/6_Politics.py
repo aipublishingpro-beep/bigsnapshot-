@@ -1,32 +1,22 @@
 import streamlit as st
 
-# ============================================================
-# PAGE CONFIG
-# ============================================================
 st.set_page_config(
     page_title="Politics Edge Finder | BigSnapshot",
     page_icon="🗳️",
     layout="wide"
 )
 
-# ============================================================
-# CUSTOM CSS
-# ============================================================
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-    
     .stApp {
         background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%);
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# COMING SOON PAGE
-# ============================================================
 st.markdown("""
 <div style="text-align: center; padding: 80px 20px;">
     <div style="font-size: 80px; margin-bottom: 20px;">🗳️</div>
@@ -36,7 +26,6 @@ st.markdown("""
     <p style="color: #888; font-size: 22px; margin-bottom: 40px;">
         Coming Soon — 2026 Midterms
     </p>
-    
     <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); 
                 border-radius: 16px; padding: 40px; max-width: 600px; margin: 0 auto;
                 border: 1px solid #333;">
@@ -55,7 +44,6 @@ st.markdown("""
             <p style="color: #00c853; font-size: 14px; margin: 8px 0;">🟢 Sep - Nov 2026: Full markets active</p>
         </div>
     </div>
-    
     <p style="color: #555; font-size: 14px; margin-top: 50px;">
         BigSnapshot © 2026 | Check back in Summer 2026
     </p>
