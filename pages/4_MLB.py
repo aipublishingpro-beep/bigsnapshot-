@@ -1,17 +1,19 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
+import requests
+import math
 
 # ============================================================
-# MLB EDGE FINDER v1.0
+# MLB EDGE FINDER v1.2
 # Pitcher Matchup + Market Lag Model
-# Pregame Moneyline & Full-Game Totals
+# NOW WITH REAL API INTEGRATION
 # ============================================================
 
 st.set_page_config(page_title="MLB Edge Finder", page_icon="⚾", layout="wide")
 
-VERSION = "1.0"
+VERSION = "1.2"
 
 # ============================================================
 # STYLING
@@ -31,396 +33,353 @@ header {visibility: hidden;}
 # ============================================================
 
 MLB_TEAMS = {
-    "ARI": {"name": "Arizona Diamondbacks", "league": "NL", "division": "West"},
-    "ATL": {"name": "Atlanta Braves", "league": "NL", "division": "East"},
-    "BAL": {"name": "Baltimore Orioles", "league": "AL", "division": "East"},
-    "BOS": {"name": "Boston Red Sox", "league": "AL", "division": "East"},
-    "CHC": {"name": "Chicago Cubs", "league": "NL", "division": "Central"},
-    "CHW": {"name": "Chicago White Sox", "league": "AL", "division": "Central"},
-    "CIN": {"name": "Cincinnati Reds", "league": "NL", "division": "Central"},
-    "CLE": {"name": "Cleveland Guardians", "league": "AL", "division": "Central"},
-    "COL": {"name": "Colorado Rockies", "league": "NL", "division": "West"},
-    "DET": {"name": "Detroit Tigers", "league": "AL", "division": "Central"},
-    "HOU": {"name": "Houston Astros", "league": "AL", "division": "West"},
-    "KC": {"name": "Kansas City Royals", "league": "AL", "division": "Central"},
-    "LAA": {"name": "Los Angeles Angels", "league": "AL", "division": "West"},
-    "LAD": {"name": "Los Angeles Dodgers", "league": "NL", "division": "West"},
-    "MIA": {"name": "Miami Marlins", "league": "NL", "division": "East"},
-    "MIL": {"name": "Milwaukee Brewers", "league": "NL", "division": "Central"},
-    "MIN": {"name": "Minnesota Twins", "league": "AL", "division": "Central"},
-    "NYM": {"name": "New York Mets", "league": "NL", "division": "East"},
-    "NYY": {"name": "New York Yankees", "league": "AL", "division": "East"},
-    "OAK": {"name": "Oakland Athletics", "league": "AL", "division": "West"},
-    "PHI": {"name": "Philadelphia Phillies", "league": "NL", "division": "East"},
-    "PIT": {"name": "Pittsburgh Pirates", "league": "NL", "division": "Central"},
-    "SD": {"name": "San Diego Padres", "league": "NL", "division": "West"},
-    "SF": {"name": "San Francisco Giants", "league": "NL", "division": "West"},
-    "SEA": {"name": "Seattle Mariners", "league": "AL", "division": "West"},
-    "STL": {"name": "St. Louis Cardinals", "league": "NL", "division": "Central"},
-    "TB": {"name": "Tampa Bay Rays", "league": "AL", "division": "East"},
-    "TEX": {"name": "Texas Rangers", "league": "AL", "division": "West"},
-    "TOR": {"name": "Toronto Blue Jays", "league": "AL", "division": "East"},
-    "WSH": {"name": "Washington Nationals", "league": "NL", "division": "East"},
+    108: {"abbr": "LAA", "name": "Los Angeles Angels", "league": "AL"},
+    109: {"abbr": "ARI", "name": "Arizona Diamondbacks", "league": "NL"},
+    110: {"abbr": "BAL", "name": "Baltimore Orioles", "league": "AL"},
+    111: {"abbr": "BOS", "name": "Boston Red Sox", "league": "AL"},
+    112: {"abbr": "CHC", "name": "Chicago Cubs", "league": "NL"},
+    113: {"abbr": "CIN", "name": "Cincinnati Reds", "league": "NL"},
+    114: {"abbr": "CLE", "name": "Cleveland Guardians", "league": "AL"},
+    115: {"abbr": "COL", "name": "Colorado Rockies", "league": "NL"},
+    116: {"abbr": "DET", "name": "Detroit Tigers", "league": "AL"},
+    117: {"abbr": "HOU", "name": "Houston Astros", "league": "AL"},
+    118: {"abbr": "KC", "name": "Kansas City Royals", "league": "AL"},
+    119: {"abbr": "LAD", "name": "Los Angeles Dodgers", "league": "NL"},
+    120: {"abbr": "WSH", "name": "Washington Nationals", "league": "NL"},
+    121: {"abbr": "NYM", "name": "New York Mets", "league": "NL"},
+    133: {"abbr": "OAK", "name": "Oakland Athletics", "league": "AL"},
+    134: {"abbr": "PIT", "name": "Pittsburgh Pirates", "league": "NL"},
+    135: {"abbr": "SD", "name": "San Diego Padres", "league": "NL"},
+    136: {"abbr": "SEA", "name": "Seattle Mariners", "league": "AL"},
+    137: {"abbr": "SF", "name": "San Francisco Giants", "league": "NL"},
+    138: {"abbr": "STL", "name": "St. Louis Cardinals", "league": "NL"},
+    139: {"abbr": "TB", "name": "Tampa Bay Rays", "league": "AL"},
+    140: {"abbr": "TEX", "name": "Texas Rangers", "league": "AL"},
+    141: {"abbr": "TOR", "name": "Toronto Blue Jays", "league": "AL"},
+    142: {"abbr": "MIN", "name": "Minnesota Twins", "league": "AL"},
+    143: {"abbr": "PHI", "name": "Philadelphia Phillies", "league": "NL"},
+    144: {"abbr": "ATL", "name": "Atlanta Braves", "league": "NL"},
+    145: {"abbr": "CHW", "name": "Chicago White Sox", "league": "AL"},
+    146: {"abbr": "MIA", "name": "Miami Marlins", "league": "NL"},
+    147: {"abbr": "NYY", "name": "New York Yankees", "league": "AL"},
+    158: {"abbr": "MIL", "name": "Milwaukee Brewers", "league": "NL"},
 }
 
+# Reverse lookup
+TEAM_ABBR_TO_ID = {v["abbr"]: k for k, v in MLB_TEAMS.items()}
+
 # ============================================================
-# PARK FACTORS (Run Environment)
+# PARK FACTORS
 # ============================================================
 
 PARK_FACTORS = {
-    "COL": 1.38,  # Coors Field - extreme hitter's park
-    "CIN": 1.08,
-    "TEX": 1.06,
-    "BOS": 1.05,  # Fenway
-    "PHI": 1.04,
-    "CHC": 1.03,  # Wrigley (wind dependent)
-    "BAL": 1.02,
-    "MIL": 1.01,
-    "ATL": 1.00,
-    "LAD": 0.99,
-    "ARI": 0.99,
-    "NYY": 0.99,
-    "MIN": 0.98,
-    "CHW": 0.98,
-    "HOU": 0.97,
-    "CLE": 0.97,
-    "TOR": 0.97,
-    "KC": 0.96,
-    "DET": 0.96,
-    "STL": 0.96,
-    "WSH": 0.95,
-    "PIT": 0.95,
-    "LAA": 0.95,
-    "NYM": 0.94,
-    "SD": 0.93,
-    "TB": 0.93,
-    "SF": 0.92,
-    "SEA": 0.91,
-    "MIA": 0.90,
-    "OAK": 0.90,
+    "COL": 1.38, "CIN": 1.08, "TEX": 1.06, "BOS": 1.05, "PHI": 1.04,
+    "CHC": 1.03, "BAL": 1.02, "MIL": 1.01, "ATL": 1.00, "LAD": 0.99,
+    "ARI": 0.99, "NYY": 0.99, "MIN": 0.98, "CHW": 0.98, "HOU": 0.97,
+    "CLE": 0.97, "TOR": 0.97, "KC": 0.96, "DET": 0.96, "STL": 0.96,
+    "WSH": 0.95, "PIT": 0.95, "LAA": 0.95, "NYM": 0.94, "SD": 0.93,
+    "TB": 0.93, "SF": 0.92, "SEA": 0.91, "MIA": 0.90, "OAK": 0.90,
 }
 
 # ============================================================
-# MOCK PITCHER DATA
+# API FUNCTIONS - MLB STATS API (FREE, NO KEY)
 # ============================================================
 
-PITCHERS = {
-    "Gerrit Cole": {"team": "NYY", "hand": "R", "era": 3.12, "fip": 3.05, "k9": 11.2, "bb9": 2.1, "hr9": 1.0, "last5_era": 2.85},
-    "Corbin Burnes": {"team": "BAL", "hand": "R", "era": 2.92, "fip": 3.15, "k9": 10.8, "bb9": 2.0, "hr9": 0.9, "last5_era": 2.65},
-    "Zack Wheeler": {"team": "PHI", "hand": "R", "era": 3.01, "fip": 2.88, "k9": 10.5, "bb9": 1.8, "hr9": 0.8, "last5_era": 2.90},
-    "Spencer Strider": {"team": "ATL", "hand": "R", "era": 3.25, "fip": 3.10, "k9": 12.5, "bb9": 2.5, "hr9": 1.1, "last5_era": 3.45},
-    "Logan Webb": {"team": "SF", "hand": "R", "era": 3.15, "fip": 3.35, "k9": 7.8, "bb9": 1.9, "hr9": 0.7, "last5_era": 2.88},
-    "Framber Valdez": {"team": "HOU", "hand": "L", "era": 3.22, "fip": 3.45, "k9": 8.2, "bb9": 2.8, "hr9": 0.6, "last5_era": 3.10},
-    "Blake Snell": {"team": "LAD", "hand": "L", "era": 3.38, "fip": 3.20, "k9": 11.8, "bb9": 4.2, "hr9": 0.9, "last5_era": 2.55},
-    "Tarik Skubal": {"team": "DET", "hand": "L", "era": 2.85, "fip": 2.92, "k9": 10.2, "bb9": 1.5, "hr9": 0.8, "last5_era": 2.40},
-    "Yoshinobu Yamamoto": {"team": "LAD", "hand": "R", "era": 3.05, "fip": 3.12, "k9": 9.8, "bb9": 2.0, "hr9": 1.0, "last5_era": 3.20},
-    "Dylan Cease": {"team": "SD", "hand": "R", "era": 3.45, "fip": 3.55, "k9": 11.0, "bb9": 3.5, "hr9": 1.0, "last5_era": 3.85},
-    "Tyler Glasnow": {"team": "LAD", "hand": "R", "era": 3.10, "fip": 2.95, "k9": 12.0, "bb9": 2.8, "hr9": 0.9, "last5_era": 2.75},
-    "Chris Sale": {"team": "ATL", "hand": "L", "era": 2.95, "fip": 3.08, "k9": 10.5, "bb9": 2.0, "hr9": 1.0, "last5_era": 2.60},
-    "Seth Lugo": {"team": "KC", "hand": "R", "era": 3.35, "fip": 3.50, "k9": 8.5, "bb9": 2.2, "hr9": 1.1, "last5_era": 3.65},
-    "Sonny Gray": {"team": "STL", "hand": "R", "era": 3.28, "fip": 3.40, "k9": 9.2, "bb9": 2.5, "hr9": 0.9, "last5_era": 3.50},
-    "Joe Ryan": {"team": "MIN", "hand": "R", "era": 3.55, "fip": 3.65, "k9": 9.0, "bb9": 1.8, "hr9": 1.3, "last5_era": 4.10},
-    "Ranger Suarez": {"team": "PHI", "hand": "L", "era": 3.15, "fip": 3.30, "k9": 7.5, "bb9": 2.2, "hr9": 0.8, "last5_era": 2.95},
-}
+@st.cache_data(ttl=300)  # Cache 5 minutes
+def fetch_mlb_schedule(date_str):
+    """Fetch MLB schedule with probable pitchers from official MLB Stats API"""
+    url = f"https://statsapi.mlb.com/api/v1/schedule"
+    params = {
+        "sportId": 1,
+        "date": date_str,
+        "hydrate": "probablePitcher,team,linescore"
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("dates", [])
+    except Exception as e:
+        st.error(f"MLB API error: {e}")
+        return []
+
+@st.cache_data(ttl=3600)  # Cache 1 hour
+def fetch_pitcher_stats(player_id, season=2026):
+    """Fetch pitcher season stats"""
+    url = f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats"
+    params = {
+        "stats": "season",
+        "season": season,
+        "group": "pitching"
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        stats = data.get("stats", [])
+        if stats and stats[0].get("splits"):
+            return stats[0]["splits"][0].get("stat", {})
+        return {}
+    except:
+        return {}
+
+@st.cache_data(ttl=3600)
+def fetch_pitcher_recent_games(player_id, season=2026):
+    """Fetch pitcher's last 5 game logs"""
+    url = f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats"
+    params = {
+        "stats": "gameLog",
+        "season": season,
+        "group": "pitching"
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        stats = data.get("stats", [])
+        if stats and stats[0].get("splits"):
+            # Get last 5 starts
+            games = stats[0]["splits"][-5:]
+            return games
+        return []
+    except:
+        return []
+
+@st.cache_data(ttl=1800)  # Cache 30 min
+def fetch_team_record(team_id, season=2026):
+    """Fetch team standings/record"""
+    url = f"https://statsapi.mlb.com/api/v1/teams/{team_id}/stats"
+    params = {
+        "stats": "season",
+        "season": season,
+        "group": "hitting"
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        return data
+    except:
+        return {}
 
 # ============================================================
-# MOCK GAMES
+# KALSHI API (PUBLIC MARKET DATA)
 # ============================================================
 
-def get_mock_games():
-    """Generate mock MLB games"""
-    games = [
-        {
-            "game_id": "mlb_001",
-            "away_team": "NYY",
-            "home_team": "BOS",
-            "away_pitcher": "Gerrit Cole",
-            "home_pitcher": "None Listed",
-            "away_kalshi": 58,
-            "home_kalshi": 44,
-            "total_line": 8.5,
-            "over_kalshi": 52,
-            "under_kalshi": 50,
-            "game_time": "7:10 PM ET",
-            "away_last10": "7-3",
-            "home_last10": "5-5",
-            "away_vs_rhp": ".265",
-            "home_vs_rhp": ".248",
-            "away_bullpen_inn": 8.2,
-            "home_bullpen_inn": 12.1,
-            "weather": {"wind_mph": 12, "wind_dir": "Out to CF", "temp": 72},
-            "open_away": 55,
-            "open_home": 47,
-        },
-        {
-            "game_id": "mlb_002",
-            "away_team": "LAD",
-            "home_team": "SF",
-            "away_pitcher": "Tyler Glasnow",
-            "home_pitcher": "Logan Webb",
-            "away_kalshi": 62,
-            "home_kalshi": 40,
-            "total_line": 7.0,
-            "over_kalshi": 45,
-            "under_kalshi": 57,
-            "game_time": "9:45 PM ET",
-            "away_last10": "8-2",
-            "home_last10": "6-4",
-            "away_vs_rhp": ".272",
-            "home_vs_rhp": ".255",
-            "away_bullpen_inn": 5.1,
-            "home_bullpen_inn": 7.2,
-            "weather": {"wind_mph": 8, "wind_dir": "In from LF", "temp": 58},
-            "open_away": 60,
-            "open_home": 42,
-        },
-        {
-            "game_id": "mlb_003",
-            "away_team": "ATL",
-            "home_team": "PHI",
-            "away_pitcher": "Chris Sale",
-            "home_pitcher": "Zack Wheeler",
-            "away_kalshi": 48,
-            "home_kalshi": 54,
-            "total_line": 7.5,
-            "over_kalshi": 48,
-            "under_kalshi": 54,
-            "game_time": "6:40 PM ET",
-            "away_last10": "6-4",
-            "home_last10": "7-3",
-            "away_vs_rhp": ".258",
-            "home_vs_lhp": ".242",
-            "away_bullpen_inn": 9.0,
-            "home_bullpen_inn": 6.2,
-            "weather": {"wind_mph": 5, "wind_dir": "Calm", "temp": 68},
-            "open_away": 46,
-            "open_home": 56,
-        },
-        {
-            "game_id": "mlb_004",
-            "away_team": "HOU",
-            "home_team": "TEX",
-            "away_pitcher": "Framber Valdez",
-            "home_pitcher": "None Listed",
-            "away_kalshi": 55,
-            "home_kalshi": 47,
-            "total_line": 8.0,
-            "over_kalshi": 55,
-            "under_kalshi": 47,
-            "game_time": "8:05 PM ET",
-            "away_last10": "6-4",
-            "home_last10": "4-6",
-            "away_vs_rhp": ".262",
-            "home_vs_lhp": ".238",
-            "away_bullpen_inn": 7.1,
-            "home_bullpen_inn": 14.2,
-            "weather": {"wind_mph": 0, "wind_dir": "Dome", "temp": 72},
-            "open_away": 52,
-            "open_home": 50,
-        },
-        {
-            "game_id": "mlb_005",
-            "away_team": "SD",
-            "home_team": "COL",
-            "away_pitcher": "Dylan Cease",
-            "home_pitcher": "None Listed",
-            "away_kalshi": 65,
-            "home_kalshi": 37,
-            "total_line": 11.5,
-            "over_kalshi": 58,
-            "under_kalshi": 44,
-            "game_time": "8:40 PM ET",
-            "away_last10": "5-5",
-            "home_last10": "3-7",
-            "away_vs_rhp": ".255",
-            "home_vs_rhp": ".268",
-            "away_bullpen_inn": 10.0,
-            "home_bullpen_inn": 11.2,
-            "weather": {"wind_mph": 15, "wind_dir": "Out to RF", "temp": 78},
-            "open_away": 62,
-            "open_home": 40,
-        },
-        {
-            "game_id": "mlb_006",
-            "away_team": "DET",
-            "home_team": "MIN",
-            "away_pitcher": "Tarik Skubal",
-            "home_pitcher": "Joe Ryan",
-            "away_kalshi": 52,
-            "home_kalshi": 50,
-            "total_line": 8.0,
-            "over_kalshi": 50,
-            "under_kalshi": 52,
-            "game_time": "7:40 PM ET",
-            "away_last10": "7-3",
-            "home_last10": "5-5",
-            "away_vs_rhp": ".248",
-            "home_vs_lhp": ".235",
-            "away_bullpen_inn": 4.2,
-            "home_bullpen_inn": 9.1,
-            "weather": {"wind_mph": 6, "wind_dir": "In", "temp": 65},
-            "open_away": 48,
-            "open_home": 54,
-        },
-    ]
-    return games
+@st.cache_data(ttl=60)  # Cache 1 minute for prices
+def fetch_kalshi_mlb_markets():
+    """Fetch MLB markets from Kalshi"""
+    url = "https://api.elections.kalshi.com/trade-api/v2/markets"
+    params = {
+        "limit": 100,
+        "status": "open",
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        markets = data.get("markets", [])
+        # Filter for MLB
+        mlb_markets = [m for m in markets if "MLB" in m.get("ticker", "").upper() or "baseball" in m.get("title", "").lower()]
+        return mlb_markets
+    except Exception as e:
+        return []
+
+def match_kalshi_to_game(kalshi_markets, away_abbr, home_abbr):
+    """Try to match Kalshi market to a specific game"""
+    for market in kalshi_markets:
+        ticker = market.get("ticker", "").upper()
+        title = market.get("title", "").upper()
+        if away_abbr in ticker or away_abbr in title:
+            if home_abbr in ticker or home_abbr in title:
+                yes_price = market.get("yes_ask", 50)
+                no_price = market.get("no_ask", 50)
+                return {
+                    "found": True,
+                    "away_price": no_price,  # Away = No typically
+                    "home_price": yes_price,  # Home = Yes typically
+                    "ticker": market.get("ticker"),
+                }
+    return {"found": False, "away_price": 50, "home_price": 50, "ticker": None}
 
 # ============================================================
 # EDGE CALCULATION ENGINE
 # ============================================================
 
-def calculate_pitcher_quality_score(pitcher_name):
-    """Calculate pitcher quality score (0-10 scale)"""
-    if pitcher_name == "None Listed" or pitcher_name not in PITCHERS:
-        return 4.0  # Unknown pitcher penalty
+def calculate_pitcher_quality_score(stats):
+    """Calculate pitcher quality score from real stats"""
+    if not stats:
+        return 3.0  # Unknown pitcher penalty
     
-    p = PITCHERS[pitcher_name]
+    era = float(stats.get("era", 4.50))
+    whip = float(stats.get("whip", 1.30))
+    k_per_9 = float(stats.get("strikeoutsPer9Inn", 8.0))
+    bb_per_9 = float(stats.get("walksPer9Inn", 3.0))
+    hr_per_9 = float(stats.get("homeRunsPer9", 1.2))
     
-    # Lower ERA/FIP = better
-    era_score = max(0, 10 - (p["era"] - 2.0) * 2)
-    fip_score = max(0, 10 - (p["fip"] - 2.0) * 2)
+    # Score components (lower ERA/WHIP = better, higher K = better)
+    era_score = max(0, 10 - (era - 2.0) * 1.5)
+    whip_score = max(0, 10 - (whip - 0.9) * 5)
+    k_score = min(10, k_per_9 / 1.2)
+    bb_score = max(0, 10 - bb_per_9 * 2)
+    hr_score = max(0, 10 - hr_per_9 * 4)
     
-    # Higher K/9 = better
-    k_score = min(10, p["k9"] / 1.2)
-    
-    # Lower BB/9 = better
-    bb_score = max(0, 10 - p["bb9"] * 2)
-    
-    # Lower HR/9 = better
-    hr_score = max(0, 10 - p["hr9"] * 5)
-    
-    # Weighted blend
-    quality = (era_score * 0.25 + fip_score * 0.25 + k_score * 0.2 + bb_score * 0.15 + hr_score * 0.15)
-    
-    return round(quality, 2)
+    quality = (era_score * 0.30 + whip_score * 0.20 + k_score * 0.20 + bb_score * 0.15 + hr_score * 0.15)
+    return round(max(0, min(10, quality)), 2)
 
-def calculate_pitcher_form_score(pitcher_name):
-    """Calculate recent form score based on last 5 starts"""
-    if pitcher_name == "None Listed" or pitcher_name not in PITCHERS:
+def calculate_pitcher_form_score(recent_games):
+    """Calculate recent form from last 5 game logs"""
+    if not recent_games:
         return 5.0
     
-    p = PITCHERS[pitcher_name]
-    season_era = p["era"]
-    recent_era = p["last5_era"]
+    total_era = 0
+    games_counted = 0
+    for game in recent_games:
+        stat = game.get("stat", {})
+        era = stat.get("era")
+        if era:
+            total_era += float(era)
+            games_counted += 1
     
-    # Positive if pitching better recently
-    diff = season_era - recent_era
-    form_score = 5.0 + (diff * 2)
+    if games_counted == 0:
+        return 5.0
     
-    return round(max(0, min(10, form_score)), 2)
+    avg_era = total_era / games_counted
+    # Lower recent ERA = better form
+    form_score = max(0, min(10, 10 - (avg_era - 2.5) * 1.5))
+    return round(form_score, 2)
 
-def calculate_bullpen_risk(innings_last_3_days):
-    """Calculate bullpen fatigue risk"""
-    if innings_last_3_days < 6:
-        return "LOW"
-    elif innings_last_3_days < 10:
-        return "MED"
-    else:
-        return "HIGH"
+def calculate_bullpen_risk(team_abbr):
+    """Estimate bullpen fatigue - would need more API calls for real data"""
+    # Placeholder - in production, fetch recent game logs
+    return "MED"
 
-def calculate_park_adjustment(home_team):
-    """Get park factor adjustment"""
-    return PARK_FACTORS.get(home_team, 1.0)
+def calculate_model_probability(away_edge, home_edge):
+    """Convert edge scores to probabilities using logistic function"""
+    edge_diff = home_edge - away_edge
+    home_prob = 100 / (1 + math.exp(-edge_diff / 4.5))
+    home_prob = max(12, min(88, home_prob))
+    away_prob = 100 - home_prob
+    return round(away_prob), round(home_prob)
 
-def calculate_weather_impact(weather):
-    """Calculate weather impact on totals"""
-    wind_mph = weather.get("wind_mph", 0)
-    wind_dir = weather.get("wind_dir", "")
-    
-    if "Dome" in wind_dir:
-        return {"impact": "NEUTRAL", "note": "Dome - no weather impact"}
-    
-    if wind_mph < 10:
-        return {"impact": "NEUTRAL", "note": "Light wind - minimal impact"}
-    
-    if "Out" in wind_dir:
-        return {"impact": "OVER", "note": f"{wind_mph} mph out - favors hitters"}
-    elif "In" in wind_dir:
-        return {"impact": "UNDER", "note": f"{wind_mph} mph in - suppresses runs"}
-    else:
-        return {"impact": "NEUTRAL", "note": f"{wind_mph} mph - mixed impact"}
-
-def calculate_market_movement(current_price, open_price):
-    """Detect market movement direction"""
-    diff = current_price - open_price
-    if diff >= 5:
-        return {"direction": "STEAM", "diff": diff, "note": "Sharp money detected"}
-    elif diff <= -5:
-        return {"direction": "FADE", "diff": diff, "note": "Public side - potential fade"}
-    else:
-        return {"direction": "STABLE", "diff": diff, "note": "Minimal movement"}
-
-def calculate_total_edge(game, side):
-    """Calculate total edge score for a team"""
-    if side == "away":
-        pitcher = game["away_pitcher"]
-        opp_pitcher = game["home_pitcher"]
-        bullpen_inn = game["away_bullpen_inn"]
-        opp_bullpen_inn = game["home_bullpen_inn"]
-        last10 = game["away_last10"]
-    else:
-        pitcher = game["home_pitcher"]
-        opp_pitcher = game["away_pitcher"]
-        bullpen_inn = game["home_bullpen_inn"]
-        opp_bullpen_inn = game["away_bullpen_inn"]
-        last10 = game["home_last10"]
-        
-    # Factor 1: Pitcher Quality (2.0x weight)
-    pitcher_quality = calculate_pitcher_quality_score(pitcher)
-    opp_pitcher_quality = calculate_pitcher_quality_score(opp_pitcher)
-    pitcher_edge = (pitcher_quality - opp_pitcher_quality) * 2.0
-    
-    # Factor 2: Pitcher Recent Form (1.5x weight)
-    pitcher_form = calculate_pitcher_form_score(pitcher)
-    opp_pitcher_form = calculate_pitcher_form_score(opp_pitcher)
-    form_edge = (pitcher_form - opp_pitcher_form) * 1.5
-    
-    # Factor 3: Bullpen Fatigue (1.2x weight)
-    bullpen_risk = calculate_bullpen_risk(bullpen_inn)
-    opp_bullpen_risk = calculate_bullpen_risk(opp_bullpen_inn)
-    bullpen_scores = {"LOW": 2, "MED": 0, "HIGH": -2}
-    bullpen_edge = (bullpen_scores[bullpen_risk] - bullpen_scores[opp_bullpen_risk]) * 1.2
-    
-    # Factor 4: Offensive Form (0.8x weight)
-    wins = int(last10.split("-")[0])
-    form_pct = wins / 10
-    offense_edge = (form_pct - 0.5) * 10 * 0.8
-    
-    # Factor 5: Park Factor (1.0x weight) - only for home team
-    if side == "home":
-        park = calculate_park_adjustment(game["home_team"])
-        park_edge = (park - 1.0) * 5  # Slight home boost in hitter's parks
-    else:
-        park_edge = 0
-    
-    # Total edge
-    total = pitcher_edge + form_edge + bullpen_edge + offense_edge + park_edge
-    
-    return {
-        "total": round(total, 2),
-        "pitcher_quality": round(pitcher_quality, 2),
-        "pitcher_form": round(pitcher_form, 2),
-        "bullpen_risk": bullpen_risk,
-        "offense_form": round(offense_edge, 2),
-        "park_edge": round(park_edge, 2),
-    }
-
-def determine_edge_label(edge_score, kalshi_diff):
+def determine_edge_label(edge_score, kalshi_diff, pitcher_known=True):
     """Determine edge label: STRONG / LEAN / PASS"""
-    if edge_score >= 8 and kalshi_diff >= 8:
+    if not pitcher_known:
+        return "PASS"
+    if edge_score >= 9 and kalshi_diff >= 10:
         return "STRONG"
-    elif edge_score >= 4 and kalshi_diff >= 5:
+    elif edge_score >= 4 and kalshi_diff >= 6:
         return "LEAN"
     else:
         return "PASS"
 
-def calculate_model_probability(away_edge, home_edge):
-    """Convert edge scores to implied probabilities"""
-    edge_diff = home_edge - away_edge
-    home_prob = 50 + (edge_diff * 2)
-    home_prob = max(15, min(85, home_prob))
-    away_prob = 100 - home_prob
-    return round(away_prob), round(home_prob)
+def calculate_park_adjustment(home_abbr):
+    """Get park factor"""
+    return PARK_FACTORS.get(home_abbr, 1.0)
+
+# ============================================================
+# PROCESS GAMES
+# ============================================================
+
+def process_game(game_data, kalshi_markets):
+    """Process a single game from MLB API"""
+    away_team_id = game_data["teams"]["away"]["team"]["id"]
+    home_team_id = game_data["teams"]["home"]["team"]["id"]
+    
+    away_info = MLB_TEAMS.get(away_team_id, {"abbr": "UNK", "name": "Unknown"})
+    home_info = MLB_TEAMS.get(home_team_id, {"abbr": "UNK", "name": "Unknown"})
+    
+    away_abbr = away_info["abbr"]
+    home_abbr = home_info["abbr"]
+    
+    # Get probable pitchers
+    away_pitcher = game_data["teams"]["away"].get("probablePitcher", {})
+    home_pitcher = game_data["teams"]["home"].get("probablePitcher", {})
+    
+    away_pitcher_name = away_pitcher.get("fullName", "TBD")
+    home_pitcher_name = home_pitcher.get("fullName", "TBD")
+    away_pitcher_id = away_pitcher.get("id")
+    home_pitcher_id = home_pitcher.get("id")
+    
+    # Fetch pitcher stats if available
+    away_pitcher_stats = fetch_pitcher_stats(away_pitcher_id) if away_pitcher_id else {}
+    home_pitcher_stats = fetch_pitcher_stats(home_pitcher_id) if home_pitcher_id else {}
+    
+    # Fetch recent form
+    away_recent = fetch_pitcher_recent_games(away_pitcher_id) if away_pitcher_id else []
+    home_recent = fetch_pitcher_recent_games(home_pitcher_id) if home_pitcher_id else []
+    
+    # Calculate scores
+    away_quality = calculate_pitcher_quality_score(away_pitcher_stats)
+    home_quality = calculate_pitcher_quality_score(home_pitcher_stats)
+    
+    away_form = calculate_pitcher_form_score(away_recent)
+    home_form = calculate_pitcher_form_score(home_recent)
+    
+    # Edge calculation
+    away_edge = (away_quality - home_quality) * 2.0 + (away_form - home_form) * 1.0
+    home_edge = (home_quality - away_quality) * 2.0 + (home_form - away_form) * 1.0
+    
+    # Park factor for home team
+    park = calculate_park_adjustment(home_abbr)
+    home_edge += (park - 1.0) * 3
+    
+    # Clamp edges
+    away_edge = max(-12, min(12, away_edge))
+    home_edge = max(-12, min(12, home_edge))
+    
+    # Model probabilities
+    away_model, home_model = calculate_model_probability(away_edge, home_edge)
+    
+    # Match Kalshi prices
+    kalshi_match = match_kalshi_to_game(kalshi_markets, away_abbr, home_abbr)
+    away_kalshi = kalshi_match["away_price"]
+    home_kalshi = kalshi_match["home_price"]
+    
+    # Edge labels
+    away_diff = away_model - away_kalshi
+    home_diff = home_model - home_kalshi
+    
+    away_label = determine_edge_label(away_edge, away_diff, away_pitcher_id is not None)
+    home_label = determine_edge_label(home_edge, home_diff, home_pitcher_id is not None)
+    
+    # Game time
+    game_time = game_data.get("gameDate", "")
+    try:
+        dt = datetime.fromisoformat(game_time.replace("Z", "+00:00"))
+        eastern = pytz.timezone("US/Eastern")
+        dt_eastern = dt.astimezone(eastern)
+        time_str = dt_eastern.strftime("%I:%M %p ET")
+    except:
+        time_str = "TBD"
+    
+    return {
+        "game_id": game_data.get("gamePk"),
+        "away_abbr": away_abbr,
+        "home_abbr": home_abbr,
+        "away_name": away_info["name"],
+        "home_name": home_info["name"],
+        "away_pitcher": away_pitcher_name,
+        "home_pitcher": home_pitcher_name,
+        "away_pitcher_stats": away_pitcher_stats,
+        "home_pitcher_stats": home_pitcher_stats,
+        "away_quality": away_quality,
+        "home_quality": home_quality,
+        "away_form": away_form,
+        "home_form": home_form,
+        "away_edge": away_edge,
+        "home_edge": home_edge,
+        "away_model": away_model,
+        "home_model": home_model,
+        "away_kalshi": away_kalshi,
+        "home_kalshi": home_kalshi,
+        "kalshi_found": kalshi_match["found"],
+        "away_label": away_label,
+        "home_label": home_label,
+        "park_factor": park,
+        "game_time": time_str,
+        "status": game_data.get("status", {}).get("detailedState", "Scheduled"),
+    }
 
 # ============================================================
 # UI COMPONENTS
@@ -431,38 +390,13 @@ def render_header():
     <div style='text-align: center; padding: 1rem 0;'>
         <h1>MLB Edge Finder</h1>
         <p style='color: #888; font-size: 0.9rem;'>Pitcher Matchup + Market Lag Model | v{VERSION}</p>
+        <p style='color: #666; font-size: 0.8rem;'>Live MLB Stats API + Kalshi Markets</p>
     </div>
     """, unsafe_allow_html=True)
 
 def render_game_card(game):
-    """Render a single game analysis card"""
-    away = game["away_team"]
-    home = game["home_team"]
-    
-    away_edge = calculate_total_edge(game, "away")
-    home_edge = calculate_total_edge(game, "home")
-    
-    away_model, home_model = calculate_model_probability(away_edge["total"], home_edge["total"])
-    
-    # Market movement
-    away_movement = calculate_market_movement(game["away_kalshi"], game["open_away"])
-    home_movement = calculate_market_movement(game["home_kalshi"], game["open_home"])
-    
-    # Weather
-    weather_impact = calculate_weather_impact(game["weather"])
-    
-    # Park factor
-    park_factor = calculate_park_adjustment(home)
-    
-    # Edge labels
-    away_kalshi_diff = away_model - game["away_kalshi"]
-    home_kalshi_diff = home_model - game["home_kalshi"]
-    
-    away_label = determine_edge_label(away_edge["total"], away_kalshi_diff)
-    home_label = determine_edge_label(home_edge["total"], home_kalshi_diff)
-    
-    # Card border color
-    has_edge = away_label != "PASS" or home_label != "PASS"
+    """Render a single game card"""
+    has_edge = game["away_label"] != "PASS" or game["home_label"] != "PASS"
     border_color = "#22c55e" if has_edge else "#333"
     
     with st.container():
@@ -470,122 +404,62 @@ def render_game_card(game):
         <div style='border: 2px solid {border_color}; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; background: #0e1117;'>
             <div style='display: flex; justify-content: space-between; margin-bottom: 0.5rem;'>
                 <span style='color: #888;'>{game['game_time']}</span>
-                <span style='color: #666;'>MLB</span>
+                <span style='color: #666;'>{game['status']}</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        # Pitchers prominently displayed
         col1, col2, col3 = st.columns([2, 1, 2])
         
         with col1:
-            st.markdown(f"### {away}")
-            st.caption(MLB_TEAMS[away]["name"])
+            st.markdown(f"### {game['away_abbr']}")
+            st.caption(game['away_name'])
             st.markdown(f"**{game['away_pitcher']}**")
-            if game['away_pitcher'] in PITCHERS:
-                p = PITCHERS[game['away_pitcher']]
-                st.caption(f"ERA: {p['era']} | FIP: {p['fip']} | K/9: {p['k9']}")
-                st.caption(f"Last 5: {p['last5_era']} ERA")
+            if game['away_pitcher_stats']:
+                s = game['away_pitcher_stats']
+                st.caption(f"ERA: {s.get('era', '-')} | WHIP: {s.get('whip', '-')} | K/9: {s.get('strikeoutsPer9Inn', '-')}")
             else:
-                st.caption("Pitcher TBD")
-            st.caption(f"Last 10: {game['away_last10']}")
-            st.caption(f"Bullpen Risk: **{away_edge['bullpen_risk']}**")
+                st.caption("Stats unavailable")
+            st.caption(f"Quality: {game['away_quality']:.1f} | Form: {game['away_form']:.1f}")
         
         with col2:
             st.markdown("### VS")
-            st.markdown(f"**Kalshi:** {game['away_kalshi']}c / {game['home_kalshi']}c")
-            st.markdown(f"**Model:** {away_model}% / {home_model}%")
-            st.caption(f"Total: {game['total_line']}")
+            if game['kalshi_found']:
+                st.markdown(f"**Kalshi:** {game['away_kalshi']}c / {game['home_kalshi']}c")
+            else:
+                st.caption("Kalshi: No market found")
+            st.markdown(f"**Model:** {game['away_model']}% / {game['home_model']}%")
+            if game['park_factor'] >= 1.03:
+                st.caption(f"Park: Hitter-friendly")
+            elif game['park_factor'] <= 0.95:
+                st.caption(f"Park: Pitcher-friendly")
         
         with col3:
-            st.markdown(f"### {home}")
-            st.caption(MLB_TEAMS[home]["name"])
+            st.markdown(f"### {game['home_abbr']}")
+            st.caption(game['home_name'])
             st.markdown(f"**{game['home_pitcher']}**")
-            if game['home_pitcher'] in PITCHERS:
-                p = PITCHERS[game['home_pitcher']]
-                st.caption(f"ERA: {p['era']} | FIP: {p['fip']} | K/9: {p['k9']}")
-                st.caption(f"Last 5: {p['last5_era']} ERA")
+            if game['home_pitcher_stats']:
+                s = game['home_pitcher_stats']
+                st.caption(f"ERA: {s.get('era', '-')} | WHIP: {s.get('whip', '-')} | K/9: {s.get('strikeoutsPer9Inn', '-')}")
             else:
-                st.caption("Pitcher TBD")
-            st.caption(f"Last 10: {game['home_last10']}")
-            st.caption(f"Bullpen Risk: **{home_edge['bullpen_risk']}**")
+                st.caption("Stats unavailable")
+            st.caption(f"Quality: {game['home_quality']:.1f} | Form: {game['home_form']:.1f}")
         
         st.markdown("---")
         
-        # Edge Labels
         col_a, col_b = st.columns(2)
         
         with col_a:
-            label_color = "#22c55e" if away_label == "STRONG" else "#fbbf24" if away_label == "LEAN" else "#666"
-            st.markdown(f"**{away}:** <span style='color:{label_color}'>{away_label}</span>", unsafe_allow_html=True)
-            st.caption(f"Edge Score: {away_edge['total']:+.1f}")
-            if away_movement["direction"] != "STABLE":
-                st.caption(f"Market: {away_movement['note']}")
+            lbl = game['away_label']
+            color = "#22c55e" if lbl == "STRONG" else "#fbbf24" if lbl == "LEAN" else "#666"
+            st.markdown(f"**{game['away_abbr']}:** <span style='color:{color}'>{lbl}</span>", unsafe_allow_html=True)
+            st.caption(f"Edge: {game['away_edge']:+.1f}")
         
         with col_b:
-            label_color = "#22c55e" if home_label == "STRONG" else "#fbbf24" if home_label == "LEAN" else "#666"
-            st.markdown(f"**{home}:** <span style='color:{label_color}'>{home_label}</span>", unsafe_allow_html=True)
-            st.caption(f"Edge Score: {home_edge['total']:+.1f}")
-            if home_movement["direction"] != "STABLE":
-                st.caption(f"Market: {home_movement['note']}")
-        
-        # Context bar
-        context_items = []
-        if park_factor >= 1.05:
-            context_items.append(f"Park: Hitter-friendly ({park_factor:.2f})")
-        elif park_factor <= 0.95:
-            context_items.append(f"Park: Pitcher-friendly ({park_factor:.2f})")
-        
-        if weather_impact["impact"] != "NEUTRAL":
-            context_items.append(f"Weather: {weather_impact['note']}")
-        
-        if context_items:
-            st.caption(" | ".join(context_items))
-
-def render_edge_summary(games):
-    """Render summary of actionable edges"""
-    edges = []
-    
-    for game in games:
-        away = game["away_team"]
-        home = game["home_team"]
-        
-        away_edge = calculate_total_edge(game, "away")
-        home_edge = calculate_total_edge(game, "home")
-        
-        away_model, home_model = calculate_model_probability(away_edge["total"], home_edge["total"])
-        
-        away_diff = away_model - game["away_kalshi"]
-        home_diff = home_model - game["home_kalshi"]
-        
-        away_label = determine_edge_label(away_edge["total"], away_diff)
-        home_label = determine_edge_label(home_edge["total"], home_diff)
-        
-        if away_label in ["STRONG", "LEAN"]:
-            edges.append({
-                "matchup": f"{away} @ {home}",
-                "pick": away,
-                "pitcher": game["away_pitcher"],
-                "label": away_label,
-                "kalshi": game["away_kalshi"],
-                "model": away_model,
-                "edge": away_diff,
-                "time": game["game_time"],
-            })
-        
-        if home_label in ["STRONG", "LEAN"]:
-            edges.append({
-                "matchup": f"{away} @ {home}",
-                "pick": home,
-                "pitcher": game["home_pitcher"],
-                "label": home_label,
-                "kalshi": game["home_kalshi"],
-                "model": home_model,
-                "edge": home_diff,
-                "time": game["game_time"],
-            })
-    
-    return edges
+            lbl = game['home_label']
+            color = "#22c55e" if lbl == "STRONG" else "#fbbf24" if lbl == "LEAN" else "#666"
+            st.markdown(f"**{game['home_abbr']}:** <span style='color:{color}'>{lbl}</span>", unsafe_allow_html=True)
+            st.caption(f"Edge: {game['home_edge']:+.1f}")
 
 # ============================================================
 # MAIN APP
@@ -594,67 +468,104 @@ def render_edge_summary(games):
 def main():
     render_header()
     
-    # Timezone
     eastern = pytz.timezone("US/Eastern")
     now = datetime.now(eastern)
     
     # Sidebar
     with st.sidebar:
         st.markdown("### Settings")
+        
+        # Date picker
+        selected_date = st.date_input("Game Date", value=now.date())
+        date_str = selected_date.strftime("%Y-%m-%d")
+        
         show_all = st.checkbox("Show all games", value=True)
+        
+        if st.button("Refresh Data"):
+            st.cache_data.clear()
+            st.rerun()
+        
+        st.markdown("---")
+        st.markdown("### Data Sources")
+        st.caption("MLB Stats API (official)")
+        st.caption("Kalshi Public Markets")
         
         st.markdown("---")
         st.markdown("### Factor Weights")
         st.caption("Pitcher Quality: 2.0x")
-        st.caption("Pitcher Form: 1.5x")
-        st.caption("Bullpen Fatigue: 1.2x")
-        st.caption("Handedness: 1.0x")
-        st.caption("Park Factor: 1.0x")
-        st.caption("Offensive Form: 0.8x")
-        st.caption("Weather: 0.5x")
+        st.caption("Pitcher Form: 1.0x")
+        st.caption("Park Factor: varies")
+        st.caption("Edge clamped: -12 to +12")
         
         st.markdown("---")
         st.markdown("[Kalshi MLB Markets](https://kalshi.com/?search=mlb)")
         
         st.markdown("---")
         st.caption(f"v{VERSION}")
-        st.caption(f"{now.strftime('%I:%M %p ET')}")
+        st.caption(f"Updated: {now.strftime('%I:%M %p ET')}")
     
-    # Get games
-    games = get_mock_games()
+    # Fetch data
+    with st.spinner("Fetching MLB schedule..."):
+        schedule_data = fetch_mlb_schedule(date_str)
+    
+    with st.spinner("Fetching Kalshi markets..."):
+        kalshi_markets = fetch_kalshi_mlb_markets()
+    
+    # Check if games exist
+    if not schedule_data:
+        st.warning(f"No MLB games scheduled for {date_str}. Try a different date or wait for the season to start (late March).")
+        
+        # Show next scheduled games
+        st.markdown("---")
+        st.markdown("### Season Info")
+        st.info("MLB regular season typically runs late March through early October. Spring Training games may appear in March.")
+        return
+    
+    # Process games
+    games = []
+    for date_obj in schedule_data:
+        for game_data in date_obj.get("games", []):
+            processed = process_game(game_data, kalshi_markets)
+            games.append(processed)
+    
+    if not games:
+        st.warning("No games found for this date.")
+        return
     
     # Edge summary
-    edges = render_edge_summary(games)
+    edges = [g for g in games if g["away_label"] != "PASS" or g["home_label"] != "PASS"]
     
     if edges:
         st.markdown("### Actionable Edges")
-        
-        for e in sorted(edges, key=lambda x: -abs(x["edge"])):
-            label_color = "#22c55e" if e["label"] == "STRONG" else "#fbbf24"
-            st.markdown(
-                f"<span style='color:{label_color}'>{e['label']}</span> **{e['pick']}** ({e['matchup']}) — "
-                f"{e['pitcher']} | Kalshi: {e['kalshi']}c | Model: {e['model']}% | +{e['edge']:.0f}c edge | {e['time']}",
-                unsafe_allow_html=True
-            )
-        
+        for g in edges:
+            if g["away_label"] in ["STRONG", "LEAN"]:
+                lbl = g["away_label"]
+                color = "#22c55e" if lbl == "STRONG" else "#fbbf24"
+                diff = g["away_model"] - g["away_kalshi"]
+                st.markdown(
+                    f"<span style='color:{color}'>{lbl}</span> **{g['away_abbr']}** @ {g['home_abbr']} — "
+                    f"{g['away_pitcher']} | Model: {g['away_model']}% | +{diff:.0f}c edge | {g['game_time']}",
+                    unsafe_allow_html=True
+                )
+            if g["home_label"] in ["STRONG", "LEAN"]:
+                lbl = g["home_label"]
+                color = "#22c55e" if lbl == "STRONG" else "#fbbf24"
+                diff = g["home_model"] - g["home_kalshi"]
+                st.markdown(
+                    f"<span style='color:{color}'>{lbl}</span> **{g['home_abbr']}** vs {g['away_abbr']} — "
+                    f"{g['home_pitcher']} | Model: {g['home_model']}% | +{diff:.0f}c edge | {g['game_time']}",
+                    unsafe_allow_html=True
+                )
         st.markdown("---")
     else:
-        st.info("No actionable edges detected. Check back closer to game time.")
+        st.info("No actionable edges detected for this date.")
     
     # All games
-    st.markdown("### Today's Games")
+    st.markdown(f"### Games for {date_str}")
+    st.caption(f"{len(games)} games found | Kalshi markets: {len(kalshi_markets)}")
     
     for game in games:
-        away_edge = calculate_total_edge(game, "away")
-        home_edge = calculate_total_edge(game, "home")
-        away_model, home_model = calculate_model_probability(away_edge["total"], home_edge["total"])
-        away_diff = away_model - game["away_kalshi"]
-        home_diff = home_model - game["home_kalshi"]
-        away_label = determine_edge_label(away_edge["total"], away_diff)
-        home_label = determine_edge_label(home_edge["total"], home_diff)
-        
-        has_edge = away_label != "PASS" or home_label != "PASS"
-        
+        has_edge = game["away_label"] != "PASS" or game["home_label"] != "PASS"
         if show_all or has_edge:
             render_game_card(game)
     
@@ -664,7 +575,7 @@ def main():
     <div style='background: #1a1a1a; padding: 1rem; border-radius: 8px; font-size: 0.8rem; color: #666;'>
         <strong>Disclaimer:</strong> This tool is for informational and educational purposes only. 
         Past performance does not guarantee future results. All trading involves risk of loss.
-        This is not financial advice. Model outputs are estimates based on historical factors.
+        Not financial advice. Data from MLB Stats API and Kalshi public markets.
     </div>
     """, unsafe_allow_html=True)
 
