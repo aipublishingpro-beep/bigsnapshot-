@@ -227,7 +227,6 @@ col_high, col_low = st.columns(2)
 
 with col_high:
     st.write("**HIGH Temp Market**")
-    st.caption(f"`{config['high_series']}-{date_suffix}-T##`")
     
     high_markets, err = fetch_series_markets(config["high_series"])
     if err:
@@ -238,23 +237,17 @@ with col_high:
             st.success(f"✅ Found {len(day_markets)} brackets")
             for market in sorted(day_markets, key=lambda x: x.get("ticker", "")):
                 ticker = market.get("ticker", "")
-                title = market.get("title", "")
+                title = market.get("title", "No title")
                 yes_bid = market.get("yes_bid", 0)
                 yes_ask = market.get("yes_ask", 0)
-                
-                # Extract threshold from ticker (e.g., -T40 means 40°F)
-                threshold = ticker.split("-T")[-1] if "-T" in ticker else ""
                 
                 if yes_bid and yes_ask:
                     mid = (yes_bid + yes_ask) / 2
                     spread = yes_ask - yes_bid
-                    col_a, col_b = st.columns([2, 1])
-                    with col_a:
-                        st.write(f"**{threshold}°F+**")
-                    with col_b:
-                        st.write(f"{mid:.0f}¢ (spread {spread}¢)")
+                    spread_warn = " ⚠️" if spread > 15 else ""
+                    st.write(f"**{title}** → {mid:.0f}¢ (spread {spread}¢){spread_warn}")
                 else:
-                    st.write(f"**{threshold}°F+** — no bid/ask")
+                    st.write(f"**{title}** → no bid/ask")
         else:
             st.warning("No markets for this date")
             if high_markets:
@@ -262,7 +255,6 @@ with col_high:
                 shown = set()
                 for m in high_markets[:10]:
                     t = m.get("ticker", "")
-                    # Extract date portion
                     parts = t.split("-")
                     if len(parts) >= 2:
                         date_part = parts[1]
@@ -272,7 +264,6 @@ with col_high:
 
 with col_low:
     st.write("**LOW Temp Market**")
-    st.caption(f"`{config['low_series']}-{date_suffix}-T##`")
     
     low_markets, err = fetch_series_markets(config["low_series"])
     if err:
@@ -283,23 +274,17 @@ with col_low:
             st.success(f"✅ Found {len(day_markets)} brackets")
             for market in sorted(day_markets, key=lambda x: x.get("ticker", "")):
                 ticker = market.get("ticker", "")
-                title = market.get("title", "")
+                title = market.get("title", "No title")
                 yes_bid = market.get("yes_bid", 0)
                 yes_ask = market.get("yes_ask", 0)
-                
-                # Extract threshold from ticker
-                threshold = ticker.split("-T")[-1] if "-T" in ticker else ""
                 
                 if yes_bid and yes_ask:
                     mid = (yes_bid + yes_ask) / 2
                     spread = yes_ask - yes_bid
-                    col_a, col_b = st.columns([2, 1])
-                    with col_a:
-                        st.write(f"**{threshold}°F or less**")
-                    with col_b:
-                        st.write(f"{mid:.0f}¢ (spread {spread}¢)")
+                    spread_warn = " ⚠️" if spread > 15 else ""
+                    st.write(f"**{title}** → {mid:.0f}¢ (spread {spread}¢){spread_warn}")
                 else:
-                    st.write(f"**{threshold}°F or less** — no bid/ask")
+                    st.write(f"**{title}** → no bid/ask")
         else:
             st.warning("No markets for this date")
             if low_markets:
