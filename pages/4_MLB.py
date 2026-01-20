@@ -569,6 +569,48 @@ def main():
         if show_all or has_edge:
             render_game_card(game)
     
+    # How to Use Guide
+    st.markdown("---")
+    with st.expander("📖 How to Use This App"):
+        st.markdown("""
+        **Understanding Edge Labels:**
+        - **STRONG** = High-confidence edge (≥9 edge score + ≥10¢ Kalshi diff). Best opportunities.
+        - **LEAN** = Moderate edge (≥4 edge score + ≥6¢ diff). Proceed with consideration.
+        - **PASS** = No actionable edge. Model and market aligned or pitcher unknown.
+        
+        **Why Pitchers Dominate MLB Betting:**
+        - Starting pitchers account for ~60% of game outcome variance
+        - A bad pitcher vs a good lineup is the most reliable edge in baseball
+        - Bullpen fatigue compounds late — watch HIGH risk bullpens
+        
+        **Reading the Analysis:**
+        - **Pitcher Quality (2.0x):** ERA, FIP, WHIP, K/9, BB/9, HR/9 blend
+        - **Pitcher Form (1.0x):** Last 5 starts trend — recent performance matters
+        - **Bullpen Risk:** LOW/MED/HIGH based on recent innings — HIGH means vulnerable late
+        - **Park Factor:** Coors (1.38) inflates runs; Oracle Park (0.92) suppresses them
+        
+        **Best Practices:**
+        1. Prioritize games where BOTH pitchers are known (TBD = auto-PASS)
+        2. STRONG edges with good pitchers are your best bets
+        3. Watch bullpen risk — HIGH + HIGH often means volatile totals
+        4. Check park factor — Coors Field games are different animals
+        5. Line movement toward your pick = confirmation
+        
+        **Timing Tips:**
+        - Probable pitchers usually confirmed 1-2 days before game
+        - Best edges appear early morning before market adjusts
+        - Late scratches (pitcher changes) create sudden edge opportunities
+        
+        **What This Tool Does NOT Do:**
+        - Predict exact scores
+        - Guarantee wins
+        - Account for weather in real-time (yet)
+        - Track in-game changes
+        
+        **Settlement Note:**
+        Kalshi MLB markets settle on official game results. Suspended/postponed games have specific rules — check Kalshi's market rules before trading.
+        """)
+    
     # Disclaimer
     st.markdown("---")
     st.markdown("""
