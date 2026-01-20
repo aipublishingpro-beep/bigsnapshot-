@@ -144,16 +144,40 @@ def find_todays_markets(markets, series_ticker, date_suffix):
             found.append(m)
     return found
 
-def parse_today_forecast(periods):
-    """Extract today's high and low from NWS periods"""
+def parse_forecast_for_date(periods, target_date):
+    """Extract high and low for a specific date from NWS periods"""
     high, low = None, None
-    for p in periods[:4]:
-        name = p.get("name", "").lower()
+    
+    for p in periods:
         temp = p.get("temperature")
-        if "night" in name or "tonight" in name:
-            low = temp
-        elif high is None and temp:
-            high = temp
+        is_day = p.get("isDaytime", True)
+        start_time = p.get("startTime", "")
+        
+        # Parse the period's date
+        if start_time:
+            try:
+                period_date = datetime.fromisoformat(start_time.replace("Z", "+00:00")).date()
+            except:
+                continue
+            
+            # Match target date
+            if period_date == target_date:
+                if is_day and high is None:
+                    high = temp
+                elif not is_day and low is None:
+                    low = temp
+    
+    # Fallback for today if we didn't find by date
+    if high is None or low is None:
+        for p in periods[:4]:
+            name = p.get("name", "").lower()
+            temp = p.get("temperature")
+            
+            if high is None and ("today" in name or "this afternoon" in name):
+                high = temp
+            if low is None and ("tonight" in name or "night" in name):
+                low = temp
+    
     return high, low
 
 def calculate_market_implied(markets):
@@ -198,8 +222,27 @@ config = CITIES[city]
 today = now_et.date()
 tomorrow = today + timedelta(days=1)
 
-date_option = st.radio("Select Date", ["Today", "Tomorrow"], horizontal=True)
-target_date = today if date_option == "Today" else tomorrow
+# Owner sees 7-day view, public sees today only
+is_owner = st.session_state.get("user_type") == "Owner"
+
+if is_owner:
+    date_options = ["Today", "Tomorrow", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"]
+    date_option = st.radio("Select Date", date_options, horizontal=True)
+    
+    day_index = date_options.index(date_option)
+    target_date = today + timedelta(days=day_index)
+    
+    # Show market availability
+    if day_index == 0:
+        st.success("🟢 **MARKET OPEN** — Trade now")
+    elif day_index == 1:
+        st.success("🟢 **MARKET OPENS 2AM** — You see the answer first")
+    else:
+        days_until = day_index - 1
+        st.warning(f"🟡 **MARKET OPENS IN {days_until} DAYS** — Plan your position now")
+else:
+    target_date = today
+
 date_suffix = get_date_suffix(target_date)
 
 st.caption(f"Looking for: {target_date.strftime('%A, %B %d')} | Suffix: `{date_suffix}`")
@@ -213,7 +256,7 @@ if nws_err:
     st.error(f"NWS Error: {nws_err}")
     nws_high, nws_low = None, None
 else:
-    nws_high, nws_low = parse_today_forecast(periods)
+    nws_high, nws_low = parse_forecast_for_date(periods, target_date)
     
     # Show last update time
     if update_time:
@@ -399,9 +442,92 @@ with col_low:
 st.subheader("🎯 Edge Analysis")
 st.caption("Kalshi settlements reference NWS Daily Climate Report. Other sources are informational only.")
 
-# Placeholder for edge calculation
-# Would compare NWS forecast to market-implied temperature
-st.info("Edge calculation requires bracket-level market data. Use debug below to verify tickers.")
+# --- 7-DAY OVERVIEW (Owner Only) ---
+if is_owner:
+    with st.expander("📅 **7-DAY EDGE OVERVIEW** (Owner Only)", expanded=False):
+        st.markdown("**Your weekly edge — see every bracket before markets open**")
+        st.divider()
+        
+        # Build 7-day forecast table
+        week_data = []
+        for i in range(7):
+            day_date = today + timedelta(days=i)
+            day_high, day_low = parse_forecast_for_date(periods, day_date)
+            
+            # Market status
+            if i == 0:
+                status = "🟢 OPEN"
+            elif i == 1:
+                status = "🟢 2AM"
+            else:
+                status = f"🟡 {i-1}d"
+            
+            week_data.append({
+                "day": day_date.strftime("%a"),
+                "date": day_date.strftime("%b %d"),
+                "high": day_high,
+                "low": day_low,
+                "status": status
+            })
+        
+        # Display as table
+        st.markdown("""
+        <style>
+        .week-table { width: 100%; border-collapse: collapse; }
+        .week-table th, .week-table td { padding: 12px 8px; text-align: center; border-bottom: 1px solid #333; }
+        .week-table th { background: #1a1a1a; color: #888; font-size: 12px; }
+        .week-table td { font-size: 14px; }
+        .bracket-cell { background: #e67e22; color: #000; border-radius: 4px; padding: 4px 8px; font-weight: bold; }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        table_html = """
+        <table class="week-table">
+            <tr>
+                <th>DAY</th>
+                <th>DATE</th>
+                <th>HIGH</th>
+                <th>HIGH BRACKET</th>
+                <th>LOW</th>
+                <th>LOW BRACKET</th>
+                <th>MARKET</th>
+            </tr>
+        """
+        
+        for d in week_data:
+            high_str = f"{d['high']}°F" if d['high'] else "—"
+            low_str = f"{d['low']}°F" if d['low'] else "—"
+            
+            # Calculate brackets (2-degree ranges)
+            if d['high']:
+                h = d['high']
+                high_bracket = f"<span class='bracket-cell'>{h-1}° to {h}°</span>"
+            else:
+                high_bracket = "—"
+            
+            if d['low']:
+                l = d['low']
+                low_bracket = f"<span class='bracket-cell'>{l}° to {l+1}°</span>"
+            else:
+                low_bracket = "—"
+            
+            table_html += f"""
+            <tr>
+                <td><strong>{d['day']}</strong></td>
+                <td>{d['date']}</td>
+                <td>{high_str}</td>
+                <td>{high_bracket}</td>
+                <td>{low_str}</td>
+                <td>{low_bracket}</td>
+                <td>{d['status']}</td>
+            </tr>
+            """
+        
+        table_html += "</table>"
+        st.markdown(table_html, unsafe_allow_html=True)
+        
+        st.divider()
+        st.caption("🔥 Orange = Your target bracket | 🟢 = Market open | 🟡 = Days until market opens")
 
 # --- DEBUG ---
 with st.expander("🔧 Debug"):
