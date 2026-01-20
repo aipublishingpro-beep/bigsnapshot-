@@ -1,158 +1,154 @@
 import streamlit as st
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 
-st.set_page_config(page_title="NYC Temp Edge Finder", page_icon="🌡️", layout="wide")
+st.set_page_config(page_title="NYC Temp Markets", page_icon="🌡️", layout="wide")
 
-st.title("🌡️ NYC Temperature Edge Finder")
+st.title("🌡️ NYC Temperature Markets")
 st.caption("Kalshi Weather Markets | BigSnapshot.com")
 
 # --- CONFIG ---
-# Ticker patterns from Kalshi URLs:
-# HIGH: https://kalshi.com/markets/kxhighny/kxhighny-26jan20
-# LOW:  https://kalshi.com/markets/kxlowtnyc/kxlowtnyc-26jan20
-# Date format: YYmmmDD lowercase (26jan20 for Jan 20, 2026)
-
+# Kalshi ticker format: kxhighny-26jan20 (YYmmmDD lowercase)
+# LOW ticker has T: kxlowtnyc
 HIGH_SERIES = "kxhighny"
-LOW_SERIES = "kxlowtnyc"  # Note the T!
+LOW_SERIES = "kxlowtnyc"
 
 def get_date_suffix(target_date):
     """Convert date to Kalshi format: 26jan20 (YYmmmDD lowercase)"""
     return target_date.strftime("%y%b%d").lower()
 
 def fetch_markets(series_ticker, date_suffix):
-    """Fetch markets from Kalshi API"""
+    """Fetch specific market from Kalshi API"""
     url = "https://api.elections.kalshi.com/trade-api/v2/markets"
-    params = {"ticker": f"{series_ticker}-{date_suffix}"}
+    full_ticker = f"{series_ticker}-{date_suffix}"
     
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params={"ticker": full_ticker}, timeout=10)
         if response.status_code == 200:
-            data = response.json()
-            return data.get("markets", []), None
-        else:
-            return [], f"API returned {response.status_code}"
+            return response.json().get("markets", []), None
+        return [], f"API {response.status_code}"
     except Exception as e:
         return [], str(e)
 
-def fetch_series_markets(series_ticker):
-    """Fetch all markets in a series"""
+def fetch_series(series_ticker):
+    """Fetch all markets in series (for debugging)"""
     url = "https://api.elections.kalshi.com/trade-api/v2/markets"
-    params = {"series_ticker": series_ticker, "limit": 100}
     
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params={"series_ticker": series_ticker, "limit": 50}, timeout=10)
         if response.status_code == 200:
-            data = response.json()
-            return data.get("markets", []), None
-        else:
-            return [], f"API returned {response.status_code}"
+            return response.json().get("markets", []), None
+        return [], f"API {response.status_code}"
     except Exception as e:
         return [], str(e)
 
-# --- DATE SELECTION ---
-st.subheader("Select Date")
-col1, col2 = st.columns(2)
+def get_nws_forecast():
+    """Fetch NYC forecast from NWS API"""
+    try:
+        # NYC Central Park grid point
+        response = requests.get(
+            "https://api.weather.gov/gridpoints/OKX/33,37/forecast",
+            headers={"User-Agent": "BigSnapshot Weather App"},
+            timeout=10
+        )
+        if response.status_code == 200:
+            periods = response.json().get("properties", {}).get("periods", [])
+            return periods, None
+        return [], f"NWS API {response.status_code}"
+    except Exception as e:
+        return [], str(e)
 
-with col1:
-    target_date = st.date_input(
-        "Target Date",
-        value=datetime.now().date(),
-        min_value=datetime.now().date(),
-        max_value=datetime.now().date() + timedelta(days=14)
-    )
+# --- TODAY'S DATE ---
+today = datetime.now().date()
+date_suffix = get_date_suffix(today)
 
-date_suffix = get_date_suffix(target_date)
+st.info(f"**Today:** {today.strftime('%A, %B %d, %Y')} | **Ticker suffix:** `{date_suffix}`")
 
-with col2:
-    st.info(f"**Date suffix:** {date_suffix}")
-    st.caption(f"HIGH ticker: {HIGH_SERIES}-{date_suffix}")
-    st.caption(f"LOW ticker: {LOW_SERIES}-{date_suffix}")
+# --- NWS FORECAST ---
+st.subheader("📡 NWS Forecast")
 
-# --- DEBUG MODE ---
-with st.expander("🔧 Debug Info", expanded=True):
-    st.write("**Expected Tickers:**")
-    st.code(f"{HIGH_SERIES}-{date_suffix}")
-    st.code(f"{LOW_SERIES}-{date_suffix}")
+periods, nws_err = get_nws_forecast()
+if nws_err:
+    st.error(f"NWS Error: {nws_err}")
+elif periods:
+    # Find today's high and tonight's low
+    today_high = None
+    today_low = None
     
-    if st.button("🔍 Test API - Fetch Series Markets"):
-        st.write("---")
-        st.write("**HIGH Series Markets:**")
-        high_markets, high_err = fetch_series_markets(HIGH_SERIES)
-        if high_err:
-            st.error(high_err)
-        elif high_markets:
-            for m in high_markets[:5]:
-                st.write(f"- `{m.get('ticker')}` | {m.get('title', 'No title')}")
-            if len(high_markets) > 5:
-                st.caption(f"...and {len(high_markets)-5} more")
-        else:
-            st.warning("No HIGH markets returned")
+    for p in periods[:4]:
+        name = p.get("name", "").lower()
+        temp = p.get("temperature")
         
-        st.write("---")
-        st.write("**LOW Series Markets:**")
-        low_markets, low_err = fetch_series_markets(LOW_SERIES)
-        if low_err:
-            st.error(low_err)
-        elif low_markets:
-            for m in low_markets[:5]:
-                st.write(f"- `{m.get('ticker')}` | {m.get('title', 'No title')}")
-            if len(low_markets) > 5:
-                st.caption(f"...and {len(low_markets)-5} more")
-        else:
-            st.warning("No LOW markets returned")
-
-# --- FETCH MARKETS ---
-st.subheader("Markets")
-
-if st.button("🔄 Load Markets", type="primary"):
-    with st.spinner("Fetching from Kalshi..."):
-        # Fetch HIGH markets
-        high_markets, high_err = fetch_markets(HIGH_SERIES, date_suffix)
-        low_markets, low_err = fetch_markets(LOW_SERIES, date_suffix)
+        if "night" in name or "tonight" in name:
+            today_low = temp
+        elif today_high is None and temp:
+            today_high = temp
     
-    col_high, col_low = st.columns(2)
-    
-    with col_high:
-        st.write("### 🔥 HIGH Temp Markets")
-        if high_err:
-            st.error(f"Error: {high_err}")
-        elif high_markets:
-            for market in high_markets:
-                ticker = market.get("ticker", "")
-                title = market.get("title", "No title")
-                yes_bid = market.get("yes_bid", 0)
-                yes_ask = market.get("yes_ask", 0)
-                
-                if yes_bid and yes_ask:
-                    mid = (yes_bid + yes_ask) / 2
-                    st.metric(title[:50], f"{mid:.0f}¢")
-                else:
-                    st.write(f"**{title[:50]}**")
-                st.caption(f"`{ticker}`")
-        else:
-            st.warning(f"No HIGH markets found for {HIGH_SERIES}-{date_suffix}")
-    
-    with col_low:
-        st.write("### ❄️ LOW Temp Markets")
-        if low_err:
-            st.error(f"Error: {low_err}")
-        elif low_markets:
-            for market in low_markets:
-                ticker = market.get("ticker", "")
-                title = market.get("title", "No title")
-                yes_bid = market.get("yes_bid", 0)
-                yes_ask = market.get("yes_ask", 0)
-                
-                if yes_bid and yes_ask:
-                    mid = (yes_bid + yes_ask) / 2
-                    st.metric(title[:50], f"{mid:.0f}¢")
-                else:
-                    st.write(f"**{title[:50]}**")
-                st.caption(f"`{ticker}`")
-        else:
-            st.warning(f"No LOW markets found for {LOW_SERIES}-{date_suffix}")
+    col1, col2 = st.columns(2)
+    with col1:
+        if today_high:
+            st.metric("🔥 NWS High", f"{today_high}°F")
+    with col2:
+        if today_low:
+            st.metric("❄️ NWS Low", f"{today_low}°F")
 
-# --- FOOTER ---
+# --- KALSHI MARKETS ---
+st.subheader("📊 Kalshi Markets")
+
+col_high, col_low = st.columns(2)
+
+with col_high:
+    st.write("**HIGH Temp Market**")
+    st.caption(f"`{HIGH_SERIES}-{date_suffix}`")
+    
+    markets, err = fetch_markets(HIGH_SERIES, date_suffix)
+    if err:
+        st.error(err)
+    elif markets:
+        for m in markets:
+            title = m.get("title", "")
+            yes_bid = m.get("yes_bid", 0)
+            yes_ask = m.get("yes_ask", 0)
+            if yes_bid and yes_ask:
+                mid = (yes_bid + yes_ask) / 2
+                st.metric(title[:40], f"{mid:.0f}¢")
+            else:
+                st.write(title)
+    else:
+        st.warning("No market found")
+
+with col_low:
+    st.write("**LOW Temp Market**")
+    st.caption(f"`{LOW_SERIES}-{date_suffix}`")
+    
+    markets, err = fetch_markets(LOW_SERIES, date_suffix)
+    if err:
+        st.error(err)
+    elif markets:
+        for m in markets:
+            title = m.get("title", "")
+            yes_bid = m.get("yes_bid", 0)
+            yes_ask = m.get("yes_ask", 0)
+            if yes_bid and yes_ask:
+                mid = (yes_bid + yes_ask) / 2
+                st.metric(title[:40], f"{mid:.0f}¢")
+            else:
+                st.write(title)
+    else:
+        st.warning("No market found")
+
+# --- DEBUG ---
+with st.expander("🔧 Debug"):
+    if st.button("Show All Series Tickers"):
+        st.write("**HIGH Series:**")
+        markets, _ = fetch_series(HIGH_SERIES)
+        for m in markets[:10]:
+            st.code(m.get("ticker"))
+        
+        st.write("**LOW Series:**")
+        markets, _ = fetch_series(LOW_SERIES)
+        for m in markets[:10]:
+            st.code(m.get("ticker"))
+
 st.divider()
-st.caption("BigSnapshot.com | Weather Edge Finder v1.0")
+st.caption("BigSnapshot.com | Temp Markets v1.0")
