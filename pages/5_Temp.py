@@ -14,17 +14,23 @@ st.markdown("""
 # --- CITY CONFIG ---
 # Each city: NWS grid point + Kalshi series tickers
 CITIES = {
-    "New York City": {
-        "nws_office": "OKX",
-        "nws_grid": "33,37",
-        "high_series": "KXHIGHNY",
-        "low_series": "KXLOWTNYC"
+    "Atlanta": {
+        "nws_office": "FFC",
+        "nws_grid": "52,88",
+        "high_series": "KXHIGHATL",
+        "low_series": "KXLOWTATL"
     },
-    "Los Angeles": {
-        "nws_office": "LOX",
-        "nws_grid": "154,44",
-        "high_series": "KXHIGHLA",
-        "low_series": "KXLOWTLA"
+    "Austin": {
+        "nws_office": "EWX",
+        "nws_grid": "156,91",
+        "high_series": "KXHIGHAUS",
+        "low_series": "KXLOWTAUS"
+    },
+    "Boston": {
+        "nws_office": "BOX",
+        "nws_grid": "71,90",
+        "high_series": "KXHIGHBOS",
+        "low_series": "KXLOWTBOS"
     },
     "Chicago": {
         "nws_office": "LOT",
@@ -32,17 +38,71 @@ CITIES = {
         "high_series": "KXHIGHCHI",
         "low_series": "KXLOWTCHI"
     },
+    "Dallas": {
+        "nws_office": "FWD",
+        "nws_grid": "79,108",
+        "high_series": "KXHIGHDAL",
+        "low_series": "KXLOWTDAL"
+    },
+    "Denver": {
+        "nws_office": "BOU",
+        "nws_grid": "62,60",
+        "high_series": "KXHIGHDEN",
+        "low_series": "KXLOWTDEN"
+    },
+    "Houston": {
+        "nws_office": "HGX",
+        "nws_grid": "65,97",
+        "high_series": "KXHIGHHOU",
+        "low_series": "KXLOWTHOU"
+    },
+    "Los Angeles": {
+        "nws_office": "LOX",
+        "nws_grid": "154,44",
+        "high_series": "KXHIGHLA",
+        "low_series": "KXLOWTLA"
+    },
     "Miami": {
         "nws_office": "MFL",
         "nws_grid": "109,50",
         "high_series": "KXHIGHMIA",
         "low_series": "KXLOWTMIA"
     },
-    "Austin": {
-        "nws_office": "EWX",
-        "nws_grid": "156,91",
-        "high_series": "KXHIGHAUS",
-        "low_series": "KXLOWTAUS"
+    "New York City": {
+        "nws_office": "OKX",
+        "nws_grid": "33,37",
+        "high_series": "KXHIGHNY",
+        "low_series": "KXLOWTNYC"
+    },
+    "Philadelphia": {
+        "nws_office": "PHI",
+        "nws_grid": "49,75",
+        "high_series": "KXHIGHPHL",
+        "low_series": "KXLOWTPHL"
+    },
+    "Phoenix": {
+        "nws_office": "PSR",
+        "nws_grid": "161,58",
+        "high_series": "KXHIGHPHX",
+        "low_series": "KXLOWTPHX"
+    },
+    "San Francisco": {
+        "nws_office": "MTR",
+        "nws_grid": "85,105",
+        "high_series": "KXHIGHSF",
+        "low_series": "KXLOWTSF"
+    },
+    "Seattle": {
+        "nws_office": "SEW",
+        "nws_grid": "124,67",
+        "high_series": "KXHIGHSEA",
+        "low_series": "KXLOWTSEA"
+    },
+    "Washington DC": {
+        "nws_office": "LWX",
+        "nws_grid": "97,71",
+        "high_series": "KXHIGHDC",
+        "low_series": "KXLOWTDC"
     }
 }
 
@@ -105,20 +165,9 @@ def calculate_market_implied(markets):
 st.title("🌡️ Temperature Edge Finder")
 st.caption("NWS Forecast vs Kalshi Markets | BigSnapshot.com")
 
-# --- TIME CHECK ---
+# --- TIME ---
 et = pytz.timezone("America/New_York")
 now_et = datetime.now(et)
-hour = now_et.hour
-
-if hour < 8:
-    st.success("🟢 **PRE-MARKET** — Edge window active. NWS data available, markets opening soon.")
-    locked = False
-elif hour < 12:
-    st.info("🟡 **TRADING WINDOW** — 8 AM - 12 PM ET. Execute positions now.")
-    locked = False
-else:
-    st.error("🔴 **LOCKED** — After noon ET. Read-only mode. Edge has decayed.")
-    locked = True
 
 st.caption(f"Current time: {now_et.strftime('%I:%M %p ET')} | Today: {now_et.strftime('%A, %B %d, %Y')}")
 
@@ -235,13 +284,12 @@ with col_low:
                     st.code(m.get("ticker", ""))
 
 # --- EDGE ANALYSIS ---
-if not locked:
-    st.subheader("🎯 Edge Analysis")
-    st.caption("Kalshi settlements reference NWS Daily Climate Report. Other sources are informational only.")
-    
-    # Placeholder for edge calculation
-    # Would compare NWS forecast to market-implied temperature
-    st.info("Edge calculation requires bracket-level market data. Use debug below to verify tickers.")
+st.subheader("🎯 Edge Analysis")
+st.caption("Kalshi settlements reference NWS Daily Climate Report. Other sources are informational only.")
+
+# Placeholder for edge calculation
+# Would compare NWS forecast to market-implied temperature
+st.info("Edge calculation requires bracket-level market data. Use debug below to verify tickers.")
 
 # --- DEBUG ---
 with st.expander("🔧 Debug"):
