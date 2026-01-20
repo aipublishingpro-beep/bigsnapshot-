@@ -12,6 +12,14 @@ except ImportError:
 
 st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide")
 
+# ============================================================
+# AUTH CHECK
+# ============================================================
+if 'authenticated' not in st.session_state or not st.session_state.authenticated:
+    st.warning("⚠️ Please log in from the Home page first.")
+    st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
+    st.stop()
+
 # ========== INIT ==========
 if "sid" not in st.session_state:
     st.session_state["sid"] = str(uuid.uuid4())
@@ -223,6 +231,9 @@ def draw_football_field(yard_line, possession_abbr, home_abbr, away_abbr, is_red
 
 # ========== SIDEBAR ==========
 with st.sidebar:
+    st.page_link("Home.py", label="🏠 Home", use_container_width=True)
+    st.divider()
+    
     st.header("🎯 ML Signal Legend")
     st.markdown("""
     🟢 **STRONG BUY** → 8.0+
@@ -283,10 +294,9 @@ nfc_ticker = "KXNFLGAME-26JAN26PHIWAS"
 nfc_market = fetch_kalshi_market(nfc_ticker)
 nfc_exists = nfc_market.get("exists", False)
 
-# Calculate edge score for PHI (factors hidden)
-nfc_score = 7.5  # Based on DVOA, defense, H2H
+nfc_score = 7.5
 nfc_pick = "PHI"
-nfc_factors = ["📈", "🛡️", "⚔️", "🏆"]  # Icons only, no weights
+nfc_factors = ["📈", "🛡️", "⚔️", "🏆"]
 
 if nfc_score >= 8.0:
     nfc_border = "#00ff00"
@@ -341,10 +351,9 @@ afc_ticker = "KXNFLGAME-26JAN26BUFKC"
 afc_market = fetch_kalshi_market(afc_ticker)
 afc_exists = afc_market.get("exists", False)
 
-# Calculate edge score for AFC (toss-up)
-afc_score = 5.5  # Toss-up
+afc_score = 5.5
 afc_pick = "TOSS-UP"
-afc_factors = ["📈", "🛡️", "🏠", "🏆"]  # Icons only
+afc_factors = ["📈", "🛡️", "🏠", "🏆"]
 
 if afc_score >= 8.0:
     afc_border = "#00ff00"
