@@ -2,8 +2,9 @@ import streamlit as st
 
 st.set_page_config(page_title="BigSnapshot", page_icon="📊", layout="wide")
 
-# ========== HIDE STREAMLIT UI ==========
+# ========== HIDE STREAMLIT UI + MOBILE RESPONSIVE ==========
 st.markdown("""
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
@@ -11,7 +12,52 @@ header {visibility: hidden;}
 .stDeployButton {display: none;}
 [data-testid="stToolbar"] {display: none;}
 [data-testid="stSidebar"] {display: none;}
-.block-container {padding-top: 2rem;}
+.block-container {padding-top: 2rem; padding-left: 1rem; padding-right: 1rem;}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .block-container {padding-left: 0.5rem; padding-right: 0.5rem;}
+    h1 {font-size: 1.8em !important;}
+    h2 {font-size: 1.4em !important;}
+    h3 {font-size: 1.2em !important;}
+    p {font-size: 1em !important;}
+    
+    /* Stack columns on mobile */
+    [data-testid="column"] {
+        width: 100% !important;
+        flex: 100% !important;
+        min-width: 100% !important;
+    }
+    
+    /* Smaller padding on cards */
+    div[style*="padding: 24px"] {
+        padding: 16px !important;
+    }
+    div[style*="padding: 40px"] {
+        padding: 20px !important;
+    }
+    
+    /* Buttons full width */
+    .stButton > button {
+        width: 100% !important;
+    }
+    a[style*="padding: 14px 32px"] {
+        padding: 12px 20px !important;
+        font-size: 1em !important;
+        display: block !important;
+        text-align: center !important;
+    }
+    a[style*="padding: 16px 40px"] {
+        padding: 14px 24px !important;
+        font-size: 1em !important;
+    }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+    h1 {font-size: 1.5em !important;}
+    .block-container {padding-left: 0.3rem; padding-right: 0.3rem;}
+}
 </style>
 """, unsafe_allow_html=True)
 
