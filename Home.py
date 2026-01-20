@@ -31,9 +31,11 @@ VALID_PASSWORDS = {
 }
 
 # ============================================================
-# STRIPE PAYMENT LINK
+# STRIPE PAYMENT LINK + AUTO-REVEAL TOKEN
 # ============================================================
 STRIPE_LINK = "https://buy.stripe.com/14A00lcgHe9oaIodx65Rm00"
+ACCESS_PASSWORD = "SNAPCRACKLE2026"
+PAID_TOKEN = "thankyou"
 
 # ============================================================
 # CUSTOM CSS
