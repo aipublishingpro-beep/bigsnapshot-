@@ -183,10 +183,15 @@ def fetch_nws_current(lat, lon):
 def fetch_kalshi_brackets(series_ticker, target_date):
     """Fetch Kalshi temperature brackets"""
     
-    # Format date for ticker (e.g., 20JAN26 for Jan 20, 2026)
-    date_str = target_date.strftime("%d%b%y").upper()
+    # Format date multiple ways to match Kalshi's format
+    date_formats = [
+        target_date.strftime("%d%b%y").upper(),  # 20JAN26
+        target_date.strftime("%d%b%y").lower(),  # 20jan26
+        target_date.strftime("%-d%b%y").upper(), # 20JAN26 (no leading zero)
+        target_date.strftime("%y%b%d").upper(),  # 26JAN20
+    ]
     
-    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open&limit=100"
+    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&limit=100"
     
     try:
         resp = requests.get(url, timeout=10)
@@ -197,15 +202,21 @@ def fetch_kalshi_brackets(series_ticker, target_date):
         markets = data.get("markets", [])
         
         if not markets:
-            return {"success": False, "brackets": [], "error": "No markets returned"}
+            return {"success": False, "brackets": [], "error": "No markets returned from API"}
         
-        # Filter for target date only
+        # Try to find markets matching any date format
         brackets = []
         for m in markets:
-            ticker = m.get("ticker", "")
+            ticker = m.get("ticker", "").lower()
             
-            # Check if this market is for our target date
-            if date_str.lower() not in ticker.lower():
+            # Check if this market matches any of our date formats
+            matched = False
+            for date_str in date_formats:
+                if date_str.lower() in ticker:
+                    matched = True
+                    break
+            
+            if not matched:
                 continue
             
             title = m.get("title", "")
@@ -233,7 +244,9 @@ def fetch_kalshi_brackets(series_ticker, target_date):
         if brackets:
             return {"success": True, "brackets": brackets}
         else:
-            return {"success": False, "brackets": [], "error": f"No markets for {date_str}"}
+            # Return first few tickers for debugging
+            sample_tickers = [m.get("ticker", "")[:30] for m in markets[:3]]
+            return {"success": False, "brackets": [], "error": f"No match. Sample tickers: {sample_tickers}"}
             
     except Exception as e:
         return {"success": False, "brackets": [], "error": str(e)}
