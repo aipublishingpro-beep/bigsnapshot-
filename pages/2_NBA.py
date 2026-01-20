@@ -70,7 +70,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v16.6 | 8-Factor ML")
+    st.caption("v16.7 | 8-Factor ML")
 
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
@@ -106,7 +106,7 @@ TEAM_ABBREVS = {
     "Utah Jazz": "Utah", "Washington Wizards": "Washington"
 }
 
-# KALSHI CODES - lowercase for ticker format
+# KALSHI CODES - lowercase stored, uppercased in URL builder
 KALSHI_CODES = {
     "Atlanta": "atl", "Boston": "bos", "Brooklyn": "bkn", "Charlotte": "cha",
     "Chicago": "chi", "Cleveland": "cle", "Dallas": "dal", "Denver": "den",
@@ -205,15 +205,15 @@ def calc_distance_miles(lat1, lon1, lat2, lon2):
     return R * c
 
 def build_kalshi_ticker(away_team, home_team, game_date):
-    """Build Kalshi ticker in correct format: kxnbagame-25jan20dalnyk"""
-    date_code = game_date.strftime("%y%b%d").lower()
-    away_code = KALSHI_CODES.get(away_team, "xxx")
-    home_code = KALSHI_CODES.get(home_team, "xxx")
-    return f"kxnbagame-{date_code}{away_code}{home_code}"
+    """Build Kalshi ticker in correct format: KXNBAGAME-26JAN20DALNYK"""
+    away_code = KALSHI_CODES.get(away_team, "xxx").upper()
+    home_code = KALSHI_CODES.get(home_team, "xxx").upper()
+    date_str = game_date.strftime("%y%b%d").upper()
+    return f"KXNBAGAME-{date_str}{away_code}{home_code}"
 
 def build_kalshi_url(ticker):
-    """Build Kalshi URL - full path format"""
-    return f"https://kalshi.com/markets/kxnbagame/professional-basketball-game/{ticker}"
+    """Build Kalshi URL - working format"""
+    return f"https://kalshi.com/markets/KXNBAGAME/{ticker}"
 
 # ========== FETCH ESPN GAMES ==========
 @st.cache_data(ttl=60)
@@ -431,7 +431,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # ========== HEADER ==========
 st.title("🎯 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v16.6")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v16.7")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -860,4 +860,4 @@ with st.expander("📊 Position Tracker — Trade Management", expanded=False):
 
 st.divider()
 
-st.caption("⚠️ For entertainment only. Not financial advice. v16.6 | 8-Factor ML")
+st.caption("⚠️ For entertainment only. Not financial advice. v16.7 | 8-Factor ML")
