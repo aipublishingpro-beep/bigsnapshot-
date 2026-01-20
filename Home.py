@@ -1,6 +1,28 @@
 import streamlit as st
 
-st.set_page_config(page_title="BigSnapshot", page_icon="📊", layout="wide")
+st.set_page_config(
+    page_title="BigSnapshot — Smarter Sports Betting Decisions",
+    page_icon="📊",
+    layout="wide"
+)
+
+# ========== SEO META TAGS ==========
+st.markdown("""
+<head>
+<title>BigSnapshot — Smarter Sports Betting Decisions</title>
+<meta name="description" content="BigSnapshot helps serious bettors make cleaner decisions by compressing model signals, market pressure, and context into one screen. No hype. No noise. Just clarity.">
+<meta name="keywords" content="sports betting analytics, NBA betting tools, NFL betting tools, NHL betting tools, betting edge finder, Kalshi trading, market line movement, sharp money, BigSnapshot">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.bigsnapshot.com">
+<meta property="og:title" content="BigSnapshot — Smarter Sports Betting Decisions">
+<meta property="og:description" content="One screen. Less noise. Better betting decisions. Decision compression for serious sports bettors.">
+<meta property="og:url" content="https://www.bigsnapshot.com">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BigSnapshot — Smarter Sports Betting Decisions">
+<meta name="twitter:description" content="One screen. Less noise. Better betting decisions.">
+</head>
+""", unsafe_allow_html=True)
 
 # ========== HIDE STREAMLIT UI + MOBILE RESPONSIVE ==========
 st.markdown("""<style>
