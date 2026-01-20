@@ -40,20 +40,7 @@ with st.sidebar:
     
     🔵 **BUY** → 6.5-7.9
     
-    🟡 **LEAN** → 5.5-6.4
-    
-    ⚪ **WEAK / NO EDGE** → Below 5.5
-    """)
-    
-    st.divider()
-    
-    st.header("📊 Market Pressure")
-    st.markdown("""
-    🟢 **CONFIRMING** → Market agrees
-    
-    🟡 **NEUTRAL** → No clear flow
-    
-    🔴 **FADING** → Market disagrees
+    ⚪ Below 6.5 = Hidden
     """)
     
     st.divider()
@@ -83,7 +70,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v16.1 | 8-Factor ML + Market Pressure")
+    st.caption("v16.5 | 8-Factor ML")
 
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
@@ -225,77 +212,8 @@ def build_kalshi_ticker(away_team, home_team, game_date):
     return f"kxnbagame-{date_code}{away_code}{home_code}"
 
 def build_kalshi_url(ticker):
-    """Build full Kalshi URL with correct path"""
-    return f"https://kalshi.com/markets/kxnbagame/professional-basketball-game/{ticker}"
-
-# ========== KALSHI MARKET FUNCTIONS ==========
-@st.cache_data(ttl=120)
-def fetch_kalshi_market(ticker):
-    try:
-        url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker}"
-        resp = requests.get(url, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            market = data.get("market", {})
-            if market:
-                return {
-                    "yes_price": market.get("yes_bid", 0),
-                    "no_price": market.get("no_bid", 0),
-                    "last_price": market.get("last_price", 0),
-                    "volume": market.get("volume", 0),
-                    "open_interest": market.get("open_interest", 0),
-                    "exists": True
-                }
-        return {"exists": False}
-    except:
-        return {"exists": False}
-
-@st.cache_data(ttl=300)
-def fetch_kalshi_history(ticker):
-    try:
-        url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker}/history"
-        params = {"limit": 50}
-        resp = requests.get(url, params=params, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            return data.get("history", [])
-        return []
-    except:
-        return []
-
-def calc_market_pressure(ticker, pick_team, home_team):
-    market = fetch_kalshi_market(ticker)
-    if not market.get("exists"):
-        return None, "NO DATA", "#888888"
-    
-    history = fetch_kalshi_history(ticker)
-    if len(history) < 2:
-        return market, "NEUTRAL", "#ffaa00"
-    
-    recent_prices = [h.get("yes_price", 50) for h in history[:10]]
-    older_prices = [h.get("yes_price", 50) for h in history[10:20]] if len(history) > 10 else recent_prices
-    
-    avg_recent = sum(recent_prices) / len(recent_prices) if recent_prices else 50
-    avg_older = sum(older_prices) / len(older_prices) if older_prices else 50
-    
-    price_move = avg_recent - avg_older
-    
-    pick_is_home = pick_team == home_team
-    
-    if pick_is_home:
-        if price_move > 3:
-            return market, "CONFIRMING", "#00ff00"
-        elif price_move < -3:
-            return market, "FADING", "#ff4444"
-        else:
-            return market, "NEUTRAL", "#ffaa00"
-    else:
-        if price_move < -3:
-            return market, "CONFIRMING", "#00ff00"
-        elif price_move > 3:
-            return market, "FADING", "#ff4444"
-        else:
-            return market, "NEUTRAL", "#ffaa00"
+    """Build Kalshi URL - short format goes directly to order book"""
+    return f"https://kalshi.com/markets/{ticker}"
 
 # ========== FETCH ESPN GAMES ==========
 @st.cache_data(ttl=60)
@@ -513,7 +431,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # ========== HEADER ==========
 st.title("🎯 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v16.1")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v16.5")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -534,37 +452,29 @@ for gk in game_list:
     
     if pick:
         ticker = build_kalshi_ticker(away, home, now)
-        market, pressure_label, pressure_color = calc_market_pressure(ticker, pick, home)
         
         ml_results.append({
             "game": gk, "pick": pick, "score": score, "factors": factors,
             "away": away, "home": home, "status": g['status_type'],
-            "ticker": ticker, "market": market,
-            "pressure_label": pressure_label, "pressure_color": pressure_color
+            "ticker": ticker
         })
 
 ml_results.sort(key=lambda x: x['score'], reverse=True)
+
+# Filter to only show STRONG BUY (8.0+) and BUY (6.5+)
+ml_results = [r for r in ml_results if r['score'] >= 6.5]
 
 if ml_results:
     for r in ml_results:
         if r['score'] >= 8.0:
             border_color = "#00ff00"
-        elif r['score'] >= 6.5:
-            border_color = "#00aaff"
-        elif r['score'] >= 5.5:
-            border_color = "#ffff00"
         else:
-            border_color = "#888888"
+            border_color = "#00aaff"
         
         factor_icons = " ".join([f[0] for f in r['factors'][:4]])
         opponent = r['away'] if r['pick'] == r['home'] else r['home']
         pick_code = KALSHI_CODES.get(r['pick'], "xxx").upper()
         kalshi_url = build_kalshi_url(r['ticker'])
-        
-        market_info = ""
-        if r['market'] and r['market'].get('exists'):
-            yes_price = r['market'].get('yes_price', 0)
-            market_info = f" | {yes_price}¢"
         
         st.markdown(f"""
         <div style="display: flex; align-items: center; background: #1a1a2e; border-left: 4px solid {border_color}; padding: 12px 16px; margin-bottom: 8px; border-radius: 4px;">
@@ -573,28 +483,12 @@ if ml_results:
                 <span style="color: #888;"> vs {opponent}</span>
                 <span style="color: {border_color}; font-weight: bold; margin-left: 8px;">{r['score']}/10</span>
                 <span style="color: #888; font-size: 0.9em;"> {factor_icons}</span>
-                <span style="background: {r['pressure_color']}22; color: {r['pressure_color']}; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 8px;">{r['pressure_label']}{market_info}</span>
             </div>
             <div>
                 <a href="{kalshi_url}" target="_blank" style="background: #00aa00; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-weight: bold;">BUY {pick_code}</a>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        
-        with st.expander(f"📈 {r['pick']} Line Movement", expanded=False):
-            history = fetch_kalshi_history(r['ticker'])
-            if history and len(history) > 1:
-                import pandas as pd
-                df = pd.DataFrame(history)
-                if 'yes_price' in df.columns and 'ts' in df.columns:
-                    df['time'] = pd.to_datetime(df['ts'], unit='s')
-                    df = df.sort_values('time')
-                    st.line_chart(df.set_index('time')['yes_price'], use_container_width=True)
-                    st.caption(f"Volume: {r['market'].get('volume', 'N/A')} | OI: {r['market'].get('open_interest', 'N/A')}")
-                else:
-                    st.info("Chart data unavailable")
-            else:
-                st.info("No price history available")
     
     st.markdown(f"""
     <div style="text-align: center; margin-top: 16px;">
@@ -602,7 +496,7 @@ if ml_results:
     </div>
     """, unsafe_allow_html=True)
 else:
-    st.info("No games scheduled for today")
+    st.info("No strong edges found today (requires 6.5+ score)")
 
 st.divider()
 
@@ -966,4 +860,4 @@ with st.expander("📊 Position Tracker — Trade Management", expanded=False):
 
 st.divider()
 
-st.caption("⚠️ For entertainment only. Not financial advice. v16.1 | 8-Factor ML + Market Pressure")
+st.caption("⚠️ For entertainment only. Not financial advice. v16.5 | 8-Factor ML")
