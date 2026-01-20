@@ -64,7 +64,7 @@ if 'authenticated' not in st.session_state:
 BETA_PASSWORD = "BIGSNAP2026"
 
 # ========== LANDING PAGE ==========
-if not st.session_state.authenticated:
+if not st.session_state.authenticated and not st.session_state.show_apps:
     
     # Hero
     st.markdown("""
