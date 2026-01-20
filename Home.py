@@ -303,6 +303,9 @@ if not st.session_state.authenticated:
     # Footer
     st.markdown("""
     <div style="text-align: center; padding: 40px 20px; margin-top: 20px;">
+        <p style="color: #888; font-size: 13px; margin-bottom: 15px;">
+            <strong>💳 Refund Policy:</strong> Not satisfied? Email aipublishingpro@gmail.com within 7 days for a full refund. No questions asked.
+        </p>
         <p style="color: #555; font-size: 12px;">
             ⚠️ For entertainment only. Not financial advice.<br>
             📧 aipublishingpro@gmail.com
