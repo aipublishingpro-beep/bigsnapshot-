@@ -48,15 +48,15 @@ header {visibility: hidden;}
 """, unsafe_allow_html=True)
 
 # ============================================================
-# CITY CONFIGURATIONS - EXPANDED (17 CITIES)
+# CITY CONFIGURATIONS - FIXED TICKERS
 # ============================================================
 CITIES = {
     "NYC": {
         "name": "New York City",
         "nws_station": "KNYC",
         "nws_gridpoint": "OKX/33,37",
-        "kalshi_high": "KXHIGHNY",
-        "kalshi_low": "KXLOWNY",
+        "kalshi_high": "kxhighny",
+        "kalshi_low": "kxlowtnyc",
         "lat": 40.7128,
         "lon": -74.0060,
     },
@@ -64,8 +64,8 @@ CITIES = {
         "name": "Chicago",
         "nws_station": "KORD",
         "nws_gridpoint": "LOT/76,73",
-        "kalshi_high": "KXHIGHCHI",
-        "kalshi_low": "KXLOWCHI",
+        "kalshi_high": "kxhighchi",
+        "kalshi_low": "kxlowtchi",
         "lat": 41.8781,
         "lon": -87.6298,
     },
@@ -73,8 +73,8 @@ CITIES = {
         "name": "Miami",
         "nws_station": "KMIA",
         "nws_gridpoint": "MFL/109,50",
-        "kalshi_high": "KXHIGHMIA",
-        "kalshi_low": "KXLOWMIA",
+        "kalshi_high": "kxhighmia",
+        "kalshi_low": "kxlowtmia",
         "lat": 25.7617,
         "lon": -80.1918,
     },
@@ -82,8 +82,8 @@ CITIES = {
         "name": "Denver",
         "nws_station": "KDEN",
         "nws_gridpoint": "BOU/62,60",
-        "kalshi_high": "KXHIGHDEN",
-        "kalshi_low": "KXLOWDEN",
+        "kalshi_high": "kxhighden",
+        "kalshi_low": "kxlowtden",
         "lat": 39.7392,
         "lon": -104.9903,
     },
@@ -91,8 +91,8 @@ CITIES = {
         "name": "Los Angeles",
         "nws_station": "KLAX",
         "nws_gridpoint": "LOX/154,44",
-        "kalshi_high": "KXHIGHLA",
-        "kalshi_low": "KXLOWLA",
+        "kalshi_high": "kxhighla",
+        "kalshi_low": "kxlowtla",
         "lat": 34.0522,
         "lon": -118.2437,
     },
@@ -100,8 +100,8 @@ CITIES = {
         "name": "Phoenix",
         "nws_station": "KPHX",
         "nws_gridpoint": "PSR/159,59",
-        "kalshi_high": "KXHIGHPHX",
-        "kalshi_low": "KXLOWPHX",
+        "kalshi_high": "kxhighphx",
+        "kalshi_low": "kxlowtphx",
         "lat": 33.4484,
         "lon": -112.0740,
     },
@@ -109,8 +109,8 @@ CITIES = {
         "name": "Dallas",
         "nws_station": "KDFW",
         "nws_gridpoint": "FWD/80,108",
-        "kalshi_high": "KXHIGHDFW",
-        "kalshi_low": "KXLOWDFW",
+        "kalshi_high": "kxhighdfw",
+        "kalshi_low": "kxlowtdfw",
         "lat": 32.7767,
         "lon": -96.7970,
     },
@@ -118,8 +118,8 @@ CITIES = {
         "name": "Houston",
         "nws_station": "KIAH",
         "nws_gridpoint": "HGX/65,97",
-        "kalshi_high": "KXHIGHHOU",
-        "kalshi_low": "KXLOWHOU",
+        "kalshi_high": "kxhighhou",
+        "kalshi_low": "kxlowthou",
         "lat": 29.7604,
         "lon": -95.3698,
     },
@@ -127,8 +127,8 @@ CITIES = {
         "name": "Atlanta",
         "nws_station": "KATL",
         "nws_gridpoint": "FFC/51,88",
-        "kalshi_high": "KXHIGHATL",
-        "kalshi_low": "KXLOWATL",
+        "kalshi_high": "kxhighatl",
+        "kalshi_low": "kxlowtatl",
         "lat": 33.7490,
         "lon": -84.3880,
     },
@@ -136,73 +136,10 @@ CITIES = {
         "name": "Boston",
         "nws_station": "KBOS",
         "nws_gridpoint": "BOX/71,90",
-        "kalshi_high": "KXHIGHBOS",
-        "kalshi_low": "KXLOWBOS",
+        "kalshi_high": "kxhighbos",
+        "kalshi_low": "kxlowtbos",
         "lat": 42.3601,
         "lon": -71.0589,
-    },
-    "SEA": {
-        "name": "Seattle",
-        "nws_station": "KSEA",
-        "nws_gridpoint": "SEW/124,67",
-        "kalshi_high": "KXHIGHSEA",
-        "kalshi_low": "KXLOWSEA",
-        "lat": 47.6062,
-        "lon": -122.3321,
-    },
-    "LAS": {
-        "name": "Las Vegas",
-        "nws_station": "KLAS",
-        "nws_gridpoint": "VEF/126,97",
-        "kalshi_high": "KXHIGHLAS",
-        "kalshi_low": "KXLOWLAS",
-        "lat": 36.1699,
-        "lon": -115.1398,
-    },
-    "MSP": {
-        "name": "Minneapolis",
-        "nws_station": "KMSP",
-        "nws_gridpoint": "MPX/107,71",
-        "kalshi_high": "KXHIGHMSP",
-        "kalshi_low": "KXLOWMSP",
-        "lat": 44.9778,
-        "lon": -93.2650,
-    },
-    "DET": {
-        "name": "Detroit",
-        "nws_station": "KDTW",
-        "nws_gridpoint": "DTX/65,33",
-        "kalshi_high": "KXHIGHDET",
-        "kalshi_low": "KXLOWDET",
-        "lat": 42.3314,
-        "lon": -83.0458,
-    },
-    "PHL": {
-        "name": "Philadelphia",
-        "nws_station": "KPHL",
-        "nws_gridpoint": "PHI/57,97",
-        "kalshi_high": "KXHIGHPHL",
-        "kalshi_low": "KXLOWPHL",
-        "lat": 39.9526,
-        "lon": -75.1652,
-    },
-    "SFO": {
-        "name": "San Francisco",
-        "nws_station": "KSFO",
-        "nws_gridpoint": "MTR/84,105",
-        "kalshi_high": "KXHIGHSF",
-        "kalshi_low": "KXLOWSF",
-        "lat": 37.7749,
-        "lon": -122.4194,
-    },
-    "DCA": {
-        "name": "Washington DC",
-        "nws_station": "KDCA",
-        "nws_gridpoint": "LWX/96,70",
-        "kalshi_high": "KXHIGHDC",
-        "kalshi_low": "KXLOWDC",
-        "lat": 38.9072,
-        "lon": -77.0369,
     },
 }
 
@@ -244,79 +181,62 @@ def fetch_nws_current(lat, lon):
 
 @st.cache_data(ttl=60)
 def fetch_kalshi_brackets(series_ticker, target_date):
-    """Fetch Kalshi temperature brackets - tries multiple API approaches"""
+    """Fetch Kalshi temperature brackets"""
     
-    # Format date for ticker (e.g., 21JAN26)
+    # Format date for ticker (e.g., 20JAN26 for Jan 20, 2026)
     date_str = target_date.strftime("%d%b%y").upper()
     
-    # Try multiple ticker formats (Kalshi has changed these over time)
-    ticker_variants = [
-        series_ticker,                           # KXHIGHNY
-        series_ticker.replace("KX", ""),         # HIGHNY
-        series_ticker.replace("KXHIGH", "HIGH"), # HIGHNY
-        series_ticker.replace("KXLOW", "LOW"),   # LOWNY
-    ]
+    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open&limit=100"
     
-    for ticker in ticker_variants:
-        urls_to_try = [
-            f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={ticker}",
-            f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={ticker}&status=open",
-            f"https://trading-api.kalshi.com/trade-api/v2/markets?series_ticker={ticker}&status=open&limit=50",
-        ]
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code != 200:
+            return {"success": False, "brackets": [], "error": f"API returned {resp.status_code}"}
         
-        for url in urls_to_try:
-            try:
-                resp = requests.get(url, timeout=10)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    markets = data.get("markets", [])
-                    
-                    # Filter for target date if we got results
-                    if markets:
-                        filtered = []
-                        for m in markets:
-                            m_ticker = m.get("ticker", "")
-                            # Check if market is for our target date
-                            if date_str in m_ticker:
-                                filtered.append(m)
-                        
-                        if filtered:
-                            markets = filtered
-                    
-                    if markets:
-                        brackets = []
-                        for m in markets:
-                            m_ticker = m.get("ticker", "")
-                            title = m.get("title", "")
-                            yes_ask = m.get("yes_ask") or m.get("yes_price") or 50
-                            yes_bid = m.get("yes_bid") or 50
-                            no_ask = m.get("no_ask") or 50
-                            
-                            if yes_bid and yes_ask:
-                                mid_price = (yes_bid + yes_ask) / 2
-                            else:
-                                mid_price = yes_ask if yes_ask else 50
-                            
-                            spread = abs(yes_ask - yes_bid) if (yes_bid and yes_ask) else 0
-                            temp_range = parse_temp_range(title)
-                            
-                            brackets.append({
-                                "ticker": m_ticker,
-                                "title": title,
-                                "range": temp_range,
-                                "yes_ask": yes_ask,
-                                "yes_bid": yes_bid,
-                                "mid_price": mid_price,
-                                "spread": spread,
-                                "no_ask": no_ask,
-                            })
-                        
-                        if brackets:
-                            return {"success": True, "brackets": brackets}
-            except:
+        data = resp.json()
+        markets = data.get("markets", [])
+        
+        if not markets:
+            return {"success": False, "brackets": [], "error": "No markets returned"}
+        
+        # Filter for target date only
+        brackets = []
+        for m in markets:
+            ticker = m.get("ticker", "")
+            
+            # Check if this market is for our target date
+            if date_str.lower() not in ticker.lower():
                 continue
-    
-    return {"success": False, "brackets": [], "error": "No markets found"}
+            
+            title = m.get("title", "")
+            yes_ask = m.get("yes_ask") or 50
+            yes_bid = m.get("yes_bid") or 50
+            
+            if yes_bid and yes_ask:
+                mid_price = (yes_bid + yes_ask) / 2
+            else:
+                mid_price = yes_ask
+            
+            spread = abs(yes_ask - yes_bid) if (yes_bid and yes_ask) else 0
+            temp_range = parse_temp_range(title)
+            
+            brackets.append({
+                "ticker": ticker,
+                "title": title,
+                "range": temp_range,
+                "yes_ask": yes_ask,
+                "yes_bid": yes_bid,
+                "mid_price": mid_price,
+                "spread": spread,
+            })
+        
+        if brackets:
+            return {"success": True, "brackets": brackets}
+        else:
+            return {"success": False, "brackets": [], "error": f"No markets for {date_str}"}
+            
+    except Exception as e:
+        return {"success": False, "brackets": [], "error": str(e)}
 
 def parse_temp_range(title):
     import re
@@ -363,33 +283,50 @@ def extract_nws_temps(forecast_data, target_date):
     return {"high": high, "low": low, "high_uncertainty": high_uncertainty, "low_uncertainty": low_uncertainty}
 
 def calc_market_implied(brackets):
+    """Calculate market-implied temperature from bracket probabilities"""
     if not brackets:
         return None, None, None
+    
+    import re
+    
     total_prob = 0
     weighted_temp = 0
+    valid_brackets = 0
+    
     for b in brackets:
-        prob = b["mid_price"] / 100
-        total_prob += prob
+        prob = b["mid_price"] / 100  # Convert cents to probability
         range_str = b["range"]
-        import re
+        
+        # Extract temperature numbers from range
         nums = re.findall(r'\d+', range_str)
+        
         if len(nums) >= 2:
+            # Range like "26-27°F" -> midpoint 26.5
             midpoint = (int(nums[0]) + int(nums[1])) / 2
         elif len(nums) == 1:
+            # "≤21°F" or "≥30°F"
             midpoint = int(nums[0])
         else:
             continue
+        
+        total_prob += prob
         weighted_temp += midpoint * prob
-    if total_prob > 0:
+        valid_brackets += 1
+    
+    # Calculate implied temp
+    if total_prob > 0 and valid_brackets > 0:
         implied_temp = weighted_temp / total_prob
     else:
-        implied_temp = None
+        return None, None, None
+    
+    # Vig warning (should be close to 100%)
     vig_warning = None
-    if total_prob > 1.05:
-        vig_warning = f"High vig detected ({total_prob:.0%})"
-    elif total_prob < 0.95:
+    if total_prob > 1.15:
+        vig_warning = f"High vig ({total_prob:.0%})"
+    elif total_prob < 0.85:
         vig_warning = f"Low liquidity ({total_prob:.0%})"
-    return round(implied_temp, 1) if implied_temp else None, total_prob, vig_warning
+    
+    return round(implied_temp, 1), round(total_prob * 100), vig_warning
 
 def classify_edge(diff):
     abs_diff = abs(diff) if diff else 0
@@ -512,7 +449,16 @@ with st.sidebar:
         format_func=lambda x: f"{CITIES[x]['name']} ({x})",
         on_change=clear_cache
     )
-    target_date = st.date_input("Target Date", value=now_et.date() + timedelta(days=1), on_change=clear_cache)
+    target_option = st.radio("Target Date", ["Tomorrow (Time Edge)", "Today"], index=0, on_change=clear_cache)
+    
+    if target_option == "Tomorrow (Time Edge)":
+        target_date = now_et.date() + timedelta(days=1)
+        st.caption("🕐 Early positioning — NWS forecast ready before crowd")
+    else:
+        target_date = now_et.date()
+        st.caption("📊 Active trading — markets live now")
+    
+    st.caption(f"📅 {target_date.strftime('%b %d, %Y')}")
     if st.button("🔄 Refresh Data"):
         st.cache_data.clear()
         st.rerun()
@@ -534,6 +480,15 @@ elif status_type == "warning":
     st.warning(f"🟡 {message}")
 else:
     st.info(f"ℹ️ {message}")
+
+# Time Edge banner for tomorrow
+if target_date > now_et.date():
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1a472a, #2d5a3d); padding: 12px 20px; border-radius: 8px; border-left: 4px solid #00ff88; margin-bottom: 20px;">
+        <strong style="color: #00ff88;">⏳ TIME EDGE MODE</strong><br>
+        <span style="color: #ccc; font-size: 0.9em;">Tomorrow's NWS forecast is ready. Kalshi markets open in the morning. Position early.</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Main columns
 col1, col2 = st.columns(2)
@@ -560,6 +515,7 @@ with col1:
         market_high, total_prob, vig_warning = calc_market_implied(kalshi_result["brackets"])
         if market_high:
             st.metric("Market Implied High", f"{market_high}°F")
+            st.caption(f"Based on {len(kalshi_result['brackets'])} brackets | Sum: {total_prob}%")
         if vig_warning:
             st.caption(f"⚠️ {vig_warning}")
         if status != "LOCKED":
@@ -567,8 +523,11 @@ with col1:
         with st.expander("📊 Bracket Details"):
             render_bracket_table(kalshi_result["brackets"], nws_high, "High")
     else:
-        st.warning(f"No Kalshi high temp markets found for {city['name']} on {target_date}")
-        st.caption("💡 Try NYC — it typically has the most active temperature markets")
+        if target_date > now_et.date():
+            st.info(f"⏳ Tomorrow's markets not open yet — NWS forecast ready for early positioning")
+        else:
+            st.warning(f"No Kalshi high temp markets found for {city['name']} on {target_date}")
+            st.caption("💡 Try NYC — it typically has the most active temperature markets")
 
 with col2:
     st.markdown("## ❄️ Low Temperature")
@@ -589,6 +548,7 @@ with col2:
         market_low, total_prob_low, vig_warning_low = calc_market_implied(kalshi_low_result["brackets"])
         if market_low:
             st.metric("Market Implied Low", f"{market_low}°F")
+            st.caption(f"Based on {len(kalshi_low_result['brackets'])} brackets | Sum: {total_prob_low}%")
         if vig_warning_low:
             st.caption(f"⚠️ {vig_warning_low}")
         if status != "LOCKED":
@@ -596,7 +556,10 @@ with col2:
         with st.expander("📊 Bracket Details"):
             render_bracket_table(kalshi_low_result["brackets"], nws_low, "Low")
     else:
-        st.warning(f"No Kalshi low temp markets found for {city['name']} on {target_date}")
+        if target_date > now_et.date():
+            st.info(f"⏳ Tomorrow's markets not open yet — NWS forecast ready")
+        else:
+            st.warning(f"No Kalshi low temp markets found for {city['name']} on {target_date}")
 
 # Current temp
 st.markdown("---")
