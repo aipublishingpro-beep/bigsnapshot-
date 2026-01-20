@@ -2,8 +2,6 @@ import streamlit as st
 import requests
 from datetime import datetime, timedelta
 import pytz
-import json
-import os
 import time
 
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
@@ -17,7 +15,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# AUTH CHECK - Uses Home.py's session state
+# AUTH CHECK
 # ============================================================
 if 'authenticated' not in st.session_state or not st.session_state.authenticated:
     st.warning("⚠️ Please log in from the Home page first.")
@@ -64,8 +62,6 @@ div[role="radiogroup"] label:nth-of-type(2) span {
 """, unsafe_allow_html=True)
 
 # ========== SESSION STATE INIT ==========
-st.session_state.setdefault("totals_side_radio", "NO (Under)")
-st.session_state.setdefault("ml_pick_radio", None)
 if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
 if "positions" not in st.session_state:
@@ -86,7 +82,6 @@ if "pace_history" not in st.session_state:
 # ========== DATE INVALIDATION ==========
 if "snapshot_date" not in st.session_state or st.session_state["snapshot_date"] != today_str:
     st.session_state["snapshot_date"] = today_str
-    st.session_state.pop("big_snapshot", None)
     st.session_state.drought_tracker = {}
     st.session_state.pace_history = {}
 
@@ -165,7 +160,6 @@ with st.sidebar:
     st.divider()
     st.header("🔗 KALSHI")
     st.caption("⚠️ NBA not on trade API yet")
-    st.caption("Track here → Execute on web")
     st.divider()
     
     st.header("📖 ML LEGEND")
@@ -174,18 +168,18 @@ with st.sidebar:
     
     st.header("🎯 10 ML FACTORS")
     st.markdown("""
-| # | Factor | Max Pts |
-|---|--------|---------|
-| 1 | 🛏️ **Opp B2B** | +1.0 |
-| 2 | 📊 **Net Rating** | +1.0 |
-| 3 | 🛡️ **Top 5 DEF** | +1.0 |
-| 4 | 🏠 **Home Court** | +1.0 |
-| 5 | 🏥 **Star OUT** | +2.0 |
-| 6 | ✈️ **Travel 2K+mi** | +1.0 |
-| 7 | 📈 **Home Win %** | +0.8 |
-| 8 | 🏔️ **Altitude** | +1.0 |
-| 9 | 🔥 **Hot Streak** | +1.0 |
-| 10 | 🆚 **H2H Edge** | +0.5 |
+| # | Factor | Max |
+|---|--------|-----|
+| 1 | 🛏️ Opp B2B | +1.0 |
+| 2 | 📊 Net Rating | +1.0 |
+| 3 | 🛡️ Top 5 DEF | +1.0 |
+| 4 | 🏠 Home Court | +1.0 |
+| 5 | 🏥 Star OUT | +2.0 |
+| 6 | ✈️ Travel 2K+ | +1.0 |
+| 7 | 📈 Home Win% | +0.8 |
+| 8 | 🏔️ Altitude | +1.0 |
+| 9 | 🔥 Hot Streak | +1.0 |
+| 10 | 🆚 H2H Edge | +0.5 |
 """)
     st.divider()
     st.caption("v15.44 SIGNAL")
@@ -588,6 +582,100 @@ for r in ml_results:
     kalshi_url = build_kalshi_ml_url(r["away"], r["home"])
     reasons = " • ".join(r["reasons"])
     st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:6px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {r['color']}"><div><b style="color:#fff">{r['pick']}</b> <span style="color:#666">vs {r['away'] if r['pick']==r['home'] else r['home']}</span> <span style="color:#38bdf8">{r['score']}/10</span> <span style="color:#777;font-size:0.8em">{reasons}</span></div><a href="{kalshi_url}" target="_blank" style="background:#16a34a;color:#fff;padding:4px 10px;border-radius:5px;font-size:0.8em;text-decoration:none;font-weight:600">BUY {r['pick']}</a></div>""", unsafe_allow_html=True)
+
+st.divider()
+
+# ========== CUSHION SCANNER ==========
+st.subheader("🎯 CUSHION SCANNER")
+
+THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5, 250.5, 255.5]
+
+cs1, cs2 = st.columns([1, 1])
+cush_min = cs1.selectbox("Min minutes", [6, 9, 12, 15, 18], index=0, key="cush_min_select")
+cush_side = cs2.selectbox("Side", ["NO", "YES"], key="cush_side_select")
+
+live_count = sum(1 for g in games.values() if g['status_type'] not in ["STATUS_FINAL", "STATUS_SCHEDULED"])
+st.caption(f"📊 {len(games)} games | {live_count} live")
+
+cush_results = []
+
+for gk, g in games.items():
+    mins = get_minutes_played(g['period'], g['clock'], g['status_type'])
+    total = g['total']
+    
+    if g['status_type'] == "STATUS_FINAL": continue
+    if mins < cush_min: continue
+    if mins <= 0: continue
+    
+    pace = total / mins
+    remaining_min = max(48 - mins, 1)
+    projected_final = round(total + pace * remaining_min)
+    
+    if cush_side == "NO":
+        tight_line = None
+        safe_line = None
+        for i, t in enumerate(THRESHOLDS):
+            if t > projected_final:
+                tight_line = t
+                if i + 1 < len(THRESHOLDS):
+                    safe_line = THRESHOLDS[i + 1]
+                else:
+                    safe_line = tight_line
+                break
+        if not tight_line:
+            tight_line = THRESHOLDS[-1]
+            safe_line = tight_line
+        cushion = safe_line - projected_final
+    else:
+        tight_line = None
+        safe_line = None
+        for i in range(len(THRESHOLDS) - 1, -1, -1):
+            if THRESHOLDS[i] < projected_final:
+                tight_line = THRESHOLDS[i]
+                if i - 1 >= 0:
+                    safe_line = THRESHOLDS[i - 1]
+                else:
+                    safe_line = tight_line
+                break
+        if not tight_line:
+            tight_line = THRESHOLDS[0]
+            safe_line = tight_line
+        cushion = projected_final - safe_line
+    
+    if cushion < 6: continue
+    
+    if cush_side == "NO":
+        if pace < 4.6: pace_status, pace_color = "✅ SLOW", "#00ff00"
+        elif pace < 4.9: pace_status, pace_color = "⚠️ AVG", "#ffff00"
+        else: pace_status, pace_color = "❌ FAST", "#ff0000"
+    else:
+        if pace > 5.1: pace_status, pace_color = "✅ FAST", "#00ff00"
+        elif pace > 4.8: pace_status, pace_color = "⚠️ AVG", "#ffff00"
+        else: pace_status, pace_color = "❌ SLOW", "#ff0000"
+    
+    cush_results.append({
+        'game': gk, 'total': total, 'mins': mins, 'pace': pace,
+        'pace_status': pace_status, 'pace_color': pace_color,
+        'projected': projected_final, 'cushion': cushion,
+        'safe_line': safe_line, 'period': g['period'], 'clock': g['clock']
+    })
+
+cush_results.sort(key=lambda x: x['cushion'], reverse=True)
+
+if cush_results:
+    for r in cush_results:
+        status_txt = f"Q{r['period']} {r['clock']}"
+        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:8px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {r['pace_color']}">
+        <div><b style="color:#fff">{r['game'].replace('@', ' @ ')}</b> <span style="color:#666">{status_txt}</span></div>
+        <div style="display:flex;gap:15px;align-items:center">
+        <span style="color:#888">Total: <b style="color:#fff">{r['total']}</b></span>
+        <span style="color:#888">Proj: <b style="color:#fff">{r['projected']}</b></span>
+        <span style="background:#ff6600;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold">🎯 {cush_side} {r['safe_line']}</span>
+        <span style="color:#00ff00;font-weight:bold">+{r['cushion']}</span>
+        <span style="color:{r['pace_color']}">{r['pace_status']} {r['pace']:.2f}</span>
+        </div></div>""", unsafe_allow_html=True)
+else:
+    st.info(f"No {cush_side} opportunities with 6+ cushion")
 
 st.divider()
 
