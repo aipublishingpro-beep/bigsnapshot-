@@ -70,7 +70,7 @@ with st.sidebar:
     """)
     
     st.divider()
-    st.caption("v16.7 | 8-Factor ML")
+    st.caption("v16.8 | 8-Factor ML")
 
 # ========== SESSION STATE ==========
 if 'auto_refresh' not in st.session_state:
@@ -204,15 +204,13 @@ def calc_distance_miles(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return R * c
 
-def build_kalshi_ticker(away_team, home_team, game_date):
-    """Build Kalshi ticker in correct format: KXNBAGAME-26JAN20DALNYK"""
+def build_kalshi_ml_url(away_team, home_team):
+    """Build Kalshi moneyline URL - matches working standalone version"""
     away_code = KALSHI_CODES.get(away_team, "xxx").upper()
     home_code = KALSHI_CODES.get(home_team, "xxx").upper()
-    date_str = game_date.strftime("%y%b%d").upper()
-    return f"KXNBAGAME-{date_str}{away_code}{home_code}"
-
-def build_kalshi_url(ticker):
-    """Build Kalshi URL - working format"""
+    today = datetime.now(pytz.timezone('US/Eastern'))
+    date_str = today.strftime("%y%b%d").upper()
+    ticker = f"KXNBAGAME-{date_str}{away_code}{home_code}"
     return f"https://kalshi.com/markets/KXNBAGAME/{ticker}"
 
 # ========== FETCH ESPN GAMES ==========
@@ -431,7 +429,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # ========== HEADER ==========
 st.title("🎯 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v16.7")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v16.8")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -451,12 +449,9 @@ for gk in game_list:
     pick, score, factors = calc_ml_score(away, home, injuries, yesterday_teams)
     
     if pick:
-        ticker = build_kalshi_ticker(away, home, now)
-        
         ml_results.append({
             "game": gk, "pick": pick, "score": score, "factors": factors,
-            "away": away, "home": home, "status": g['status_type'],
-            "ticker": ticker
+            "away": away, "home": home, "status": g['status_type']
         })
 
 ml_results.sort(key=lambda x: x['score'], reverse=True)
@@ -474,7 +469,7 @@ if ml_results:
         factor_icons = " ".join([f[0] for f in r['factors'][:4]])
         opponent = r['away'] if r['pick'] == r['home'] else r['home']
         pick_code = KALSHI_CODES.get(r['pick'], "xxx").upper()
-        kalshi_url = build_kalshi_url(r['ticker'])
+        kalshi_url = build_kalshi_ml_url(r['away'], r['home'])
         
         st.markdown(f"""
         <div style="display: flex; align-items: center; background: #1a1a2e; border-left: 4px solid {border_color}; padding: 12px 16px; margin-bottom: 8px; border-radius: 4px;">
@@ -860,4 +855,4 @@ with st.expander("📊 Position Tracker — Trade Management", expanded=False):
 
 st.divider()
 
-st.caption("⚠️ For entertainment only. Not financial advice. v16.7 | 8-Factor ML")
+st.caption("⚠️ For entertainment only. Not financial advice. v16.8 | 8-Factor ML")
