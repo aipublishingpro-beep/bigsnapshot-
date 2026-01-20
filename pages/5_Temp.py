@@ -191,6 +191,14 @@ def calculate_market_implied(markets):
 st.title("🌡️ Temperature Edge Finder")
 st.caption("NWS Forecast vs Kalshi Markets | BigSnapshot.com")
 
+# --- OWNER CHECK ---
+is_owner = st.session_state.get("user_type") == "Owner"
+
+# Backup: URL param unlock for owner features
+if st.query_params.get("mode") == "owner":
+    is_owner = True
+    st.session_state["user_type"] = "Owner"
+
 # --- TIME ---
 et = pytz.timezone("America/New_York")
 now_et = datetime.now(et)
