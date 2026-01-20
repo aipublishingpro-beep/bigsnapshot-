@@ -57,9 +57,14 @@ st.markdown("""
 # ========== SESSION STATE ==========
 if 'show_apps' not in st.session_state:
     st.session_state.show_apps = False
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+# ========== PASSWORD (CHANGE THIS) ==========
+BETA_PASSWORD = "BIGSNAP2026"
 
 # ========== LANDING PAGE ==========
-if not st.session_state.show_apps:
+if not st.session_state.authenticated:
     
     # Hero
     st.markdown("""
@@ -238,10 +243,21 @@ if not st.session_state.show_apps:
 
 # ========== APP HUB ==========
 else:
-    # Back button
-    if st.button("← Back to Home"):
-        st.session_state.show_apps = False
-        st.rerun()
+    # Check if preview mode (not authenticated) or full access
+    is_preview = not st.session_state.authenticated
+    
+    # Header
+    if is_preview:
+        st.warning("👀 **PREVIEW MODE** — Join beta for full access")
+        if st.button("← Back to Home"):
+            st.session_state.show_apps = False
+            st.rerun()
+    else:
+        st.success("✅ **BETA ACCESS UNLOCKED** — Welcome!")
+        if st.button("🚪 Logout"):
+            st.session_state.authenticated = False
+            st.session_state.show_apps = False
+            st.rerun()
     
     st.title("📊 BigSnapshot")
     st.caption("Decision compression for serious bettors")
