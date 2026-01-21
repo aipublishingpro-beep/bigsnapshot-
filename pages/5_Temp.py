@@ -1,8 +1,7 @@
 import streamlit as st
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
-import math
 import re
 
 st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
@@ -14,18 +13,12 @@ div[data-testid="stMarkdownContainer"] p {color: #c9d1d9;}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center">
-<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v2.4</span>
-</div>
-""", unsafe_allow_html=True)
-
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
 CITY_CONFIG = {
     "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67},
-    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75},
+    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KORD", "lat": 41.79, "lon": -87.75},
     "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67},
     "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41},
     "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29},
@@ -85,6 +78,11 @@ def get_bracket_bounds(range_str):
     else:
         return int(nums[0]) - 0.5, int(nums[0]) + 0.5
 
+def temp_in_bracket(temp, range_str):
+    """Check if temperature falls within bracket"""
+    low, high = get_bracket_bounds(range_str)
+    return low < temp <= high
+
 @st.cache_data(ttl=60)
 def fetch_kalshi_brackets(series_ticker):
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
@@ -137,136 +135,135 @@ def fetch_kalshi_brackets(series_ticker):
     except:
         return None
 
-@st.cache_data(ttl=300)
-def fetch_nws_temp(station):
-    url = f"https://api.weather.gov/stations/{station}/observations/latest"
+@st.cache_data(ttl=120)
+def fetch_nws_observations(station):
+    """Fetch today's hourly observations from NWS"""
+    url = f"https://api.weather.gov/stations/{station}/observations"
     try:
-        resp = requests.get(url, headers={"User-Agent": "TempEdge/2.4"}, timeout=10)
-        if resp.status_code == 200:
-            tc = resp.json().get("properties", {}).get("temperature", {}).get("value")
-            if tc is not None:
-                return round(tc * 9/5 + 32, 1)
-    except:
-        pass
-    return None
+        resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
+        if resp.status_code != 200:
+            return None, None, None, []
+        
+        observations = resp.json().get("features", [])
+        if not observations:
+            return None, None, None, []
+        
+        # Get today's date in local timezone
+        today = datetime.now(eastern).date()
+        
+        temps = []
+        readings = []
+        
+        for obs in observations:
+            props = obs.get("properties", {})
+            timestamp_str = props.get("timestamp", "")
+            temp_c = props.get("temperature", {}).get("value")
+            
+            if not timestamp_str or temp_c is None:
+                continue
+            
+            # Parse timestamp
+            try:
+                ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                ts_local = ts.astimezone(eastern)
+                
+                # Only include today's readings
+                if ts_local.date() == today:
+                    temp_f = round(temp_c * 9/5 + 32, 1)
+                    temps.append(temp_f)
+                    readings.append({
+                        "time": ts_local.strftime("%H:%M"),
+                        "temp": temp_f
+                    })
+            except:
+                continue
+        
+        if not temps:
+            return None, None, None, []
+        
+        current = temps[0] if temps else None
+        low = min(temps)
+        high = max(temps)
+        
+        return current, low, high, readings[:12]  # Last 12 readings
+        
+    except Exception as e:
+        return None, None, None, []
 
-@st.cache_data(ttl=1800)
-def fetch_nws_forecast(city):
-    try:
-        cfg = CITY_CONFIG.get(city, {})
-        lat = cfg.get("lat", 40.78)
-        lon = cfg.get("lon", -73.97)
-        
-        point_url = f"https://api.weather.gov/points/{lat},{lon}"
-        resp = requests.get(point_url, headers={"User-Agent": "TempEdge/2.4"}, timeout=10)
-        props = resp.json().get("properties", {})
-        forecast_url = props.get("forecast", "")
-        
-        if not forecast_url:
-            return None, None
-        
-        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/2.4"}, timeout=10)
-        periods = resp.json().get("properties", {}).get("periods", [])
-        
-        high_temp = None
-        low_temp = None
-        for p in periods[:6]:
-            name = p.get("name", "").lower()
-            temp = p.get("temperature", 0)
-            if ("tonight" in name or "night" in name) and low_temp is None:
-                low_temp = temp
-            elif p.get("isDaytime", True) and high_temp is None:
-                high_temp = temp
-        
-        return high_temp, low_temp
-    except:
-        return None, None
-
-def normal_cdf(x, mu, sigma):
-    return 0.5 * (1 + math.erf((x - mu) / (sigma * math.sqrt(2))))
-
-def calc_model_prob(forecast, low, high, sigma):
-    if low == -999:
-        return normal_cdf(high, forecast, sigma)
-    elif high == 999:
-        return 1 - normal_cdf(low, forecast, sigma)
-    else:
-        return normal_cdf(high, forecast, sigma) - normal_cdf(low, forecast, sigma)
-
-def render_brackets(brackets, forecast, sigma):
+def render_brackets_with_actual(brackets, actual_temp, temp_type):
+    """Render brackets highlighting the actual winning bracket"""
     if not brackets:
         st.error("Could not load brackets")
         return
     
-    # Find best edge
-    best = max(brackets, key=lambda b: calc_model_prob(forecast, *get_bracket_bounds(b['range']), sigma) * 100 - b['yes'])
-    best_edge = calc_model_prob(forecast, *get_bracket_bounds(best['range']), sigma) * 100 - best['yes']
+    # Find which bracket the actual temp falls into
+    winning_bracket = None
+    for b in brackets:
+        if temp_in_bracket(actual_temp, b['range']):
+            winning_bracket = b['range']
+            break
     
     market_fav = max(brackets, key=lambda b: b['yes'])
     st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
     
     for b in brackets:
-        low, high = get_bracket_bounds(b['range'])
-        model_prob = calc_model_prob(forecast, low, high, sigma) * 100
-        market_prob = b['yes']
-        edge = model_prob - market_prob
-        is_best = (b['range'] == best['range']) and (best_edge >= 5)
+        is_winner = b['range'] == winning_bracket
+        is_market_fav = b['range'] == market_fav['range']
         
-        # Build styles
-        if is_best:
+        # Calculate edge: if this is the actual winner, edge = 100 - kalshi price
+        if is_winner:
+            edge = 100 - b['yes']
             box_style = "background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;box-shadow:0 0 15px rgba(245,158,11,0.4);border-radius:6px;padding:12px 14px;margin:8px 0"
             name_style = "color:#fbbf24;font-weight:700;font-size:1.05em"
             edge_color = "#fbbf24"
             icon = " 🎯"
-        elif edge >= 5:
-            box_style = "background:#0f1f0f;border:1px solid #2d5a2d;border-radius:6px;padding:10px 12px;margin:5px 0"
-            name_style = "color:#e5e7eb;font-weight:500"
-            edge_color = "#4ade80"
-            icon = " 🟢"
-        elif edge <= -5:
-            box_style = "background:#1f0f0f;border:1px solid #5a2d2d;border-radius:6px;padding:10px 12px;margin:5px 0"
-            name_style = "color:#e5e7eb;font-weight:500"
-            edge_color = "#f87171"
-            icon = " 🔴"
+            model_txt = "ACTUAL"
         else:
-            box_style = "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
+            edge = 0 - b['yes']  # Would lose full amount
+            if is_market_fav:
+                box_style = "background:#1a1a2e;border:1px solid #4a4a6a;border-radius:6px;padding:10px 12px;margin:5px 0"
+                icon = " ⭐"
+            else:
+                box_style = "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
+                icon = ""
             name_style = "color:#e5e7eb;font-weight:500"
             edge_color = "#6b7280"
-            icon = ""
+            model_txt = "—"
         
         html = f'''<div style="{box_style}">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
                 <span style="{name_style}">{b['range']}{icon}</span>
                 <div style="display:flex;gap:12px;align-items:center">
                     <span style="color:#f59e0b">Kalshi {b['yes']:.0f}¢</span>
-                    <span style="color:#9ca3af">Model {model_prob:.0f}%</span>
-                    <span style="color:{edge_color};font-weight:bold">{edge:+.0f}¢</span>
+                    <span style="color:#9ca3af">{model_txt}</span>
                 </div>
             </div>
         </div>'''
         st.markdown(html, unsafe_allow_html=True)
     
-    # BUY YES card
-    if best_edge >= 5:
-        card = f'''
-        <div style="background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;border-radius:10px;padding:18px;text-align:center;margin-top:12px;box-shadow:0 0 20px rgba(245,158,11,0.5)">
-            <div style="color:#fbbf24;font-size:0.9em;font-weight:600">🎯 BEST EDGE: +{best_edge:.0f}¢</div>
-            <div style="color:#fff;font-size:1.3em;font-weight:700;margin:10px 0">{best['range']}</div>
-            <a href="{best['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY YES</a>
-        </div>'''
-        st.markdown(card, unsafe_allow_html=True)
-    else:
-        card = f'''
-        <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px;text-align:center;margin-top:12px">
-            <div style="color:#6b7280">No strong edge found</div>
-            <div style="color:#9ca3af;margin:5px 0">{market_fav['range']} @ {market_fav['yes']:.0f}¢</div>
-            <a href="{market_fav['url']}" target="_blank" style="background:#30363d;color:#c9d1d9;padding:8px 20px;border-radius:6px;text-decoration:none;display:inline-block">VIEW MARKET</a>
-        </div>'''
-        st.markdown(card, unsafe_allow_html=True)
+    # Show actual temp and winning bracket
+    if winning_bracket:
+        winner_data = next((b for b in brackets if b['range'] == winning_bracket), None)
+        if winner_data:
+            potential_profit = 100 - winner_data['yes']
+            card = f'''
+            <div style="background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;border-radius:10px;padding:18px;text-align:center;margin-top:12px;box-shadow:0 0 20px rgba(245,158,11,0.5)">
+                <div style="color:#fbbf24;font-size:0.9em;font-weight:600">🌡️ ACTUAL {temp_type}: {actual_temp}°F</div>
+                <div style="color:#fff;font-size:1.3em;font-weight:700;margin:10px 0">{winning_bracket}</div>
+                <div style="color:#4ade80;font-size:0.9em">Potential profit: +{potential_profit:.0f}¢ per contract</div>
+                <a href="{winner_data['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:10px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY YES</a>
+            </div>'''
+            st.markdown(card, unsafe_allow_html=True)
 
 # ========== HEADER ==========
+st.markdown("""
+<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center">
+<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.0 (Actual Observations)</span>
+</div>
+""", unsafe_allow_html=True)
+
 st.title("🌡️ TEMP EDGE FINDER")
-st.caption(f"Live Kalshi Data | {now.strftime('%b %d, %Y %I:%M %p ET')}")
+st.caption(f"Live NWS Observations + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')}")
 
 c1, c2 = st.columns([4, 1])
 with c1:
@@ -276,13 +273,37 @@ with c2:
     nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
     st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
 
-nws_temp = fetch_nws_temp(cfg.get("station", "KNYC"))
-nws_high, nws_low = fetch_nws_forecast(city)
+# Fetch actual observations
+current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
 
-curr = f"{nws_temp}°F" if nws_temp else "?"
-hi = f"{nws_high}°F" if nws_high else "?"
-lo = f"{nws_low}°F" if nws_low else "?"
-st.caption(f"📡 Current: **{curr}** | NWS High: **{hi}** | NWS Low: **{lo}**")
+# Display current conditions
+if current_temp:
+    st.markdown(f"""
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
+        <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
+            <div>
+                <div style="color:#6b7280;font-size:0.8em">CURRENT</div>
+                <div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div>
+            </div>
+            <div>
+                <div style="color:#3b82f6;font-size:0.8em">TODAY'S LOW</div>
+                <div style="color:#3b82f6;font-size:1.5em;font-weight:700">{obs_low}°F</div>
+            </div>
+            <div>
+                <div style="color:#ef4444;font-size:0.8em">TODAY'S HIGH</div>
+                <div style="color:#ef4444;font-size:1.5em;font-weight:700">{obs_high}°F</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Show recent readings
+    if readings:
+        with st.expander("📊 Recent Readings"):
+            reading_text = " | ".join([f"{r['time']}: {r['temp']}°F" for r in readings[:8]])
+            st.caption(reading_text)
+else:
+    st.warning("⚠️ Could not fetch NWS observations")
 
 st.markdown("---")
 
@@ -291,30 +312,34 @@ col_high, col_low = st.columns(2)
 with col_high:
     st.subheader("☀️ HIGH TEMP")
     
-    if nws_high:
-        high_forecast = int(nws_high)
-        st.metric("🎯 NWS Forecast", f"{high_forecast}°F")
+    if obs_high:
+        st.metric("📈 Today's High So Far", f"{obs_high}°F")
+        hour = now.hour
+        if hour < 15:
+            st.caption("⏳ High may still increase (before 3 PM)")
+        else:
+            st.caption("✅ High likely locked in (after 3 PM)")
+        
+        brackets_high = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY"))
+        render_brackets_with_actual(brackets_high, obs_high, "HIGH")
     else:
-        high_forecast = st.number_input("🎯 Your forecast (NWS unavailable)", value=40, min_value=-20, max_value=120, key="high_fc")
-    
-    high_sigma = st.slider("σ uncertainty", 0.1, 3.0, 1.8, 0.1, key="high_sig")
-    
-    brackets_high = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY"))
-    render_brackets(brackets_high, high_forecast, high_sigma)
+        st.error("Could not fetch observations")
 
 with col_low:
     st.subheader("🌙 LOW TEMP")
     
-    if nws_low:
-        low_forecast = int(nws_low)
-        st.metric("🎯 NWS Forecast", f"{low_forecast}°F")
+    if obs_low:
+        st.metric("📉 Today's Low So Far", f"{obs_low}°F")
+        hour = now.hour
+        if hour < 8:
+            st.caption("⏳ Low may still drop (before 8 AM)")
+        else:
+            st.caption("✅ Low likely locked in (after 8 AM)")
+        
+        brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
+        render_brackets_with_actual(brackets_low, obs_low, "LOW")
     else:
-        low_forecast = st.number_input("🎯 Your forecast (NWS unavailable)", value=25, min_value=-20, max_value=120, key="low_fc")
-    
-    low_sigma = st.slider("σ uncertainty", 0.1, 3.0, 1.8, 0.1, key="low_sig")
-    
-    brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
-    render_brackets(brackets_low, low_forecast, low_sigma)
+        st.error("Could not fetch observations")
 
 st.markdown("---")
-st.caption("⚠️ Experimental. Not financial advice. v2.4")
+st.caption("⚠️ Based on actual NWS observations. Not financial advice. v3.0")
