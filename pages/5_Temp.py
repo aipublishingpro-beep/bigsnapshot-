@@ -53,8 +53,8 @@ now = datetime.now(eastern)
 CITY_CONFIG = {
     "Austin": {
         "grid": "EWX/156,91",
-        "kalshi_high": "KXHIGHAUS",
-        "kalshi_low": "KXLOWAUS",
+        "kalshi_high": "kxhighaus",
+        "kalshi_low": "kxlowtaus",
         "kalshi_slug_high": "highest-temperature-in-austin",
         "kalshi_slug_low": "lowest-temperature-in-austin",
         "tz": "US/Central",
@@ -62,8 +62,8 @@ CITY_CONFIG = {
     },
     "Chicago": {
         "grid": "LOT/76,73",
-        "kalshi_high": "KXHIGHCHI",
-        "kalshi_low": "KXLOWCHI",
+        "kalshi_high": "kxhighchi",
+        "kalshi_low": "kxlowtchi",
         "kalshi_slug_high": "highest-temperature-in-chicago",
         "kalshi_slug_low": "lowest-temperature-in-chicago",
         "tz": "US/Central",
@@ -71,8 +71,8 @@ CITY_CONFIG = {
     },
     "Denver": {
         "grid": "BOU/62,60",
-        "kalshi_high": "KXHIGHDEN",
-        "kalshi_low": "KXLOWDEN",
+        "kalshi_high": "kxhighden",
+        "kalshi_low": "kxlowtden",
         "kalshi_slug_high": "highest-temperature-in-denver",
         "kalshi_slug_low": "lowest-temperature-in-denver",
         "tz": "US/Mountain",
@@ -80,8 +80,8 @@ CITY_CONFIG = {
     },
     "Los Angeles": {
         "grid": "LOX/154,44",
-        "kalshi_high": "KXHIGHLAX",
-        "kalshi_low": "KXLOWLAX",
+        "kalshi_high": "kxhighlax",
+        "kalshi_low": "kxlowtlax",
         "kalshi_slug_high": "highest-temperature-in-los-angeles",
         "kalshi_slug_low": "lowest-temperature-in-los-angeles",
         "tz": "US/Pacific",
@@ -89,8 +89,8 @@ CITY_CONFIG = {
     },
     "Miami": {
         "grid": "MFL/109,50",
-        "kalshi_high": "KXHIGHMIA",
-        "kalshi_low": "KXLOWMIA",
+        "kalshi_high": "kxhighmia",
+        "kalshi_low": "kxlowtmia",
         "kalshi_slug_high": "highest-temperature-in-miami",
         "kalshi_slug_low": "lowest-temperature-in-miami",
         "tz": "US/Eastern",
@@ -98,17 +98,17 @@ CITY_CONFIG = {
     },
     "New York City": {
         "grid": "OKX/33,37",
-        "kalshi_high": "KXHIGHNY",
-        "kalshi_low": "KXLOWNY",
+        "kalshi_high": "kxhighny",
+        "kalshi_low": "kxlowtnyc",
         "kalshi_slug_high": "highest-temperature-in-nyc",
-        "kalshi_slug_low": "lowest-temperature-in-nyc-today",
+        "kalshi_slug_low": "lowest-temperature-in-nyc",
         "tz": "US/Eastern",
         "station": "Central Park (KNYC)"
     },
     "Philadelphia": {
         "grid": "PHI/49,75",
-        "kalshi_high": "KXHIGHPHL",
-        "kalshi_low": "KXLOWPHL",
+        "kalshi_high": "kxhighphl",
+        "kalshi_low": "kxlowtphl",
         "kalshi_slug_high": "highest-temperature-in-philadelphia",
         "kalshi_slug_low": "lowest-temperature-in-philadelphia",
         "tz": "US/Eastern",
