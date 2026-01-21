@@ -204,6 +204,54 @@ def fetch_ap_rankings():
     except:
         return {}
 
+@st.cache_data(ttl=3600)
+def fetch_team_streaks():
+    """Fetch team streaks from ESPN - returns dict of team: streak (positive=wins, negative=losses)"""
+    streaks = {}
+    try:
+        # Get recent games to calculate streaks for teams playing today
+        dates = [(datetime.now(eastern) - timedelta(days=i)).strftime('%Y%m%d') for i in range(1, 14)]
+        team_results = {}
+        
+        for date in dates:
+            url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates={date}&limit=100"
+            resp = requests.get(url, timeout=8)
+            data = resp.json()
+            
+            for event in data.get("events", []):
+                status = event.get("status", {}).get("type", {}).get("name", "")
+                if status != "STATUS_FINAL":
+                    continue
+                comp = event.get("competitions", [{}])[0]
+                competitors = comp.get("competitors", [])
+                if len(competitors) < 2:
+                    continue
+                
+                for c in competitors:
+                    abbrev = c.get("team", {}).get("abbreviation", "")
+                    won = c.get("winner", False)
+                    if abbrev:
+                        if abbrev not in team_results:
+                            team_results[abbrev] = []
+                        team_results[abbrev].append({"date": date, "won": won})
+        
+        # Calculate current streak for each team
+        for team, results in team_results.items():
+            results.sort(key=lambda x: x['date'], reverse=True)
+            if not results:
+                continue
+            streak = 0
+            streak_type = results[0]['won']
+            for r in results:
+                if r['won'] == streak_type:
+                    streak += 1
+                else:
+                    break
+            streaks[team] = streak if streak_type else -streak
+    except:
+        pass
+    return streaks
+
 def get_conference_tier(conf_name):
     """Return tier based on conference strength"""
     if not conf_name: return 3
@@ -346,6 +394,7 @@ game_list = sorted(list(games.keys()))
 yesterday_teams = fetch_yesterday_teams()
 rankings = fetch_ap_rankings()
 news = fetch_cbb_news()
+streaks = fetch_team_streaks()
 now = datetime.now(eastern)
 
 # Filter yesterday teams to only include today's teams
@@ -385,15 +434,67 @@ with st.sidebar:
 </span>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v1.1 NCAA EDGE")
+    st.caption("v1.2 NCAA EDGE")
 
 # TITLE
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("College Basketball Edge Detection | v1.1")
+st.caption("College Basketball Edge Detection | v1.2")
 st.markdown("<p style='color:#888;font-size:0.85em;margin-top:-10px'>Only 🔒 STRONG picks are tracked. All others are informational.</p>", unsafe_allow_html=True)
 
+# ============================================================
+# 💰 TOP PICK OF THE DAY (Hero Section)
+# ============================================================
+def get_top_pick():
+    """Calculate and return the top pick of the day"""
+    if not games:
+        return None
+    top_result = None
+    top_score = 0
+    for gk, g in games.items():
+        try:
+            pick_abbrev, pick_name, score, reasons, pick_rank = calc_ncaa_score(
+                g["home_team"], g["away_team"],
+                g["home_abbrev"], g["away_abbrev"],
+                g["home_rank"], g["away_rank"],
+                g["home_conf"], g["away_conf"],
+                g["home_record"], g["away_record"],
+                yesterday_teams, rankings
+            )
+            if score > top_score and g.get('status_type') == "STATUS_SCHEDULED":
+                top_score = score
+                is_home = pick_abbrev == g["home_abbrev"]
+                opp_abbrev = g["away_abbrev"] if is_home else g["home_abbrev"]
+                top_result = {
+                    "pick_abbrev": pick_abbrev, "pick_name": pick_name,
+                    "pick_rank": pick_rank, "opp_abbrev": opp_abbrev,
+                    "score": score, "reasons": reasons,
+                    "away_abbrev": g["away_abbrev"], "home_abbrev": g["home_abbrev"],
+                    "home_record": g["home_record"], "away_record": g["away_record"]
+                }
+        except:
+            continue
+    return top_result
+
+top_pick = get_top_pick()
+if top_pick and top_pick["score"] >= 8.0:
+    tier, color, is_tracked = get_signal_tier(top_pick["score"])
+    kalshi_url = build_kalshi_ncaa_url(top_pick["away_abbrev"], top_pick["home_abbrev"])
+    buy_btn = get_buy_button_html(kalshi_url, "🎯 BUY NOW")
+    rank_display = f"#{top_pick['pick_rank']} " if top_pick['pick_rank'] > 0 else ""
+    tracked_icon = "📊" if is_tracked else ""
+    
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg,#0a2a0a,#1a3a1a);padding:20px;border-radius:12px;border:3px solid {color};margin:15px 0;text-align:center">
+        <div style="color:#888;font-size:0.9em;margin-bottom:8px">💰 TOP PICK OF THE DAY</div>
+        <div style="font-size:2.2em;font-weight:bold;color:#fff;margin-bottom:5px">{rank_display}{escape_html(top_pick['pick_abbrev'])} {tracked_icon}</div>
+        <div style="color:{color};font-size:1.4em;font-weight:bold;margin-bottom:10px">{tier} {top_pick['score']}/10</div>
+        <div style="color:#aaa;font-size:0.9em;margin-bottom:12px">vs {escape_html(top_pick['opp_abbrev'])} • {' · '.join(top_pick['reasons'][:3])}</div>
+        <div>{buy_btn if kalshi_url else '<span style="color:#666">Market loading...</span>'}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
 # STATS SUMMARY
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric("Today's Games", len(games))
 with col2:
@@ -401,6 +502,18 @@ with col2:
     st.metric("Ranked Matchups", ranked_games)
 with col3:
     st.metric("B2B Teams", len(yesterday_teams))
+with col4:
+    # TODAY'S RECORD - Count STRONG picks that finished
+    strong_wins = sum(1 for pos in st.session_state.ncaa_positions 
+                      if pos.get('tracked') and games.get(pos.get('game'), {}).get('status_type') == "STATUS_FINAL"
+                      and ((pos.get('pick') == pos.get('game', '').split('@')[1] and games.get(pos.get('game'), {}).get('home_score', 0) > games.get(pos.get('game'), {}).get('away_score', 0))
+                           or (pos.get('pick') == pos.get('game', '').split('@')[0] and games.get(pos.get('game'), {}).get('away_score', 0) > games.get(pos.get('game'), {}).get('home_score', 0))))
+    strong_total = sum(1 for pos in st.session_state.ncaa_positions 
+                       if pos.get('tracked') and games.get(pos.get('game'), {}).get('status_type') == "STATUS_FINAL")
+    if strong_total > 0:
+        st.metric("📊 Today", f"{strong_wins}-{strong_total - strong_wins}")
+    else:
+        st.metric("📊 Today", "0-0")
 
 # LEGEND BOX
 st.markdown("""
@@ -416,6 +529,24 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+# ⏰ NEXT TIP-OFF COUNTDOWN
+scheduled_games = [g for g in games.values() if g.get('status_type') == "STATUS_SCHEDULED"]
+if scheduled_games and not live_games:
+    # Show countdown message
+    st.markdown(f"""
+    <div style="background:#1a1a2e;padding:10px 15px;border-radius:6px;text-align:center;margin-bottom:10px;border-left:3px solid #38bdf8">
+        <span style="color:#38bdf8;font-weight:bold">⏰ {len(scheduled_games)} games scheduled</span>
+        <span style="color:#888"> • Check Kalshi for tip-off times</span>
+    </div>
+    """, unsafe_allow_html=True)
+elif live_games:
+    st.markdown(f"""
+    <div style="background:#1a2a1a;padding:10px 15px;border-radius:6px;text-align:center;margin-bottom:10px;border-left:3px solid #00ff00">
+        <span style="color:#00ff00;font-weight:bold">🔴 {len(live_games)} LIVE NOW</span>
+        <span style="color:#888"> • Scroll down for live tracker</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.divider()
 
@@ -600,6 +731,43 @@ else:
 
 st.divider()
 
+# 🔥 HOT STREAKS (Teams on 5+ win streaks playing today)
+hot_teams = []
+cold_teams = []
+for gk in games.keys():
+    parts = gk.split("@")
+    for team in parts:
+        streak = streaks.get(team, 0)
+        if streak >= 5:
+            hot_teams.append({"team": team, "streak": streak})
+        elif streak <= -4:
+            cold_teams.append({"team": team, "streak": streak})
+
+if hot_teams:
+    st.subheader("🔥 HOT STREAKS")
+    st.caption("Teams on 5+ win streaks playing today — Ride the momentum")
+    hot_cols = st.columns(min(len(hot_teams), 4))
+    for i, t in enumerate(sorted(hot_teams, key=lambda x: x['streak'], reverse=True)[:4]):
+        with hot_cols[i]:
+            st.markdown(f"""<div style="background:linear-gradient(135deg,#1a2a1a,#0a1a0a);padding:12px;border-radius:8px;text-align:center;border:2px solid #00ff00">
+                <div style="color:#fff;font-weight:bold;font-size:1.2em">{escape_html(t['team'])}</div>
+                <div style="color:#00ff00;font-size:1.1em;font-weight:bold">🔥 W{t['streak']}</div>
+            </div>""", unsafe_allow_html=True)
+    st.divider()
+
+# ❄️ FADE ALERT (Teams on 4+ loss streaks playing today)
+if cold_teams:
+    st.subheader("❄️ FADE ALERT")
+    st.caption("Teams on 4+ loss streaks — Consider fading")
+    cold_cols = st.columns(min(len(cold_teams), 4))
+    for i, t in enumerate(sorted(cold_teams, key=lambda x: x['streak'])[:4]):
+        with cold_cols[i]:
+            st.markdown(f"""<div style="background:linear-gradient(135deg,#2a1a1a,#1a0a0a);padding:12px;border-radius:8px;text-align:center;border:2px solid #ff4444">
+                <div style="color:#fff;font-weight:bold;font-size:1.2em">{escape_html(t['team'])}</div>
+                <div style="color:#ff4444;font-size:1.1em;font-weight:bold">❄️ L{abs(t['streak'])}</div>
+            </div>""", unsafe_allow_html=True)
+    st.divider()
+
 # AP TOP 25 RANKINGS
 st.subheader("📊 AP TOP 25")
 st.caption("Current rankings from AP Poll")
@@ -772,8 +940,8 @@ Click **BUY** buttons to go directly to Kalshi markets.
 
 ---
 
-*Built for Kalshi. v1.1*
+*Built for Kalshi. v1.2*
 """)
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v1.1 NCAA EDGE")
+st.caption("⚠️ Educational only. Not financial advice. v1.2 NCAA EDGE")
