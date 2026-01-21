@@ -252,11 +252,18 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
         winner_data = next((b for b in brackets if b['range'] == winning_bracket), None)
         if winner_data:
             potential_profit = 100 - winner_data['yes']
+            
+            # Show different message if market already settled (price >= 99¢)
+            if winner_data['yes'] >= 99:
+                profit_line = '<div style="color:#4ade80;font-size:0.9em">✅ Market settled — outcome confirmed</div>'
+            else:
+                profit_line = f'<div style="color:#4ade80;font-size:0.9em">Potential profit: +{potential_profit:.0f}¢ per contract</div>'
+            
             card = f'''
             <div style="background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;border-radius:10px;padding:18px;text-align:center;margin-top:12px;box-shadow:0 0 20px rgba(245,158,11,0.5)">
                 <div style="color:#fbbf24;font-size:0.9em;font-weight:600">🌡️ ACTUAL {temp_type}: {actual_temp}°F</div>
                 <div style="color:#fff;font-size:1.3em;font-weight:700;margin:10px 0">{winning_bracket}</div>
-                <div style="color:#4ade80;font-size:0.9em">Potential profit: +{potential_profit:.0f}¢ per contract</div>
+                {profit_line}
                 <a href="{winner_data['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:10px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY YES</a>
             </div>'''
             st.markdown(card, unsafe_allow_html=True)
@@ -298,7 +305,7 @@ if current_temp:
     """, unsafe_allow_html=True)
     
     if readings:
-        with st.expander("📊 Recent NWS Observations"):
+        with st.expander("📊 Recent NWS Observations", expanded=True):
             # Find LOW reversal (temp lower than both neighbors)
             low_reversal_idx = None
             for i in range(1, len(readings) - 1):
