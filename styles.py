@@ -20,11 +20,6 @@ def apply_styles():
     """, unsafe_allow_html=True)
 
 def buy_button(url, text="BUY"):
-    """Returns HTML for a BUY button that opens in new tab.
-    
-    Usage:
-        st.markdown(buy_button(kalshi_url, "BUY TEAM"), unsafe_allow_html=True)
-    """
     return f'''<a href="{url}" target="_blank" style="
         display: block;
         background: linear-gradient(135deg, #00c853, #00a844);
@@ -38,11 +33,6 @@ def buy_button(url, text="BUY"):
     ">{text}</a>'''
 
 def link_button(url, text="View"):
-    """Returns HTML for a generic link button that opens in new tab.
-    
-    Usage:
-        st.markdown(link_button(url, "🔗 View on Kalshi"), unsafe_allow_html=True)
-    """
     return f'''<a href="{url}" target="_blank" style="
         display: block;
         background: linear-gradient(135deg, #1e3a5f, #0f2744);
