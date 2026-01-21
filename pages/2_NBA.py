@@ -166,7 +166,7 @@ with st.sidebar:
     st.header("🔗 KALSHI")
     st.caption("⚠️ NBA not on trade API yet")
     st.divider()
-    st.caption("v15.53 BUY BUTTONS")
+    st.caption("v15.55 🛡️+2 SAFE")
 
 def build_kalshi_ml_url(away_team, home_team):
     away_code = KALSHI_CODES.get(away_team, "xxx").upper()
@@ -429,7 +429,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # HEADER
 st.title("🏀 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.53")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.55")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -613,11 +613,17 @@ for gk, g in games.items():
     pace = g['total'] / mins
     proj = round(g['total'] + pace * max(48 - mins, 1))
     if cush_side == "NO":
-        safe_line = next((THRESHOLDS[i+1] if i+1 < len(THRESHOLDS) else t for i, t in enumerate(THRESHOLDS) if t > proj), THRESHOLDS[-1])
+        # Find first threshold > proj, then go 2 brackets higher for safety
+        base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > proj), len(THRESHOLDS)-1)
+        safe_idx = min(base_idx + 2, len(THRESHOLDS) - 1)
+        safe_line = THRESHOLDS[safe_idx]
         cushion = safe_line - proj
         pace_ok = pace < 4.6
     else:
-        safe_line = next((THRESHOLDS[i-1] if i > 0 else t for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < proj), THRESHOLDS[0])
+        # Find first threshold < proj, then go 2 brackets lower for safety
+        base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < proj), 0)
+        safe_idx = max(base_idx - 2, 0)
+        safe_line = THRESHOLDS[safe_idx]
         cushion = proj - safe_line
         pace_ok = pace > 5.1
     if cushion >= 6:
@@ -641,6 +647,7 @@ if cush_results:
         <span style="background:#ff6600;color:#000;padding:3px 10px;border-radius:5px;font-weight:bold">🎯 {cush_side} {r['safe_line']}</span>
         <span style="color:#00ff00;font-weight:bold">+{r['cushion']:.0f}</span>
         <span style="color:{pclr}">{r['pace']:.2f}/min</span>
+        <span style="color:#888;font-size:0.8em">🛡️+2</span>
         <a href="{kalshi_url}" target="_blank" style="background:{btn_color};color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">{btn_text}</a>
         </div></div>""", unsafe_allow_html=True)
 else:
@@ -664,22 +671,28 @@ if pace_data:
         away_t, home_t = game_parts[0], game_parts[1]
         kalshi_url = build_kalshi_totals_url(away_t, home_t)
         
-        # Determine pace label, color, and button
+        # Determine pace label, color, and button (2-bracket safety buffer)
         if p['pace'] < 4.5:
             lbl, clr = "🟢 SLOW", "#00ff00"
-            rec_line = next((t for t in THRESHOLDS if t > p['proj']), THRESHOLDS[-1])
-            btn_html = f'<a href="{kalshi_url}" target="_blank" style="background:#00aa00;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY NO {rec_line}</a>' if not p['final'] else ""
+            base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > p['proj']), len(THRESHOLDS)-1)
+            safe_idx = min(base_idx + 2, len(THRESHOLDS) - 1)
+            rec_line = THRESHOLDS[safe_idx]
+            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#00aa00;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY NO {rec_line}</a>' if not p['final'] else ""
         elif p['pace'] < 4.8:
             lbl, clr = "🟡 AVG", "#ffff00"
             btn_html = ""
         elif p['pace'] < 5.2:
             lbl, clr = "🟠 FAST", "#ff8800"
-            rec_line = next((THRESHOLDS[i] for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), THRESHOLDS[0])
-            btn_html = f'<a href="{kalshi_url}" target="_blank" style="background:#cc6600;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
+            base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), 0)
+            safe_idx = max(base_idx - 2, 0)
+            rec_line = THRESHOLDS[safe_idx]
+            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#cc6600;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
         else:
             lbl, clr = "🔴 SHOOTOUT", "#ff0000"
-            rec_line = next((THRESHOLDS[i] for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), THRESHOLDS[0])
-            btn_html = f'<a href="{kalshi_url}" target="_blank" style="background:#cc0000;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
+            base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), 0)
+            safe_idx = max(base_idx - 2, 0)
+            rec_line = THRESHOLDS[safe_idx]
+            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#cc0000;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
         
         status = "FINAL" if p['final'] else f"Q{p['period']} {p['clock']}"
         st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:4px solid {clr}">
@@ -719,10 +732,12 @@ with st.expander("📈 Active Positions — Tracking Your Bets", expanded=False)
     st.markdown("""**Position Status:** ✅ WON/LOST, 🟢 CRUISING (15+), 🟢 LEADING (8-14), 🟡 AHEAD (1-7), 🟠 CLOSE (within 5), 🔴 BEHIND (6+)""")
 
 with st.expander("🎯 Cushion Scanner — Live Total Opportunities", expanded=False):
-    st.markdown("""Finds live games where projected total has cushion from the line. Look for 6+ cushion with favorable pace.""")
+    st.markdown("""Finds live games where projected total has cushion from the line. Look for 6+ cushion with favorable pace.
+    
+**🛡️+2 = Safety buffer.** We recommend 2 brackets above/below projection for extra margin. Buy closer to projection at your own risk.""")
 
 with st.expander("🔥 Pace Scanner — Game Flow", expanded=False):
     st.markdown("""**Pace Labels:** 🟢 SLOW (<4.5/min), 🟡 AVG (4.5-4.8/min), 🟠 FAST (4.8-5.2/min), 🔴 SHOOTOUT (5.2+/min)""")
 
 st.divider()
-st.caption("⚠️ Entertainment only. Not financial advice. v15.53")
+st.caption("⚠️ Entertainment only. Not financial advice. v15.55")
