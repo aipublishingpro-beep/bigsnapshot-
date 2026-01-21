@@ -1,536 +1,445 @@
 import streamlit as st
-import requests
-from datetime import datetime, timedelta
-import pytz
-import re
+from styles import apply_styles
 
-st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
+st.set_page_config(
+    page_title="BigSnapshot | Prediction Market Edge Finder",
+    page_icon="📊",
+    layout="wide"
+)
 
+apply_styles()
+
+# ============================================================
+# GA4 TRACKING
+# ============================================================
+st.markdown("""
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
+<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# SESSION STATE
+# ============================================================
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None
+
+# ============================================================
+# PASSWORD CONFIG - PAID ACCESS ONLY
+# ============================================================
+VALID_PASSWORDS = {
+    "WILLIE1228": "Owner",
+    "SNAPCRACKLE2026": "Paid Subscriber",
+}
+
+# ============================================================
+# STRIPE PAYMENT LINK + AUTO-REVEAL TOKEN
+# ============================================================
+STRIPE_LINK = "https://buy.stripe.com/14A00lcgHe9oaIodx65Rm00"
+ACCESS_PASSWORD = "SNAPCRACKLE2026"
+PAID_TOKEN = "thankyou"
+
+# ============================================================
+# DETECT STRIPE REDIRECT (query params)
+# ============================================================
+query_params = st.query_params
+from_payment = query_params.get("paid") in ["true", PAID_TOKEN]
+is_production_token = query_params.get("paid") == PAID_TOKEN
+
+# ============================================================
+# PAGE-SPECIFIC CSS
+# ============================================================
 st.markdown("""
 <style>
-.stApp {background-color: #0d1117;}
-div[data-testid="stMarkdownContainer"] p {color: #c9d1d9;}
+    .stApp {
+        background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%);
+    }
+    [data-testid="stSidebar"] {display: none;}
 </style>
 """, unsafe_allow_html=True)
 
-eastern = pytz.timezone("US/Eastern")
-now = datetime.now(eastern)
-
-CITY_CONFIG = {
-    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67},
-    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75},
-    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67},
-    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41},
-    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29},
-    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97},
-    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23},
-}
-
-CITY_LIST = sorted(CITY_CONFIG.keys())
-
-def get_bracket_bounds(range_str):
-    """Parse temperature bracket from Kalshi subtitle - only match temp numbers with °"""
-    tl = range_str.lower()
+# ============================================================
+# LANDING PAGE (NOT LOGGED IN)
+# ============================================================
+if not st.session_state.authenticated:
     
-    # Pattern: "<12°" or "be <12°"
-    below_match = re.search(r'<\s*(\d+)°', range_str)
-    if below_match:
-        return -999, int(below_match.group(1)) - 0.5
+    # ============ PAID USER FLOW - SKIP TO PASSWORD ============
+    if from_payment:
+        st.markdown("""
+        <div style="text-align: center; padding: 50px 20px 20px 20px;">
+            <div style="font-size: 60px; margin-bottom: 15px;">📊</div>
+            <h1 style="font-size: 2.5em; color: #fff;">BigSnapshot</h1>
+            <p style="color: #888; font-size: 1.1em;">Prediction Market Edge Finder</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.success("✅ Payment received. Enter your access password below.")
+        
+        if is_production_token:
+            st.markdown("### 🔑 Your access password:")
+            st.code(ACCESS_PASSWORD)
+        
+        st.markdown("---")
+        
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            password_input = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter password")
+            if st.button("🔓 UNLOCK", use_container_width=True, type="primary"):
+                if password_input.upper() in VALID_PASSWORDS:
+                    st.session_state.authenticated = True
+                    st.session_state.user_type = VALID_PASSWORDS[password_input.upper()]
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid password")
+        
+        st.stop()
     
-    # Pattern: ">19°" or "be >19°"  
-    above_match = re.search(r'>\s*(\d+)°', range_str)
-    if above_match:
-        return int(above_match.group(1)) + 0.5, 999
+    # ============ REGULAR MARKETING FLOW ============
     
-    # Pattern: "16-17°" or "16° to 17°" or "16 to 17°"
-    range_match = re.search(r'(\d+)[-–]\s*(\d+)°|(\d+)°?\s*to\s*(\d+)°', range_str)
-    if range_match:
-        if range_match.group(1) and range_match.group(2):
-            low, high = int(range_match.group(1)), int(range_match.group(2))
-        else:
-            low, high = int(range_match.group(3)), int(range_match.group(4))
-        return low - 0.5, high + 0.5
+    # ============ HERO ============
+    st.markdown("""
+    <div style="text-align: center; padding: 50px 20px 20px 20px;">
+        <div style="font-size: 60px; margin-bottom: 15px;">📊</div>
+        <h1 style="font-size: 2.8em; margin-bottom: 0; color: #fff;">Stop Switching Tabs.</h1>
+        <h1 style="font-size: 2.8em; margin-top: 5px; color: #00d4ff;">Start Making Cleaner Decisions.</h1>
+        <p style="font-size: 1.2em; color: #888; max-width: 700px; margin: 25px auto;">
+            BigSnapshot is a decision-compression tool for serious Kalshi bettors. It pulls the signals that matter into one screen—so you spend less time hunting and more time deciding.
+        </p>
+        <p style="color: #666; font-size: 1.1em;">No hype. No picks shoved in your face. Just clarity.</p>
+        <p style="color: #555; font-size: 1em; margin-top: 20px;">Because edge disappears once everyone sees it.</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Pattern: "32° or below" or "41° or above"
-    if "or below" in tl or "below" in tl:
-        nums = re.findall(r'(\d+)°', range_str)
-        if nums:
-            return -999, int(nums[0]) + 0.5
-    if "or above" in tl or "above" in tl:
-        nums = re.findall(r'(\d+)°', range_str)
-        if nums:
-            return int(nums[0]) - 0.5, 999
+    # ============ FREE TEMP BUTTON ============
+    st.markdown(
+        """
+        <div style="text-align: center; margin: 30px 0 15px 0;">
+            <a href="/Temp" target="_self">
+                <button style="
+                    background-color:#f59e0b;
+                    color:black;
+                    padding:14px 36px;
+                    border:none;
+                    border-radius:10px;
+                    font-size:16px;
+                    font-weight:700;
+                    cursor:pointer;
+                ">
+                    🌡️ Try Temp Edge Finder FREE
+                </button>
+            </a>
+            <p style="color: #888; font-size: 12px; margin-top: 10px;">No signup required. See it in action.</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     
-    # Fallback: only numbers with degree symbol
-    nums = re.findall(r'(\d+)°', range_str)
-    if len(nums) >= 2:
-        return int(nums[0]) - 0.5, int(nums[1]) + 0.5
-    elif nums:
-        return int(nums[0]) - 0.5, int(nums[0]) + 0.5
-    
-    return 0, 100
-
-def temp_in_bracket(temp, range_str):
-    """Check if temperature falls within bracket"""
-    low, high = get_bracket_bounds(range_str)
-    return low < temp <= high
-
-@st.cache_data(ttl=60)
-def fetch_kalshi_brackets(series_ticker):
-    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
-    try:
-        resp = requests.get(url, timeout=10)
-        if resp.status_code != 200:
-            return None
-        markets = resp.json().get("markets", [])
-        if not markets:
-            return None
-        
-        today = datetime.now(eastern)
-        today_str = today.strftime('%y%b%d').upper()
-        
-        today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
-        if not today_markets:
-            first_event = markets[0].get("event_ticker", "")
-            today_markets = [m for m in markets if m.get("event_ticker") == first_event]
-        
-        brackets = []
-        for m in today_markets:
-            range_txt = m.get("subtitle", "") or m.get("title", "")
-            ticker = m.get("ticker", "")
-            
-            low, high = get_bracket_bounds(range_txt)
-            if low == -999:
-                mid = high - 1
-            elif high == 999:
-                mid = low + 1
-            else:
-                mid = (low + high) / 2
-            
-            yb = m.get("yes_bid", 0)
-            ya = m.get("yes_ask", 0)
-            if yb and ya:
-                yes_price = (yb + ya) / 2
-            else:
-                yes_price = ya or yb or 0
-            
-            brackets.append({
-                "range": range_txt,
-                "mid": mid,
-                "yes": yes_price,
-                "ticker": ticker,
-                "url": f"https://kalshi.com/markets/{series_ticker.lower()}/{ticker.lower()}" if ticker else "#"
-            })
-        
-        brackets.sort(key=lambda x: x['mid'] or 0)
-        return brackets
-    except:
-        return None
-
-@st.cache_data(ttl=120)
-def fetch_nws_observations(station):
-    """Fetch today's hourly observations from NWS"""
-    url = f"https://api.weather.gov/stations/{station}/observations"
-    try:
-        resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
-        if resp.status_code != 200:
-            return None, None, None, []
-        
-        observations = resp.json().get("features", [])
-        if not observations:
-            return None, None, None, []
-        
-        today = datetime.now(eastern).date()
-        temps = []
-        readings = []
-        
-        for obs in observations:
-            props = obs.get("properties", {})
-            timestamp_str = props.get("timestamp", "")
-            temp_c = props.get("temperature", {}).get("value")
-            
-            if not timestamp_str or temp_c is None:
-                continue
-            
-            try:
-                ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                ts_local = ts.astimezone(eastern)
-                
-                if ts_local.date() == today:
-                    temp_f = round(temp_c * 9/5 + 32, 1)
-                    temps.append(temp_f)
-                    readings.append({"time": ts_local.strftime("%H:%M"), "temp": temp_f})
-            except:
-                continue
-        
-        if not temps:
-            return None, None, None, []
-        
-        current = temps[0] if temps else None
-        low = min(temps)
-        high = max(temps)
-        
-        return current, low, high, readings[:12]
-        
-    except:
-        return None, None, None, []
-
-@st.cache_data(ttl=300)
-def fetch_nws_forecast(lat, lon):
-    """Fetch NWS forecast for display"""
-    try:
-        # First get the forecast URL from points endpoint
-        points_url = f"https://api.weather.gov/points/{lat},{lon}"
-        resp = requests.get(points_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
-        if resp.status_code != 200:
-            return None
-        
-        forecast_url = resp.json().get("properties", {}).get("forecast")
-        if not forecast_url:
-            return None
-        
-        # Fetch the actual forecast
-        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
-        if resp.status_code != 200:
-            return None
-        
-        periods = resp.json().get("properties", {}).get("periods", [])
-        if not periods:
-            return None
-        
-        # Return first 4 periods (today/tonight/tomorrow/tomorrow night)
-        return periods[:4]
-    except:
-        return None
-
-def render_brackets_with_actual(brackets, actual_temp, temp_type):
-    """Render brackets highlighting the actual winning bracket"""
-    if not brackets:
-        st.error("Could not load brackets")
-        return
-    
-    winning_bracket = None
-    for b in brackets:
-        if temp_in_bracket(actual_temp, b['range']):
-            winning_bracket = b['range']
-            break
-    
-    market_fav = max(brackets, key=lambda b: b['yes'])
-    st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
-    
-    for b in brackets:
-        is_winner = b['range'] == winning_bracket
-        is_market_fav = b['range'] == market_fav['range']
-        
-        if is_winner:
-            box_style = "background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;box-shadow:0 0 15px rgba(245,158,11,0.4);border-radius:6px;padding:12px 14px;margin:8px 0"
-            name_style = "color:#fbbf24;font-weight:700;font-size:1.05em"
-            icon = " 🎯"
-            model_txt = "ACTUAL"
-        else:
-            if is_market_fav:
-                box_style = "background:#1a1a2e;border:1px solid #4a4a6a;border-radius:6px;padding:10px 12px;margin:5px 0"
-                icon = " ⭐"
-            else:
-                box_style = "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
-                icon = ""
-            name_style = "color:#e5e7eb;font-weight:500"
-            model_txt = "—"
-        
-        html = f'''<div style="{box_style}">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-                <span style="{name_style}">{b['range']}{icon}</span>
-                <div style="display:flex;gap:12px;align-items:center">
-                    <span style="color:#f59e0b">Kalshi {b['yes']:.0f}¢</span>
-                    <span style="color:#9ca3af">{model_txt}</span>
-                </div>
+    # ============ STRIPE BUY BUTTON (TOP) ============
+    if not from_payment:
+        st.markdown(
+            f"""
+            <div style="text-align: center; margin: 15px 0 30px 0;">
+                <a href="{STRIPE_LINK}" target="_blank">
+                    <button style="
+                        background-color:#22c55e;
+                        color:black;
+                        padding:16px 40px;
+                        border:none;
+                        border-radius:10px;
+                        font-size:18px;
+                        font-weight:700;
+                        cursor:pointer;
+                    ">
+                        🔓 Unlock All Tools – $49.99
+                    </button>
+                </a>
+                <p style="color: #888; font-size: 13px; margin-top: 12px;">One-time payment. Refund available if not a fit.</p>
             </div>
-        </div>'''
-        st.markdown(html, unsafe_allow_html=True)
+            """,
+            unsafe_allow_html=True
+        )
     
-    if winning_bracket:
-        winner_data = next((b for b in brackets if b['range'] == winning_bracket), None)
-        if winner_data:
-            potential_profit = 100 - winner_data['yes']
-            card = f'''
-            <div style="background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;border-radius:10px;padding:18px;text-align:center;margin-top:12px;box-shadow:0 0 20px rgba(245,158,11,0.5)">
-                <div style="color:#fbbf24;font-size:0.9em;font-weight:600">🌡️ ACTUAL {temp_type}: {actual_temp}°F</div>
-                <div style="color:#fff;font-size:1.3em;font-weight:700;margin:10px 0">{winning_bracket}</div>
-                <div style="color:#4ade80;font-size:0.9em">Potential profit: +{potential_profit:.0f}¢ per contract</div>
-                <a href="{winner_data['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:10px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY YES</a>
-            </div>'''
-            st.markdown(card, unsafe_allow_html=True)
-
-# ========== HEADER ==========
-st.title("🌡️ TEMP EDGE FINDER")
-st.caption(f"Live NWS Observations + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')}")
-
-c1, c2 = st.columns([4, 1])
-with c1:
-    city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index("New York City"))
-with c2:
-    cfg = CITY_CONFIG.get(city, {})
-    nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
-    st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
-
-# Fetch actual observations
-current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
-
-# Display current conditions
-if current_temp:
-    st.markdown(f"""
-    <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
-        <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
-            <div>
-                <div style="color:#6b7280;font-size:0.8em">CURRENT</div>
-                <div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div>
+    # ============ ONE SCREEN SECTION ============
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 16px; padding: 40px; margin: 40px auto; max-width: 900px;">
+        <h2 style="color: #fff; text-align: center; margin-bottom: 20px;">One Screen. One Flow. Zero Noise.</h2>
+        <p style="color: #aaa; text-align: center; font-size: 1.1em; margin-bottom: 25px;">
+            Most bettors lose edge before they even place a bet—switching between odds, stats, line movement, news, and gut instinct. BigSnapshot fixes that.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;">
+            <div style="text-align: center;">
+                <span style="color: #00ff88; font-size: 1.1em;">✓ Where the edge is</span>
             </div>
-            <div>
-                <div style="color:#3b82f6;font-size:0.8em">TODAY'S LOW</div>
-                <div style="color:#3b82f6;font-size:1.5em;font-weight:700">{obs_low}°F</div>
+            <div style="text-align: center;">
+                <span style="color: #00ff88; font-size: 1.1em;">✓ Whether the market agrees or resists</span>
             </div>
-            <div>
-                <div style="color:#ef4444;font-size:0.8em">TODAY'S HIGH</div>
-                <div style="color:#ef4444;font-size:1.5em;font-weight:700">{obs_high}°F</div>
+            <div style="text-align: center;">
+                <span style="color: #00ff88; font-size: 1.1em;">✓ What deserves attention—and what doesn't</span>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    if readings:
-        with st.expander("📊 Recent NWS Observations", expanded=True):
-            # Find LOW reversal (temp lower than both neighbors)
-            low_reversal_idx = None
-            for i in range(1, len(readings) - 1):
-                if readings[i]['temp'] < readings[i-1]['temp'] and readings[i]['temp'] < readings[i+1]['temp']:
-                    low_reversal_idx = i
-                    break
-            
-            # Find HIGH reversal (temp higher than both neighbors)
-            high_reversal_idx = None
-            for i in range(1, len(readings) - 1):
-                if readings[i]['temp'] > readings[i-1]['temp'] and readings[i]['temp'] > readings[i+1]['temp']:
-                    high_reversal_idx = i
-                    break
-            
-            for i, r in enumerate(readings[:8]):
-                # Highlight LOW reversal in orange
-                if i == low_reversal_idx:
-                    row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
-                    time_style = "color:#fbbf24;font-weight:600"
-                    temp_style = "color:#fbbf24;font-weight:700"
-                    label = " ↩️ LOW"
-                # Highlight HIGH reversal in red
-                elif i == high_reversal_idx:
-                    row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d0a0a,#1a0808);border:1px solid #ef4444;margin:2px 0"
-                    time_style = "color:#f87171;font-weight:600"
-                    temp_style = "color:#f87171;font-weight:700"
-                    label = " ↩️ HIGH"
-                else:
-                    row_style = "display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #30363d"
-                    time_style = "color:#9ca3af"
-                    temp_style = "color:#fff;font-weight:600"
-                    label = ""
-                st.markdown(f"<div style='{row_style}'><span style='{time_style}'>{r['time']}</span><span style='{temp_style}'>{r['temp']}°F{label}</span></div>", unsafe_allow_html=True)
-else:
-    st.warning("⚠️ Could not fetch NWS observations")
-
-st.markdown("---")
-
-col_high, col_low = st.columns(2)
-
-with col_high:
-    st.subheader("☀️ HIGH TEMP")
-    hour = now.hour
+    # ============ BENEFITS GRID ============
+    st.markdown("### Why BigSnapshot Is Different")
     
-    if obs_high:
-        st.metric("📈 High So Far", f"{obs_high}°F")
-        brackets_high = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY"))
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #00d4ff;">
+            <h3 style="color: #00d4ff; margin: 0 0 10px 0;">⏱️ Save Time on Every Slate</h3>
+            <p style="color: #aaa; margin: 0;">No bouncing between sportsbooks, stats sites, and Twitter. No manual cross-checking. Scan an entire slate in seconds.</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        if hour >= 15:
-            st.caption("✅ High likely locked in (after 3 PM)")
-            render_brackets_with_actual(brackets_high, obs_high, "HIGH")
-        else:
-            st.caption(f"⏳ Too early — HIGH peaks 12-5 PM. Check back later.")
-            if brackets_high:
-                market_fav = max(brackets_high, key=lambda b: b['yes'])
-                st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
-                for b in brackets_high:
-                    is_fav = b['range'] == market_fav['range']
-                    if is_fav:
-                        box_style = "background:#1a1a2e;border:1px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:5px 0"
-                        icon = " ⭐"
-                    else:
-                        box_style = "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
-                        icon = ""
-                    html = f'''<div style="{box_style}">
-                        <div style="display:flex;justify-content:space-between;align-items:center">
-                            <span style="color:#e5e7eb">{b['range']}{icon}</span>
-                            <span style="color:#f59e0b">Kalshi {b['yes']:.0f}¢</span>
-                        </div>
-                    </div>'''
-                    st.markdown(html, unsafe_allow_html=True)
-                
-                # Add BUY button for market favorite
-                st.markdown(f'''
-                <div style="text-align:center;margin-top:12px">
-                    <a href="{market_fav['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a>
-                </div>
-                ''', unsafe_allow_html=True)
-    else:
-        st.error("Could not fetch observations")
-
-with col_low:
-    st.subheader("🌙 LOW TEMP")
-    hour = now.hour
-    
-    if obs_low:
-        st.metric("📉 Today's Low", f"{obs_low}°F")
-        brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #ff6b6b;">
+            <h3 style="color: #ff6b6b; margin: 0 0 10px 0;">🎯 Decision Compression</h3>
+            <p style="color: #aaa; margin: 0;">Raw data is distilled into clear signals. You see what matters, not everything. Analysis paralysis disappears.</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        if hour >= 6:  # LOW locks in by 6 AM
-            st.caption("✅ Low locked in (after 6 AM)")
-            render_brackets_with_actual(brackets_low, obs_low, "LOW")
-        else:
-            st.caption(f"⏳ Low may still drop (before 6 AM)")
-            if brackets_low:
-                market_fav = max(brackets_low, key=lambda b: b['yes'])
-                st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
-                for b in brackets_low:
-                    is_fav = b['range'] == market_fav['range']
-                    if is_fav:
-                        box_style = "background:#1a1a2e;border:1px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:5px 0"
-                        icon = " ⭐"
-                    else:
-                        box_style = "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
-                        icon = ""
-                    html = f'''<div style="{box_style}">
-                        <div style="display:flex;justify-content:space-between;align-items:center">
-                            <span style="color:#e5e7eb">{b['range']}{icon}</span>
-                            <span style="color:#f59e0b">Kalshi {b['yes']:.0f}¢</span>
-                        </div>
-                    </div>'''
-                    st.markdown(html, unsafe_allow_html=True)
-                
-                # Add BUY button for market favorite
-                st.markdown(f'''
-                <div style="text-align:center;margin-top:12px">
-                    <a href="{market_fav['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a>
-                </div>
-                ''', unsafe_allow_html=True)
-    else:
-        st.error("Could not fetch observations")
-
-# ========== NWS FORECAST SECTION ==========
-st.markdown("---")
-st.subheader("📡 NWS Forecast")
-
-forecast = fetch_nws_forecast(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
-if forecast:
-    fcols = st.columns(len(forecast))
-    for i, period in enumerate(forecast):
-        with fcols[i]:
-            name = period.get("name", "")
-            temp = period.get("temperature", "")
-            unit = period.get("temperatureUnit", "F")
-            short = period.get("shortForecast", "")
-            
-            # Color based on day/night
-            if "night" in name.lower() or "tonight" in name.lower():
-                bg = "#1a1a2e"
-                temp_color = "#3b82f6"
-            else:
-                bg = "#1f2937"
-                temp_color = "#ef4444"
-            
-            st.markdown(f"""
-            <div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center">
-                <div style="color:#9ca3af;font-size:0.8em;font-weight:600">{name}</div>
-                <div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div>
-                <div style="color:#6b7280;font-size:0.75em;margin-top:5px">{short}</div>
-            </div>
-            """, unsafe_allow_html=True)
-else:
-    st.caption("Could not load NWS forecast")
-
-st.markdown("---")
-st.markdown("""
-<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center">
-<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.1</span>
-</div>
-""", unsafe_allow_html=True)
-
-with st.expander("❓ How to Use This App"):
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #ffd93d;">
+            <h3 style="color: #ffd93d; margin: 0 0 10px 0;">📊 Market Awareness</h3>
+            <p style="color: #aaa; margin: 0;">Instantly know if the market supports your view. Instantly know when it's pushing back. You're aware before you commit.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #a855f7;">
+            <h3 style="color: #a855f7; margin: 0 0 10px 0;">🛑 Stops You From Chasing Steam</h3>
+            <p style="color: #aaa; margin: 0;">Late moves are obvious. Resistance is clearly flagged. The app naturally slows you down when chasing would hurt you most.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #4ade80;">
+            <h3 style="color: #4ade80; margin: 0 0 10px 0;">🧘 Discipline Built In</h3>
+            <p style="color: #aaa; margin: 0;">No BUY / SELL hype. No flashing alerts. No forced picks. BigSnapshot encourages restraint instead of impulsive action.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #38bdf8;">
+            <h3 style="color: #38bdf8; margin: 0 0 10px 0;">👀 Early Signal Visibility</h3>
+            <p style="color: #aaa; margin: 0;">Spot early pressure before public noise takes over. Especially powerful in thinner markets. Timing improves without forcing volume.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #f472b6;">
+            <h3 style="color: #f472b6; margin: 0 0 10px 0;">✂️ Fewer Bad Bets, Same Good Bets</h3>
+            <p style="color: #aaa; margin: 0;">The app doesn't create more bets. It filters out the bad versions of good ideas. Your edge quality improves without trading more.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #88ff88;">
+            <h3 style="color: #88ff88; margin: 0 0 10px 0;">⏳ Time Is the Real Edge</h3>
+            <p style="color: #aaa; margin: 0;">Most edges don't fail — they get crowded. BigSnapshot helps you see pressure early, before the market fully reacts.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # ============ RESULT SECTION ============
     st.markdown("""
-    **🌡️ What This App Does**
-    
-    Compares actual NWS temperature observations against Kalshi prediction market prices to find edge opportunities.
-    
-    **⏰ When to Check**
-    
-    • **LOW Temperature**: Usually bottoms out between 4-7 AM. Look for the ↩️ REVERSAL in observations — that confirms the low is set.
-    • **HIGH Temperature**: Usually peaks between 12-5 PM. Once you see temps dropping after the peak, the high is locked.
-    
-    The app highlights the reversal point when detected — that's your confirmation.
-    
-    **🧠 Philosophy**
-    
-    This app doesn't predict. It shows you what's already happened so you can avoid bad trades.
-    
-    • No reversal yet? Don't bet — the low/high isn't confirmed.
-    • See a reversal + market mispriced? Now you have information the market hasn't processed.
-    • No edge visible? Skip it. Discipline is edge.
-    
-    **↩️ Reversal Point (Orange/Red Highlight)**
-    
-    In "Recent NWS Observations", we highlight the **reversal point** — the exact moment temps bottomed out and started climbing back up:
-    """)
-    st.markdown("""
-    <div style="background:#161b22;border-radius:6px;padding:10px;margin:10px 0">
-        <div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"><span style="color:#9ca3af">07:51</span><span style="color:#fff">19.0°F (warming up)</span></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"><span style="color:#fbbf24;font-weight:600">06:51</span><span style="color:#fbbf24;font-weight:700">17.1°F ↩️ LOW</span></div>
-        <div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"><span style="color:#9ca3af">05:51</span><span style="color:#fff">18.0°F (cooling down)</span></div>
+    <div style="background: linear-gradient(135deg, #0f3460, #1a1a2e); border-radius: 16px; padding: 40px; margin: 40px auto; text-align: center; max-width: 900px;">
+        <h2 style="color: #fff; margin-bottom: 20px;">The Result</h2>
+        <div style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; margin-bottom: 30px;">
+            <span style="color: #00ff88; font-size: 1.1em;">✓ Less second-guessing</span>
+            <span style="color: #00ff88; font-size: 1.1em;">✓ Less tilt</span>
+            <span style="color: #00ff88; font-size: 1.1em;">✓ Fewer mistakes</span>
+            <span style="color: #00ff88; font-size: 1.1em;">✓ More trust in your process</span>
+        </div>
+        <p style="color: #fff; font-size: 1.4em; font-weight: bold; margin: 0;">You don't bet more. You bet cleaner.</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # ============ LIVE TOOLS (MARKETING) ============
+    st.markdown("### 🎯 Live Tools")
     st.markdown("""
-    When you see a reversal, it confirms the LOW is locked in. The temperature hit bottom and reversed direction — it's not going lower.
+    <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #3a4a6a;">
+            <div style="font-size: 45px; margin-bottom: 15px;">🏀</div>
+            <h3 style="color: #fff; margin-bottom: 10px;">NBA Edge Finder</h3>
+        </div>
+        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4a5a4a;">
+            <div style="font-size: 45px; margin-bottom: 15px;">🏈</div>
+            <h3 style="color: #fff; margin-bottom: 10px;">NFL Edge Finder</h3>
+        </div>
+        <div style="background: linear-gradient(135deg, #2a2a3a 0%, #3a3a4a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4a4a5a;">
+            <div style="font-size: 45px; margin-bottom: 15px;">🏒</div>
+            <h3 style="color: #fff; margin-bottom: 10px;">NHL Edge Finder</h3>
+        </div>
+        <div style="background: linear-gradient(135deg, #3a2a1a 0%, #4a3a2a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #f59e0b;">
+            <div style="font-size: 45px; margin-bottom: 15px;">🌡️</div>
+            <h3 style="color: #f59e0b; margin-bottom: 5px;">Temp Edge Finder</h3>
+            <span style="background:#f59e0b;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    **🎯 Reading the Display**
+    # ============ COMING SOON (MARKETING) ============
+    st.markdown("### 🚧 Coming Soon")
+    st.markdown("""
+    <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+            <div style="font-size: 35px; margin-bottom: 8px;">⚾</div>
+            <h4 style="color: #888; margin: 0;">MLB</h4>
+        </div>
+        <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+            <div style="font-size: 35px; margin-bottom: 8px;">⚽</div>
+            <h4 style="color: #888; margin: 0;">Soccer</h4>
+        </div>
+        <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+            <div style="font-size: 35px; margin-bottom: 8px;">🏛️</div>
+            <h4 style="color: #888; margin: 0;">Politics</h4>
+        </div>
+        <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+            <div style="font-size: 35px; margin-bottom: 8px;">📈</div>
+            <h4 style="color: #888; margin: 0;">Economics</h4>
+        </div>
+        <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
+            <div style="font-size: 35px; margin-bottom: 8px;">🎬</div>
+            <h4 style="color: #888; margin: 0;">Entertainment</h4>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    • **⭐ Star** = Market favorite (highest Kalshi price)
-    • **🎯 ACTUAL** = The bracket where the observed temperature actually falls
-    • **Kalshi price** = What the market thinks the probability is (e.g., 40¢ = 40% chance)
+    # ============ BOTTOM LINE + SECOND CTA ============
+    st.markdown("""
+    <div style="text-align: center; padding: 40px 20px; max-width: 700px; margin: 0 auto;">
+        <p style="color: #888; font-size: 1.2em; margin-bottom: 20px;">
+            BigSnapshot doesn't help you chase wins. It helps you make fewer bad decisions.
+        </p>
+        <p style="color: #fff; font-weight: bold; font-size: 1.3em;">That's where real edge comes from.</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    **💰 Finding Edge**
+    if not from_payment:
+        st.markdown(
+            f"""
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{STRIPE_LINK}" target="_blank">
+                    <button style="
+                        background-color:#22c55e;
+                        color:black;
+                        padding:16px 40px;
+                        border:none;
+                        border-radius:10px;
+                        font-size:18px;
+                        font-weight:700;
+                        cursor:pointer;
+                    ">
+                        🔓 Unlock All Tools – $49.99
+                    </button>
+                </a>
+                <p style="color: #888; font-size: 13px; margin-top: 12px;">One-time payment. Refund available if not a fit.</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     
-    When ACTUAL bracket ≠ Market favorite, there may be edge:
-    • If actual temp falls in a bracket priced at 1¢, buying YES pays +99¢ profit
-    • If actual temp falls in a bracket priced at 50¢, buying YES pays +50¢ profit
+    st.markdown("---")
     
-    **📊 Data Sources**
+    # ============ PASSWORD ENTRY ============
+    st.markdown("""
+    <div style="max-width: 400px; margin: 30px auto; text-align: center;">
+        <p style="color: #888; font-size: 14px; margin-bottom: 15px;">
+            Already paid? Enter your password below:
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    • **Observations**: Live hourly readings from NWS weather stations
-    • **Brackets**: Real-time prices from Kalshi API
-    • **Forecast**: NWS official forecast for reference
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        password_input = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter password")
+        if st.button("🔓 UNLOCK", use_container_width=True, type="primary"):
+            if password_input.upper() in VALID_PASSWORDS:
+                st.session_state.authenticated = True
+                st.session_state.user_type = VALID_PASSWORDS[password_input.upper()]
+                st.rerun()
+            else:
+                st.error("❌ Invalid password")
     
-    **⚠️ Important Notes**
+    # Footer
+    st.markdown("""
+    <div style="text-align: center; padding: 40px 20px; margin-top: 20px;">
+        <p style="color: #888; font-size: 13px; margin-bottom: 15px;">
+            <strong>💳 Refund Policy:</strong> Not satisfied? Email aipublishingpro@gmail.com within 7 days for a full refund. No questions asked.
+        </p>
+        <p style="color: #555; font-size: 12px;">
+            ⚠️ For entertainment only. Not financial advice.<br>
+            📧 aipublishingpro@gmail.com
+        </p>
+        <p style="color: #555; font-size: 12px; margin-top: 10px;">
+            Questions or feedback? DM me on X: @AIPublishingPro
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    • This is NOT financial advice
-    • Weather can change — especially HIGH temps before 3 PM
-    • Always verify on Kalshi before trading
-    • Kalshi uses specific weather stations — slight differences possible
-    """)
+    st.stop()
 
-st.markdown("""
-<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px;padding:0 20px">
-⚠️ For entertainment and educational purposes only. This tool displays observed temperature data alongside Kalshi market prices. It does not constitute financial advice.
-Kalshi settles markets using official weather stations, which may differ slightly from NWS observations shown here.
-Always verify market details on Kalshi before trading.
-</div>
-""", unsafe_allow_html=True)
+# ============================================================
+# AUTHENTICATED - SHOW APP HUB (LIVE TOOLS FIRST)
+# ============================================================
+st.title("📊 BigSnapshot")
+st.caption("Prediction Market Edge Finder")
 
+st.markdown("---")
+
+# ============ LIVE TOOLS - PURE STREAMLIT ============
+st.header("🔥 LIVE TOOLS")
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.subheader("🏀 NBA")
+    if st.button("OPEN NBA", use_container_width=True, type="primary", key="nav_nba"):
+        st.switch_page("pages/2_NBA.py")
+
+with col2:
+    st.subheader("🏈 NFL")
+    if st.button("OPEN NFL", use_container_width=True, type="primary", key="nav_nfl"):
+        st.switch_page("pages/1_NFL.py")
+
+with col3:
+    st.subheader("🏒 NHL")
+    if st.button("OPEN NHL", use_container_width=True, type="primary", key="nav_nhl"):
+        st.switch_page("pages/3_NHL.py")
+
+with col4:
+    st.subheader("🌡️ TEMP")
+    if st.button("OPEN TEMP", use_container_width=True, type="primary", key="nav_temp"):
+        st.switch_page("pages/5_Temp.py")
+
+st.markdown("---")
+
+# ============ COMING SOON - MINIMAL ============
+st.caption("🚧 Coming Soon: MLB • Soccer • Politics • Economics • Entertainment")
+
+st.markdown("---")
+
+# Logout
+col1, col2, col3 = st.columns([1, 1, 1])
+with col2:
+    if st.button("🚪 Logout", use_container_width=True):
+        st.session_state.authenticated = False
+        st.session_state.user_type = None
+        st.rerun()
+
+# Footer
 st.markdown("""
-<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:10px;padding:0 20px">
-Questions or feedback? DM me on X: @AIPublishingPro
+<div style="text-align: center; padding: 20px;">
+    <p style="color: #555; font-size: 12px;">
+        ⚠️ For entertainment only. Not financial advice.<br>
+        📧 aipublishingpro@gmail.com
+    </p>
+    <p style="color: #555; font-size: 12px; margin-top: 10px;">
+        Questions or feedback? DM me on X: @AIPublishingPro
+    </p>
 </div>
 """, unsafe_allow_html=True)
