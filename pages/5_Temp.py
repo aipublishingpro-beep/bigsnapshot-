@@ -110,17 +110,6 @@ KALSHI_CODES = {
     "Utah": "uta", "Washington": "was"
 }
 
-ESPN_TEAM_IDS = {
-    "Atlanta": "1", "Boston": "2", "Brooklyn": "17", "Charlotte": "30",
-    "Chicago": "4", "Cleveland": "5", "Dallas": "6", "Denver": "7",
-    "Detroit": "8", "Golden State": "9", "Houston": "10", "Indiana": "11",
-    "LA Clippers": "12", "LA Lakers": "13", "Memphis": "29", "Miami": "14",
-    "Milwaukee": "15", "Minnesota": "16", "New Orleans": "3", "New York": "18",
-    "Oklahoma City": "25", "Orlando": "19", "Philadelphia": "20", "Phoenix": "21",
-    "Portland": "22", "Sacramento": "23", "San Antonio": "24", "Toronto": "28",
-    "Utah": "26", "Washington": "27"
-}
-
 def build_kalshi_totals_url(away_team, home_team):
     away_code = KALSHI_CODES.get(away_team, "xxx").upper()
     home_code = KALSHI_CODES.get(home_team, "xxx").upper()
@@ -293,57 +282,63 @@ def calc_distance(loc1, loc2):
     a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
     return 3959 * 2 * atan2(sqrt(a), sqrt(1-a))
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1800)
 def fetch_team_form(team_name):
-    """Fetch last 5 game results for a team from ESPN API"""
-    team_id = ESPN_TEAM_IDS.get(team_name)
-    if not team_id:
-        return "-----"
+    """Fetch last 5 game results for a team by scanning recent scoreboards"""
+    eastern = pytz.timezone('US/Eastern')
+    results = []
     
     try:
-        url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_id}/schedule"
-        resp = requests.get(url, timeout=10)
-        data = resp.json()
-        
-        results = []
-        events = data.get("events", [])
-        
-        for event in reversed(events):
+        for days_ago in range(1, 15):
             if len(results) >= 5:
                 break
             
-            status = event.get("competitions", [{}])[0].get("status", {}).get("type", {}).get("name", "")
-            if status != "STATUS_FINAL":
-                continue
+            check_date = (datetime.now(eastern) - timedelta(days=days_ago)).strftime('%Y%m%d')
+            url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={check_date}"
+            resp = requests.get(url, timeout=5)
+            data = resp.json()
             
-            competitors = event.get("competitions", [{}])[0].get("competitors", [])
-            team_score = 0
-            opp_score = 0
-            
-            for comp in competitors:
-                comp_id = comp.get("id", "")
-                score = int(comp.get("score", {}).get("value", 0) if isinstance(comp.get("score"), dict) else comp.get("score", 0))
+            for event in data.get("events", []):
+                if len(results) >= 5:
+                    break
                 
-                if comp_id == team_id:
-                    team_score = score
-                else:
-                    opp_score = score
-            
-            if team_score > opp_score:
-                results.append("W")
-            elif team_score < opp_score:
-                results.append("L")
+                status = event.get("status", {}).get("type", {}).get("name", "")
+                if status != "STATUS_FINAL":
+                    continue
+                
+                comp = event.get("competitions", [{}])[0]
+                competitors = comp.get("competitors", [])
+                
+                team_found = False
+                team_score = 0
+                opp_score = 0
+                
+                for c in competitors:
+                    full_name = c.get("team", {}).get("displayName", "")
+                    c_team = TEAM_ABBREVS.get(full_name, full_name)
+                    score = int(c.get("score", 0) or 0)
+                    
+                    if c_team == team_name:
+                        team_found = True
+                        team_score = score
+                    else:
+                        opp_score = score
+                
+                if team_found:
+                    if team_score > opp_score:
+                        results.append("W")
+                    else:
+                        results.append("L")
         
         if not results:
             return "-----"
         
-        results = results[:5]
         while len(results) < 5:
             results.append("-")
         
-        return "".join(results)
+        return "".join(results[:5])
     
-    except Exception as e:
+    except:
         return "-----"
 
 def get_form_color(form_str):
