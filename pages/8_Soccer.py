@@ -594,7 +594,8 @@ if live_games:
             st.markdown(f"**Pick:** {game['pick']}")
             st.markdown(f"**Edge:** {game['edge_score']}")
         with col3:
-            st.link_button("📈 Trade on Kalshi", game['kalshi_url'])
+            st.link_button("📈 Trade on Kalshi", game['fallback_url'])
+            st.caption(f"[Try direct link]({game['kalshi_url']})")
 
 # Top Pick
 if all_games:
@@ -614,7 +615,7 @@ if all_games:
         <p style="color: #8899aa;">
             📅 {top_pick['game_time'].strftime('%b %d, %I:%M %p ET')}
         </p>
-        <a href="{top_pick['kalshi_url']}" target="_blank" style="
+        <a href="{top_pick['fallback_url']}" target="_blank" style="
             display: inline-block;
             background: linear-gradient(135deg, #00c853 0%, #00e676 100%);
             color: white !important;
@@ -624,6 +625,7 @@ if all_games:
             margin-top: 12px;
             text-decoration: none;
         ">📈 Trade on Kalshi</a>
+        <br><a href="{top_pick['kalshi_url']}" target="_blank" style="color: #888; font-size: 0.8rem;">Try direct game link (may 404)</a>
     </div>
     """, unsafe_allow_html=True)
 
@@ -652,8 +654,8 @@ for game in all_games:
         st.metric("Edge", game['edge_score'])
     
     with col4:
-        st.link_button("Trade", game['kalshi_url'], use_container_width=True)
-        st.caption(f"[Browse League]({game['fallback_url']})")
+        st.link_button("Trade", game['fallback_url'], use_container_width=True)
+        st.caption(f"[Direct link]({game['kalshi_url']})")
 
 # How to Use
 with st.expander("📖 How to Use Soccer Edge Finder"):
