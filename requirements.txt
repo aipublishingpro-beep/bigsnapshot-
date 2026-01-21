@@ -5,3 +5,4 @@ cryptography>=41.0.0
 plotly
 pandas
 numpy
+extra-streamlit-components
