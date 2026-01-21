@@ -335,21 +335,21 @@ signals = generate_edge_signals()
 
 if signals:
     for signal in signals:
-        # Determine card class based on strength
+        # Determine card style based on strength
         if signal['strength'] == "STRONG":
-            card_class = "signal-card-strong"
-            badge_class = "signal-badge-strong"
+            card_style = "background: linear-gradient(135deg, #3d1a1a 0%, #5a2d2d 100%); border: 2px solid #ff6b35; border-radius: 16px; padding: 24px; margin: 16px 0; box-shadow: 0 8px 32px rgba(255, 107, 53, 0.3);"
+            badge_style = "background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%); color: white; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 700;"
         elif signal['strength'] == "MODERATE":
-            card_class = "signal-card-moderate"
-            badge_class = "signal-badge-moderate"
+            card_style = "background: linear-gradient(135deg, #3d3d1a 0%, #5a5a2d 100%); border: 2px solid #ffcc00; border-radius: 16px; padding: 24px; margin: 16px 0; box-shadow: 0 4px 20px rgba(255, 204, 0, 0.2);"
+            badge_style = "background: linear-gradient(135deg, #ffcc00 0%, #ffd93d 100%); color: black; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 700;"
         else:
-            card_class = "signal-card-watch"
-            badge_class = "signal-badge-watch"
+            card_style = "background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border: 1px solid #4a9eff; border-radius: 16px; padding: 24px; margin: 16px 0;"
+            badge_style = "background: linear-gradient(135deg, #4a9eff 0%, #2d7dd2 100%); color: white; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 700;"
         
         # Build data points HTML
         data_points_html = ""
         for dp in signal['data_points']:
-            data_points_html += f'<div class="data-point">📊 {dp}</div>'
+            data_points_html += f'<div style="background: rgba(0, 0, 0, 0.3); border-radius: 8px; padding: 8px 12px; margin: 4px 0; font-family: monospace; color: #ccc;">📊 {dp}</div>'
         
         # Get Kalshi link
         kalshi_link = KALSHI_MARKETS.get(signal['kalshi_market'], KALSHI_MARKETS['economics'])
@@ -359,10 +359,10 @@ if signals:
         subtitle_html = f'<p style="color: {signal["color"]}; margin: 4px 0 0 0; font-size: 0.95rem; font-weight: 600;">→ {subtitle}</p>' if subtitle else ''
         
         st.markdown(f"""
-        <div class="{card_class}">
+        <div style="{card_style}">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
                 <div>
-                    <span class="{badge_class}">{signal['strength']} SIGNAL</span>
+                    <span style="{badge_style}">{signal['strength']} SIGNAL</span>
                     <h3 style="color: white; margin: 12px 0 4px 0;">{signal['title']}</h3>
                     {subtitle_html}
                     <p style="color: #888; margin: 8px 0 0 0; font-size: 0.85rem;">Market: <strong style="color: #fff;">{signal['market']}</strong></p>
@@ -381,7 +381,7 @@ if signals:
                 💡 <strong>Implication:</strong> {signal['implication']}
             </p>
             
-            <a href="{kalshi_link}" target="_blank" class="market-link">📈 View on Kalshi</a>
+            <a href="{kalshi_link}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #4a9eff 0%, #2d7dd2 100%); color: white; padding: 10px 20px; border-radius: 8px; font-weight: 600; text-decoration: none; margin-top: 12px;">📈 View on Kalshi</a>
         </div>
         """, unsafe_allow_html=True)
 else:
