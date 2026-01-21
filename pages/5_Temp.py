@@ -499,4 +499,10 @@ with st.expander("❓ How to Use This App"):
     • Kalshi uses specific weather stations — slight differences possible
     """)
 
-st.caption("⚠️ Based on actual NWS observations. Not financial advice. v3.1")
+st.markdown("""
+<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px;padding:0 20px">
+⚠️ For entertainment and educational purposes only. This tool displays observed temperature data alongside Kalshi market prices. It does not constitute financial advice.
+Kalshi settles markets using official weather stations, which may differ slightly from NWS observations shown here.
+Always verify market details on Kalshi before trading.
+</div>
+""", unsafe_allow_html=True)
