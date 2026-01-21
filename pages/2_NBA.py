@@ -5,7 +5,7 @@ import pytz
 import json
 import os
 import time
-from styles import apply_styles
+from styles import apply_styles, buy_button
 
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
 
@@ -159,19 +159,6 @@ H2H_EDGES = {
     ("Phoenix", "Portland"): 0.5, ("Miami", "Orlando"): 0.5,
     ("Dallas", "San Antonio"): 0.5, ("Memphis", "New Orleans"): 0.3,
 }
-
-def buy_button(url, text="BUY"):
-    return f'''<a href="{url}" target="_blank" style="
-        display: block;
-        background: linear-gradient(135deg, #00c853, #00a844);
-        color: white;
-        padding: 12px 24px;
-        border-radius: 8px;
-        text-decoration: none;
-        font-weight: 600;
-        text-align: center;
-        margin: 5px 0;
-    ">{text}</a>'''
 
 def build_kalshi_ml_url(away_team, home_team):
     away_code = KALSHI_CODES.get(away_team, "XXX")
@@ -416,10 +403,15 @@ def calc_ml_score(home_team, away_team, yesterday_teams, injuries, last_5):
     else: return away_team, af, ra[:5], home_out, away_out, home_net, away_net
 
 def get_signal_tier(score):
-    if score >= 8.0: return "🟢 STRONG", "#00ff00"
-    elif score >= 6.5: return "🔵 BUY", "#00aaff"
-    elif score >= 5.5: return "🟡 LEAN", "#ffff00"
-    else: return "⚪ TOSS-UP", "#888888"
+    """STRICT TIER SYSTEM - Only 10.0 = STRONG BUY (tracked)"""
+    if score >= 10.0:
+        return "🔒 STRONG BUY", "#00ff00", True  # Bright green, tracked
+    elif score >= 8.0:
+        return "🔵 BUY", "#00aaff", False  # Blue, NOT tracked
+    elif score >= 5.5:
+        return "🟡 LEAN", "#ffaa00", False  # Amber, NOT tracked
+    else:
+        return "⚪ PASS", "#666666", False  # Grey, NOT tracked
 
 # FETCH DATA
 games = fetch_espn_scores()
@@ -439,16 +431,28 @@ yesterday_teams = yesterday_teams.intersection(today_teams)
 # SIDEBAR
 with st.sidebar:
     st.header("📖 SIGNAL TIERS")
-    st.markdown("🟢 **STRONG** → 8.0+\n\n🔵 **BUY** → 6.5-7.9\n\n🟡 **LEAN** → 5.5-6.4")
+    st.markdown("""
+🔒 **STRONG BUY** → 10.0
+<span style="color:#888;font-size:0.85em">Tracked in stats</span>
+
+🔵 **BUY** → 8.0-9.9
+<span style="color:#888;font-size:0.85em">Informational only</span>
+
+🟡 **LEAN** → 5.5-7.9
+<span style="color:#888;font-size:0.85em">Slight edge</span>
+
+⚪ **PASS** → Below 5.5
+<span style="color:#888;font-size:0.85em">No edge</span>
+""", unsafe_allow_html=True)
     st.divider()
     st.header("📊 MODEL INFO")
     st.markdown("Proprietary multi-factor model analyzing matchups, injuries, rest, travel, momentum, and historical edges.")
     st.divider()
-    st.caption("v17.6 NBA EDGE")
+    st.caption("v17.7 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
-st.caption("Proprietary ML Model + Live Tracker | v17.6")
+st.caption("Proprietary ML Model + Live Tracker | v17.7")
 
 # LIVE GAMES
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
@@ -488,7 +492,7 @@ if games:
         away, home = g["away_team"], g["home_team"]
         try:
             pick, score, reasons, home_out, away_out, home_net, away_net = calc_ml_score(home, away, yesterday_teams, injuries, last_5)
-            tier, color = get_signal_tier(score)
+            tier, color, is_tracked = get_signal_tier(score)
             is_home = pick == home
             pick_code = KALSHI_CODES.get(pick, "???")
             opp = away if is_home else home
@@ -500,14 +504,18 @@ if games:
                 "pick": pick, "pick_code": pick_code, "opp": opp, "opp_code": opp_code,
                 "score": score, "color": color, "tier": tier, "reasons": reasons,
                 "is_home": is_home, "away": away, "home": home,
-                "pick_net": pick_net, "opp_net": opp_net, "opp_out": opp_out
+                "pick_net": pick_net, "opp_net": opp_net, "opp_out": opp_out,
+                "is_tracked": is_tracked
             })
         except: continue
     
     ml_results.sort(key=lambda x: x["score"], reverse=True)
     
+    # Count tracked picks for stats
+    tracked_picks = [r for r in ml_results if r["is_tracked"]]
+    
     for r in ml_results:
-        if r["score"] < 5.0: continue
+        if r["score"] < 5.5: continue
         kalshi_url = build_kalshi_ml_url(r["away"], r["home"])
         reasons_str = " • ".join(r["reasons"])
         injury_str = f" • 🏥 {r['opp_out'][0][:12]} OUT" if r["opp_out"] else ""
@@ -523,22 +531,36 @@ if games:
             status_badge = "PRE"
             status_color = "#00ff00"
         
-        st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:12px 14px;border-radius:8px;border-left:4px solid {r['color']}">
-            <b style="color:#fff;font-size:1.1em">{r['pick']}</b> <span style="color:#666">vs {r['opp']}</span>
-            <span style="color:#38bdf8;margin-left:8px;font-weight:bold">{r['score']}/10</span>
-            <span style="color:{status_color};margin-left:8px;font-size:0.8em">⏱️ {status_badge}</span>
-            <span style="color:#777;font-size:0.85em;margin-left:10px">{reasons_str}{injury_str}</span>
+        # STRONG BUY gets thick border + tracked label
+        if r["is_tracked"]:
+            border_style = f"border-left: 6px solid {r['color']}; border: 2px solid {r['color']};"
+            tracked_label = '<span style="background:#00ff00;color:#000;padding:2px 6px;border-radius:4px;font-size:0.7em;margin-left:8px;">📊 TRACKED</span>'
+        else:
+            border_style = f"border-left: 4px solid {r['color']};"
+            tracked_label = ""
+        
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:12px 14px;border-radius:8px;{border_style}">
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
+                <span style="color:{r['color']};font-weight:bold;">{r['tier']}</span>
+                <b style="color:#fff;font-size:1.1em">{r['pick']}</b>
+                <span style="color:#666">vs {r['opp']}</span>
+                <span style="color:#38bdf8;font-weight:bold">{r['score']}/10</span>
+                <span style="color:{status_color};font-size:0.8em">⏱️ {status_badge}</span>
+                {tracked_label}
+            </div>
+            <div style="color:#777;font-size:0.85em;margin-top:6px">{reasons_str}{injury_str}</div>
         </div>""", unsafe_allow_html=True)
         st.markdown(buy_button(kalshi_url, f"BUY {r['pick']}"), unsafe_allow_html=True)
     
-    scheduled_strong = [r for r in ml_results if r["score"] >= 6.5 and games.get(f"{r['away']}@{r['home']}", {}).get('status_type') == "STATUS_SCHEDULED"]
+    # Only add STRONG BUY (tracked) picks to tracker
+    scheduled_strong = [r for r in ml_results if r["is_tracked"] and games.get(f"{r['away']}@{r['home']}", {}).get('status_type') == "STATUS_SCHEDULED"]
     if scheduled_strong:
-        if st.button(f"➕ Add {len(scheduled_strong)} Picks to Tracker", use_container_width=True, key="add_ml_picks"):
+        if st.button(f"➕ Add {len(scheduled_strong)} STRONG BUY Picks to Tracker", use_container_width=True, key="add_ml_picks"):
             added = 0
             for r in scheduled_strong:
                 gk = f"{r['away']}@{r['home']}"
                 if not any(p.get('game') == gk and p.get('pick') == r['pick'] for p in st.session_state.positions):
-                    st.session_state.positions.append({"game": gk, "type": "ml", "pick": r['pick'], "price": 50, "contracts": 1})
+                    st.session_state.positions.append({"game": gk, "type": "ml", "pick": r['pick'], "price": 50, "contracts": 1, "tracked": True})
                     added += 1
             if added:
                 save_positions(st.session_state.positions)
@@ -602,11 +624,13 @@ with ma2: team_b = st.selectbox("Home Team", teams, index=teams.index("Boston") 
 if team_a and team_b and team_a != team_b:
     try:
         pick, score, reasons, _, _, pick_net, opp_net = calc_ml_score(team_b, team_a, yesterday_teams, injuries, last_5)
-        tier, color = get_signal_tier(score)
+        tier, color, is_tracked = get_signal_tier(score)
         form_a, form_b = last_5.get(team_a, {}).get('form', '-----'), last_5.get(team_b, {}).get('form', '-----')
         
         away_color = color if pick == team_a else "#fff"
         home_color = color if pick == team_b else "#fff"
+        
+        tracked_note = '<div style="text-align:center;margin-top:10px;"><span style="background:#00ff00;color:#000;padding:4px 10px;border-radius:4px;font-size:0.8em;">📊 Counts toward performance stats</span></div>' if is_tracked else '<div style="text-align:center;margin-top:10px;color:#888;font-size:0.8em;">ℹ️ Informational only — not tracked in stats</div>'
         
         st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:20px;border-radius:12px;border:2px solid {color};margin:15px 0">
             <div style="text-align:center;margin-bottom:15px">
@@ -622,6 +646,7 @@ if team_a and team_b and team_a != team_b:
                 <div style="text-align:center"><div style="color:#888">Away Form</div><div style="color:#fff;font-family:monospace;font-size:1.2em">{form_a}</div></div>
                 <div style="text-align:center"><div style="color:#888">Home Form</div><div style="color:#fff;font-family:monospace;font-size:1.2em">{form_b}</div></div>
             </div>
+            {tracked_note}
         </div>""", unsafe_allow_html=True)
         
         kalshi_url = build_kalshi_ml_url(team_a, team_b)
@@ -640,6 +665,7 @@ if st.session_state.positions:
         price, contracts = pos.get('price', 50), pos.get('contracts', 1)
         cost = round(price * contracts / 100, 2)
         potential = round((100 - price) * contracts / 100, 2)
+        is_tracked_pos = pos.get('tracked', False)
         
         if g:
             pick = pos.get('pick', '')
@@ -663,9 +689,10 @@ if st.session_state.positions:
                 pnl = f"Win: +${potential:.2f}"
             
             status = "FINAL" if is_final else f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "Scheduled"
+            tracked_badge = '<span style="background:#00ff00;color:#000;padding:1px 4px;border-radius:3px;font-size:0.7em;margin-left:6px;">TRACKED</span>' if is_tracked_pos else ''
             
             st.markdown(f"""<div style='background:#1a1a2e;padding:12px;border-radius:8px;border-left:3px solid {clr};margin-bottom:8px'>
-                <div style='display:flex;justify-content:space-between'><b style='color:#fff'>{gk.replace('@', ' @ ')}</b> <span style='color:#888'>{status}</span> <b style='color:{clr}'>{label}</b></div>
+                <div style='display:flex;justify-content:space-between'><b style='color:#fff'>{gk.replace('@', ' @ ')}</b>{tracked_badge} <span style='color:#888'>{status}</span> <b style='color:{clr}'>{label}</b></div>
                 <div style='color:#aaa;margin-top:5px'>🎯 {pick} | {contracts}x @ {price}¢ | Lead: {lead:+d} | {pnl}</div></div>""", unsafe_allow_html=True)
             
             kalshi_url = build_kalshi_ml_url(parts[0], parts[1])
@@ -702,7 +729,7 @@ if sel != "Select...":
     
     if st.button("✅ ADD POSITION", use_container_width=True, type="primary"):
         gk = sel.replace(" @ ", "@")
-        st.session_state.positions.append({"game": gk, "type": "ml", "pick": st.session_state.selected_ml_pick, "price": price, "contracts": contracts})
+        st.session_state.positions.append({"game": gk, "type": "ml", "pick": st.session_state.selected_ml_pick, "price": price, "contracts": contracts, "tracked": False})
         save_positions(st.session_state.positions)
         st.rerun()
 
@@ -739,14 +766,16 @@ with st.expander("📖 HOW TO USE THIS APP", expanded=False):
 
 ---
 
-### 📊 **Signal Tiers**
+### 📊 **Signal Tiers (STRICT)**
 
-| Tier | Score | Meaning |
-|------|-------|---------|
-| 🟢 **STRONG** | 8.0+ | High-confidence pick |
-| 🔵 **BUY** | 6.5-7.9 | Good value pick |
-| 🟡 **LEAN** | 5.5-6.4 | Slight edge |
-| ⚪ **TOSS-UP** | <5.5 | No clear edge |
+| Tier | Score | Tracked? | Meaning |
+|------|-------|----------|---------|
+| 🔒 **STRONG BUY** | 10.0 | ✅ YES | Headline pick — counts in stats |
+| 🔵 **BUY** | 8.0-9.9 | ❌ NO | Good value — informational only |
+| 🟡 **LEAN** | 5.5-7.9 | ❌ NO | Slight edge |
+| ⚪ **PASS** | <5.5 | ❌ NO | No clear edge |
+
+**Important:** Only 🔒 STRONG BUY (10.0/10) picks count toward our published success rate.
 
 ---
 
@@ -763,21 +792,21 @@ with st.expander("📖 HOW TO USE THIS APP", expanded=False):
 
 ### 💡 **Tips**
 
-- Focus on **STRONG** and **BUY** tiers
+- **STRONG BUY** = headline bets we stand behind
+- **BUY** = informational, trade at your discretion
 - Check **B2B status** — fatigued teams lose
 - Watch for **star injuries**
-- Use **Matchup Analyzer** for scenarios
 
 ---
 
 ### 🔗 **Trading**
 
-Click **BUY** buttons to go directly to Kalshi markets.
+Click **BUY** buttons to go directly to Kalshi markets (opens in new tab).
 
 ---
 
-*Built for Kalshi. v17.6*
+*Built for Kalshi. v17.7*
 """)
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v17.6")
+st.caption("⚠️ Educational only. Not financial advice. v17.7")
