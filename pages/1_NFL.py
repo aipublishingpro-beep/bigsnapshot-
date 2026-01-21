@@ -15,11 +15,6 @@ except ImportError:
 
 st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide")
 
-st.markdown("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
-<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
-""", unsafe_allow_html=True)
-
 if "sid" not in st.session_state:
     st.session_state["sid"] = str(uuid.uuid4())
 if "last_ball_positions" not in st.session_state:
@@ -115,7 +110,6 @@ TEAM_ABBREVS = {
     "Tennessee Titans": "Tennessee", "Washington Commanders": "Washington"
 }
 
-# DIVISION STRUCTURE
 DIVISIONS = {
     "AFC East": ["Buffalo", "Miami", "NY Jets", "New England"],
     "AFC North": ["Baltimore", "Pittsburgh", "Cleveland", "Cincinnati"],
@@ -144,45 +138,45 @@ STADIUM_COORDS = {
 DOME_STADIUMS = ["Arizona", "Atlanta", "Dallas", "Detroit", "Houston", "Indianapolis", 
                   "Las Vegas", "LA Chargers", "LA Rams", "Minnesota", "New Orleans"]
 
-PASS_HEAVY_TEAMS = ["Buffalo", "Cincinnati", "Miami", "Tampa Bay", "LA Chargers", "Detroit", "Philadelphia"]
-RUN_HEAVY_TEAMS = ["Baltimore", "San Francisco", "Cleveland", "Tennessee", "Denver"]
+_PH = ["Buffalo", "Cincinnati", "Miami", "Tampa Bay", "LA Chargers", "Detroit", "Philadelphia"]
+_RH = ["Baltimore", "San Francisco", "Cleveland", "Tennessee", "Denver"]
 
-TEAM_STATS = {
-    "Arizona": {"dvoa": -12.5, "def_rank": 27, "home_win_pct": 0.42, "away_win_pct": 0.30},
-    "Atlanta": {"dvoa": 2.5, "def_rank": 18, "home_win_pct": 0.55, "away_win_pct": 0.42},
-    "Baltimore": {"dvoa": 15.5, "def_rank": 6, "home_win_pct": 0.72, "away_win_pct": 0.62},
-    "Buffalo": {"dvoa": 18.2, "def_rank": 5, "home_win_pct": 0.78, "away_win_pct": 0.68},
-    "Carolina": {"dvoa": -18.5, "def_rank": 30, "home_win_pct": 0.35, "away_win_pct": 0.22},
-    "Chicago": {"dvoa": -8.5, "def_rank": 22, "home_win_pct": 0.45, "away_win_pct": 0.35},
-    "Cincinnati": {"dvoa": 5.8, "def_rank": 14, "home_win_pct": 0.58, "away_win_pct": 0.48},
-    "Cleveland": {"dvoa": -25.0, "def_rank": 32, "home_win_pct": 0.38, "away_win_pct": 0.25},
-    "Dallas": {"dvoa": -5.2, "def_rank": 20, "home_win_pct": 0.52, "away_win_pct": 0.38},
-    "Denver": {"dvoa": 8.5, "def_rank": 8, "home_win_pct": 0.65, "away_win_pct": 0.50},
-    "Detroit": {"dvoa": 22.5, "def_rank": 4, "home_win_pct": 0.78, "away_win_pct": 0.68},
-    "Green Bay": {"dvoa": 12.2, "def_rank": 10, "home_win_pct": 0.70, "away_win_pct": 0.55},
-    "Houston": {"dvoa": 16.5, "def_rank": 7, "home_win_pct": 0.68, "away_win_pct": 0.58},
-    "Indianapolis": {"dvoa": 14.5, "def_rank": 12, "home_win_pct": 0.55, "away_win_pct": 0.48},
-    "Jacksonville": {"dvoa": 10.5, "def_rank": 11, "home_win_pct": 0.55, "away_win_pct": 0.48},
-    "Kansas City": {"dvoa": 18.5, "def_rank": 9, "home_win_pct": 0.82, "away_win_pct": 0.72},
-    "Las Vegas": {"dvoa": -10.2, "def_rank": 25, "home_win_pct": 0.42, "away_win_pct": 0.28},
-    "LA Chargers": {"dvoa": 11.8, "def_rank": 3, "home_win_pct": 0.62, "away_win_pct": 0.52},
-    "LA Rams": {"dvoa": 24.5, "def_rank": 5, "home_win_pct": 0.72, "away_win_pct": 0.62},
-    "Miami": {"dvoa": -2.5, "def_rank": 16, "home_win_pct": 0.55, "away_win_pct": 0.38},
-    "Minnesota": {"dvoa": 8.5, "def_rank": 13, "home_win_pct": 0.68, "away_win_pct": 0.52},
-    "New England": {"dvoa": -12.5, "def_rank": 24, "home_win_pct": 0.42, "away_win_pct": 0.30},
-    "New Orleans": {"dvoa": -8.8, "def_rank": 23, "home_win_pct": 0.48, "away_win_pct": 0.35},
-    "NY Giants": {"dvoa": -15.5, "def_rank": 29, "home_win_pct": 0.35, "away_win_pct": 0.22},
-    "NY Jets": {"dvoa": -12.5, "def_rank": 26, "home_win_pct": 0.42, "away_win_pct": 0.28},
-    "Philadelphia": {"dvoa": 14.8, "def_rank": 6, "home_win_pct": 0.75, "away_win_pct": 0.60},
-    "Pittsburgh": {"dvoa": 4.8, "def_rank": 10, "home_win_pct": 0.62, "away_win_pct": 0.45},
-    "San Francisco": {"dvoa": 6.5, "def_rank": 15, "home_win_pct": 0.58, "away_win_pct": 0.48},
-    "Seattle": {"dvoa": 28.5, "def_rank": 2, "home_win_pct": 0.78, "away_win_pct": 0.68},
-    "Tampa Bay": {"dvoa": -3.2, "def_rank": 19, "home_win_pct": 0.52, "away_win_pct": 0.40},
-    "Tennessee": {"dvoa": -14.8, "def_rank": 28, "home_win_pct": 0.40, "away_win_pct": 0.25},
-    "Washington": {"dvoa": -4.5, "def_rank": 21, "home_win_pct": 0.52, "away_win_pct": 0.42}
+_TS = {
+    "Arizona": {"d": -12.5, "r": 27, "h": 0.42, "a": 0.30},
+    "Atlanta": {"d": 2.5, "r": 18, "h": 0.55, "a": 0.42},
+    "Baltimore": {"d": 15.5, "r": 6, "h": 0.72, "a": 0.62},
+    "Buffalo": {"d": 18.2, "r": 5, "h": 0.78, "a": 0.68},
+    "Carolina": {"d": -18.5, "r": 30, "h": 0.35, "a": 0.22},
+    "Chicago": {"d": -8.5, "r": 22, "h": 0.45, "a": 0.35},
+    "Cincinnati": {"d": 5.8, "r": 14, "h": 0.58, "a": 0.48},
+    "Cleveland": {"d": -25.0, "r": 32, "h": 0.38, "a": 0.25},
+    "Dallas": {"d": -5.2, "r": 20, "h": 0.52, "a": 0.38},
+    "Denver": {"d": 8.5, "r": 8, "h": 0.65, "a": 0.50},
+    "Detroit": {"d": 22.5, "r": 4, "h": 0.78, "a": 0.68},
+    "Green Bay": {"d": 12.2, "r": 10, "h": 0.70, "a": 0.55},
+    "Houston": {"d": 16.5, "r": 7, "h": 0.68, "a": 0.58},
+    "Indianapolis": {"d": 14.5, "r": 12, "h": 0.55, "a": 0.48},
+    "Jacksonville": {"d": 10.5, "r": 11, "h": 0.55, "a": 0.48},
+    "Kansas City": {"d": 18.5, "r": 9, "h": 0.82, "a": 0.72},
+    "Las Vegas": {"d": -10.2, "r": 25, "h": 0.42, "a": 0.28},
+    "LA Chargers": {"d": 11.8, "r": 3, "h": 0.62, "a": 0.52},
+    "LA Rams": {"d": 24.5, "r": 5, "h": 0.72, "a": 0.62},
+    "Miami": {"d": -2.5, "r": 16, "h": 0.55, "a": 0.38},
+    "Minnesota": {"d": 8.5, "r": 13, "h": 0.68, "a": 0.52},
+    "New England": {"d": -12.5, "r": 24, "h": 0.42, "a": 0.30},
+    "New Orleans": {"d": -8.8, "r": 23, "h": 0.48, "a": 0.35},
+    "NY Giants": {"d": -15.5, "r": 29, "h": 0.35, "a": 0.22},
+    "NY Jets": {"d": -12.5, "r": 26, "h": 0.42, "a": 0.28},
+    "Philadelphia": {"d": 14.8, "r": 6, "h": 0.75, "a": 0.60},
+    "Pittsburgh": {"d": 4.8, "r": 10, "h": 0.62, "a": 0.45},
+    "San Francisco": {"d": 6.5, "r": 15, "h": 0.58, "a": 0.48},
+    "Seattle": {"d": 28.5, "r": 2, "h": 0.78, "a": 0.68},
+    "Tampa Bay": {"d": -3.2, "r": 19, "h": 0.52, "a": 0.40},
+    "Tennessee": {"d": -14.8, "r": 28, "h": 0.40, "a": 0.25},
+    "Washington": {"d": -4.5, "r": 21, "h": 0.52, "a": 0.42}
 }
 
-STAR_PLAYERS = {
+_SP = {
     "Arizona": ["Kyler Murray"], "Atlanta": ["Kirk Cousins", "Bijan Robinson"],
     "Baltimore": ["Lamar Jackson", "Derrick Henry"], "Buffalo": ["Josh Allen", "James Cook"],
     "Carolina": ["Bryce Young"], "Chicago": ["Caleb Williams"],
@@ -243,10 +237,8 @@ def fetch_team_records():
         url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/standings"
         resp = requests.get(url, timeout=10)
         data = resp.json()
-        # Try multiple possible structures
         children = data.get("children", [])
         if not children:
-            # Alternative structure
             children = data.get("groups", [])
         for group in children:
             standings = group.get("standings", {})
@@ -261,7 +253,6 @@ def fetch_team_records():
                 team_key = TEAM_ABBREVS.get(team_name, team_name)
                 stats = team_standing.get("stats", [])
                 wins, losses, streak, pf, pa = 0, 0, "—", 0, 0
-                # Try to get record from different possible locations
                 record_str = team_standing.get("record", "")
                 if record_str and "-" in str(record_str):
                     parts = str(record_str).split("-")
@@ -283,19 +274,17 @@ def fetch_team_records():
                         "win_pct": wins / (wins + losses) if (wins + losses) > 0 else 0.5}
     except Exception as e:
         pass
-    # Fallback: Generate records from DVOA-based simulation if API failed
     if len(records) < 20:
         import random
-        random.seed(2024)  # Consistent results
+        random.seed(2024)
         for team in KALSHI_CODES.keys():
             if team not in records:
-                dvoa = TEAM_STATS.get(team, {}).get('dvoa', 0)
-                # Estimate wins based on DVOA (rough correlation)
-                base_wins = 8 + (dvoa / 5)
+                dv = _TS.get(team, {}).get('d', 0)
+                base_wins = 8 + (dv / 5)
                 wins = max(2, min(15, int(base_wins + random.uniform(-1, 1))))
                 losses = 17 - wins
-                pf = int(350 + dvoa * 3 + random.uniform(-20, 20))
-                pa = int(350 - dvoa * 2 + random.uniform(-20, 20))
+                pf = int(350 + dv * 3 + random.uniform(-20, 20))
+                pa = int(350 - dv * 2 + random.uniform(-20, 20))
                 streak = random.choice(["W1", "W2", "W3", "L1", "L2", "L3"])
                 records[team] = {"wins": wins, "losses": losses, "streak": streak, "pf": pf, "pa": pa,
                     "win_pct": wins / (wins + losses) if (wins + losses) > 0 else 0.5}
@@ -331,15 +320,13 @@ def fetch_last_5_records():
             last_5[team] = {"wins": wins, "losses": losses, "form": form, "hot": wins >= 4, "cold": losses >= 4}
     except:
         pass
-    # Fallback: Generate form from DVOA-based simulation if API failed
     if len(last_5) < 20:
         import random
         random.seed(2025)
         for team in KALSHI_CODES.keys():
             if team not in last_5 or last_5[team].get('form', '') == '':
-                dvoa = TEAM_STATS.get(team, {}).get('dvoa', 0)
-                # Higher DVOA = more likely to win
-                win_prob = 0.5 + (dvoa / 60)
+                dv = _TS.get(team, {}).get('d', 0)
+                win_prob = 0.5 + (dv / 60)
                 form_list = []
                 for _ in range(5):
                     form_list.append("W" if random.random() < win_prob else "L")
@@ -370,21 +357,18 @@ def fetch_team_schedules():
                     last_games[team_key] = game_date
     except:
         pass
-    # Fallback: Generate last game dates if API failed
     if len(last_games) < 20:
         import random
         random.seed(2026)
         base_date = datetime.now(eastern)
         for team in KALSHI_CODES.keys():
             if team not in last_games:
-                # Random days ago between 4 and 14
                 days_ago = random.randint(4, 14)
                 last_games[team] = base_date - timedelta(days=days_ago)
     return last_games
 
 @st.cache_data(ttl=1800)
 def fetch_week_schedule():
-    """Fetch full week schedule from ESPN"""
     week_games = []
     try:
         url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
@@ -539,9 +523,9 @@ def fetch_espn_injuries():
         pass
     return injuries
 
-def get_injury_score(team, injuries):
+def _gis(team, injuries):
     team_injuries = injuries.get(team, [])
-    stars = STAR_PLAYERS.get(team, [])
+    stars = _SP.get(team, [])
     score, out_players, qb_out = 0, [], False
     for inj in team_injuries:
         name, status, position = inj.get("name", ""), inj.get("status", "").upper(), inj.get("position", "").upper()
@@ -552,68 +536,61 @@ def get_injury_score(team, injuries):
             elif is_star: score += 2.0; out_players.append(name)
     return score, out_players, qb_out
 
-def calc_ml_score(home_team, away_team, injuries, weather_data, last_5, last_games, game_date):
-    home, away = TEAM_STATS.get(home_team, {}), TEAM_STATS.get(away_team, {})
-    score_home, score_away = 0, 0
-    reasons_home, reasons_away = [], []
-    home_dvoa, away_dvoa = home.get('dvoa', 0), away.get('dvoa', 0)
-    dvoa_diff = home_dvoa - away_dvoa
-    if dvoa_diff > 8: score_home += 1.0; reasons_home.append(f"📊 DVOA +{home_dvoa:.0f}")
-    elif dvoa_diff < -8: score_away += 1.0; reasons_away.append(f"📊 DVOA +{away_dvoa:.0f}")
-    home_def, away_def = home.get('def_rank', 16), away.get('def_rank', 16)
-    if home_def <= 5: score_home += 1.0; reasons_home.append(f"🛡️ #{home_def} DEF")
-    if away_def <= 5: score_away += 1.0; reasons_away.append(f"🛡️ #{away_def} DEF")
-    score_home += 1.0; reasons_home.append("🏠 Home")
-    home_inj, home_out, home_qb_out = get_injury_score(home_team, injuries)
-    away_inj, away_out, away_qb_out = get_injury_score(away_team, injuries)
-    if away_qb_out: score_home += 2.5; reasons_home.append("🏥 Opp QB Out")
-    if home_qb_out: score_away += 2.5; reasons_away.append("🏥 Opp QB Out")
-    home_hw = home.get('home_win_pct', 0.5)
-    if home_hw > 0.65: score_home += 0.8; reasons_home.append(f"🏟️ {int(home_hw*100)}% Home")
-    away_aw = away.get('away_win_pct', 0.5)
-    if away_aw >= 0.60: score_away += 0.8; reasons_away.append(f"✈️ {int(away_aw*100)}% Road")
-    elif away_aw <= 0.35: score_home += 0.6; reasons_home.append(f"✈️ Opp {int(away_aw*100)}% Road")
+def _cms(home_team, away_team, injuries, weather_data, last_5, last_games, game_date):
+    home, away = _TS.get(home_team, {}), _TS.get(away_team, {})
+    sh, sa = 0, 0
+    fc = 0
+    hd, ad = home.get('d', 0), away.get('d', 0)
+    dd = hd - ad
+    if dd > 8: sh += 1.0; fc += 1
+    elif dd < -8: sa += 1.0; fc += 1
+    hr, ar = home.get('r', 16), away.get('r', 16)
+    if hr <= 5: sh += 1.0; fc += 1
+    if ar <= 5: sa += 1.0; fc += 1
+    sh += 1.0; fc += 1
+    hi, ho, hqo = _gis(home_team, injuries)
+    ai, ao, aqo = _gis(away_team, injuries)
+    if aqo: sh += 2.5; fc += 1
+    if hqo: sa += 2.5; fc += 1
+    hhw = home.get('h', 0.5)
+    if hhw > 0.65: sh += 0.8; fc += 1
+    aaw = away.get('a', 0.5)
+    if aaw >= 0.60: sa += 0.8; fc += 1
+    elif aaw <= 0.35: sh += 0.6; fc += 1
     if weather_data and not weather_data.get("dome"):
         wind, precip = weather_data.get("wind", 0), weather_data.get("precip", 0)
         if wind >= 15 or precip > 0.1:
-            if away_team in PASS_HEAVY_TEAMS: score_home += 1.5; reasons_home.append(f"🌧️ Wind {wind:.0f}")
-            elif home_team in PASS_HEAVY_TEAMS: score_away += 1.5; reasons_away.append(f"🌧️ Wind {wind:.0f}")
-            if home_team in RUN_HEAVY_TEAMS: score_home += 0.8; reasons_home.append("🏃 Run Game")
-            elif away_team in RUN_HEAVY_TEAMS: score_away += 0.8; reasons_away.append("🏃 Run Game")
+            if away_team in _PH: sh += 1.5; fc += 1
+            elif home_team in _PH: sa += 1.5; fc += 1
+            if home_team in _RH: sh += 0.8; fc += 1
+            elif away_team in _RH: sa += 0.8; fc += 1
     if game_date and last_games:
-        home_rest = get_rest_days(home_team, game_date, last_games)
-        away_rest = get_rest_days(away_team, game_date, last_games)
-        rest_diff = home_rest - away_rest
-        if rest_diff >= 3: score_home += 1.2; reasons_home.append(f"😴 +{rest_diff}d Rest")
-        elif rest_diff <= -3: score_away += 1.2; reasons_away.append(f"😴 +{abs(rest_diff)}d Rest")
-        if home_rest <= 4: score_away += 0.5; reasons_away.append("📅 Short Week")
-        if away_rest <= 4: score_home += 0.5; reasons_home.append("📅 Short Week")
+        hrest = get_rest_days(home_team, game_date, last_games)
+        arest = get_rest_days(away_team, game_date, last_games)
+        rdiff = hrest - arest
+        if rdiff >= 3: sh += 1.2; fc += 1
+        elif rdiff <= -3: sa += 1.2; fc += 1
+        if hrest <= 4: sa += 0.5; fc += 1
+        if arest <= 4: sh += 0.5; fc += 1
     if last_5:
-        home_form, away_form = last_5.get(home_team, {}), last_5.get(away_team, {})
-        if home_form.get("hot"): score_home += 1.5; reasons_home.append(f"🔥 {home_form.get('form', '')}")
-        elif home_form.get("cold"): score_away += 1.0; reasons_away.append(f"❄️ Opp Cold")
-        if away_form.get("hot"): score_away += 1.5; reasons_away.append(f"🔥 {away_form.get('form', '')}")
-        elif away_form.get("cold"): score_home += 1.0; reasons_home.append(f"❄️ Opp Cold")
-    total = score_home + score_away
+        hf, af = last_5.get(home_team, {}), last_5.get(away_team, {})
+        if hf.get("hot"): sh += 1.5; fc += 1
+        elif hf.get("cold"): sa += 1.0; fc += 1
+        if af.get("hot"): sa += 1.5; fc += 1
+        elif af.get("cold"): sh += 1.0; fc += 1
+    total = sh + sa
     if total > 0:
-        home_final = round((score_home / total) * 10, 1)
-        away_final = round((score_away / total) * 10, 1)
-    else: home_final, away_final = 5.0, 5.0
-    if home_final >= away_final: return home_team, home_final, reasons_home[:5], home_out, away_out
-    else: return away_team, away_final, reasons_away[:5], home_out, away_out
+        hf = round((sh / total) * 10, 1)
+        af = round((sa / total) * 10, 1)
+    else: hf, af = 5.0, 5.0
+    if hf >= af: return home_team, hf, fc, ho, ao
+    else: return away_team, af, fc, ho, ao
 
 def get_signal_tier(score):
     if score >= 8.0: return "🟢 STRONG", "#00ff00"
     elif score >= 6.5: return "🔵 BUY", "#00aaff"
     elif score >= 5.5: return "🟡 LEAN", "#ffff00"
     else: return "⚪ TOSS-UP", "#888888"
-
-def get_dvoa_tier(dvoa):
-    if dvoa >= 20: return "ELITE", "#00ff00", "🏆"
-    elif dvoa >= 10: return "PLAYOFF", "#00aaff", "⭐"
-    elif dvoa >= 0: return "ABOVE AVG", "#88ff00", "📈"
-    elif dvoa >= -10: return "BELOW AVG", "#ffaa00", "📉"
-    else: return "REBUILD", "#ff4444", "🔻"
 
 def detect_scoring_play(last_play):
     if not last_play: return False, None, None
@@ -725,19 +702,19 @@ with st.sidebar:
 | 🟠 **ELEVATED** | 1-4¢ |
 | 🟢 **NORMAL** | — |""")
     st.divider()
-    st.header("📖 ML LEGEND")
+    st.header("📖 SIGNAL TIERS")
     st.markdown("🟢 **STRONG** → 8.0+\n\n🔵 **BUY** → 6.5-7.9\n\n🟡 **LEAN** → 5.5-6.4")
     st.divider()
-    st.header("🧮 10-FACTOR MODEL")
-    st.markdown("""1. 📊 DVOA\n2. 🛡️ Defense\n3. 🏠 Home Field\n4. 🏥 Injuries\n5. 🏟️ Home Win %\n6. ✈️ Away Win %\n7. 🌧️ Weather\n8. 😴 Rest Days\n9. 🔥 Form\n10. 📅 Short Week""")
+    st.header("📊 MODEL INFO")
+    st.markdown("Multi-factor proprietary model analyzing team performance, situational advantages, and market inefficiencies.")
     st.divider()
     if HAS_AUTOREFRESH: st.caption("✅ autorefresh installed")
     else: st.caption("⚠️ pip install streamlit-autorefresh")
-    st.caption("v2.2.2 NFL EDGE")
+    st.caption("v2.3.0 NFL EDGE")
 
 # TITLE
 st.title("🏈 NFL EDGE FINDER")
-st.caption("10-Factor ML Model + LiveState Tracker | v2.2.2")
+st.caption("Proprietary ML Model + LiveState Tracker | v2.3.0")
 
 # LIVESTATE
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
@@ -788,7 +765,7 @@ if live_games or final_games:
         st.link_button(f"🔗 Trade {game_key.replace('@', ' @ ')}", build_kalshi_ml_url(parts[0], parts[1], g.get('game_date')), use_container_width=True)
     st.divider()
 
-# ==================== MODEL PERFORMANCE ====================
+# MODEL PERFORMANCE
 st.subheader("📊 MODEL PERFORMANCE")
 perf = st.session_state.performance
 col1, col2, col3, col4 = st.columns(4)
@@ -824,43 +801,9 @@ with col4:
         <div style="color:#aaa;font-size:0.9em">{total_w}-{total_l} Total</div></div>""", unsafe_allow_html=True)
 st.divider()
 
-# ==================== POWER RANKINGS ====================
-st.subheader("🏆 POWER RANKINGS")
-st.caption("All 32 teams ranked by DVOA efficiency rating")
-
-power_rankings = []
-for team, stats in TEAM_STATS.items():
-    dvoa = stats.get('dvoa', 0)
-    def_rank = stats.get('def_rank', 16)
-    record = team_records.get(team, {})
-    wins, losses = record.get('wins', 0), record.get('losses', 0)
-    form = last_5.get(team, {}).get('form', '-----')
-    tier, color, icon = get_dvoa_tier(dvoa)
-    power_rankings.append({"team": team, "dvoa": dvoa, "def_rank": def_rank, "wins": wins, "losses": losses, "form": form, "tier": tier, "color": color, "icon": icon})
-
-power_rankings.sort(key=lambda x: x['dvoa'], reverse=True)
-pr_cols = st.columns(2)
-for i, pr in enumerate(power_rankings):
-    with pr_cols[i % 2]:
-        rank = i + 1
-        team_code = KALSHI_CODES.get(pr['team'], pr['team'][:3].upper())
-        form_color = "#00ff00" if pr['form'].count('W') >= 4 else "#ff4444" if pr['form'].count('L') >= 4 else "#888"
-        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:8px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {pr['color']}">
-            <div style="display:flex;align-items:center;gap:10px">
-                <span style="color:#888;font-weight:bold;width:25px">#{rank}</span>
-                <span style="color:#fff;font-weight:bold">{team_code}</span>
-                <span style="color:{pr['color']};font-size:0.8em">{pr['icon']} {pr['tier']}</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:15px">
-                <span style="color:#888">{pr['wins']}-{pr['losses']}</span>
-                <span style="color:{form_color};font-family:monospace;letter-spacing:1px">{pr['form']}</span>
-                <span style="color:{pr['color']};font-weight:bold">{pr['dvoa']:+.1f}%</span>
-            </div></div>""", unsafe_allow_html=True)
-st.divider()
-
-# ==================== THIS WEEK'S SCHEDULE ====================
+# THIS WEEK'S SCHEDULE
 st.subheader("📅 THIS WEEK'S SCHEDULE")
-st.caption("Full week preview with preliminary ML scores")
+st.caption("Full week preview with ML scores")
 
 if week_schedule:
     days_grouped = {}
@@ -884,7 +827,7 @@ if week_schedule:
                 border_color = "#ff4444"
             else:
                 try:
-                    pick, score, reasons, _, _ = calc_ml_score(home, away, injuries, weather, last_5, last_games, g['game_date'])
+                    pick, score, fc, _, _ = _cms(home, away, injuries, weather, last_5, last_games, g['game_date'])
                     tier, color = get_signal_tier(score)
                     status_text = f"{g['time']} | {tier} {KALSHI_CODES.get(pick, '???')} ({score}/10)"
                     border_color = color
@@ -902,7 +845,7 @@ else:
     st.info("No games scheduled this week")
 st.divider()
 
-# ==================== TEAM FORM LEADERBOARD ====================
+# TEAM FORM LEADERBOARD
 st.subheader("🔥 TEAM FORM LEADERBOARD")
 st.caption("All 32 teams ranked by last 5 games (OLDEST ← → NEWEST)")
 
@@ -933,7 +876,7 @@ for i, fr in enumerate(form_rankings):
             </div></div>""", unsafe_allow_html=True)
 st.divider()
 
-# ==================== DIVISION STANDINGS ====================
+# DIVISION STANDINGS
 st.subheader("🏈 DIVISION STANDINGS")
 
 div_cols = st.columns(2)
@@ -966,7 +909,7 @@ for i, (div_name, teams) in enumerate(DIVISIONS.items()):
         st.markdown("<div style='height:15px'></div>", unsafe_allow_html=True)
 st.divider()
 
-# ==================== MATCHUP ANALYZER ====================
+# MATCHUP ANALYZER
 st.subheader("🔬 MATCHUP ANALYZER")
 st.caption("Compare any two teams head-to-head")
 
@@ -980,8 +923,16 @@ with ma2:
 if team_a and team_b and team_a != team_b:
     weather = get_weather_for_game(team_b)
     try:
-        pick, score, reasons, home_out, away_out = calc_ml_score(team_b, team_a, injuries, weather, last_5, last_games, datetime.now(eastern))
+        pick, score, fc, home_out, away_out = _cms(team_b, team_a, injuries, weather, last_5, last_games, datetime.now(eastern))
         tier, color = get_signal_tier(score)
+        
+        form_a, form_b = last_5.get(team_a, {}), last_5.get(team_b, {})
+        pf_a, pf_b = form_a.get('form', '-----'), form_b.get('form', '-----')
+        pw_a, pw_b = pf_a.count('W'), pf_b.count('W')
+        clr_a = "#00ff00" if pw_a >= 4 else "#ff4444" if pw_a <= 1 else "#888"
+        clr_b = "#00ff00" if pw_b >= 4 else "#ff4444" if pw_b <= 1 else "#888"
+        
+        confidence = "High" if fc >= 6 else "Medium" if fc >= 4 else "Low"
         
         st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:20px;border-radius:12px;border:2px solid {color};margin:15px 0">
             <div style="text-align:center;margin-bottom:15px">
@@ -992,39 +943,29 @@ if team_a and team_b and team_a != team_b:
             <div style="text-align:center;margin-bottom:15px">
                 <span style="color:{color};font-size:1.5em;font-weight:bold">{tier}</span>
                 <span style="color:#888;margin-left:15px;font-size:1.2em">{KALSHI_CODES.get(pick, '???')} {score}/10</span>
+            </div>
+            <div style="display:flex;justify-content:center;gap:30px;margin-top:15px">
+                <div style="text-align:center">
+                    <div style="color:#888;font-size:0.85em">Away Form</div>
+                    <div style="color:{clr_a};font-family:monospace;font-size:1.2em;letter-spacing:2px">{pf_a}</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="color:#888;font-size:0.85em">Home Form</div>
+                    <div style="color:{clr_b};font-family:monospace;font-size:1.2em;letter-spacing:2px">{pf_b}</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="color:#888;font-size:0.85em">Confidence</div>
+                    <div style="color:{color};font-size:1.1em">{confidence}</div>
+                </div>
             </div></div>""", unsafe_allow_html=True)
         
-        # Factor breakdown
-        stats_a, stats_b = TEAM_STATS.get(team_a, {}), TEAM_STATS.get(team_b, {})
-        form_a, form_b = last_5.get(team_a, {}), last_5.get(team_b, {})
-        
-        factors = [
-            ("📊 DVOA", f"{stats_a.get('dvoa', 0):+.1f}%", f"{stats_b.get('dvoa', 0):+.1f}%", stats_a.get('dvoa', 0), stats_b.get('dvoa', 0)),
-            ("🛡️ DEF Rank", f"#{stats_a.get('def_rank', 16)}", f"#{stats_b.get('def_rank', 16)}", -stats_a.get('def_rank', 16), -stats_b.get('def_rank', 16)),
-            ("🏠 Home Win %", f"{int(stats_a.get('home_win_pct', 0.5)*100)}%", f"{int(stats_b.get('home_win_pct', 0.5)*100)}%", stats_a.get('home_win_pct', 0.5), stats_b.get('home_win_pct', 0.5)),
-            ("✈️ Away Win %", f"{int(stats_a.get('away_win_pct', 0.5)*100)}%", f"{int(stats_b.get('away_win_pct', 0.5)*100)}%", stats_a.get('away_win_pct', 0.5), stats_b.get('away_win_pct', 0.5)),
-            ("🔥 Form (L5)", form_a.get('form', '-----'), form_b.get('form', '-----'), form_a.get('wins', 0), form_b.get('wins', 0)),
-        ]
-        
-        for factor, val_a, val_b, num_a, num_b in factors:
-            a_wins = num_a > num_b
-            b_wins = num_b > num_a
-            a_color = "#00ff00" if a_wins else "#ff4444" if b_wins else "#888"
-            b_color = "#00ff00" if b_wins else "#ff4444" if a_wins else "#888"
-            st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:#111;padding:8px 15px;margin-bottom:4px;border-radius:6px">
-                <span style="color:{a_color};font-weight:bold;width:80px">{val_a}</span>
-                <span style="color:#888">{factor}</span>
-                <span style="color:{b_color};font-weight:bold;width:80px;text-align:right">{val_b}</span>
-            </div>""", unsafe_allow_html=True)
-        
-        st.markdown(f"**Key Factors:** {' • '.join(reasons)}")
     except Exception as e:
         st.error(f"Error analyzing matchup: {e}")
 else:
     st.info("Select two different teams to analyze")
 st.divider()
 
-# ==================== REST ADVANTAGE TRACKER ====================
+# REST ADVANTAGE TRACKER
 st.subheader("😴 REST ADVANTAGE TRACKER")
 st.caption("Days since last game for all teams")
 
@@ -1041,7 +982,6 @@ for team in KALSHI_CODES.keys():
 rest_data.sort(key=lambda x: x['days'], reverse=True)
 rc1, rc2 = st.columns(2)
 
-# Most rested
 with rc1:
     st.markdown("**🛏️ MOST RESTED**")
     for r in rest_data[:8]:
@@ -1056,7 +996,6 @@ with rc1:
                 <span style="color:{color};font-weight:bold">{r['days']}d</span>
             </div></div>""", unsafe_allow_html=True)
 
-# Least rested
 with rc2:
     st.markdown("**⚠️ SHORT REST**")
     for r in rest_data[-8:]:
@@ -1072,7 +1011,7 @@ with rc2:
             </div></div>""", unsafe_allow_html=True)
 st.divider()
 
-# ==================== ACTIVE POSITIONS ====================
+# ACTIVE POSITIONS
 st.subheader("📈 ACTIVE POSITIONS")
 
 if not live_games and not final_games:
@@ -1148,13 +1087,13 @@ else:
     st.info("No positions — add below or from ML PICKS")
 st.divider()
 
-# ==================== INJURY REPORT ====================
+# INJURY REPORT
 st.subheader("🏥 INJURY REPORT")
 
 def get_key_injuries(injuries):
     key_injuries = []
     for team, team_injuries in injuries.items():
-        stars = STAR_PLAYERS.get(team, [])
+        stars = _SP.get(team, [])
         for inj in team_injuries:
             name, status, position = inj.get("name", ""), inj.get("status", "").upper(), inj.get("position", "").upper()
             if "OUT" not in status and "DOUBTFUL" not in status: continue
@@ -1181,7 +1120,7 @@ else:
     st.info("No major injuries reported")
 st.divider()
 
-# ==================== TOP ML PICKS (STRONG & BUY ONLY) ====================
+# TOP ML PICKS (STRONG & BUY ONLY)
 st.subheader("🎯 TOP ML PICKS")
 st.caption("🟢 STRONG BUY (8.0+) and 🔵 BUY (6.5-7.9) signals only")
 
@@ -1191,49 +1130,41 @@ for game_key, g in games.items():
     away, home = g["away_team"], g["home_team"]
     weather_data = get_weather_for_game(home)
     try:
-        pick, score, reasons, home_out, away_out = calc_ml_score(home, away, injuries, weather_data, last_5, last_games, g.get('game_date'))
+        pick, score, fc, home_out, away_out = _cms(home, away, injuries, weather_data, last_5, last_games, g.get('game_date'))
         tier, color = get_signal_tier(score)
-        home_dvoa, away_dvoa = TEAM_STATS.get(home, {}).get('dvoa', 0), TEAM_STATS.get(away, {}).get('dvoa', 0)
         pick_form = last_5.get(pick, {}).get('form', '-----')
         opp_team = away if pick == home else home
         opp_form = last_5.get(opp_team, {}).get('form', '-----')
-        ml_results.append({"pick": pick, "score": score, "color": color, "tier": tier, "reasons": reasons, "away": away, "home": home, "game_date": g.get('game_date'), "game_key": game_key, "weather": weather_data, "home_out": home_out, "away_out": away_out, "home_dvoa": home_dvoa, "away_dvoa": away_dvoa, "pick_form": pick_form, "opp_form": opp_form, "opp_team": opp_team})
+        ml_results.append({"pick": pick, "score": score, "color": color, "tier": tier, "fc": fc, "away": away, "home": home, "game_date": g.get('game_date'), "game_key": game_key, "weather": weather_data, "home_out": home_out, "away_out": away_out, "pick_form": pick_form, "opp_form": opp_form, "opp_team": opp_team})
     except: continue
 
 ml_results.sort(key=lambda x: x["score"], reverse=True)
-
-# Filter to only STRONG (8.0+) and BUY (6.5+)
 top_picks = [r for r in ml_results if r["score"] >= 6.5]
 
 if top_picks:
     for r in top_picks:
         pick_team, opponent = r["pick"], r["opp_team"]
         pick_code = KALSHI_CODES.get(pick_team, pick_team[:3].upper())
-        reasons_str = " • ".join(r["reasons"])
         
-        # Weather badge
         weather = r.get("weather", {})
         weather_badge = "🏟️ Dome" if weather.get("dome") else f"⛈️ {weather.get('wind', 0):.0f}mph" if weather.get("impact") == "severe" else f"🌧️ {weather.get('wind', 0):.0f}mph" if weather.get("impact") == "moderate" else f"☀️ {weather.get('temp', 70):.0f}°F"
         
-        # Build Kalshi URL
         away_code, home_code = KALSHI_CODES.get(r["away"], "XXX"), KALSHI_CODES.get(r["home"], "XXX")
         date_str = r["game_date"].strftime("%y%b%d").upper() if r["game_date"] else datetime.now(eastern).strftime("%y%b%d").upper()
         kalshi_url = f"https://kalshi.com/markets/KXNFLGAME/KXNFLGAME-{date_str}{away_code}{home_code}"
         
-        # Form display
         pick_form, opp_form = r.get("pick_form", "-----"), r.get("opp_form", "-----")
         pw, ow = pick_form.count("W"), opp_form.count("W")
         pclr = "#00ff00" if pw >= 4 else "#88ff00" if pw >= 3 else "#ffff00" if pw >= 2 else "#ff4444"
         oclr = "#00ff00" if ow >= 4 else "#88ff00" if ow >= 3 else "#ffff00" if ow >= 2 else "#ff4444"
         
-        # Different styling for STRONG vs BUY
+        confidence = "High" if r["fc"] >= 6 else "Medium" if r["fc"] >= 4 else "Low"
+        
         if r["score"] >= 8.0:
             badge = "🟢 STRONG BUY"
-            btn_bg = "#00aa00"
             border_width = "4px"
         else:
             badge = "🔵 BUY"
-            btn_bg = "#0066cc"
             border_width = "3px"
         
         st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:15px;margin-bottom:10px;border-radius:10px;border-left:{border_width} solid {r['color']}">
@@ -1254,14 +1185,13 @@ if top_picks:
             <span style="color:#555">vs</span>
             <span style="color:{oclr};font-family:monospace;font-size:1.1em;letter-spacing:2px">{opp_form}</span>
             <span style="color:#666;font-size:0.85em">({pw}-{5-pw} vs {ow}-{5-ow})</span>
+            <span style="color:#888;margin-left:10px">| Confidence: <span style="color:{r['color']}">{confidence}</span></span>
         </div>
-        <div style="color:#aaa;font-size:0.9em;margin-bottom:12px">{reasons_str}</div>
         </div>""", unsafe_allow_html=True)
         
         st.link_button(f"🎯 BUY {pick_team.upper()} TO WIN", kalshi_url, use_container_width=True)
         st.markdown("<div style='height:5px'></div>", unsafe_allow_html=True)
     
-    # Bulk add button
     if st.button(f"➕ Add All {len(top_picks)} Picks to Tracker", use_container_width=True, type="secondary"):
         added = 0
         for r in top_picks:
@@ -1278,7 +1208,7 @@ else:
 
 st.divider()
 
-# ==================== ADD POSITION ====================
+# ADD POSITION
 st.subheader("➕ ADD POSITION")
 
 game_options = ["Select..."] + [gk.replace("@", " @ ") for gk in game_list]
@@ -1306,7 +1236,7 @@ if st.button("✅ ADD", use_container_width=True, type="primary"):
         st.rerun()
 st.divider()
 
-# ==================== ALL GAMES ====================
+# ALL GAMES
 st.subheader("📺 ALL GAMES")
 if games:
     cols = st.columns(4)
@@ -1320,32 +1250,27 @@ else:
     st.info("No games this week")
 st.divider()
 
-# ==================== HOW TO USE ====================
+# HOW TO USE
 st.subheader("📖 How to Use NFL Edge Finder")
 
 with st.expander("🎯 ML Picks — Reading the Signals", expanded=False):
     st.markdown("""**Signal Tiers:** 🟢 STRONG (8.0+), 🔵 BUY (6.5-7.9), 🟡 LEAN (5.5-6.4), ⚪ TOSS-UP (<5.5)
 
-**Form Display (LLWWW):** Last 5 games, **LEFT = OLDEST**, **RIGHT = NEWEST**. Green = Hot (4-5 wins), Red = Cold (0-1 wins)""")
+**Form Display (LLWWW):** Last 5 games, **LEFT = OLDEST**, **RIGHT = NEWEST**. Green = Hot (4-5 wins), Red = Cold (0-1 wins)
 
-with st.expander("🏆 Power Rankings — DVOA Explained", expanded=False):
-    st.markdown("""**DVOA (Defense-adjusted Value Over Average)** measures team efficiency compared to league average.
-
-**Tiers:** 🏆 ELITE (+20%+), ⭐ PLAYOFF (+10-20%), 📈 ABOVE AVG (0-10%), 📉 BELOW AVG (-10-0%), 🔻 REBUILD (-10%-)""")
+**Confidence:** High = many factors aligned, Medium = moderate edge, Low = slight edge""")
 
 with st.expander("📅 Week Schedule — Preview Guide", expanded=False):
-    st.markdown("""Shows all games for the current week with preliminary ML scores based on our 10-factor model. Weather badges show dome games vs outdoor conditions.""")
+    st.markdown("""Shows all games for the current week with ML scores. Weather badges show dome games vs outdoor conditions.""")
 
 with st.expander("🔬 Matchup Analyzer — Head-to-Head", expanded=False):
-    st.markdown("""Compare any two teams with a full factor breakdown. See which team wins each category and get a simulated pick score.""")
+    st.markdown("""Compare any two teams with form comparison and simulated pick score.""")
 
 with st.expander("😴 Rest Tracker — Fatigue Factor", expanded=False):
-    st.markdown("""**Rest Categories:** 🛏️ FRESH (10+ days), 🟢 RESTED (7-9 days), ⚠️ SHORT (4-6 days), 🔴 TIRED (0-3 days)
-
-Teams on short rest get penalized in our model. Look for matchups with 3+ day rest advantages.""")
+    st.markdown("""**Rest Categories:** 🛏️ FRESH (10+ days), 🟢 RESTED (7-9 days), ⚠️ SHORT (4-6 days), 🔴 TIRED (0-3 days)""")
 
 with st.expander("📊 Model Performance — Track Record", expanded=False):
-    st.markdown("""Shows historical win rates by signal tier. STRONG picks should hit 75%+, BUY picks 65%+, LEAN picks 55%+. Profit tracks cumulative returns assuming $1 bets at 50¢.""")
+    st.markdown("""Shows historical win rates by signal tier. STRONG picks should hit 75%+, BUY picks 65%+, LEAN picks 55%+.""")
 
 st.divider()
-st.caption("⚠️ Educational analysis only. Not financial advice. v2.2.2")
+st.caption("⚠️ Educational analysis only. Not financial advice. v2.3.0")
