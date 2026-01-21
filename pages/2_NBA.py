@@ -488,14 +488,12 @@ if live_games:
             </div></div>""", unsafe_allow_html=True)
     st.divider()
 
-# PRE-GAME ML PICKS
-st.subheader("🎯 PRE-GAME ML PICKS")
+# ML PICKS
+st.subheader("🎯 ML PICKS")
 
-scheduled = {k: v for k, v in games.items() if v['status_type'] == "STATUS_SCHEDULED"}
-
-if scheduled:
+if games:
     ml_results = []
-    for gk, g in scheduled.items():
+    for gk, g in games.items():
         away, home = g["away_team"], g["home_team"]
         try:
             pick, score, reasons, home_out, away_out, home_net, away_net = calc_ml_score(home, away, yesterday_teams, injuries, last_5)
@@ -523,11 +521,24 @@ if scheduled:
         reasons_str = " • ".join(r["reasons"])
         injury_str = f" • 🏥 {r['opp_out'][0][:12]} OUT" if r["opp_out"] else ""
         
+        # Get game status
+        g = games.get(f"{r['away']}@{r['home']}", {})
+        if g.get('status_type') == "STATUS_FINAL":
+            status_badge = "FINAL"
+            status_color = "#888"
+        elif g.get('period', 0) > 0:
+            status_badge = f"Q{g.get('period')} {g.get('clock', '')}"
+            status_color = "#ff4444"
+        else:
+            status_badge = "PRE"
+            status_color = "#00ff00"
+        
         col_info, col_btn = st.columns([5, 1])
         with col_info:
             st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:12px 14px;border-radius:8px;border-left:4px solid {r['color']}">
                 <b style="color:#fff;font-size:1.1em">{r['pick']}</b> <span style="color:#666">vs {r['opp']}</span>
                 <span style="color:#38bdf8;margin-left:8px;font-weight:bold">{r['score']}/10</span>
+                <span style="color:{status_color};margin-left:8px;font-size:0.8em">⏱️ {status_badge}</span>
                 <span style="color:#777;font-size:0.85em;margin-left:10px">{reasons_str}{injury_str}</span>
             </div>""", unsafe_allow_html=True)
         with col_btn:
