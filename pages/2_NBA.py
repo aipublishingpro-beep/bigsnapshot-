@@ -166,7 +166,7 @@ with st.sidebar:
     st.header("🔗 KALSHI")
     st.caption("⚠️ NBA not on trade API yet")
     st.divider()
-    st.caption("v15.58 🛡️+2 SAFE")
+    st.caption("v15.59 🛡️+2 SAFE")
 
 def build_kalshi_ml_url(away_team, home_team):
     away_code = KALSHI_CODES.get(away_team, "xxx").upper()
@@ -303,7 +303,7 @@ def fetch_all_team_forms():
         if results:
             form = "".join(results[:5])
             while len(form) < 5: form += "-"
-            forms[team] = form
+            forms[team] = form[::-1]  # Reverse so oldest is left, newest is right
         else:
             forms[team] = "-----"
     return forms
@@ -429,7 +429,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # HEADER
 st.title("🏀 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.58")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.59")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -725,7 +725,7 @@ st.subheader("📖 How to Use NBA Edge Finder")
 with st.expander("🎯 ML Picks — Reading the Signals", expanded=False):
     st.markdown("""**Signal Tiers:** 🟢 STRONG BUY (8.0+), 🔵 BUY (6.5-7.9), 🟡 LEAN (5.5-6.4), ⚪ TOSS-UP (<5.5)
     
-**Form Display (WWLWL):** Last 5 games. Green = Hot (4-5 wins), Red = Cold (0-1 wins)""")
+**Form Display (LLWWW):** Last 5 games, left=oldest, right=most recent. Green = Hot (4-5 wins), Red = Cold (0-1 wins)""")
 
 with st.expander("📈 Active Positions — Tracking Your Bets", expanded=False):
     st.markdown("""**Position Status:** ✅ WON/LOST, 🟢 CRUISING (15+), 🟢 LEADING (8-14), 🟡 AHEAD (1-7), 🟠 CLOSE (within 5), 🔴 BEHIND (6+)""")
@@ -741,4 +741,4 @@ with st.expander("🔥 Pace Scanner — Game Flow", expanded=False):
 **🛡️+2 = Safety buffer.** We recommend 2 brackets above/below projection for extra margin.""")
 
 st.divider()
-st.caption("⚠️ Entertainment only. Not financial advice. v15.58")
+st.caption("⚠️ Entertainment only. Not financial advice. v15.59")
