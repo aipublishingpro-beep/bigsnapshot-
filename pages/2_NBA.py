@@ -435,11 +435,11 @@ with st.sidebar:
     st.header("📊 MODEL INFO")
     st.markdown("Proprietary multi-factor model analyzing matchups, injuries, rest, travel, momentum, and historical edges.")
     st.divider()
-    st.caption("v17.5 NBA EDGE")
+    st.caption("v17.6 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
-st.caption("Proprietary ML Model + Live Tracker | v17.5")
+st.caption("Proprietary ML Model + Live Tracker | v17.6")
 
 # LIVE GAMES
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
@@ -714,10 +714,9 @@ else:
 
 st.divider()
 
-# HOW TO USE
-st.subheader("📖 HOW TO USE THIS APP")
-
-st.markdown("""
+# HOW TO USE - COLLAPSED
+with st.expander("📖 HOW TO USE THIS APP", expanded=False):
+    st.markdown("""
 ### 🎯 **Getting Started**
 
 **NBA Edge Finder** is a proprietary prediction model for Kalshi NBA moneyline markets.
@@ -761,8 +760,8 @@ Click **BUY** buttons to go directly to Kalshi markets.
 
 ---
 
-*Built for Kalshi. v17.5*
+*Built for Kalshi. v17.6*
 """)
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v17.5")
+st.caption("⚠️ Educational only. Not financial advice. v17.6")
