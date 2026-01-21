@@ -405,6 +405,9 @@ for gk in games.keys():
     today_teams.add(parts[1])
 yesterday_teams = yesterday_teams.intersection(today_teams)
 
+# Define live_games early for use throughout
+live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
+
 # SIDEBAR
 with st.sidebar:
     st.header("📖 SIGNAL TIERS")
@@ -602,7 +605,6 @@ if upset_watch:
     st.divider()
 
 # LIVE GAMES
-live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
 if live_games:
     st.subheader("⚡ LIVE GAMES")
     hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
