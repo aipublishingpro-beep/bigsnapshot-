@@ -277,17 +277,18 @@ default_city = query_params.get("city", "New York City")
 if default_city not in CITY_LIST:
     default_city = "New York City"
 
-c1, c2, c3 = st.columns([3, 1, 1])
+c1, c2 = st.columns([4, 1])
 with c1:
     city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
 with c2:
-    if st.button("⭐ Set Default", use_container_width=True):
-        st.query_params["city"] = city
-        st.success(f"✓ Bookmark this page!")
-with c3:
     cfg = CITY_CONFIG.get(city, {})
     nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
     st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
+
+# Set default button - small and subtle
+if st.button("⭐ Set as Default City", use_container_width=False):
+    st.query_params["city"] = city
+    st.success(f"✓ Bookmark this page to save {city} as default!")
 
 # Fetch actual observations
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
@@ -297,7 +298,7 @@ if current_temp:
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
         <div style="text-align:center;margin-bottom:10px">
-            <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#3b82f6">{cfg.get('station', 'N/A')}</strong></span>
+            <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#22c55e">{cfg.get('station', 'N/A')}</strong></span>
         </div>
         <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
             <div>
