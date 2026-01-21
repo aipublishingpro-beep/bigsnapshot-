@@ -13,14 +13,21 @@ apply_styles()
 
 # ========== GOOGLE ANALYTICS G4 ==========
 st.markdown("""
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-XXXXXXXXXX');
-</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
+<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
+""", unsafe_allow_html=True)
+
+# ========== MOBILE CSS FIX ==========
+st.markdown("""
+<style>
+    @media (max-width: 768px) {
+        .stApp { padding: 0.5rem; }
+        h1 { font-size: 1.5rem !important; }
+        h2 { font-size: 1.2rem !important; }
+        div[data-testid="column"] { width: 100% !important; flex: 100% !important; min-width: 100% !important; }
+        .stButton button { padding: 8px 12px !important; font-size: 14px !important; }
+    }
+</style>
 """, unsafe_allow_html=True)
 
 eastern = pytz.timezone("US/Eastern")
@@ -160,6 +167,10 @@ H2H_EDGES = {
     ("Dallas", "San Antonio"): 0.5, ("Memphis", "New Orleans"): 0.3,
 }
 
+def escape_html(text):
+    if not text: return ""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
 def build_kalshi_ml_url(away_team, home_team):
     away_code = KALSHI_CODES.get(away_team, "XXX")
     home_code = KALSHI_CODES.get(home_team, "XXX")
@@ -173,6 +184,12 @@ def build_kalshi_totals_url(away_team, home_team):
     date_str = datetime.now(eastern).strftime("%y%b%d").upper()
     ticker = f"KXNBATOTAL-{date_str}{away_code}{home_code}"
     return f"https://kalshi.com/markets/KXNBATOTAL/{ticker}"
+
+def get_buy_button_html(kalshi_url, label="BUY"):
+    if kalshi_url:
+        return f'<a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:4px 10px;border-radius:4px;font-size:0.75em;font-weight:bold;text-decoration:none">{label}</a>'
+    else:
+        return f'<span style="background:#444;color:#888;padding:4px 10px;border-radius:4px;font-size:0.75em">Market N/A</span>'
 
 def calc_distance(loc1, loc2):
     from math import radians, sin, cos, sqrt, atan2
@@ -247,6 +264,24 @@ def fetch_espn_injuries():
     except: pass
     return injuries
 
+@st.cache_data(ttl=1800)
+def fetch_nba_news():
+    """Fetch NBA news from ESPN"""
+    url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news?limit=5"
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        articles = []
+        for article in data.get("articles", [])[:5]:
+            articles.append({
+                "headline": article.get("headline", ""),
+                "description": article.get("description", "")[:100] + "..." if article.get("description") else "",
+                "link": article.get("links", {}).get("web", {}).get("href", "")
+            })
+        return articles
+    except:
+        return []
+
 TEAM_IDS = {
     "Atlanta": "1", "Boston": "2", "Brooklyn": "17", "Charlotte": "30",
     "Chicago": "4", "Cleveland": "5", "Dallas": "6", "Denver": "7",
@@ -277,6 +312,14 @@ def fetch_team_streak(team_name):
         return 0
     except:
         return 0
+
+@st.cache_data(ttl=3600)
+def fetch_all_team_streaks():
+    """Fetch streaks for all teams at once"""
+    streaks = {}
+    for team in KALSHI_CODES.keys():
+        streaks[team] = fetch_team_streak(team)
+    return streaks
 
 @st.cache_data(ttl=3600)
 def fetch_last_5_records():
@@ -342,12 +385,6 @@ def get_minutes_played(period, clock, status_type):
         if period <= 4: return (period - 1) * 12 + (12 - time_left)
         else: return 48 + (period - 5) * 5 + (5 - time_left)
     except: return (period - 1) * 12 if period <= 4 else 48 + (period - 5) * 5
-
-def escape_html(text):
-    """Escape HTML special characters"""
-    if not text:
-        return ""
-    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 def calc_ml_score(home_team, away_team, yesterday_teams, injuries, last_5):
     home, away = TEAM_STATS.get(home_team, {}), TEAM_STATS.get(away_team, {})
@@ -425,6 +462,8 @@ game_list = sorted(list(games.keys()))
 yesterday_teams = fetch_yesterday_teams()
 injuries = fetch_espn_injuries()
 last_5 = fetch_last_5_records()
+news = fetch_nba_news()
+all_streaks = fetch_all_team_streaks()
 now = datetime.now(eastern)
 
 today_teams = set()
@@ -433,6 +472,9 @@ for gk in games.keys():
     today_teams.add(parts[0])
     today_teams.add(parts[1])
 yesterday_teams = yesterday_teams.intersection(today_teams)
+
+# Define live_games early for use throughout
+live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
 
 # SIDEBAR
 with st.sidebar:
@@ -454,14 +496,125 @@ with st.sidebar:
     st.header("📊 MODEL INFO")
     st.markdown("Proprietary multi-factor model analyzing matchups, injuries, rest, travel, momentum, and historical edges.")
     st.divider()
-    st.caption("v17.8 NBA EDGE")
+    st.caption("v18.0 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
-st.caption("Proprietary ML Model + Live Tracker | v17.8")
+st.caption("Proprietary ML Model + Live Tracker | v18.0")
+st.markdown("<p style='color:#888;font-size:0.85em;margin-top:-10px'>Only 🔒 STRONG picks are tracked. All others are informational.</p>", unsafe_allow_html=True)
+
+# ============================================================
+# 💰 TOP PICK OF THE DAY (Hero Section)
+# ============================================================
+def get_top_pick():
+    """Calculate and return the top pick of the day"""
+    if not games:
+        return None
+    top_result = None
+    top_score = 0
+    for gk, g in games.items():
+        try:
+            away, home = g["away_team"], g["home_team"]
+            pick, score, reasons, home_out, away_out, home_net, away_net = calc_ml_score(home, away, yesterday_teams, injuries, last_5)
+            if score > top_score and g.get('status_type') == "STATUS_SCHEDULED":
+                top_score = score
+                is_home = pick == home
+                opp = away if is_home else home
+                top_result = {
+                    "pick": pick, "pick_code": KALSHI_CODES.get(pick, "???"),
+                    "opp": opp, "opp_code": KALSHI_CODES.get(opp, "???"),
+                    "score": score, "reasons": reasons,
+                    "away": away, "home": home
+                }
+        except:
+            continue
+    return top_result
+
+top_pick = get_top_pick()
+if top_pick and top_pick["score"] >= 8.0:
+    tier, color, is_tracked = get_signal_tier(top_pick["score"])
+    kalshi_url = build_kalshi_ml_url(top_pick["away"], top_pick["home"])
+    buy_btn = get_buy_button_html(kalshi_url, "🎯 BUY NOW")
+    tracked_icon = "📊" if is_tracked else ""
+    
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg,#0a2a0a,#1a3a1a);padding:20px;border-radius:12px;border:3px solid {color};margin:15px 0;text-align:center">
+        <div style="color:#888;font-size:0.9em;margin-bottom:8px">💰 TOP PICK OF THE DAY</div>
+        <div style="font-size:2.2em;font-weight:bold;color:#fff;margin-bottom:5px">{escape_html(top_pick['pick_code'])} {tracked_icon}</div>
+        <div style="color:{color};font-size:1.4em;font-weight:bold;margin-bottom:10px">{tier} {top_pick['score']}/10</div>
+        <div style="color:#aaa;font-size:0.9em;margin-bottom:12px">vs {escape_html(top_pick['opp_code'])} • {' · '.join(top_pick['reasons'][:3])}</div>
+        <div>{buy_btn if kalshi_url else '<span style="color:#666">Market loading...</span>'}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# STATS SUMMARY
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("Today's Games", len(games))
+with col2:
+    st.metric("B2B Teams", len(yesterday_teams))
+with col3:
+    st.metric("Live Now", len(live_games))
+with col4:
+    # TODAY'S RECORD - Count STRONG picks that finished
+    strong_wins = sum(1 for pos in st.session_state.positions 
+                      if pos.get('tracked') and games.get(pos.get('game'), {}).get('status_type') == "STATUS_FINAL"
+                      and ((pos.get('pick') == pos.get('game', '').split('@')[1] and games.get(pos.get('game'), {}).get('home_score', 0) > games.get(pos.get('game'), {}).get('away_score', 0))
+                           or (pos.get('pick') == pos.get('game', '').split('@')[0] and games.get(pos.get('game'), {}).get('away_score', 0) > games.get(pos.get('game'), {}).get('home_score', 0))))
+    strong_total = sum(1 for pos in st.session_state.positions 
+                       if pos.get('tracked') and games.get(pos.get('game'), {}).get('status_type') == "STATUS_FINAL")
+    if strong_total > 0:
+        st.metric("📊 Today", f"{strong_wins}-{strong_total - strong_wins}")
+    else:
+        st.metric("📊 Today", "0-0")
+
+# LEGEND BOX
+st.markdown("""
+<div style="background:linear-gradient(135deg,#0f172a,#1a1a2e);padding:12px 16px;border-radius:8px;margin:10px 0;border:1px solid #333">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap">
+            <span style="color:#00ff00;font-weight:bold">🔒 STRONG 10.0</span>
+            <span style="color:#00aaff">🔵 BUY 8.0+</span>
+            <span style="color:#ffaa00">🟡 LEAN 5.5+</span>
+            <span style="color:#666">⚪ PASS &lt;5.5</span>
+        </div>
+        <span style="color:#888;font-size:0.8em">📊 = Tracked in stats</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ⏰ STATUS BAR
+scheduled_games = [g for g in games.values() if g.get('status_type') == "STATUS_SCHEDULED"]
+if live_games:
+    st.markdown(f"""
+    <div style="background:#1a2a1a;padding:10px 15px;border-radius:6px;text-align:center;margin-bottom:10px;border-left:3px solid #00ff00">
+        <span style="color:#00ff00;font-weight:bold">🔴 {len(live_games)} LIVE NOW</span>
+        <span style="color:#888"> • Scroll down for live tracker</span>
+    </div>
+    """, unsafe_allow_html=True)
+elif scheduled_games:
+    st.markdown(f"""
+    <div style="background:#1a1a2e;padding:10px 15px;border-radius:6px;text-align:center;margin-bottom:10px;border-left:3px solid #38bdf8">
+        <span style="color:#38bdf8;font-weight:bold">⏰ {len(scheduled_games)} games scheduled</span>
+        <span style="color:#888"> • Check Kalshi for tip-off times</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.divider()
+
+# 📰 BREAKING NEWS
+if news:
+    st.subheader("📰 BREAKING NEWS")
+    for article in news[:3]:
+        if article.get("headline"):
+            link = article.get("link", "#")
+            st.markdown(f"""<div style="background:#0f172a;padding:10px 12px;border-radius:6px;margin-bottom:6px;border-left:3px solid #38bdf8">
+                <a href="{link}" target="_blank" style="color:#fff;text-decoration:none;font-weight:bold;font-size:0.95em">{escape_html(article['headline'])}</a>
+                <div style="color:#666;font-size:0.8em;margin-top:4px">{escape_html(article.get('description', ''))}</div>
+            </div>""", unsafe_allow_html=True)
+    st.divider()
 
 # LIVE GAMES
-live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
 if live_games:
     st.subheader("⚡ LIVE GAMES")
     hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
@@ -511,7 +664,7 @@ if games:
                 "score": score, "color": color, "tier": tier, "reasons": reasons,
                 "is_home": is_home, "away": away, "home": home,
                 "pick_net": pick_net, "opp_net": opp_net, "opp_out": opp_out,
-                "is_tracked": is_tracked
+                "is_tracked": is_tracked, "game_key": gk
             })
         except: continue
     
@@ -520,11 +673,10 @@ if games:
     for r in ml_results:
         if r["score"] < 5.5: continue
         kalshi_url = build_kalshi_ml_url(r["away"], r["home"])
-        # Escape all dynamic content and limit reasons to 3
         reasons_safe = [escape_html(reason) for reason in r["reasons"][:3]]
         reasons_str = " · ".join(reasons_safe)
         
-        g = games.get(f"{r['away']}@{r['home']}", {})
+        g = games.get(r["game_key"], {})
         if g.get('status_type') == "STATUS_FINAL":
             status_badge = "FINAL"
             status_color = "#888"
@@ -535,7 +687,6 @@ if games:
             status_badge = "PRE"
             status_color = "#00ff00"
         
-        # Compact single-line design
         tracked_badge = ' <span style="background:#00ff00;color:#000;padding:1px 4px;border-radius:3px;font-size:0.65em">📊</span>' if r["is_tracked"] else ""
         border_width = "3px" if r["is_tracked"] else "2px"
         
@@ -555,12 +706,12 @@ if games:
 <div style="color:#666;font-size:0.75em;margin:-2px 0 6px 14px">{reasons_str}</div>""", unsafe_allow_html=True)
     
     # Only add STRONG BUY (tracked) picks to tracker
-    scheduled_strong = [r for r in ml_results if r["is_tracked"] and games.get(f"{r['away']}@{r['home']}", {}).get('status_type') == "STATUS_SCHEDULED"]
+    scheduled_strong = [r for r in ml_results if r["is_tracked"] and games.get(r["game_key"], {}).get('status_type') == "STATUS_SCHEDULED"]
     if scheduled_strong:
         if st.button(f"➕ Add {len(scheduled_strong)} STRONG Picks to Tracker", use_container_width=True, key="add_ml_picks"):
             added = 0
             for r in scheduled_strong:
-                gk = f"{r['away']}@{r['home']}"
+                gk = r["game_key"]
                 if not any(p.get('game') == gk and p.get('pick') == r['pick'] for p in st.session_state.positions):
                     st.session_state.positions.append({"game": gk, "type": "ml", "pick": r['pick'], "price": 50, "contracts": 1, "tracked": True})
                     added += 1
@@ -572,6 +723,43 @@ else:
 
 st.divider()
 
+# 🔥 HOT STREAKS (Teams on 4+ win streaks playing today)
+hot_teams = []
+cold_teams = []
+for team in today_teams:
+    streak = all_streaks.get(team, 0)
+    if streak >= 4:
+        hot_teams.append({"team": team, "streak": streak})
+    elif streak <= -4:
+        cold_teams.append({"team": team, "streak": streak})
+
+if hot_teams:
+    st.subheader("🔥 HOT STREAKS")
+    st.caption("Teams on 4+ win streaks playing today — Ride the momentum")
+    hot_cols = st.columns(min(len(hot_teams), 4))
+    for i, t in enumerate(sorted(hot_teams, key=lambda x: x['streak'], reverse=True)[:4]):
+        with hot_cols[i]:
+            code = KALSHI_CODES.get(t['team'], "???")
+            st.markdown(f"""<div style="background:linear-gradient(135deg,#1a2a1a,#0a1a0a);padding:12px;border-radius:8px;text-align:center;border:2px solid #00ff00">
+                <div style="color:#fff;font-weight:bold;font-size:1.2em">{escape_html(code)}</div>
+                <div style="color:#00ff00;font-size:1.1em;font-weight:bold">🔥 W{t['streak']}</div>
+            </div>""", unsafe_allow_html=True)
+    st.divider()
+
+# ❄️ FADE ALERT (Teams on 4+ loss streaks playing today)
+if cold_teams:
+    st.subheader("❄️ FADE ALERT")
+    st.caption("Teams on 4+ loss streaks — Consider fading")
+    cold_cols = st.columns(min(len(cold_teams), 4))
+    for i, t in enumerate(sorted(cold_teams, key=lambda x: x['streak'])[:4]):
+        with cold_cols[i]:
+            code = KALSHI_CODES.get(t['team'], "???")
+            st.markdown(f"""<div style="background:linear-gradient(135deg,#2a1a1a,#1a0a0a);padding:12px;border-radius:8px;text-align:center;border:2px solid #ff4444">
+                <div style="color:#fff;font-weight:bold;font-size:1.2em">{escape_html(code)}</div>
+                <div style="color:#ff4444;font-size:1.1em;font-weight:bold">❄️ L{abs(t['streak'])}</div>
+            </div>""", unsafe_allow_html=True)
+    st.divider()
+
 # TEAM FORM LEADERBOARD
 st.subheader("🔥 TEAM FORM LEADERBOARD")
 st.caption("All 30 teams ranked by streak")
@@ -579,7 +767,7 @@ st.caption("All 30 teams ranked by streak")
 form_list = []
 for team in KALSHI_CODES.keys():
     fd = last_5.get(team, {"wins": 0, "form": "-----"})
-    streak = fetch_team_streak(team)
+    streak = all_streaks.get(team, 0)
     form_list.append({"team": team, "wins": fd.get("wins", 0), "form": fd.get("form", "-----"), "streak": streak})
 form_list.sort(key=lambda x: x['streak'], reverse=True)
 
@@ -809,8 +997,8 @@ Click **BUY** buttons to go directly to Kalshi markets (opens in new tab).
 
 ---
 
-*Built for Kalshi. v17.8*
+*Built for Kalshi. v18.0*
 """)
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v17.8")
+st.caption("⚠️ Educational only. Not financial advice. v18.0")
