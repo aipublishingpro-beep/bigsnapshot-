@@ -38,7 +38,7 @@ if not st.session_state.authenticated:
     st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
     st.stop()
 
-VERSION = "2.0"
+VERSION = "3.0"
 
 # ============================================================
 # GA4 TRACKING
@@ -75,6 +75,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+eastern = pytz.timezone('US/Eastern')
+
 # ============================================================
 # TEAM MAPPINGS
 # ============================================================
@@ -105,41 +107,41 @@ KALSHI_CODES = {
 DOME_STADIUMS = ["ARI", "ATL", "DAL", "DET", "HOU", "IND", "LV", "LAC", "LAR", "MIN", "NO"]
 
 # ============================================================
-# TEAM STATS (Power ratings, win %)
+# TEAM STATS - POWER RATINGS, RECORDS, FORM
 # ============================================================
 TEAM_STATS = {
-    "ARI": {"pwr": -12.5, "rank": 27, "home_win": 0.42, "away_win": 0.30},
-    "ATL": {"pwr": 2.5, "rank": 18, "home_win": 0.55, "away_win": 0.42},
-    "BAL": {"pwr": 15.5, "rank": 6, "home_win": 0.72, "away_win": 0.62},
-    "BUF": {"pwr": 18.2, "rank": 5, "home_win": 0.78, "away_win": 0.68},
-    "CAR": {"pwr": -18.5, "rank": 30, "home_win": 0.35, "away_win": 0.22},
-    "CHI": {"pwr": -8.5, "rank": 22, "home_win": 0.45, "away_win": 0.35},
-    "CIN": {"pwr": 5.8, "rank": 14, "home_win": 0.58, "away_win": 0.48},
-    "CLE": {"pwr": -25.0, "rank": 32, "home_win": 0.38, "away_win": 0.25},
-    "DAL": {"pwr": -5.2, "rank": 20, "home_win": 0.52, "away_win": 0.38},
-    "DEN": {"pwr": 8.5, "rank": 8, "home_win": 0.65, "away_win": 0.50},
-    "DET": {"pwr": 22.5, "rank": 4, "home_win": 0.78, "away_win": 0.68},
-    "GB": {"pwr": 12.2, "rank": 10, "home_win": 0.70, "away_win": 0.55},
-    "HOU": {"pwr": 16.5, "rank": 7, "home_win": 0.68, "away_win": 0.58},
-    "IND": {"pwr": 14.5, "rank": 12, "home_win": 0.55, "away_win": 0.48},
-    "JAX": {"pwr": 10.5, "rank": 11, "home_win": 0.55, "away_win": 0.48},
-    "KC": {"pwr": 18.5, "rank": 9, "home_win": 0.82, "away_win": 0.72},
-    "LV": {"pwr": -10.2, "rank": 25, "home_win": 0.42, "away_win": 0.28},
-    "LAC": {"pwr": 11.8, "rank": 3, "home_win": 0.62, "away_win": 0.52},
-    "LAR": {"pwr": 24.5, "rank": 5, "home_win": 0.72, "away_win": 0.62},
-    "MIA": {"pwr": -2.5, "rank": 16, "home_win": 0.55, "away_win": 0.38},
-    "MIN": {"pwr": 8.5, "rank": 13, "home_win": 0.68, "away_win": 0.52},
-    "NE": {"pwr": -12.5, "rank": 24, "home_win": 0.42, "away_win": 0.30},
-    "NO": {"pwr": -8.8, "rank": 23, "home_win": 0.48, "away_win": 0.35},
-    "NYG": {"pwr": -15.5, "rank": 29, "home_win": 0.35, "away_win": 0.22},
-    "NYJ": {"pwr": -12.5, "rank": 26, "home_win": 0.42, "away_win": 0.28},
-    "PHI": {"pwr": 14.8, "rank": 6, "home_win": 0.75, "away_win": 0.60},
-    "PIT": {"pwr": 4.8, "rank": 10, "home_win": 0.62, "away_win": 0.45},
-    "SF": {"pwr": 6.5, "rank": 15, "home_win": 0.58, "away_win": 0.48},
-    "SEA": {"pwr": 28.5, "rank": 2, "home_win": 0.78, "away_win": 0.68},
-    "TB": {"pwr": -3.2, "rank": 19, "home_win": 0.52, "away_win": 0.40},
-    "TEN": {"pwr": -14.8, "rank": 28, "home_win": 0.40, "away_win": 0.25},
-    "WAS": {"pwr": -4.5, "rank": 21, "home_win": 0.52, "away_win": 0.42}
+    "ARI": {"pwr": -12.5, "rank": 27, "home_win": 0.42, "record": "4-13", "form": "LLLWL"},
+    "ATL": {"pwr": 2.5, "rank": 18, "home_win": 0.55, "record": "8-9", "form": "LWLWL"},
+    "BAL": {"pwr": 15.5, "rank": 3, "home_win": 0.72, "record": "12-5", "form": "WWWLW"},
+    "BUF": {"pwr": 18.2, "rank": 2, "home_win": 0.78, "record": "13-4", "form": "WWWWL"},
+    "CAR": {"pwr": -18.5, "rank": 30, "home_win": 0.35, "record": "5-12", "form": "LLWLL"},
+    "CHI": {"pwr": -8.5, "rank": 22, "home_win": 0.45, "record": "5-12", "form": "LLLLL"},
+    "CIN": {"pwr": 5.8, "rank": 14, "home_win": 0.58, "record": "9-8", "form": "WWWWL"},
+    "CLE": {"pwr": -25.0, "rank": 32, "home_win": 0.38, "record": "3-14", "form": "LLLLL"},
+    "DAL": {"pwr": -5.2, "rank": 20, "home_win": 0.52, "record": "7-10", "form": "LLWLL"},
+    "DEN": {"pwr": 8.5, "rank": 8, "home_win": 0.65, "record": "10-7", "form": "WLWWL"},
+    "DET": {"pwr": 22.5, "rank": 1, "home_win": 0.78, "record": "15-2", "form": "WWWWW"},
+    "GB": {"pwr": 12.2, "rank": 6, "home_win": 0.70, "record": "11-6", "form": "WWLWW"},
+    "HOU": {"pwr": 10.5, "rank": 7, "home_win": 0.68, "record": "10-7", "form": "WLWWW"},
+    "IND": {"pwr": -2.5, "rank": 16, "home_win": 0.55, "record": "8-9", "form": "LWLWL"},
+    "JAX": {"pwr": -8.5, "rank": 23, "home_win": 0.45, "record": "4-13", "form": "LLLWL"},
+    "KC": {"pwr": 18.5, "rank": 4, "home_win": 0.82, "record": "15-2", "form": "WWWWW"},
+    "LV": {"pwr": -10.2, "rank": 25, "home_win": 0.42, "record": "4-13", "form": "LLLLW"},
+    "LAC": {"pwr": 11.8, "rank": 5, "home_win": 0.62, "record": "11-6", "form": "WLWWW"},
+    "LAR": {"pwr": 8.5, "rank": 9, "home_win": 0.62, "record": "10-7", "form": "WWLWW"},
+    "MIA": {"pwr": -2.5, "rank": 17, "home_win": 0.55, "record": "8-9", "form": "WLLWL"},
+    "MIN": {"pwr": 12.5, "rank": 5, "home_win": 0.68, "record": "14-3", "form": "WWWWL"},
+    "NE": {"pwr": -12.5, "rank": 24, "home_win": 0.42, "record": "4-13", "form": "LLLLL"},
+    "NO": {"pwr": -8.8, "rank": 21, "home_win": 0.48, "record": "5-12", "form": "LLLWL"},
+    "NYG": {"pwr": -15.5, "rank": 29, "home_win": 0.35, "record": "3-14", "form": "LLLLL"},
+    "NYJ": {"pwr": -6.5, "rank": 19, "home_win": 0.45, "record": "5-12", "form": "WLLLL"},
+    "PHI": {"pwr": 14.8, "rank": 4, "home_win": 0.75, "record": "14-3", "form": "WWWWW"},
+    "PIT": {"pwr": 4.8, "rank": 12, "home_win": 0.62, "record": "10-7", "form": "LLWWL"},
+    "SF": {"pwr": -4.5, "rank": 18, "home_win": 0.52, "record": "6-11", "form": "LWLLL"},
+    "SEA": {"pwr": 6.5, "rank": 10, "home_win": 0.62, "record": "10-7", "form": "WLWWL"},
+    "TB": {"pwr": 5.8, "rank": 11, "home_win": 0.58, "record": "10-7", "form": "WWWLW"},
+    "TEN": {"pwr": -14.8, "rank": 28, "home_win": 0.40, "record": "3-14", "form": "LLLLW"},
+    "WAS": {"pwr": 8.5, "rank": 8, "home_win": 0.62, "record": "12-5", "form": "WWWWL"}
 }
 
 STADIUM_COORDS = {
@@ -157,20 +159,30 @@ STADIUM_COORDS = {
 }
 
 # ============================================================
-# KALSHI URL BUILDER
+# HELPER FUNCTIONS
 # ============================================================
-def build_kalshi_url(away_abbr, home_abbr):
-    eastern = pytz.timezone('US/Eastern')
-    today = datetime.now(eastern)
-    date_str = today.strftime("%y%b%d").upper()
+def build_kalshi_url(away_abbr, home_abbr, game_date=None):
+    if game_date:
+        date_str = game_date.strftime("%y%b%d").upper()
+    else:
+        date_str = datetime.now(eastern).strftime("%y%b%d").upper()
     away_code = KALSHI_CODES.get(away_abbr, away_abbr.lower())
     home_code = KALSHI_CODES.get(home_abbr, home_abbr.lower())
     ticker = f"KXNFLGAME-{date_str}{away_code.upper()}{home_code.upper()}"
     return f"https://kalshi.com/markets/kxnflgame/{ticker.lower()}"
 
-# ============================================================
-# WEATHER API
-# ============================================================
+def format_form(form_str):
+    """Format WWLWL into colored spans"""
+    if not form_str:
+        return ""
+    html = ""
+    for c in form_str:
+        if c == "W":
+            html += '<span style="color:#22c55e;font-weight:bold;">W</span>'
+        else:
+            html += '<span style="color:#ef4444;font-weight:bold;">L</span>'
+    return html
+
 @st.cache_data(ttl=1800)
 def fetch_weather(lat, lon):
     try:
@@ -178,75 +190,92 @@ def fetch_weather(lat, lon):
         resp = requests.get(url, timeout=5)
         data = resp.json()
         current = data.get("current", {})
-        return {
-            "temp": current.get("temperature_2m", 70),
-            "wind": current.get("wind_speed_10m", 0),
-            "precip": current.get("precipitation", 0)
-        }
+        return {"temp": current.get("temperature_2m", 70), "wind": current.get("wind_speed_10m", 0), "precip": current.get("precipitation", 0)}
     except:
         return {"temp": 70, "wind": 0, "precip": 0}
 
-def get_weather_for_game(home_abbr):
+def get_weather_impact(home_abbr):
     if home_abbr in DOME_STADIUMS:
-        return {"wind": 0, "precip": 0, "temp": 72, "dome": True, "impact": "none"}
+        return "🏠 Dome", "none"
     coords = STADIUM_COORDS.get(home_abbr)
     if not coords:
-        return {"wind": 0, "precip": 0, "temp": 70, "dome": False, "impact": "none"}
-    weather = fetch_weather(coords[0], coords[1])
-    wind, precip, temp = weather.get("wind", 0), weather.get("precip", 0), weather.get("temp", 70)
+        return "", "none"
+    w = fetch_weather(coords[0], coords[1])
+    wind, precip = w.get("wind", 0), w.get("precip", 0)
     if wind >= 20 or precip > 0.5:
-        impact = "severe"
+        return f"🌧️ {int(wind)}mph", "severe"
     elif wind >= 15 or precip > 0.1:
-        impact = "moderate"
-    elif wind >= 10:
-        impact = "light"
-    else:
-        impact = "none"
-    return {"wind": wind, "precip": precip, "temp": temp, "dome": False, "impact": impact}
+        return f"💨 {int(wind)}mph", "moderate"
+    return "", "none"
 
 # ============================================================
-# ESPN API - REAL DATA
+# ESPN API FUNCTIONS
 # ============================================================
+@st.cache_data(ttl=300)
+def fetch_nfl_news():
+    try:
+        url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=5"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        articles = []
+        for article in data.get("articles", [])[:3]:
+            articles.append({
+                "headline": article.get("headline", ""),
+                "description": article.get("description", "")[:120] + "..." if article.get("description") else ""
+            })
+        return articles
+    except:
+        return []
+
 @st.cache_data(ttl=60)
-def fetch_nfl_games():
-    eastern = pytz.timezone('US/Eastern')
-    today_date = datetime.now(eastern).strftime('%Y%m%d')
-    url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={today_date}"
+def fetch_nfl_scoreboard():
+    url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
-        games = {}
+        games = []
+        week_info = data.get("week", {}).get("text", "")
+        season_type = data.get("season", {}).get("type", {}).get("name", "")
+        
         for event in data.get("events", []):
             comp = event.get("competitions", [{}])[0]
             competitors = comp.get("competitors", [])
             if len(competitors) < 2:
                 continue
-            home_team, away_team = None, None
-            home_score, away_score = 0, 0
-            home_abbr, away_abbr = "", ""
+            
+            home_team, away_team = {}, {}
             for c in competitors:
                 full_name = c.get("team", {}).get("displayName", "")
                 abbr = TEAM_ABBREVS.get(full_name, c.get("team", {}).get("abbreviation", ""))
                 score = int(c.get("score", 0) or 0)
+                record = ""
+                if c.get("records"):
+                    record = c["records"][0].get("summary", "")
+                
+                team_data = {
+                    "name": full_name, "abbr": abbr, "score": score, "record": record
+                }
                 if c.get("homeAway") == "home":
-                    home_team, home_score, home_abbr = full_name, score, abbr
+                    home_team = team_data
                 else:
-                    away_team, away_score, away_abbr = full_name, score, abbr
+                    away_team = team_data
+            
             status_obj = event.get("status", {})
             status_type = status_obj.get("type", {}).get("name", "STATUS_SCHEDULED")
+            status_detail = status_obj.get("type", {}).get("shortDetail", "")
             clock = status_obj.get("displayClock", "")
             period = status_obj.get("period", 0)
-            game_key = f"{away_abbr}@{home_abbr}"
-            games[game_key] = {
-                "away_team": away_team, "home_team": home_team,
-                "away_abbr": away_abbr, "home_abbr": home_abbr,
-                "away_score": away_score, "home_score": home_score,
-                "quarter": period, "clock": clock, "status_type": status_type
-            }
-        return games
+            game_date_str = event.get("date", "")
+            
+            games.append({
+                "home": home_team, "away": away_team,
+                "status_type": status_type, "status_detail": status_detail,
+                "clock": clock, "quarter": period, "game_date": game_date_str
+            })
+        
+        return games, week_info, season_type
     except Exception as e:
-        st.error(f"ESPN API error: {e}")
-        return {}
+        return [], "", ""
 
 @st.cache_data(ttl=300)
 def fetch_nfl_injuries():
@@ -273,64 +302,71 @@ def fetch_nfl_injuries():
     return injuries
 
 # ============================================================
-# ML SCORING MODEL - NFL FACTORS
+# ML SCORING MODEL
 # ============================================================
 def calc_ml_score(home_abbr, away_abbr, injuries):
     home = TEAM_STATS.get(home_abbr, {})
     away = TEAM_STATS.get(away_abbr, {})
-    weather = get_weather_for_game(home_abbr)
     
     score_home, score_away = 0, 0
     reasons_home, reasons_away = [], []
     
-    # Factor 1: Power Rating Difference
+    # Power Rating
     home_pwr = home.get('pwr', 0)
     away_pwr = away.get('pwr', 0)
     pwr_diff = home_pwr - away_pwr
     if pwr_diff > 10:
-        score_home += 2.0
-        reasons_home.append(f"💪 +{pwr_diff:.1f}")
+        score_home += 2.5
+        reasons_home.append(f"📊 Net +{pwr_diff:.1f}")
     elif pwr_diff > 5:
-        score_home += 1.0
-        reasons_home.append(f"💪 +{pwr_diff:.1f}")
+        score_home += 1.5
+        reasons_home.append(f"📊 Net +{pwr_diff:.1f}")
     elif pwr_diff < -10:
-        score_away += 2.0
-        reasons_away.append(f"💪 +{-pwr_diff:.1f}")
+        score_away += 2.5
+        reasons_away.append(f"📊 Net +{-pwr_diff:.1f}")
     elif pwr_diff < -5:
-        score_away += 1.0
-        reasons_away.append(f"💪 +{-pwr_diff:.1f}")
+        score_away += 1.5
+        reasons_away.append(f"📊 Net +{-pwr_diff:.1f}")
     
-    # Factor 2: Home Field Advantage
+    # Home Field
     home_hw = home.get('home_win', 0.5)
-    score_home += 1.0
-    reasons_home.append(f"🏟️ {int(home_hw*100)}%")
+    if home_hw >= 0.65:
+        score_home += 1.5
+        reasons_home.append(f"🏟️ {int(home_hw*100)}% Home")
+    else:
+        score_home += 0.5
+        reasons_home.append("🏟️ Home")
     
-    # Factor 3: Team Ranking
+    # Rank differential
     home_rank = home.get('rank', 16)
     away_rank = away.get('rank', 16)
-    if home_rank <= 10 and away_rank > 20:
+    if home_rank <= 8 and away_rank > 20:
         score_home += 1.5
-        reasons_home.append(f"📊 #{home_rank}")
-    elif away_rank <= 10 and home_rank > 20:
+        reasons_home.append(f"🏆 #{home_rank} DEF")
+    elif away_rank <= 8 and home_rank > 20:
         score_away += 1.5
-        reasons_away.append(f"📊 #{away_rank}")
+        reasons_away.append(f"🏆 #{away_rank} DEF")
     
-    # Factor 4: Weather Impact (favors home team in bad weather)
-    if weather["impact"] == "severe":
+    # Form (hot/cold streaks)
+    home_form = home.get('form', '')
+    away_form = away.get('form', '')
+    home_wins = home_form.count('W') if home_form else 0
+    away_wins = away_form.count('W') if away_form else 0
+    if home_wins >= 4:
         score_home += 1.0
-        reasons_home.append(f"🌧️ {int(weather['wind'])}mph")
-    elif weather["impact"] == "moderate":
+        reasons_home.append("🔥 Hot")
+    if away_wins >= 4:
+        score_away += 1.0
+        reasons_away.append("🔥 Hot")
+    if home_wins <= 1:
+        score_away += 0.5
+    if away_wins <= 1:
         score_home += 0.5
-        reasons_home.append(f"💨 {int(weather['wind'])}mph")
-    elif weather["dome"]:
-        reasons_home.append("🏠 Dome")
     
-    # Factor 5: Key Injuries (QB, RB1)
-    key_positions = ["QB", "RB"]
-    home_key_out = len([i for i in injuries.get(home_abbr, []) 
-                        if 'out' in i.get('status', '').lower() and i.get('pos') in key_positions])
-    away_key_out = len([i for i in injuries.get(away_abbr, []) 
-                        if 'out' in i.get('status', '').lower() and i.get('pos') in key_positions])
+    # Key Injuries (QB, RB)
+    key_pos = ["QB", "RB"]
+    home_key_out = len([i for i in injuries.get(home_abbr, []) if 'out' in i.get('status', '').lower() and i.get('pos') in key_pos])
+    away_key_out = len([i for i in injuries.get(away_abbr, []) if 'out' in i.get('status', '').lower() and i.get('pos') in key_pos])
     if away_key_out > home_key_out:
         score_home += 2.0
         reasons_home.append(f"🏥 {away_key_out} key OUT")
@@ -338,17 +374,14 @@ def calc_ml_score(home_abbr, away_abbr, injuries):
         score_away += 2.0
         reasons_away.append(f"🏥 {home_key_out} key OUT")
     
-    # Factor 6: Total Injuries
-    home_inj = len([i for i in injuries.get(home_abbr, []) if 'out' in i.get('status', '').lower()])
-    away_inj = len([i for i in injuries.get(away_abbr, []) if 'out' in i.get('status', '').lower()])
-    if away_inj > home_inj + 3:
+    # Weather impact
+    weather_str, impact = get_weather_impact(home_abbr)
+    if impact == "severe":
         score_home += 1.0
-        reasons_home.append(f"🩹 {away_inj} OUT")
-    elif home_inj > away_inj + 3:
-        score_away += 1.0
-        reasons_away.append(f"🩹 {home_inj} OUT")
+        if weather_str:
+            reasons_home.append(weather_str)
     
-    # Calculate final scores
+    # Normalize to 10
     total = score_home + score_away
     if total > 0:
         home_final = round((score_home / total) * 10, 1)
@@ -357,19 +390,19 @@ def calc_ml_score(home_abbr, away_abbr, injuries):
         home_final, away_final = 5.0, 5.0
     
     if home_final >= away_final:
-        return home_abbr, home_final, reasons_home[:4]
+        return home_abbr, home_final, reasons_home[:4], True
     else:
-        return away_abbr, away_final, reasons_away[:4]
+        return away_abbr, away_final, reasons_away[:4], False
 
 def get_signal_tier(score):
-    if score >= 8.0:
-        return "🟢 STRONG BUY", "#00ff00"
-    elif score >= 6.5:
-        return "🔵 BUY", "#00aaff"
+    if score >= 10.0:
+        return "🔒 STRONG", "#22c55e"
+    elif score >= 8.0:
+        return "🔵 BUY", "#3b82f6"
     elif score >= 5.5:
-        return "🟡 LEAN", "#ffff00"
+        return "🟡 LEAN", "#eab308"
     else:
-        return "⚪ TOSS-UP", "#888888"
+        return "⚪ PASS", "#6b7280"
 
 # ============================================================
 # SIDEBAR
@@ -378,8 +411,20 @@ with st.sidebar:
     st.page_link("Home.py", label="🏠 Home", use_container_width=True)
     st.divider()
     
-    st.header("📖 ML LEGEND")
-    st.markdown("🟢 **STRONG BUY** → 8.0+\n\n🔵 **BUY** → 6.5-7.9\n\n🟡 **LEAN** → 5.5-6.4\n\n⚪ **TOSS-UP** → Below 5.5")
+    st.header("📖 SIGNAL TIERS")
+    st.markdown("""
+🔒 **STRONG** → 10.0 <span style="color:#888;font-size:0.8em;">Tracked in stats</span>
+
+🔵 **BUY** → 8.0-9.9 <span style="color:#888;font-size:0.8em;">Informational only</span>
+
+🟡 **LEAN** → 5.5-7.9 <span style="color:#888;font-size:0.8em;">Slight edge</span>
+
+⚪ **PASS** → Below 5.5 <span style="color:#888;font-size:0.8em;">No edge</span>
+""", unsafe_allow_html=True)
+    st.divider()
+    
+    st.header("📊 MODEL INFO")
+    st.caption("Proprietary multi-factor model analyzing power ratings, home field, form, injuries, and weather.")
     st.divider()
     
     st.header("🔗 KALSHI")
@@ -388,109 +433,197 @@ with st.sidebar:
     st.caption(f"v{VERSION}")
 
 # ============================================================
-# MAIN
+# MAIN CONTENT
 # ============================================================
-eastern = pytz.timezone('US/Eastern')
 now = datetime.now(eastern)
 
 st.title("🏈 NFL EDGE FINDER")
 st.caption(f"v{VERSION} | {now.strftime('%I:%M:%S %p ET')} | Real ESPN Data")
 
-games = fetch_nfl_games()
+# Fetch all data
+news = fetch_nfl_news()
+games, week_info, season_type = fetch_nfl_scoreboard()
 injuries = fetch_nfl_injuries()
 
-if not games:
-    st.warning("No NFL games scheduled today.")
-    st.stop()
+st.divider()
+
+# ============================================================
+# 🏆 SUPER BOWL / PLAYOFFS INFO
+# ============================================================
+if season_type in ["Post Season", "Off Season"]:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 15px 20px; border-radius: 10px; border-left: 4px solid #ffd700; margin-bottom: 20px;">
+        <span style="font-size: 1.3em; font-weight: bold; color: #ffd700;">🏆 SUPER BOWL LIX</span><br>
+        <span style="color: #ccc;">February 9, 2025 • Caesars Superdome, New Orleans</span><br>
+        <span style="color: #888; font-size: 0.9em;">AFC vs NFC Championship Winners</span>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    # Show playoff picture during regular season
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0f172a, #1e293b); padding: 12px 18px; border-radius: 8px; margin-bottom: 15px;">
+        <span style="font-weight: bold; color: #ffd700;">🏆 PLAYOFF PICTURE</span>
+        <span style="color: #888; margin-left: 15px;">AFC: KC, BUF, BAL, HOU, LAC, PIT, DEN</span>
+        <span style="color: #888; margin-left: 15px;">NFC: DET, PHI, MIN, LAR, TB, WAS, GB</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ============================================================
+# 📰 BREAKING NEWS
+# ============================================================
+st.subheader("📰 BREAKING NEWS")
+
+if news:
+    for article in news:
+        st.markdown(f"""
+        <div style="background: #0f172a; padding: 12px 15px; margin-bottom: 8px; border-radius: 6px; border-left: 3px solid #3b82f6;">
+            <div style="font-weight: 600; color: #fff;">{article['headline']}</div>
+            <div style="color: #888; font-size: 0.85em; margin-top: 4px;">{article['description']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+else:
+    st.info("No breaking news available")
 
 st.divider()
 
 # ============================================================
 # 🎯 ML PICKS
 # ============================================================
-st.subheader("🎯 ML PICKS")
+if week_info:
+    st.subheader(f"🎯 ML PICKS")
+else:
+    st.subheader("🎯 ML PICKS")
 
-ml_results = []
-for game_key, g in games.items():
-    away_abbr = g["away_abbr"]
-    home_abbr = g["home_abbr"]
+if games:
+    ml_results = []
+    for g in games:
+        home_abbr = g["home"].get("abbr", "")
+        away_abbr = g["away"].get("abbr", "")
+        if not home_abbr or not away_abbr:
+            continue
+        
+        pick, score, reasons, is_home = calc_ml_score(home_abbr, away_abbr, injuries)
+        tier_label, tier_color = get_signal_tier(score)
+        opponent = away_abbr if is_home else home_abbr
+        
+        # Parse game date
+        game_dt = None
+        try:
+            game_dt = datetime.fromisoformat(g["game_date"].replace("Z", "+00:00"))
+            game_dt = game_dt.astimezone(eastern)
+        except:
+            pass
+        
+        ml_results.append({
+            "pick": pick, "opponent": opponent, "score": score,
+            "tier_label": tier_label, "tier_color": tier_color,
+            "reasons": reasons, "is_home": is_home,
+            "status_type": g["status_type"], "status_detail": g["status_detail"],
+            "game_dt": game_dt, "home_abbr": home_abbr, "away_abbr": away_abbr,
+            "home_score": g["home"].get("score", 0), "away_score": g["away"].get("score", 0),
+            "quarter": g.get("quarter", 0), "clock": g.get("clock", "")
+        })
     
-    pick, score, reasons = calc_ml_score(home_abbr, away_abbr, injuries)
-    tier, color = get_signal_tier(score)
+    ml_results.sort(key=lambda x: x["score"], reverse=True)
     
-    opponent = away_abbr if pick == home_abbr else home_abbr
-    kalshi_url = build_kalshi_url(away_abbr, home_abbr)
-    
-    ml_results.append({
-        "pick": pick,
-        "opponent": opponent,
-        "score": score,
-        "color": color,
-        "reasons": reasons,
-        "kalshi_url": kalshi_url,
-        "game_key": game_key,
-        "status": g["status_type"]
-    })
-
-ml_results.sort(key=lambda x: x["score"], reverse=True)
-
-shown = 0
-for r in ml_results:
-    if r["score"] < 5.5:
-        continue
-    shown += 1
-    reasons_str = " • ".join(r["reasons"]) if r["reasons"] else ""
-    
-    st.markdown(f"""
-    <div style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #0f172a, #020617); padding: 10px 15px; margin-bottom: 6px; border-radius: 8px; border-left: 4px solid {r['color']};">
-        <div>
-            <span style="font-weight: bold; color: #fff;">{r['pick']}</span>
-            <span style="color: #666;"> vs {r['opponent']}</span>
-            <span style="color: {r['color']}; font-weight: bold; margin-left: 10px;">{r['score']}/10</span>
-            <span style="color: #888; font-size: 0.85em; margin-left: 10px;">{reasons_str}</span>
+    for r in ml_results:
+        if r["score"] < 5.5:
+            continue
+        
+        # Status badge
+        if r["status_type"] == "STATUS_FINAL":
+            status_html = '<span style="background:#374151;color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:0.75em;margin-left:10px;">FINAL</span>'
+        elif r["status_type"] == "STATUS_IN_PROGRESS":
+            status_html = f'<span style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75em;margin-left:10px;">🔴 Q{r["quarter"]} {r["clock"]}</span>'
+        else:
+            status_html = '<span style="background:#1d4ed8;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75em;margin-left:10px;">📅 PRE</span>'
+        
+        # Reasons
+        reasons_html = ""
+        for reason in r["reasons"]:
+            reasons_html += f'<span style="color:#9ca3af;margin-right:8px;">{reason}</span>'
+        
+        # Form
+        pick_form = TEAM_STATS.get(r["pick"], {}).get("form", "")
+        form_html = format_form(pick_form)
+        
+        # Kalshi URL
+        kalshi_url = build_kalshi_url(r["away_abbr"], r["home_abbr"], r["game_dt"])
+        
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #0f172a, #020617); padding: 14px 18px; margin-bottom: 10px; border-radius: 10px; border-left: 4px solid {r['tier_color']};">
+            <div style="flex: 1;">
+                <span style="background:{r['tier_color']}22;color:{r['tier_color']};padding:3px 10px;border-radius:4px;font-weight:600;font-size:0.85em;">{r['tier_label'].split()[0]}</span>
+                <span style="font-weight: bold; color: #fff; font-size: 1.15em; margin-left: 12px;">{r['pick']}</span>
+                <span style="color: #666;"> v {r['opponent']}</span>
+                <span style="color: {r['tier_color']}; font-weight: bold; margin-left: 12px;">{r['score']}</span>
+                {status_html}
+                <br>
+                <span style="margin-top: 6px; display: inline-block;">{reasons_html}</span>
+                <span style="color: #555; margin-left: 10px;">{form_html}</span>
+            </div>
+            <a href="{kalshi_url}" target="_blank" style="text-decoration: none;">
+                <button style="background: linear-gradient(135deg, #16a34a, #15803d); color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95em;">
+                    BUY
+                </button>
+            </a>
         </div>
-        <a href="{r['kalshi_url']}" target="_blank" style="text-decoration: none;">
-            <button style="background-color: #16a34a; color: white; padding: 6px 14px; border: none; border-radius: 6px; font-size: 0.85em; font-weight: 600; cursor: pointer;">
-                BUY {r['pick']}
-            </button>
-        </a>
-    </div>
-    """, unsafe_allow_html=True)
-
-if shown == 0:
-    st.info("No strong picks today. All games are close to toss-ups.")
+        """, unsafe_allow_html=True)
+    
+    # Show toss-ups
+    tossups = [r for r in ml_results if r["score"] < 5.5]
+    if tossups:
+        with st.expander(f"⚪ TOSS-UPS ({len(tossups)} games)", expanded=False):
+            for r in tossups:
+                st.caption(f"{r['away_abbr']} @ {r['home_abbr']} — No clear edge")
+else:
+    st.info("No games scheduled. Check back closer to game day!")
 
 st.divider()
 
 # ============================================================
-# 🌤️ WEATHER REPORT
+# 📅 SCHEDULED GAMES
 # ============================================================
-st.subheader("🌤️ WEATHER REPORT")
+st.subheader(f"📅 {week_info.upper() if week_info else 'SCHEDULED GAMES'}")
 
-teams_today = set()
-for g in games.values():
-    teams_today.add(g["home_abbr"])
-
-weather_shown = False
-cols = st.columns(4)
-col_idx = 0
-for home_abbr in sorted(teams_today):
-    weather = get_weather_for_game(home_abbr)
-    if weather["dome"]:
-        label = "🏠 Dome"
-    elif weather["impact"] != "none":
-        label = f"💨 {int(weather['wind'])}mph | {int(weather['temp'])}°F"
-        if weather["precip"] > 0:
-            label += " | 🌧️"
-    else:
-        label = f"☀️ {int(weather['temp'])}°F"
-    
-    with cols[col_idx % 4]:
-        impact_color = {"severe": "🔴", "moderate": "🟡", "light": "🟢", "none": "⚪"}.get(weather["impact"], "⚪")
-        st.markdown(f"**{home_abbr}** {impact_color}")
-        st.caption(label)
-    col_idx += 1
-    weather_shown = True
+if games:
+    cols = st.columns(3)
+    for idx, g in enumerate(games):
+        with cols[idx % 3]:
+            home = g["home"]
+            away = g["away"]
+            home_form = format_form(TEAM_STATS.get(home.get("abbr", ""), {}).get("form", ""))
+            away_form = format_form(TEAM_STATS.get(away.get("abbr", ""), {}).get("form", ""))
+            
+            # Game time
+            game_time = ""
+            try:
+                gdt = datetime.fromisoformat(g["game_date"].replace("Z", "+00:00")).astimezone(eastern)
+                game_time = gdt.strftime("%a %I:%M %p")
+            except:
+                pass
+            
+            # Status
+            if g["status_type"] == "STATUS_FINAL":
+                score_line = f"{away.get('score', 0)} - {home.get('score', 0)}"
+                status_badge = "FINAL"
+            elif g["status_type"] == "STATUS_IN_PROGRESS":
+                score_line = f"{away.get('score', 0)} - {home.get('score', 0)}"
+                status_badge = f"Q{g.get('quarter', 0)} {g.get('clock', '')}"
+            else:
+                score_line = "vs"
+                status_badge = game_time
+            
+            st.markdown(f"""
+            <div style="background: #0f172a; padding: 12px; border-radius: 8px; margin-bottom: 10px; text-align: center;">
+                <div style="color: #888; font-size: 0.8em; margin-bottom: 6px;">{status_badge}</div>
+                <div><span style="font-weight: bold; color: #fff;">{away.get('abbr', '')}</span> <span style="color: #666;">{away.get('record', '')}</span> {away_form}</div>
+                <div style="color: #666; margin: 4px 0;">{score_line}</div>
+                <div><span style="font-weight: bold; color: #fff;">{home.get('abbr', '')}</span> <span style="color: #666;">{home.get('record', '')}</span> {home_form}</div>
+            </div>
+            """, unsafe_allow_html=True)
+else:
+    st.info("No games scheduled")
 
 st.divider()
 
@@ -499,65 +632,57 @@ st.divider()
 # ============================================================
 st.subheader("🏥 INJURY REPORT")
 
+teams_playing = set()
+for g in games:
+    if g["home"].get("abbr"):
+        teams_playing.add(g["home"]["abbr"])
+    if g["away"].get("abbr"):
+        teams_playing.add(g["away"]["abbr"])
+
+if not teams_playing:
+    teams_playing = set(TEAM_STATS.keys())
+
 injury_shown = False
 cols = st.columns(4)
 col_idx = 0
-for team in sorted(teams_today):
+
+for team in sorted(teams_playing):
     team_inj = injuries.get(team, [])
-    key_injuries = [i for i in team_inj if 'out' in i.get('status', '').lower()]
-    if key_injuries:
+    key_out = [i for i in team_inj if 'out' in i.get('status', '').lower()][:5]
+    if key_out:
         with cols[col_idx % 4]:
             st.markdown(f"**{team}**")
-            for inj in key_injuries[:3]:
+            for inj in key_out:
                 pos = inj.get('pos', '')
-                st.caption(f"🔴 {inj['name']} ({pos})")
+                pos_color = "#ef4444" if pos in ["QB", "RB"] else "#888"
+                st.markdown(f'<span style="color:{pos_color};">🔴 {inj["name"]} ({pos})</span>', unsafe_allow_html=True)
         col_idx += 1
         injury_shown = True
 
 if not injury_shown:
-    st.info("✅ No major injuries reported for today's teams")
+    st.info("✅ No major injuries reported for this week's teams")
 
 st.divider()
 
 # ============================================================
-# 📺 ALL GAMES
-# ============================================================
-st.subheader("📺 ALL GAMES")
-
-cols = st.columns(4)
-for i, (gk, g) in enumerate(games.items()):
-    with cols[i % 4]:
-        st.markdown(f"**{g['away_abbr']}** {g['away_score']} @ **{g['home_abbr']}** {g['home_score']}")
-        if g['status_type'] == "STATUS_FINAL":
-            st.caption("FINAL")
-        elif g['quarter'] > 0:
-            st.caption(f"Q{g['quarter']} {g['clock']}")
-        else:
-            st.caption("Scheduled")
-
-st.divider()
-
-# ============================================================
-# 📖 HOW TO USE
+# 📖 LEGEND
 # ============================================================
 with st.expander("📖 How to Use This App", expanded=False):
     st.markdown("""
-    **What is NFL Edge Finder?**
-    
-    This tool analyzes NFL games and identifies moneyline betting opportunities on Kalshi prediction markets.
-    
-    **Understanding the Signals:**
-    - **🟢 STRONG BUY (8.0+):** High confidence pick
-    - **🔵 BUY (6.5-7.9):** Good edge detected
-    - **🟡 LEAN (5.5-6.4):** Slight edge
-    - **⚪ TOSS-UP (Below 5.5):** No clear edge
-    
-    **Key Indicators:**
-    - **💪 Power Rating:** Team strength differential
-    - **🏟️ Home Field:** Home win percentage
-    - **🌧️ Weather:** Wind/rain impact (favors home)
-    - **🏥 Injuries:** Key players (QB, RB) out
-    """)
+**Signal Tiers:**
+- 🔒 **STRONG (10.0)** — Highest confidence, tracked in performance stats
+- 🔵 **BUY (8.0-9.9)** — Good edge detected
+- 🟡 **LEAN (5.5-7.9)** — Slight edge
+- ⚪ **PASS (Below 5.5)** — No clear edge, avoid
+
+**Key Indicators:**
+- 📊 **Net** — Power rating differential
+- 🏟️ **Home** — Home field advantage
+- 🏆 **DEF** — Defensive ranking
+- 🔥 **Hot** — Team on winning streak
+- 🏥 **OUT** — Key players injured
+- 🌧️ **Weather** — Severe conditions favor home team
+""")
 
 st.divider()
 st.caption(f"⚠️ Entertainment only. Not financial advice. v{VERSION}")
