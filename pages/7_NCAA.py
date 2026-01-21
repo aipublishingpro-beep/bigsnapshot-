@@ -85,11 +85,23 @@ def escape_html(text):
 
 def build_kalshi_ncaa_url(team1_code, team2_code):
     """Build Kalshi NCAA basketball URL - format: kxncaambgame-{YY}{MMM}{DD}{team1}{team2}"""
-    date_str = datetime.now(eastern).strftime("%y%b%d").lower()
-    t1 = team1_code.lower().replace(" ", "").replace(".", "").replace("'", "")[:4]
-    t2 = team2_code.lower().replace(" ", "").replace(".", "").replace("'", "")[:4]
-    ticker = f"KXNCAAMBGAME-{date_str.upper()}{t1.upper()}{t2.upper()}"
-    return f"https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game/{ticker.lower()}"
+    try:
+        date_str = datetime.now(eastern).strftime("%y%b%d").upper()
+        t1 = team1_code.lower().replace(" ", "").replace(".", "").replace("'", "").replace("-", "")[:4].upper()
+        t2 = team2_code.lower().replace(" ", "").replace(".", "").replace("'", "").replace("-", "")[:4].upper()
+        if len(t1) < 2 or len(t2) < 2:
+            return None  # Invalid codes
+        ticker = f"KXNCAAMBGAME-{date_str}{t1}{t2}"
+        return f"https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game/{ticker.lower()}"
+    except:
+        return None
+
+def get_buy_button_html(kalshi_url, label="BUY"):
+    """Return BUY button HTML - graceful fallback if URL unavailable"""
+    if kalshi_url:
+        return f'<a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:4px 10px;border-radius:4px;font-size:0.75em;font-weight:bold;text-decoration:none">{label}</a>'
+    else:
+        return f'<span style="background:#444;color:#888;padding:4px 10px;border-radius:4px;font-size:0.75em">Market N/A</span>'
 
 def fetch_espn_ncaa_scores():
     """Fetch NCAA basketball scores from ESPN API"""
@@ -300,8 +312,8 @@ def calc_ncaa_score(home_team, away_team, home_abbrev, away_abbrev,
         return away_abbrev, away_team, af, ra[:4], a_rank
 
 def get_signal_tier(score):
-    """STRICT TIER SYSTEM - Only 10.0 = STRONG BUY (tracked)"""
-    if score >= 10.0:
+    """STRICT TIER SYSTEM - 9.8+ = STRONG BUY (tracked)"""
+    if score >= 9.8:
         return "🔒 STRONG", "#00ff00", True
     elif score >= 8.0:
         return "🔵 BUY", "#00aaff", False
@@ -348,10 +360,10 @@ yesterday_teams = yesterday_teams.intersection(today_teams)
 with st.sidebar:
     st.header("📖 SIGNAL TIERS")
     st.markdown("""
-🔒 **STRONG** → 10.0
+🔒 **STRONG** → 9.8+
 <span style="color:#888;font-size:0.85em">Tracked in stats</span>
 
-🔵 **BUY** → 8.0-9.9
+🔵 **BUY** → 8.0-9.7
 <span style="color:#888;font-size:0.85em">Informational only</span>
 
 🟡 **LEAN** → 5.5-7.9
@@ -373,11 +385,12 @@ with st.sidebar:
 </span>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v1.0 NCAA EDGE")
+    st.caption("v1.1 NCAA EDGE")
 
 # TITLE
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("College Basketball Edge Detection | v1.0")
+st.caption("College Basketball Edge Detection | v1.1")
+st.markdown("<p style='color:#888;font-size:0.85em;margin-top:-10px'>Only 🔒 STRONG picks are tracked. All others are informational.</p>", unsafe_allow_html=True)
 
 # STATS SUMMARY
 col1, col2, col3 = st.columns(3)
@@ -388,6 +401,21 @@ with col2:
     st.metric("Ranked Matchups", ranked_games)
 with col3:
     st.metric("B2B Teams", len(yesterday_teams))
+
+# LEGEND BOX
+st.markdown("""
+<div style="background:linear-gradient(135deg,#0f172a,#1a1a2e);padding:12px 16px;border-radius:8px;margin:10px 0;border:1px solid #333">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap">
+            <span style="color:#00ff00;font-weight:bold">🔒 STRONG 9.8+</span>
+            <span style="color:#00aaff">🔵 BUY 8.0+</span>
+            <span style="color:#ffaa00">🟡 LEAN 5.5+</span>
+            <span style="color:#666">⚪ PASS &lt;5.5</span>
+        </div>
+        <span style="color:#888;font-size:0.8em">📊 = Tracked in stats</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 st.divider()
 
@@ -537,6 +565,8 @@ if games:
         pick_display = f"#{r['pick_rank']} " if r['pick_rank'] > 0 else ""
         opp_display = f"#{r['opp_rank']} " if r['opp_rank'] > 0 else ""
         
+        buy_btn = get_buy_button_html(kalshi_url)
+        
         st.markdown(f"""<div style="background:#0f172a;padding:8px 12px;border-radius:6px;border-left:{border_width} solid {r['color']};margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
 <span style="color:{r['color']};font-weight:bold;font-size:0.85em">{escape_html(r['tier'])}</span>
@@ -545,7 +575,7 @@ if games:
 <span style="color:#38bdf8;font-weight:bold">{r['score']}</span>{tracked_badge}
 <span style="color:{status_color};font-size:0.75em">{status_badge}</span>
 </div>
-<a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:4px 10px;border-radius:4px;font-size:0.75em;font-weight:bold;text-decoration:none">BUY</a>
+{buy_btn}
 </div>
 <div style="color:#666;font-size:0.75em;margin:-2px 0 6px 14px">{reasons_str}</div>""", unsafe_allow_html=True)
     
@@ -710,8 +740,8 @@ with st.expander("📖 HOW TO USE THIS APP", expanded=False):
 
 | Tier | Score | Tracked? | Meaning |
 |------|-------|----------|---------|
-| 🔒 **STRONG** | 10.0 | ✅ YES | Headline pick — counts in stats |
-| 🔵 **BUY** | 8.0-9.9 | ❌ NO | Good value — informational only |
+| 🔒 **STRONG** | 9.8+ | ✅ YES | Headline pick — counts in stats |
+| 🔵 **BUY** | 8.0-9.7 | ❌ NO | Good value — informational only |
 | 🟡 **LEAN** | 5.5-7.9 | ❌ NO | Slight edge |
 | ⚪ **PASS** | <5.5 | ❌ NO | No clear edge |
 
@@ -742,8 +772,8 @@ Click **BUY** buttons to go directly to Kalshi markets.
 
 ---
 
-*Built for Kalshi. v1.0*
+*Built for Kalshi. v1.1*
 """)
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v1.0 NCAA EDGE")
+st.caption("⚠️ Educational only. Not financial advice. v1.1 NCAA EDGE")
