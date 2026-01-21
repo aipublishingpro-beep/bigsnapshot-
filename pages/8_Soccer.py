@@ -231,10 +231,71 @@ def get_team_rating(team_name):
             return rating
     return 70  # Default rating
 
+def get_team_abbrev(team_name):
+    """Get 3-letter abbreviation for Kalshi URLs"""
+    # Common abbreviations that Kalshi uses
+    TEAM_ABBREVS = {
+        # UCL / Top Teams
+        "Barcelona": "bar", "Real Madrid": "rma", "Bayern Munich": "bay", "Bayern München": "bay",
+        "Paris Saint-Germain": "psg", "Manchester City": "mci", "Liverpool": "liv",
+        "Chelsea": "che", "Arsenal": "ars", "Manchester United": "mun",
+        "Juventus": "juv", "Inter Milan": "int", "AC Milan": "acm", "Napoli": "nap",
+        "Borussia Dortmund": "dor", "RB Leipzig": "rbl", "Bayer Leverkusen": "lev",
+        "Atletico Madrid": "atm", "Sevilla": "sev", "Real Sociedad": "rso",
+        "Tottenham Hotspur": "tot", "Newcastle United": "new", "Aston Villa": "avl",
+        "West Ham United": "whu", "Brighton & Hove Albion": "bha", "Fulham": "ful",
+        "Crystal Palace": "cry", "Brentford": "bre", "Everton": "eve",
+        "Wolverhampton Wanderers": "wol", "Bournemouth": "bou", "Nottingham Forest": "nfo",
+        "Monaco": "mon", "Marseille": "mar", "Lyon": "oly", "Lille": "lil",
+        "Atalanta": "ata", "Roma": "rom", "Lazio": "laz", "Fiorentina": "fio",
+        "Slavia Prague": "sla", "Sporting CP": "scp", "Benfica": "ben", "Porto": "por",
+        "Ajax": "aja", "PSV Eindhoven": "psv", "Feyenoord": "fey",
+        "Celtic": "cel", "Rangers": "ran", "Union St.-Gilloise": "usg",
+        # Add more as needed
+    }
+    
+    # Check exact match first
+    for name, abbrev in TEAM_ABBREVS.items():
+        if name.lower() == team_name.lower():
+            return abbrev
+        if name.lower() in team_name.lower() or team_name.lower() in name.lower():
+            return abbrev
+    
+    # Fallback: first 3 letters of first word, lowercase
+    first_word = team_name.split()[0] if team_name else "xxx"
+    return first_word[:3].lower()
+
 def build_kalshi_url(league_key, home_team, away_team, game_date):
     """Build Kalshi market URL for soccer match"""
-    base_url = f"https://kalshi.com/sports/soccer/{LEAGUES[league_key]['kalshi']}"
-    return base_url
+    
+    # League to Kalshi market mapping
+    LEAGUE_MARKETS = {
+        "EPL": ("english-premier-league-game", "kxeplgame"),
+        "LALIGA": ("la-liga-game", "kxlaligagame"),
+        "BUNDESLIGA": ("bundesliga-game", "kxbundesligagame"),
+        "SERIEA": ("serie-a-game", "kxseriagame"),
+        "LIGUE1": ("ligue-1-game", "kxligue1game"),
+        "MLS": ("mls-game", "kxmlsgame"),
+        "UCL": ("uefa-champions-league-game", "kxuclgame"),
+    }
+    
+    if league_key not in LEAGUE_MARKETS:
+        return f"https://kalshi.com/sports/soccer"
+    
+    market_slug, ticker_prefix = LEAGUE_MARKETS[league_key]
+    
+    # Format date: YYmmmDD (e.g., 26jan21 for Jan 21, 2026)
+    date_str = game_date.strftime("%y%b%d").lower()
+    
+    # Get team abbreviations (home first, then away)
+    home_abbrev = get_team_abbrev(home_team)
+    away_abbrev = get_team_abbrev(away_team)
+    
+    # Build ticker: kxuclgame-26jan21slabar
+    ticker = f"{ticker_prefix}-{date_str}{home_abbrev}{away_abbrev}"
+    
+    # Full URL
+    return f"https://kalshi.com/markets/{market_slug}/{ticker}"
 
 def calculate_rest_days(last_game_date):
     """Calculate rest days since last match"""
