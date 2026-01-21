@@ -8,6 +8,18 @@ import time
 
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
 
+# ========== GOOGLE ANALYTICS G4 ==========
+st.markdown("""
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXXXXXXX');
+</script>
+""", unsafe_allow_html=True)
+
 eastern = pytz.timezone("US/Eastern")
 today_str = datetime.now(eastern).strftime("%Y-%m-%d")
 
@@ -154,6 +166,16 @@ STAR_PLAYERS = {
     "Toronto": ["Scottie Barnes"], "Utah": ["Lauri Markkanen"], "Washington": ["Jordan Poole"]
 }
 
+# ========== H2H RIVALRY EDGES ==========
+H2H_EDGES = {
+    ("Boston", "Philadelphia"): 0.5, ("Boston", "New York"): 0.5,
+    ("Milwaukee", "Chicago"): 0.5, ("Cleveland", "Detroit"): 0.5,
+    ("Oklahoma City", "Utah"): 0.5, ("Denver", "Minnesota"): 0.5,
+    ("LA Lakers", "LA Clippers"): 0.3, ("Golden State", "Sacramento"): 0.5,
+    ("Phoenix", "Portland"): 0.5, ("Miami", "Orlando"): 0.5,
+    ("Dallas", "San Antonio"): 0.5, ("Memphis", "New Orleans"): 0.3,
+}
+
 def build_kalshi_ml_url(away_team, home_team):
     away_code = KALSHI_CODES.get(away_team, "XXX")
     home_code = KALSHI_CODES.get(home_team, "XXX")
@@ -241,6 +263,38 @@ def fetch_espn_injuries():
     except: pass
     return injuries
 
+# ========== FETCH REAL STREAK FROM ESPN ==========
+TEAM_IDS = {
+    "Atlanta": "1", "Boston": "2", "Brooklyn": "17", "Charlotte": "30",
+    "Chicago": "4", "Cleveland": "5", "Dallas": "6", "Denver": "7",
+    "Detroit": "8", "Golden State": "9", "Houston": "10", "Indiana": "11",
+    "LA Clippers": "12", "LA Lakers": "13", "Memphis": "29", "Miami": "14",
+    "Milwaukee": "15", "Minnesota": "16", "New Orleans": "3", "New York": "18",
+    "Oklahoma City": "25", "Orlando": "19", "Philadelphia": "20", "Phoenix": "21",
+    "Portland": "22", "Sacramento": "23", "San Antonio": "24", "Toronto": "28",
+    "Utah": "26", "Washington": "27"
+}
+
+@st.cache_data(ttl=3600)
+def fetch_team_streak(team_name):
+    try:
+        team_id = TEAM_IDS.get(team_name, "1")
+        url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_id}"
+        resp = requests.get(url, timeout=5)
+        data = resp.json()
+        record = data.get("team", {}).get("record", {}).get("items", [{}])[0]
+        stats = record.get("stats", [])
+        for stat in stats:
+            if stat.get("name") == "streak":
+                streak_str = stat.get("displayValue", "W0")
+                if streak_str.startswith("W"):
+                    return int(streak_str[1:]) if len(streak_str) > 1 else 0
+                elif streak_str.startswith("L"):
+                    return -int(streak_str[1:]) if len(streak_str) > 1 else 0
+        return 0
+    except:
+        return 0
+
 @st.cache_data(ttl=3600)
 def fetch_last_5_records():
     last_5 = {}
@@ -312,38 +366,61 @@ def calc_ml_score(home_team, away_team, yesterday_teams, injuries, last_5):
     sh, sa = 0, 0
     rh, ra = [], []
     
+    # Factor 1: B2B
     home_b2b, away_b2b = home_team in yesterday_teams, away_team in yesterday_teams
     if away_b2b and not home_b2b: sh += 1.0; rh.append("🛏️ Opp B2B")
     elif home_b2b and not away_b2b: sa += 1.0; ra.append("🛏️ Opp B2B")
     
+    # Factor 2: Net Rating
     home_net, away_net = home.get('net_rating', 0), away.get('net_rating', 0)
     if home_net - away_net > 5: sh += 1.0; rh.append(f"📊 Net +{home_net:.1f}")
     elif away_net - home_net > 5: sa += 1.0; ra.append(f"📊 Net +{away_net:.1f}")
     
+    # Factor 3: Elite Defense
     home_def, away_def = home.get('def_rank', 15), away.get('def_rank', 15)
     if home_def <= 5: sh += 1.0; rh.append(f"🛡️ #{home_def} DEF")
     if away_def <= 5: sa += 1.0; ra.append(f"🛡️ #{away_def} DEF")
     
+    # Factor 4: Home Court
     sh += 1.0; rh.append("🏠 Home")
     
+    # Factor 5: Injury Impact
     home_out, home_inj = get_injury_impact(home_team, injuries)
     away_out, away_inj = get_injury_impact(away_team, injuries)
     if away_inj - home_inj > 3: sh += 2.0; rh.append(f"🏥 {away_out[0][:10]} OUT" if away_out else "🏥 Opp Injured")
     elif home_inj - away_inj > 3: sa += 2.0; ra.append(f"🏥 {home_out[0][:10]} OUT" if home_out else "🏥 Opp Injured")
     
+    # Factor 6: Travel Distance
     travel = calc_distance(away_loc, home_loc)
     if travel > 2000: sh += 1.0; rh.append(f"✈️ {int(travel)}mi")
     
+    # Factor 7: Home Win %
     home_hw = home.get('home_win_pct', 0.5)
     if home_hw > 0.65: sh += 0.8; rh.append(f"🏟️ {int(home_hw*100)}% Home")
     
+    # Factor 8: Altitude
     if home_team == "Denver": sh += 1.0; rh.append("🏔️ Altitude")
     
-    home_form, away_form = last_5.get(home_team, {}), last_5.get(away_team, {})
-    if home_form.get("hot"): sh += 1.0; rh.append(f"🔥 {home_form.get('form', '')}")
-    elif home_form.get("cold"): sa += 0.5; ra.append("❄️ Opp Cold")
-    if away_form.get("hot"): sa += 1.0; ra.append(f"🔥 {away_form.get('form', '')}")
-    elif away_form.get("cold"): sh += 0.5; rh.append("❄️ Opp Cold")
+    # Factor 9: REAL STREAK (not last 5 record)
+    home_streak = fetch_team_streak(home_team)
+    away_streak = fetch_team_streak(away_team)
+    
+    if home_streak >= 3 and away_streak <= -2:
+        sh += 1.0; rh.append(f"🔥 W{home_streak}")
+    elif away_streak >= 3 and home_streak <= -2:
+        sa += 1.0; ra.append(f"🔥 W{away_streak}")
+    elif home_streak >= 4:
+        sh += 0.5; rh.append(f"🔥 W{home_streak}")
+    elif away_streak >= 4:
+        sa += 0.5; ra.append(f"🔥 W{away_streak}")
+    
+    # Factor 10: H2H RIVALRY EDGE
+    h2h_edge = H2H_EDGES.get((home_team, away_team), 0)
+    if h2h_edge > 0:
+        sh += h2h_edge; rh.append("🆚 H2H")
+    h2h_edge_rev = H2H_EDGES.get((away_team, home_team), 0)
+    if h2h_edge_rev > 0:
+        sa += h2h_edge_rev; ra.append("🆚 H2H")
     
     total = sh + sa
     hf = round((sh / total) * 10, 1) if total > 0 else 5.0
@@ -379,13 +456,13 @@ with st.sidebar:
     st.markdown("🟢 **STRONG** → 8.0+\n\n🔵 **BUY** → 6.5-7.9\n\n🟡 **LEAN** → 5.5-6.4")
     st.divider()
     st.header("📊 MODEL INFO")
-    st.markdown("10-factor proprietary model analyzing matchups, injuries, rest, travel, and momentum.")
+    st.markdown("Proprietary multi-factor model analyzing matchups, injuries, rest, travel, momentum, and historical edges.")
     st.divider()
-    st.caption("v16.0 NBA EDGE")
+    st.caption("v17.0 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
-st.caption("10-Factor ML Model + Live Tracker | v16.0")
+st.caption("Proprietary ML Model + Live Tracker | v17.0")
 
 # MODEL PERFORMANCE
 st.subheader("📊 MODEL PERFORMANCE")
@@ -522,19 +599,20 @@ st.caption("All 30 teams ranked by last 5 games")
 form_list = []
 for team in KALSHI_CODES.keys():
     fd = last_5.get(team, {"wins": 0, "form": "-----"})
-    form_list.append({"team": team, "wins": fd.get("wins", 0), "form": fd.get("form", "-----")})
-form_list.sort(key=lambda x: x['wins'], reverse=True)
+    streak = fetch_team_streak(team)
+    form_list.append({"team": team, "wins": fd.get("wins", 0), "form": fd.get("form", "-----"), "streak": streak})
+form_list.sort(key=lambda x: x['streak'], reverse=True)
 
 fc1, fc2 = st.columns(2)
 for i, f in enumerate(form_list):
     with fc1 if i < 15 else fc2:
         code = KALSHI_CODES.get(f['team'], "???")
-        w = f['wins']
-        if w >= 4: badge, clr = "🔥 HOT", "#00ff00"
-        elif w >= 3: badge, clr = "📈 WARM", "#88ff00"
-        elif w == 2: badge, clr = "➖ EVEN", "#ffff00"
-        elif w == 1: badge, clr = "📉 COOL", "#ff8800"
-        else: badge, clr = "❄️ COLD", "#ff4444"
+        streak = f['streak']
+        if streak >= 4: badge, clr = f"🔥 W{streak}", "#00ff00"
+        elif streak >= 2: badge, clr = f"📈 W{streak}", "#88ff00"
+        elif streak >= 0: badge, clr = f"➖ {'W' if streak > 0 else 'E'}{abs(streak)}", "#ffff00"
+        elif streak >= -2: badge, clr = f"📉 L{abs(streak)}", "#ff8800"
+        else: badge, clr = f"❄️ L{abs(streak)}", "#ff4444"
         st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:#0f172a;padding:6px 10px;margin-bottom:3px;border-radius:5px;border-left:3px solid {clr}">
             <div style="display:flex;align-items:center;gap:8px">
                 <span style="color:#fff;font-weight:bold;width:40px">{code}</span>
@@ -682,4 +760,67 @@ else:
     st.info("No games today")
 
 st.divider()
-st.caption("⚠️ Educational analysis only. Not financial advice. v16.0")
+
+# ========== HOW TO USE THIS APP ==========
+st.subheader("📖 HOW TO USE THIS APP")
+
+st.markdown("""
+### 🎯 **Getting Started**
+
+**NBA Edge Finder** is a proprietary prediction model for Kalshi NBA moneyline markets. The model analyzes multiple factors to identify high-value betting opportunities.
+
+---
+
+### 📊 **Understanding Signal Tiers**
+
+| Tier | Score | Meaning |
+|------|-------|---------|
+| 🟢 **STRONG** | 8.0+ | High-confidence pick with multiple edges |
+| 🔵 **BUY** | 6.5-7.9 | Good value pick worth considering |
+| 🟡 **LEAN** | 5.5-6.4 | Slight edge, proceed with caution |
+| ⚪ **TOSS-UP** | <5.5 | No clear edge — skip |
+
+---
+
+### 🏀 **Key Features**
+
+1. **Pre-Game ML Picks** — Model-generated picks sorted by confidence score
+2. **Live Game Tracker** — Real-time scores with pace projections
+3. **Team Form Leaderboard** — Current win/loss streaks for all 30 teams
+4. **B2B Tracker** — Teams on back-to-back (fatigue alert)
+5. **Matchup Analyzer** — Compare any two teams head-to-head
+6. **Position Tracker** — Track your active bets with live P&L
+
+---
+
+### 💡 **Pro Tips**
+
+- **Focus on STRONG and BUY tiers** — These have the highest historical win rates
+- **Check B2B status** — Back-to-back teams are at a significant disadvantage
+- **Watch for injuries** — Star player absences can swing games dramatically
+- **Use the Matchup Analyzer** — Test hypothetical scenarios before betting
+
+---
+
+### ⚠️ **Important Notes**
+
+- All picks are for **educational and entertainment purposes only**
+- This is **not financial advice** — bet responsibly
+- Past performance does not guarantee future results
+- Model updates daily based on live ESPN data
+
+---
+
+### 🔗 **Trading on Kalshi**
+
+1. Click any **BUY** button to go directly to that market on Kalshi
+2. The model uses Kalshi's official team codes (e.g., LAL, BOS, MIA)
+3. NBA markets typically close at game tipoff
+
+---
+
+*Built for Kalshi prediction markets. v17.0*
+""")
+
+st.divider()
+st.caption("⚠️ Educational analysis only. Not financial advice. v17.0")
