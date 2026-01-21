@@ -13,11 +13,7 @@ apply_styles()
 # ============================================================
 # COOKIE MANAGER FOR PERSISTENT LOGIN
 # ============================================================
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_cookie_manager()
+cookie_manager = stx.CookieManager()
 
 # ============================================================
 # GA4 TRACKING
