@@ -2,8 +2,11 @@ import streamlit as st
 import requests
 from datetime import datetime, timedelta
 import pytz
+from styles import apply_styles
 
 st.set_page_config(page_title="NHL Edge Finder", page_icon="🏒", layout="wide")
+
+apply_styles()
 
 # ============================================================
 # AUTH CHECK
@@ -14,18 +17,6 @@ if 'authenticated' not in st.session_state or not st.session_state.authenticated
     st.stop()
 
 VERSION = "2.0"
-
-# ============================================================
-# STYLING
-# ============================================================
-st.markdown("""
-<style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-.stDeployButton {display: none;}
-</style>
-""", unsafe_allow_html=True)
 
 # ============================================================
 # GA4 TRACKING
@@ -116,7 +107,6 @@ def build_kalshi_url(away_abbr, home_abbr):
 # ============================================================
 @st.cache_data(ttl=60)
 def fetch_nhl_games():
-    """Fetch today's NHL games from ESPN API"""
     eastern = pytz.timezone('US/Eastern')
     today_date = datetime.now(eastern).strftime('%Y%m%d')
     url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates={today_date}"
@@ -159,7 +149,6 @@ def fetch_nhl_games():
 
 @st.cache_data(ttl=300)
 def fetch_yesterday_teams():
-    """Get teams that played yesterday for B2B detection"""
     eastern = pytz.timezone('US/Eastern')
     yesterday = (datetime.now(eastern) - timedelta(days=1)).strftime('%Y%m%d')
     url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates={yesterday}"
@@ -180,7 +169,6 @@ def fetch_yesterday_teams():
 
 @st.cache_data(ttl=300)
 def fetch_nhl_injuries():
-    """Fetch injuries from ESPN"""
     injuries = {}
     try:
         url = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries"
@@ -212,7 +200,6 @@ def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
     score_home, score_away = 0, 0
     reasons_home, reasons_away = [], []
     
-    # 1. Opponent B2B (+1.0)
     home_b2b = home_abbr in yesterday_teams
     away_b2b = away_abbr in yesterday_teams
     if away_b2b and not home_b2b:
@@ -222,7 +209,6 @@ def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
         score_away += 1.0
         reasons_away.append("🛏️ Opp B2B")
     
-    # 2. Win % differential (+1.0)
     home_win = home.get('win_pct', 0.5)
     away_win = away.get('win_pct', 0.5)
     if home_win - away_win > 0.10:
@@ -232,12 +218,10 @@ def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
         score_away += 1.0
         reasons_away.append(f"📊 {int(away_win*100)}% W")
     
-    # 3. Home Ice Advantage (+1.0)
     score_home += 1.0
     home_hw = home.get('home_win_pct', 0.55)
     reasons_home.append(f"🏠 {int(home_hw*100)}%")
     
-    # 4. Goals For differential (+1.0)
     home_gf = home.get('goals_for', 2.8)
     away_gf = away.get('goals_for', 2.8)
     if home_gf - away_gf > 0.3:
@@ -247,7 +231,6 @@ def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
         score_away += 1.0
         reasons_away.append(f"🥅 {away_gf:.2f} GF")
     
-    # 5. Goals Against differential (+1.0)
     home_ga = home.get('goals_against', 2.9)
     away_ga = away.get('goals_against', 2.9)
     if away_ga - home_ga > 0.3:
@@ -257,7 +240,6 @@ def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
         score_away += 1.0
         reasons_away.append(f"🛡️ {away_ga:.2f} GA")
     
-    # 6. Power Play (+0.5)
     home_pp = home.get('pp_pct', 20)
     away_pp = away.get('pp_pct', 20)
     if home_pp - away_pp > 4:
@@ -267,7 +249,6 @@ def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
         score_away += 0.5
         reasons_away.append(f"⚡ {away_pp:.1f}% PP")
     
-    # 7. Penalty Kill (+0.5)
     home_pk = home.get('pk_pct', 80)
     away_pk = away.get('pk_pct', 80)
     if home_pk - away_pk > 3:
@@ -277,7 +258,6 @@ def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
         score_away += 0.5
         reasons_away.append(f"🚫 {away_pk:.1f}% PK")
     
-    # 8. Key injuries (+1.5)
     home_inj = len([i for i in injuries.get(home_abbr, []) if 'out' in i.get('status', '').lower()])
     away_inj = len([i for i in injuries.get(away_abbr, []) if 'out' in i.get('status', '').lower()])
     if away_inj > home_inj + 1:
@@ -287,7 +267,6 @@ def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
         score_away += 1.5
         reasons_away.append(f"🏥 {home_inj} OUT")
     
-    # Calculate final score (normalize to 10)
     total = score_home + score_away
     if total > 0:
         home_final = round((score_home / total) * 10, 1)
@@ -295,7 +274,6 @@ def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
     else:
         home_final, away_final = 5.0, 5.0
     
-    # Determine pick
     if home_final >= away_final:
         return home_abbr, home_final, reasons_home[:4]
     else:
@@ -336,7 +314,6 @@ now = datetime.now(eastern)
 st.title("🏒 NHL EDGE FINDER")
 st.caption(f"v{VERSION} | {now.strftime('%I:%M:%S %p ET')} | Real ESPN Data")
 
-# Fetch data
 games = fetch_nhl_games()
 yesterday_teams = fetch_yesterday_teams()
 injuries = fetch_nhl_injuries()
@@ -374,10 +351,8 @@ for game_key, g in games.items():
         "status": g["status_type"]
     })
 
-# Sort by score
 ml_results.sort(key=lambda x: x["score"], reverse=True)
 
-# Show picks with score >= 5.5
 shown = 0
 for r in ml_results:
     if r["score"] < 5.5:
@@ -433,7 +408,6 @@ for team in sorted(teams_today):
 if not injury_shown:
     st.info("✅ No major injuries reported for today's teams")
 
-# B2B alert
 b2b_today = yesterday_teams.intersection(teams_today)
 if b2b_today:
     st.info(f"📅 **Back-to-Back**: {', '.join(sorted(b2b_today))}")
@@ -461,39 +435,22 @@ st.divider()
 # ============================================================
 # 📖 HOW TO USE
 # ============================================================
-with st.expander("📖 How to Use This App"):
+with st.expander("📖 How to Use This App", expanded=False):
     st.markdown("""
     **What is NHL Edge Finder?**
     
-    This tool analyzes NHL games and identifies moneyline betting opportunities on Kalshi prediction markets. Our proprietary model evaluates multiple factors to find edges where the market may be mispriced.
+    This tool analyzes NHL games and identifies moneyline betting opportunities on Kalshi prediction markets.
     
     **Understanding the Signals:**
-    - **🟢 STRONG BUY (8.0+):** High confidence pick. Multiple factors favor this team.
-    - **🔵 BUY (6.5-7.9):** Good edge detected. Worth considering.
-    - **🟡 LEAN (5.5-6.4):** Slight edge. Smaller position size recommended.
-    - **⚪ TOSS-UP (Below 5.5):** No clear edge. Consider passing.
-    
-    **How to Trade:**
-    1. Check the ML PICKS section for today's recommended plays
-    2. Click the green BUY button to go directly to that market on Kalshi
-    3. Review the Kalshi price and place your trade
-    4. Monitor the game in the ALL GAMES section
+    - **🟢 STRONG BUY (8.0+):** High confidence pick
+    - **🔵 BUY (6.5-7.9):** Good edge detected
+    - **🟡 LEAN (5.5-6.4):** Slight edge
+    - **⚪ TOSS-UP (Below 5.5):** No clear edge
     
     **Key Indicators:**
-    - **🛏️ Opp B2B:** Opponent playing back-to-back games (fatigue advantage)
+    - **🛏️ Opp B2B:** Opponent playing back-to-back games
     - **🏠 Home Ice:** Home team advantage percentage
     - **🏥 Injuries:** Key players out for opponent
-    
-    **Best Practices:**
-    - Focus on 🟢 STRONG BUY picks for highest conviction
-    - Check injury report before placing trades
-    - Back-to-back situations are significant in hockey
-    - Prices move fast — act on edges early
-    
-    **Important Notes:**
-    - Data updates every 60 seconds during games
-    - All picks are based on pre-game analysis
-    - This is for entertainment only — not financial advice
     """)
 
 st.divider()
