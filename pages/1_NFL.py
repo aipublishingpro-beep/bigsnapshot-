@@ -376,4 +376,52 @@ for i, team in enumerate(champ_teams):
             st.caption("✅ No major injuries")
 
 st.divider()
+st.subheader("📖 How to Use NFL Edge Finder")
+
+with st.expander("🎯 ML Picks — Reading the Signals", expanded=False):
+    st.markdown("""
+    **Signal Tiers:**
+    - 🟢 **STRONG BUY (8.0+)** — High confidence
+    - 🔵 **BUY (6.5-7.9)** — Good edge
+    - 🟡 **LEAN (5.5-6.4)** — Slight edge
+    - ⚪ **WEAK (<5.5)** — No clear edge
+    
+    **Market Pressure:**
+    - 🟢 **CONFIRMING** — Market agrees with pick
+    - 🟡 **NEUTRAL** — No clear money flow
+    - 🔴 **FADING** — Market disagrees
+    """)
+
+with st.expander("📡 LiveState Tracker — Live Games", expanded=False):
+    st.markdown("""
+    **What it shows:** Real-time game situations with field visualization.
+    
+    **Field Features:**
+    - Ball position on the field
+    - 🔴 Red zone indicator when inside the 20
+    - Down & distance info
+    - Score and quarter/clock
+    """)
+
+with st.expander("📈 Line Movement — Price History", expanded=False):
+    st.markdown("""
+    **How to read:**
+    - Rising YES price = Market favoring home team
+    - Falling YES price = Market favoring away team
+    
+    **Volume & Open Interest:**
+    - High volume = Active trading
+    - High OI = Large positions held
+    """)
+
+with st.expander("⚙️ Market Status", expanded=False):
+    st.markdown("""
+    **Indicators:**
+    - ✅ **BUY button** — Market is live, click to trade
+    - ⏳ **PENDING** — Market opens 2-3 days before game
+    
+    **Kalshi Ticker Format:** `KXNFLGAME-{DATE}{AWAY}{HOME}`
+    """)
+
+st.divider()
 st.caption("⚠️ Entertainment only. Not financial advice. v2.4.1")
