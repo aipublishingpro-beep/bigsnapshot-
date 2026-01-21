@@ -166,7 +166,7 @@ with st.sidebar:
     st.header("🔗 KALSHI")
     st.caption("⚠️ NBA not on trade API yet")
     st.divider()
-    st.caption("v15.55 🛡️+2 SAFE")
+    st.caption("v15.56 🛡️+2 SAFE")
 
 def build_kalshi_ml_url(away_team, home_team):
     away_code = KALSHI_CODES.get(away_team, "xxx").upper()
@@ -429,7 +429,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # HEADER
 st.title("🏀 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.55")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.56")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -670,39 +670,38 @@ if pace_data:
         game_parts = p['game'].split('@')
         away_t, home_t = game_parts[0], game_parts[1]
         kalshi_url = build_kalshi_totals_url(away_t, home_t)
+        status = "FINAL" if p['final'] else f"Q{p['period']} {p['clock']}"
         
-        # Determine pace label, color, and button (2-bracket safety buffer)
         if p['pace'] < 4.5:
             lbl, clr = "🟢 SLOW", "#00ff00"
             base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > p['proj']), len(THRESHOLDS)-1)
             safe_idx = min(base_idx + 2, len(THRESHOLDS) - 1)
             rec_line = THRESHOLDS[safe_idx]
-            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#00aa00;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY NO {rec_line}</a>' if not p['final'] else ""
+            if not p['final']:
+                st.markdown(f'''<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:4px solid {clr}"><div><b style="color:#fff">{p['game'].replace('@', ' @ ')}</b> <span style="color:#666">{status}</span></div><div style="display:flex;gap:12px;align-items:center"><span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span><span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span><span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span><span style="color:#888;font-size:0.8em">🛡️+2</span><a href="{kalshi_url}" target="_blank" style="background:#00aa00;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY NO {rec_line}</a></div></div>''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:4px solid {clr}"><div><b style="color:#fff">{p['game'].replace('@', ' @ ')}</b> <span style="color:#666">{status}</span></div><div style="display:flex;gap:12px;align-items:center"><span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span><span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span><span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span></div></div>''', unsafe_allow_html=True)
         elif p['pace'] < 4.8:
             lbl, clr = "🟡 AVG", "#ffff00"
-            btn_html = ""
+            st.markdown(f'''<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:4px solid {clr}"><div><b style="color:#fff">{p['game'].replace('@', ' @ ')}</b> <span style="color:#666">{status}</span></div><div style="display:flex;gap:12px;align-items:center"><span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span><span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span><span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span></div></div>''', unsafe_allow_html=True)
         elif p['pace'] < 5.2:
             lbl, clr = "🟠 FAST", "#ff8800"
             base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), 0)
             safe_idx = max(base_idx - 2, 0)
             rec_line = THRESHOLDS[safe_idx]
-            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#cc6600;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
+            if not p['final']:
+                st.markdown(f'''<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:4px solid {clr}"><div><b style="color:#fff">{p['game'].replace('@', ' @ ')}</b> <span style="color:#666">{status}</span></div><div style="display:flex;gap:12px;align-items:center"><span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span><span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span><span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span><span style="color:#888;font-size:0.8em">🛡️+2</span><a href="{kalshi_url}" target="_blank" style="background:#cc6600;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a></div></div>''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:4px solid {clr}"><div><b style="color:#fff">{p['game'].replace('@', ' @ ')}</b> <span style="color:#666">{status}</span></div><div style="display:flex;gap:12px;align-items:center"><span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span><span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span><span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span></div></div>''', unsafe_allow_html=True)
         else:
             lbl, clr = "🔴 SHOOTOUT", "#ff0000"
             base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), 0)
             safe_idx = max(base_idx - 2, 0)
             rec_line = THRESHOLDS[safe_idx]
-            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#cc0000;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
-        
-        status = "FINAL" if p['final'] else f"Q{p['period']} {p['clock']}"
-        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:4px solid {clr}">
-        <div><b style="color:#fff">{p['game'].replace('@', ' @ ')}</b> <span style="color:#666">{status}</span></div>
-        <div style="display:flex;gap:12px;align-items:center">
-        <span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span>
-        <span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span>
-        <span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span>
-        {btn_html}
-        </div></div>""", unsafe_allow_html=True)
+            if not p['final']:
+                st.markdown(f'''<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:4px solid {clr}"><div><b style="color:#fff">{p['game'].replace('@', ' @ ')}</b> <span style="color:#666">{status}</span></div><div style="display:flex;gap:12px;align-items:center"><span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span><span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span><span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span><span style="color:#888;font-size:0.8em">🛡️+2</span><a href="{kalshi_url}" target="_blank" style="background:#cc0000;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a></div></div>''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:4px solid {clr}"><div><b style="color:#fff">{p['game'].replace('@', ' @ ')}</b> <span style="color:#666">{status}</span></div><div style="display:flex;gap:12px;align-items:center"><span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span><span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span><span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span></div></div>''', unsafe_allow_html=True)
 else:
     st.info("No games with 6+ min")
 
@@ -737,7 +736,9 @@ with st.expander("🎯 Cushion Scanner — Live Total Opportunities", expanded=F
 **🛡️+2 = Safety buffer.** We recommend 2 brackets above/below projection for extra margin. Buy closer to projection at your own risk.""")
 
 with st.expander("🔥 Pace Scanner — Game Flow", expanded=False):
-    st.markdown("""**Pace Labels:** 🟢 SLOW (<4.5/min), 🟡 AVG (4.5-4.8/min), 🟠 FAST (4.8-5.2/min), 🔴 SHOOTOUT (5.2+/min)""")
+    st.markdown("""**Pace Labels:** 🟢 SLOW (<4.5/min), 🟡 AVG (4.5-4.8/min), 🟠 FAST (4.8-5.2/min), 🔴 SHOOTOUT (5.2+/min)
+
+**🛡️+2 = Safety buffer.** We recommend 2 brackets above/below projection for extra margin.""")
 
 st.divider()
-st.caption("⚠️ Entertainment only. Not financial advice. v15.55")
+st.caption("⚠️ Entertainment only. Not financial advice. v15.56")
