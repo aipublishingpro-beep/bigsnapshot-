@@ -71,7 +71,8 @@ def apply_styles():
     
     .signal-strong { color: #00ff88; font-weight: 700; }
     .signal-moderate { color: #ffcc00; font-weight: 600; }
-    .signal-weak { color: #ff6b6b; font-weight: 500; }
+    .signal-weak { color: #ff9500; font-weight: 500; }
+    .signal-hold { color: #ff6b6b; font-weight: 500; }
     
     .league-badge {
         display: inline-block;
@@ -104,13 +105,6 @@ def apply_styles():
         padding: 12px 16px;
         margin: 12px 0;
         border-left: 4px solid #4a9eff;
-    }
-    
-    .game-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 16px;
-        margin: 16px 0;
     }
     
     a { color: #4a9eff !important; text-decoration: none !important; }
@@ -186,39 +180,61 @@ st.markdown("""
 eastern = pytz.timezone('US/Eastern')
 
 LEAGUES = {
-    "EPL": {"name": "Premier League", "code": "eng.1", "kalshi": "EPL", "color": "#3d195b"},
-    "LALIGA": {"name": "La Liga", "code": "esp.1", "kalshi": "LALIGA", "color": "#ee8707"},
-    "BUNDESLIGA": {"name": "Bundesliga", "code": "ger.1", "kalshi": "BUNDESLIGA", "color": "#d20515"},
-    "SERIEA": {"name": "Serie A", "code": "ita.1", "kalshi": "SERIEA", "color": "#024494"},
-    "LIGUE1": {"name": "Ligue 1", "code": "fra.1", "kalshi": "LIGUE1", "color": "#091c3e"},
-    "MLS": {"name": "MLS", "code": "usa.1", "kalshi": "MLS", "color": "#000000"},
-    "UCL": {"name": "Champions League", "code": "uefa.champions", "kalshi": "UCL", "color": "#0a1128"},
+    "EPL": {"name": "Premier League", "code": "eng.1", "color": "#3d195b"},
+    "LALIGA": {"name": "La Liga", "code": "esp.1", "color": "#ee8707"},
+    "BUNDESLIGA": {"name": "Bundesliga", "code": "ger.1", "color": "#d20515"},
+    "SERIEA": {"name": "Serie A", "code": "ita.1", "color": "#024494"},
+    "LIGUE1": {"name": "Ligue 1", "code": "fra.1", "color": "#091c3e"},
+    "MLS": {"name": "MLS", "code": "usa.1", "color": "#000000"},
+    "UCL": {"name": "Champions League", "code": "uefa.champions", "color": "#0a1128"},
 }
 
-# Team strength ratings (1-100 scale, based on general performance)
+# Team strength ratings (1-100 scale)
 TEAM_RATINGS = {
-    # Premier League
     "Manchester City": 95, "Arsenal": 92, "Liverpool": 93, "Chelsea": 86,
     "Manchester United": 82, "Newcastle United": 84, "Tottenham Hotspur": 83,
     "Aston Villa": 81, "Brighton & Hove Albion": 78, "West Ham United": 76,
     "Brentford": 74, "Fulham": 73, "Crystal Palace": 72, "Wolverhampton Wanderers": 71,
     "Everton": 70, "Bournemouth": 69, "Nottingham Forest": 71, "Luton Town": 65,
     "Burnley": 66, "Sheffield United": 64, "Leicester City": 75, "Ipswich Town": 67,
-    # La Liga
     "Real Madrid": 95, "Barcelona": 93, "Atletico Madrid": 86, "Real Sociedad": 80,
     "Athletic Club": 79, "Real Betis": 77, "Villarreal": 78, "Sevilla": 76,
     "Valencia": 73, "Girona": 76, "Getafe": 70, "Osasuna": 71,
-    # Bundesliga
     "Bayern Munich": 94, "Borussia Dortmund": 87, "RB Leipzig": 85, "Bayer Leverkusen": 88,
     "Union Berlin": 74, "Freiburg": 76, "Eintracht Frankfurt": 77, "Wolfsburg": 73,
-    # Serie A
     "Inter Milan": 90, "Napoli": 86, "AC Milan": 85, "Juventus": 86,
     "Atalanta": 83, "Roma": 80, "Lazio": 79, "Fiorentina": 76,
-    # Ligue 1
     "Paris Saint-Germain": 92, "Monaco": 80, "Marseille": 79, "Lille": 77,
     "Lyon": 76, "Nice": 75, "Lens": 76, "Rennes": 74,
-    # UCL Giants
     "Bayern München": 94, "Real Madrid CF": 95, "FC Barcelona": 93,
+    "Slavia Prague": 68, "Sporting CP": 78, "Benfica": 80, "Porto": 79,
+}
+
+# ============================================================
+# TEAM ABBREVIATIONS FOR KALSHI URLs
+# ============================================================
+TEAM_ABBREVS = {
+    "Barcelona": "bar", "FC Barcelona": "bar", "Real Madrid": "rma", "Real Madrid CF": "rma",
+    "Bayern Munich": "bay", "Bayern München": "bay", "Paris Saint-Germain": "psg",
+    "Manchester City": "mci", "Liverpool": "liv", "Chelsea": "che", "Arsenal": "ars",
+    "Manchester United": "mun", "Juventus": "juv", "Inter Milan": "int", "Inter": "int",
+    "AC Milan": "acm", "Milan": "acm", "Napoli": "nap", "Borussia Dortmund": "dor",
+    "RB Leipzig": "rbl", "Bayer Leverkusen": "lev", "Atletico Madrid": "atm",
+    "Sevilla": "sev", "Real Sociedad": "rso", "Tottenham Hotspur": "tot", "Tottenham": "tot",
+    "Newcastle United": "new", "Aston Villa": "avl", "West Ham United": "whu", "West Ham": "whu",
+    "Brighton & Hove Albion": "bha", "Brighton": "bha", "Fulham": "ful",
+    "Crystal Palace": "cry", "Brentford": "bre", "Everton": "eve",
+    "Wolverhampton Wanderers": "wol", "Wolves": "wol", "Bournemouth": "bou",
+    "Nottingham Forest": "nfo", "Monaco": "mon", "Marseille": "mar", "Olympique Marseille": "mar",
+    "Lyon": "oly", "Olympique Lyonnais": "oly", "Lille": "lil",
+    "Atalanta": "ata", "Roma": "rom", "AS Roma": "rom", "Lazio": "laz", "Fiorentina": "fio",
+    "Slavia Prague": "sla", "Sporting CP": "scp", "Sporting": "scp",
+    "Benfica": "ben", "Porto": "por", "FC Porto": "por",
+    "Ajax": "aja", "PSV Eindhoven": "psv", "PSV": "psv", "Feyenoord": "fey",
+    "Celtic": "cel", "Rangers": "ran", "Union St.-Gilloise": "usg", "Union SG": "usg",
+    "Athletic Club": "ath", "Athletic Bilbao": "bil", "Bilbao": "bil",
+    "Villarreal": "vil", "Real Betis": "bet", "Valencia": "val", "Girona": "gir",
+    "Lens": "len", "Rennes": "ren", "Nice": "nic",
 }
 
 # ============================================================
@@ -229,111 +245,90 @@ def get_team_rating(team_name):
     for key, rating in TEAM_RATINGS.items():
         if key.lower() in team_name.lower() or team_name.lower() in key.lower():
             return rating
-    return 70  # Default rating
+    return 70
 
 def get_team_abbrev(team_name):
-    """Get 3-letter abbreviation for Kalshi URLs"""
-    # Common abbreviations that Kalshi uses
-    TEAM_ABBREVS = {
-        # UCL / Top Teams
-        "Barcelona": "bar", "Real Madrid": "rma", "Bayern Munich": "bay", "Bayern München": "bay",
-        "Paris Saint-Germain": "psg", "Manchester City": "mci", "Liverpool": "liv",
-        "Chelsea": "che", "Arsenal": "ars", "Manchester United": "mun",
-        "Juventus": "juv", "Inter Milan": "int", "AC Milan": "acm", "Napoli": "nap",
-        "Borussia Dortmund": "dor", "RB Leipzig": "rbl", "Bayer Leverkusen": "lev",
-        "Atletico Madrid": "atm", "Sevilla": "sev", "Real Sociedad": "rso",
-        "Tottenham Hotspur": "tot", "Newcastle United": "new", "Aston Villa": "avl",
-        "West Ham United": "whu", "Brighton & Hove Albion": "bha", "Fulham": "ful",
-        "Crystal Palace": "cry", "Brentford": "bre", "Everton": "eve",
-        "Wolverhampton Wanderers": "wol", "Bournemouth": "bou", "Nottingham Forest": "nfo",
-        "Monaco": "mon", "Marseille": "mar", "Lyon": "oly", "Lille": "lil",
-        "Atalanta": "ata", "Roma": "rom", "Lazio": "laz", "Fiorentina": "fio",
-        "Slavia Prague": "sla", "Sporting CP": "scp", "Benfica": "ben", "Porto": "por",
-        "Ajax": "aja", "PSV Eindhoven": "psv", "Feyenoord": "fey",
-        "Celtic": "cel", "Rangers": "ran", "Union St.-Gilloise": "usg",
-        # Add more as needed
-    }
-    
-    # Check exact match first
+    """Get team abbreviation for Kalshi URLs"""
+    # Check exact and partial matches
     for name, abbrev in TEAM_ABBREVS.items():
         if name.lower() == team_name.lower():
             return abbrev
         if name.lower() in team_name.lower() or team_name.lower() in name.lower():
             return abbrev
-    
-    # Fallback: first 3 letters of first word, lowercase
+    # Fallback: first 3 letters lowercase
     first_word = team_name.split()[0] if team_name else "xxx"
     return first_word[:3].lower()
 
 def build_kalshi_url(league_key, home_team, away_team, game_date):
-    """Build Kalshi market URL for soccer match"""
+    """
+    Build Kalshi market URL for soccer match
+    
+    Returns tuple: (primary_url, fallback_url)
+    - Primary: Direct link to specific game market
+    - Fallback: League page if team abbrevs don't match
+    """
     
     # League to Kalshi market mapping
     LEAGUE_MARKETS = {
-        "EPL": ("english-premier-league-game", "kxeplgame"),
-        "LALIGA": ("la-liga-game", "kxlaligagame"),
-        "BUNDESLIGA": ("bundesliga-game", "kxbundesligagame"),
-        "SERIEA": ("serie-a-game", "kxseriagame"),
-        "LIGUE1": ("ligue-1-game", "kxligue1game"),
-        "MLS": ("mls-game", "kxmlsgame"),
-        "UCL": ("uefa-champions-league-game", "kxuclgame"),
+        "EPL": ("english-premier-league-game", "kxeplgame", "EPL"),
+        "LALIGA": ("la-liga-game", "kxlaligagame", "LALIGA"),
+        "BUNDESLIGA": ("bundesliga-game", "kxbundesligagame", "BUNDESLIGA"),
+        "SERIEA": ("serie-a-game", "kxseriagame", "SERIEA"),
+        "LIGUE1": ("ligue-1-game", "kxligue1game", "LIGUE1"),
+        "MLS": ("mls-game", "kxmlsgame", "MLS"),
+        "UCL": ("uefa-champions-league-game", "kxuclgame", "UCL"),
     }
     
-    if league_key not in LEAGUE_MARKETS:
-        return f"https://kalshi.com/sports/soccer"
+    # Fallback URL (always works)
+    fallback_url = "https://kalshi.com/sports/soccer"
     
-    market_slug, ticker_prefix = LEAGUE_MARKETS[league_key]
+    if league_key not in LEAGUE_MARKETS:
+        return fallback_url
+    
+    market_slug, ticker_prefix, kalshi_league = LEAGUE_MARKETS[league_key]
+    
+    # League-specific fallback
+    fallback_url = f"https://kalshi.com/sports/soccer/{kalshi_league}"
     
     # Format date: YYmmmDD (e.g., 26jan21 for Jan 21, 2026)
     date_str = game_date.strftime("%y%b%d").lower()
     
-    # Get team abbreviations (home first, then away)
+    # Get team abbreviations
     home_abbrev = get_team_abbrev(home_team)
     away_abbrev = get_team_abbrev(away_team)
     
     # Build ticker: kxuclgame-26jan21slabar
     ticker = f"{ticker_prefix}-{date_str}{home_abbrev}{away_abbrev}"
     
-    # Full URL
-    return f"https://kalshi.com/markets/{market_slug}/{ticker}"
-
-def calculate_rest_days(last_game_date):
-    """Calculate rest days since last match"""
-    if not last_game_date:
-        return 4  # Default assumption
-    now = datetime.now(eastern)
-    delta = now - last_game_date
-    return delta.days
+    # Full URL: https://kalshi.com/markets/uefa-champions-league-game/kxuclgame-26jan21slabar
+    primary_url = f"https://kalshi.com/markets/{market_slug}/{ticker}"
+    
+    return primary_url
 
 # ============================================================
 # SCORING MODEL
 # ============================================================
-def calculate_edge_score(home_team, away_team, league, is_home_pick=True, 
-                         home_form=None, away_form=None, home_rest=4, away_rest=4):
+def calculate_edge_score(home_team, away_team, league, is_home_pick=True):
     """
     Calculate edge score for soccer picks (0-100 scale)
     
-    Factors:
-    1. Team Strength Differential (30%)
-    2. Home Advantage (20%)
-    3. Recent Form (25%)
-    4. Rest Days Advantage (15%)
-    5. League Position Factor (10%)
+    This is a RELATIVE VALUE INDICATOR, not a win probability.
+    Higher score = more factors align, not guaranteed outcome.
     """
     
     home_rating = get_team_rating(home_team)
     away_rating = get_team_rating(away_team)
     
-    score = 50  # Baseline
+    score = 50
     
-    # 1. Team Strength Differential (±15 points max)
+    # Team Strength Differential (±15 points max)
     if is_home_pick:
         strength_diff = home_rating - away_rating
     else:
         strength_diff = away_rating - home_rating
     score += min(15, max(-15, strength_diff * 0.5))
     
-    # 2. Home Advantage (+8 points for home team, varies by league)
+    # Home Advantage
     home_advantage_map = {
         "EPL": 7, "LALIGA": 9, "BUNDESLIGA": 8, "SERIEA": 8,
         "LIGUE1": 7, "MLS": 6, "UCL": 5
@@ -344,43 +339,47 @@ def calculate_edge_score(home_team, away_team, league, is_home_pick=True,
     else:
         score -= home_bonus * 0.5
     
-    # 3. Recent Form (±10 points max)
-    if home_form is not None and away_form is not None:
-        if is_home_pick:
-            form_diff = home_form - away_form
-        else:
-            form_diff = away_form - home_form
-        score += min(10, max(-10, form_diff * 2))
-    
-    # 4. Rest Days Advantage (±8 points max)
-    rest_diff = home_rest - away_rest if is_home_pick else away_rest - home_rest
-    if rest_diff >= 3:
-        score += 8
-    elif rest_diff >= 1:
-        score += 4
-    elif rest_diff <= -3:
-        score -= 8
-    elif rest_diff <= -1:
-        score -= 4
-    
-    # 5. League coefficient boost for top teams in UCL
+    # UCL boost for top teams
     if league == "UCL":
         picked_team = home_team if is_home_pick else away_team
         if get_team_rating(picked_team) >= 90:
             score += 5
     
+    # ============================================================
+    # CONFIDENCE DAMPENER - Close matchups are less predictable
+    # ============================================================
+    rating_diff = abs(home_rating - away_rating)
+    
+    # Close matchup penalty (rating diff < 6 = toss-up territory)
+    if rating_diff < 3:
+        score -= 8  # Very close - high uncertainty
+    elif rating_diff < 6:
+        score -= 5  # Close - moderate uncertainty
+    
+    # UCL knockout stage dampener (higher variance games)
+    # Top teams in UCL often rotate or have already qualified
+    if league == "UCL":
+        # Both teams are strong = unpredictable
+        if home_rating >= 85 and away_rating >= 85:
+            score -= 4
+    
     return max(0, min(100, round(score)))
 
 def get_signal_tier(score):
-    """Convert score to signal tier"""
-    if score >= 75:
+    """
+    Convert score to signal tier
+    
+    STRONG should be RARE - scarcity = credibility
+    Users forgive missed LEANs, not frequent STRONG misses
+    """
+    if score >= 80:
         return "🔥 STRONG", "signal-strong"
-    elif score >= 60:
+    elif score >= 65:
         return "✅ MODERATE", "signal-moderate"
-    elif score >= 45:
+    elif score >= 50:
         return "⚡ LEAN", "signal-weak"
     else:
-        return "⏸️ HOLD", "signal-weak"
+        return "⏸️ HOLD", "signal-hold"
 
 # ============================================================
 # API FUNCTIONS
@@ -390,19 +389,6 @@ def fetch_soccer_games(league_code):
     """Fetch games from ESPN API"""
     try:
         url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard"
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-        return None
-    except Exception as e:
-        st.error(f"Error fetching {league_code}: {e}")
-        return None
-
-@st.cache_data(ttl=600)
-def fetch_standings(league_code):
-    """Fetch league standings"""
-    try:
-        url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/standings"
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             return response.json()
@@ -436,7 +422,6 @@ def parse_games(data, league_key):
             if len(competitors) < 2:
                 continue
             
-            # ESPN: competitors[0] is usually home, competitors[1] is away
             home = None
             away = None
             for comp in competitors:
@@ -459,7 +444,6 @@ def parse_games(data, league_key):
             status_detail = status_type.get('detail', '')
             clock = status.get('displayClock', '')
             
-            # Parse game time
             game_date_str = event.get('date', '')
             try:
                 game_time = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
@@ -467,11 +451,9 @@ def parse_games(data, league_key):
             except:
                 game_time_et = datetime.now(eastern)
             
-            # Calculate edge scores for both sides
             home_edge = calculate_edge_score(home_team, away_team, league_key, is_home_pick=True)
             away_edge = calculate_edge_score(home_team, away_team, league_key, is_home_pick=False)
             
-            # Determine best pick
             if home_edge >= away_edge:
                 pick = home_team
                 edge_score = home_edge
@@ -480,6 +462,10 @@ def parse_games(data, league_key):
                 edge_score = away_edge
             
             signal, signal_class = get_signal_tier(edge_score)
+            
+            # Build URLs with fallback
+            kalshi_url = build_kalshi_url(league_key, home_team, away_team, game_time_et)
+            fallback_url = "https://kalshi.com/sports/soccer"
             
             games.append({
                 'id': event.get('id'),
@@ -498,7 +484,8 @@ def parse_games(data, league_key):
                 'away_edge': away_edge,
                 'signal': signal,
                 'signal_class': signal_class,
-                'kalshi_url': build_kalshi_url(league_key, home_team, away_team, game_time_et),
+                'kalshi_url': kalshi_url,
+                'fallback_url': fallback_url,
             })
             
         except Exception as e:
@@ -515,26 +502,16 @@ with st.sidebar:
     
     st.markdown("#### 📊 Signal Legend")
     st.markdown("""
-    🔥 **STRONG** (75+) - High conviction  
-    ✅ **MODERATE** (60-74) - Good value  
-    ⚡ **LEAN** (45-59) - Slight edge  
-    ⏸️ **HOLD** (<45) - No clear edge
+    🔥 **STRONG** (80+) - High conviction  
+    ✅ **MODERATE** (65-79) - Good value  
+    ⚡ **LEAN** (50-64) - Slight edge  
+    ⏸️ **HOLD** (<50) - No clear edge
     """)
     
     st.markdown("---")
     st.markdown("#### 🏆 Leagues")
     for key, league in LEAGUES.items():
         st.markdown(f"• {league['name']}")
-    
-    st.markdown("---")
-    st.markdown("#### ℹ️ Model Factors")
-    st.markdown("""
-    1. Team Strength (30%)
-    2. Home Advantage (20%)
-    3. Recent Form (25%)
-    4. Rest Days (15%)
-    5. League Position (10%)
-    """)
 
 # ============================================================
 # MAIN CONTENT
@@ -542,16 +519,14 @@ with st.sidebar:
 st.markdown("# ⚽ Soccer Edge Finder")
 st.markdown("*Multi-league analysis for Kalshi soccer markets*")
 
-# Status bar
 now = datetime.now(eastern)
 st.markdown(f"**Last Updated:** {now.strftime('%B %d, %Y at %I:%M %p ET')}")
 
-# League selector
 st.markdown("---")
 selected_leagues = st.multiselect(
     "Select Leagues to Analyze",
     options=list(LEAGUES.keys()),
-    default=["EPL", "UCL", "LALIGA"],
+    default=["UCL", "EPL"],
     format_func=lambda x: LEAGUES[x]['name']
 )
 
@@ -559,7 +534,6 @@ if not selected_leagues:
     st.warning("Please select at least one league")
     st.stop()
 
-# Fetch all games
 all_games = []
 live_games = []
 
@@ -571,7 +545,6 @@ with st.spinner("Fetching soccer data..."):
         all_games.extend(games)
         live_games.extend([g for g in games if g['state'] == 'in'])
 
-# Sort by edge score
 all_games.sort(key=lambda x: x['edge_score'], reverse=True)
 
 # Stats row
@@ -581,43 +554,29 @@ with col1:
 with col2:
     st.metric("Live Now", len(live_games))
 with col3:
-    strong_picks = len([g for g in all_games if g['edge_score'] >= 75])
+    strong_picks = len([g for g in all_games if g['edge_score'] >= 80])
     st.metric("Strong Picks", strong_picks)
 with col4:
     avg_edge = sum(g['edge_score'] for g in all_games) / len(all_games) if all_games else 0
     st.metric("Avg Edge Score", f"{avg_edge:.1f}")
 
-# Legend box
+# Legend
 st.markdown("""
 <div class="legend-box">
 <strong>📊 Signal Guide:</strong> 
-🔥 STRONG (75+) = High conviction | 
-✅ MODERATE (60-74) = Good value | 
-⚡ LEAN (45-59) = Slight edge | 
-⏸️ HOLD (<45) = Pass
+🔥 STRONG (80+) = High conviction | 
+✅ MODERATE (65-79) = Good value | 
+⚡ LEAN (50-64) = Slight edge | 
+⏸️ HOLD (<50) = Pass
+<br><br>
+<em style="color: #888;">Note: Edge Score = relative value indicator, NOT win probability. Close matchups are dampened.</em>
 </div>
 """, unsafe_allow_html=True)
 
-# Breaking news
-st.markdown("### 📰 Breaking News")
-news_displayed = 0
-for league_key in selected_leagues[:2]:  # Limit to first 2 leagues for news
-    news_data = fetch_news(LEAGUES[league_key]['code'])
-    if news_data and 'articles' in news_data:
-        for article in news_data['articles'][:2]:
-            headline = article.get('headline', '')
-            if headline and news_displayed < 3:
-                st.markdown(f"""
-                <div class="news-ticker">
-                    <span class="league-badge league-{league_key.lower()}">{LEAGUES[league_key]['name']}</span>
-                    {headline}
-                </div>
-                """, unsafe_allow_html=True)
-                news_displayed += 1
-
-# Live Games Section
+# Live Games
 if live_games:
     st.markdown("### 🔴 Live Matches")
+    st.caption("⚠️ Live games have higher variance - signals less reliable once in-play")
     for game in live_games:
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
@@ -637,7 +596,7 @@ if live_games:
         with col3:
             st.link_button("📈 Trade on Kalshi", game['kalshi_url'])
 
-# Top Pick Hero Section
+# Top Pick
 if all_games:
     top_pick = all_games[0]
     st.markdown("### 🏆 Top Pick")
@@ -668,7 +627,7 @@ if all_games:
     </div>
     """, unsafe_allow_html=True)
 
-# ML Picks List
+# All Picks
 st.markdown("### ⚽ All Soccer Picks")
 st.markdown("*Sorted by Edge Score (highest first)*")
 
@@ -694,43 +653,57 @@ for game in all_games:
     
     with col4:
         st.link_button("Trade", game['kalshi_url'], use_container_width=True)
+        st.caption(f"[Browse League]({game['fallback_url']})")
 
-# How to Use Expander
+# How to Use
 with st.expander("📖 How to Use Soccer Edge Finder"):
     st.markdown("""
-    ## How the Model Works
+    ## What This Tool Is (and Isn't)
     
-    The Soccer Edge Finder analyzes multiple factors to identify value in Kalshi soccer markets:
+    **Edge Score = Relative Value Indicator**
     
-    ### Factors Analyzed
+    This is NOT a win probability. It's NOT a guarantee.
     
-    1. **Team Strength Differential (30%)** - Based on historical performance, squad quality, and league position
+    The Edge Score tells you how many factors align in favor of a pick. Higher score = more alignment, not certainty.
     
-    2. **Home Advantage (20%)** - Soccer has significant home advantage, varying by league:
-       - La Liga: +9 (loudest crowds)
-       - Serie A/Bundesliga: +8
-       - Premier League/Ligue 1: +7
-       - MLS: +6
-       - Champions League: +5 (neutral venues reduce advantage)
+    ### How Scoring Works
     
-    3. **Recent Form (25%)** - Points from last 5 matches
+    **Factors that INCREASE score:**
+    - Team strength differential (stronger team favored)
+    - Home advantage (varies by league - La Liga strongest, UCL weakest)
+    - Top team in UCL gets small boost
     
-    4. **Rest Days (15%)** - Teams with 3+ extra rest days get significant boost
+    **Factors that DECREASE score (Confidence Dampeners):**
+    - Close matchups (rating diff < 6) → subtract 5-8 points
+    - Two strong UCL teams facing off → subtract 4 points
+    - This makes STRONG signals rare and meaningful
     
-    5. **League Position Factor (10%)** - Table position impacts confidence
+    ### Signal Thresholds
+    
+    | Signal | Score | Meaning |
+    |--------|-------|---------|
+    | 🔥 STRONG | 80+ | Multiple factors strongly align - rare |
+    | ✅ MODERATE | 65-79 | Good alignment - standard edge |
+    | ⚡ LEAN | 50-64 | Slight alignment - small edge |
+    | ⏸️ HOLD | <50 | No clear edge - pass or look at draw |
+    
+    ### Why STRONG Is Rare
+    
+    STRONG should be scarce. Scarcity = credibility.
+    
+    Users forgive missed LEANs. They don't forgive frequent STRONG misses.
     
     ### Trading Tips
     
-    - **Strong signals (75+)**: Consider larger positions
-    - **Moderate signals (60-74)**: Standard position size
-    - **Lean signals (45-59)**: Small position or combine with other edges
-    - **Hold (<45)**: Skip or look for draws
+    - **If Trade button 404s**: Use "Browse League" link as fallback
+    - **Close matchups**: Consider the draw market
+    - **UCL games**: Higher variance - size positions accordingly
     
-    ### Important Notes
+    ### Important Reminder
     
-    - European leagues (EPL, La Liga, etc.) typically have more predictable outcomes
-    - Champions League knockouts are harder to predict
-    - Always check for late injuries before trading
+    This tool helps you make fewer bad decisions. It doesn't predict outcomes.
+    
+    Structure beats precision. Process over picks.
     """)
 
 # Footer
