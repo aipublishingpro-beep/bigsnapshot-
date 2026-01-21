@@ -535,12 +535,12 @@ if top_pick and top_pick["score"] >= 8.0:
     tier, color, is_tracked = get_signal_tier(top_pick["score"])
     kalshi_url = build_kalshi_ml_url(top_pick["away"], top_pick["home"])
     buy_btn = get_buy_button_html(kalshi_url, "🎯 BUY NOW")
-    tracked_icon = "📊" if is_tracked else ""
+    tracked_badge = ' <span style="background:#00ff00;color:#000;padding:2px 6px;border-radius:4px;font-size:0.4em;vertical-align:middle">TRACKED</span>' if is_tracked else ""
     
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,#0a2a0a,#1a3a1a);padding:20px;border-radius:12px;border:3px solid {color};margin:15px 0;text-align:center">
         <div style="color:#888;font-size:0.9em;margin-bottom:8px">💰 TOP PICK OF THE DAY</div>
-        <div style="font-size:2.2em;font-weight:bold;color:#fff;margin-bottom:5px">{escape_html(top_pick['pick_code'])} {tracked_icon}</div>
+        <div style="font-size:2.2em;font-weight:bold;color:#fff;margin-bottom:5px">{escape_html(top_pick['pick_code'])}{tracked_badge}</div>
         <div style="color:{color};font-size:1.4em;font-weight:bold;margin-bottom:10px">{tier} {top_pick['score']}/10</div>
         <div style="color:#aaa;font-size:0.9em;margin-bottom:12px">vs {escape_html(top_pick['opp_code'])} • {' · '.join(top_pick['reasons'][:3])}</div>
         <div>{buy_btn if kalshi_url else '<span style="color:#666">Market loading...</span>'}</div>
@@ -820,24 +820,9 @@ if team_a and team_b and team_a != team_b:
         away_color = color if pick == team_a else "#fff"
         home_color = color if pick == team_b else "#fff"
         
-        tracked_note = '<div style="text-align:center;margin-top:8px"><span style="background:#00ff00;color:#000;padding:3px 8px;border-radius:4px;font-size:0.75em">📊 Tracked</span></div>' if is_tracked else ''
+        tracked_html = '<div style="text-align:center;margin-top:8px"><span style="background:#00ff00;color:#000;padding:3px 8px;border-radius:4px;font-size:0.75em">TRACKED</span></div>' if is_tracked else ''
         
-        st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:15px;border-radius:10px;border:2px solid {color};margin:10px 0">
-            <div style="text-align:center;margin-bottom:10px">
-                <span style="font-size:1.5em;color:{away_color};font-weight:bold">{escape_html(KALSHI_CODES.get(team_a, '???'))}</span>
-                <span style="color:#888;margin:0 15px;font-size:1.2em">@</span>
-                <span style="font-size:1.5em;color:{home_color};font-weight:bold">{escape_html(KALSHI_CODES.get(team_b, '???'))}</span>
-            </div>
-            <div style="text-align:center">
-                <span style="color:{color};font-size:1.3em;font-weight:bold">{escape_html(tier)}</span>
-                <span style="color:#888;margin-left:10px">{escape_html(KALSHI_CODES.get(pick, '???'))} {score}/10</span>
-            </div>
-            <div style="display:flex;justify-content:center;gap:30px;margin-top:10px">
-                <div style="text-align:center"><div style="color:#888;font-size:0.8em">Away</div><div style="color:#fff;font-family:monospace">{escape_html(form_a)}</div></div>
-                <div style="text-align:center"><div style="color:#888;font-size:0.8em">Home</div><div style="color:#fff;font-family:monospace">{escape_html(form_b)}</div></div>
-            </div>
-            {tracked_note}
-        </div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:15px;border-radius:10px;border:2px solid {color};margin:10px 0"><div style="text-align:center;margin-bottom:10px"><span style="font-size:1.5em;color:{away_color};font-weight:bold">{escape_html(KALSHI_CODES.get(team_a, '???'))}</span><span style="color:#888;margin:0 15px;font-size:1.2em">@</span><span style="font-size:1.5em;color:{home_color};font-weight:bold">{escape_html(KALSHI_CODES.get(team_b, '???'))}</span></div><div style="text-align:center"><span style="color:{color};font-size:1.3em;font-weight:bold">{escape_html(tier)}</span><span style="color:#888;margin-left:10px">{escape_html(KALSHI_CODES.get(pick, '???'))} {score}/10</span></div><div style="display:flex;justify-content:center;gap:30px;margin-top:10px"><div style="text-align:center"><div style="color:#888;font-size:0.8em">Away</div><div style="color:#fff;font-family:monospace">{escape_html(form_a)}</div></div><div style="text-align:center"><div style="color:#888;font-size:0.8em">Home</div><div style="color:#fff;font-family:monospace">{escape_html(form_b)}</div></div></div>{tracked_html}</div>""", unsafe_allow_html=True)
         
         kalshi_url = build_kalshi_ml_url(team_a, team_b)
         st.markdown(buy_button(kalshi_url, f"🎯 BUY {escape_html(pick.upper())} TO WIN"), unsafe_allow_html=True)
