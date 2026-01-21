@@ -1,5 +1,6 @@
 import streamlit as st
 from styles import apply_styles
+import extra_streamlit_components as stx
 
 st.set_page_config(
     page_title="BigSnapshot | Prediction Market Edge Finder",
@@ -8,6 +9,15 @@ st.set_page_config(
 )
 
 apply_styles()
+
+# ============================================================
+# COOKIE MANAGER FOR PERSISTENT LOGIN
+# ============================================================
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
 
 # ============================================================
 # GA4 TRACKING
@@ -24,6 +34,14 @@ if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 if 'user_type' not in st.session_state:
     st.session_state.user_type = None
+
+# ============================================================
+# CHECK COOKIE FOR PERSISTENT LOGIN
+# ============================================================
+auth_cookie = cookie_manager.get("bigsnapshot_auth")
+if auth_cookie and not st.session_state.authenticated:
+    st.session_state.authenticated = True
+    st.session_state.user_type = auth_cookie
 
 # ============================================================
 # PASSWORD CONFIG - PAID ACCESS ONLY
@@ -89,6 +107,7 @@ if not st.session_state.authenticated:
                 if password_input.upper() in VALID_PASSWORDS:
                     st.session_state.authenticated = True
                     st.session_state.user_type = VALID_PASSWORDS[password_input.upper()]
+                    cookie_manager.set("bigsnapshot_auth", VALID_PASSWORDS[password_input.upper()], max_age=30*24*60*60)
                     st.rerun()
                 else:
                     st.error("❌ Invalid password")
@@ -365,6 +384,7 @@ if not st.session_state.authenticated:
             if password_input.upper() in VALID_PASSWORDS:
                 st.session_state.authenticated = True
                 st.session_state.user_type = VALID_PASSWORDS[password_input.upper()]
+                cookie_manager.set("bigsnapshot_auth", VALID_PASSWORDS[password_input.upper()], max_age=30*24*60*60)
                 st.rerun()
             else:
                 st.error("❌ Invalid password")
@@ -373,14 +393,10 @@ if not st.session_state.authenticated:
     st.markdown("""
     <div style="text-align: center; padding: 40px 20px; margin-top: 20px;">
         <p style="color: #888; font-size: 13px; margin-bottom: 15px;">
-            <strong>💳 Refund Policy:</strong> Not satisfied? Email aipublishingpro@gmail.com within 7 days for a full refund. No questions asked.
+            <strong>💳 Refund Policy:</strong> Not satisfied? Request a refund within 7 days. No questions asked.
         </p>
         <p style="color: #555; font-size: 12px;">
-            ⚠️ For entertainment only. Not financial advice.<br>
-            📧 aipublishingpro@gmail.com
-        </p>
-        <p style="color: #555; font-size: 12px; margin-top: 10px;">
-            Questions or feedback? DM me on X: @AIPublishingPro
+            ⚠️ For entertainment only. Not financial advice.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -438,17 +454,14 @@ with col2:
     if st.button("🚪 Logout", use_container_width=True):
         st.session_state.authenticated = False
         st.session_state.user_type = None
+        cookie_manager.delete("bigsnapshot_auth")
         st.rerun()
 
 # Footer
 st.markdown("""
 <div style="text-align: center; padding: 20px;">
     <p style="color: #555; font-size: 12px;">
-        ⚠️ For entertainment only. Not financial advice.<br>
-        📧 aipublishingpro@gmail.com
-    </p>
-    <p style="color: #555; font-size: 12px; margin-top: 10px;">
-        Questions or feedback? DM me on X: @AIPublishingPro
+        ⚠️ For entertainment only. Not financial advice.
     </p>
 </div>
 """, unsafe_allow_html=True)
