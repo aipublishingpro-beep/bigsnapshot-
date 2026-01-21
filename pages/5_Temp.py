@@ -36,42 +36,69 @@ CITY_CONFIG = {
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
 def extract_range_text(market):
-    """Extract clean range text from market data"""
+    """Extract clean range text matching Kalshi's display format"""
     subtitle = market.get("subtitle", "")
     title = market.get("title", "")
+    txt = title + " " + subtitle
     
-    # Try subtitle first
-    if subtitle and ("°" in subtitle or "to" in subtitle.lower()):
-        return subtitle
+    # Pattern 1: "X-Y°" or "X° to Y°" (range)
+    range_hyphen = re.search(r'(\d+)\s*-\s*(\d+)°', txt)
+    range_to = re.search(r'(\d+)°?\s*to\s*(\d+)°', txt, re.IGNORECASE)
     
-    # Parse from title - extract temperature range
-    txt = title
+    if range_hyphen:
+        return f"{range_hyphen.group(1)}° to {range_hyphen.group(2)}°"
+    if range_to:
+        return f"{range_to.group(1)}° to {range_to.group(2)}°"
     
-    # Pattern: "Will the X temperature be Y° to Z°" or "be <X°" or "be >X°"
-    below_match = re.search(r'be\s*[<≤]?\s*(\d+)°', txt)
-    above_match = re.search(r'be\s*[>≥]?\s*(\d+)°', txt)
-    range_match = re.search(r'(\d+)°?\s*to\s*(\d+)°', txt, re.IGNORECASE)
+    # Pattern 2: "<X°" or "X° or below" or "below X°"
+    below_pattern = re.search(r'[<≤]\s*(\d+)°|(\d+)°?\s*or\s*below|below\s*(\d+)°', txt, re.IGNORECASE)
+    if below_pattern:
+        num = below_pattern.group(1) or below_pattern.group(2) or below_pattern.group(3)
+        return f"{num}° or below"
     
-    if range_match:
-        return f"{range_match.group(1)}° to {range_match.group(2)}°"
-    elif "below" in txt.lower() or "<" in txt:
-        if below_match:
-            return f"{below_match.group(1)}° or below"
-    elif "above" in txt.lower() or ">" in txt:
-        if above_match:
-            return f"{above_match.group(1)}° or above"
+    # Pattern 3: ">X°" or "X° or above" or "above X°"
+    above_pattern = re.search(r'[>≥]\s*(\d+)°|(\d+)°?\s*or\s*above|above\s*(\d+)°', txt, re.IGNORECASE)
+    if above_pattern:
+        num = above_pattern.group(1) or above_pattern.group(2) or above_pattern.group(3)
+        return f"{num}° or above"
     
-    # Fallback - try to find any degree pattern
+    # Fallback: find all numbers with degree signs
     nums = re.findall(r'(\d+)°', txt)
-    if len(nums) == 2:
+    if len(nums) >= 2:
         return f"{nums[0]}° to {nums[1]}°"
     elif len(nums) == 1:
-        if "below" in txt.lower() or "<" in txt:
+        # Check context for below/above
+        if any(w in txt.lower() for w in ['below', 'under', 'less', '<']):
             return f"{nums[0]}° or below"
-        else:
+        elif any(w in txt.lower() for w in ['above', 'over', 'more', '>']):
             return f"{nums[0]}° or above"
     
-    return subtitle or title[:30]
+    # Last resort - use subtitle if available
+    if subtitle:
+        return subtitle
+    return "Unknown"
+
+def get_bracket_bounds(range_str):
+    """Parse bracket string to get low/high bounds for probability calc"""
+    tl = range_str.lower()
+    nums = re.findall(r'(\d+)', range_str)
+    
+    if not nums:
+        return 0, 100  # Fallback
+    
+    if "below" in tl or "under" in tl:
+        # "X° or below" means temp < X+0.5
+        return -999, int(nums[0]) + 0.5
+    elif "above" in tl or "over" in tl:
+        # "X° or above" means temp > X-0.5
+        return int(nums[0]) - 0.5, 999
+    elif len(nums) >= 2:
+        # "X° to Y°" means X-0.5 < temp < Y+0.5
+        lo, hi = int(nums[0]), int(nums[1])
+        return lo - 0.5, hi + 0.5
+    else:
+        # Single number without below/above - shouldn't happen
+        return int(nums[0]) - 0.5, int(nums[0]) + 0.5
 
 @st.cache_data(ttl=60)
 def fetch_kalshi_brackets(series_ticker):
@@ -96,22 +123,15 @@ def fetch_kalshi_brackets(series_ticker):
         for m in today_markets:
             range_txt = extract_range_text(m)
             ticker = m.get("ticker", "")
-            tl = range_txt.lower()
             
-            # Calculate midpoint for sorting
-            mid = None
-            if "below" in tl:
-                nums = re.findall(r'\d+', range_txt)
-                mid = int(nums[0]) - 1 if nums else 30
-            elif "above" in tl:
-                nums = re.findall(r'\d+', range_txt)
-                mid = int(nums[0]) + 1 if nums else 60
-            elif "to" in tl:
-                nums = re.findall(r'\d+', range_txt)
-                if len(nums) >= 2:
-                    mid = (int(nums[0]) + int(nums[1])) / 2
-                else:
-                    mid = 45
+            # Calculate midpoint for sorting using same logic as bounds
+            low, high = get_bracket_bounds(range_txt)
+            if low == -999:
+                mid = high - 1
+            elif high == 999:
+                mid = low + 1
+            else:
+                mid = (low + high) / 2
             
             yb, ya = m.get("yes_bid", 0), m.get("yes_ask", 0)
             yes_price = (yb + ya) / 2 if yb and ya else ya or yb or 0
@@ -184,20 +204,26 @@ def calc_model_prob(forecast, low, high, sigma):
         return normal_cdf(high, forecast, sigma) - normal_cdf(low, forecast, sigma)
 
 def get_bracket_bounds(range_str):
+    """Parse bracket string to get low/high bounds for probability calc"""
     tl = range_str.lower()
-    nums = re.findall(r'\d+', range_str)
+    nums = re.findall(r'(\d+)', range_str)
     
-    if "below" in tl:
-        if nums:
-            return -999, int(nums[0]) + 0.5
-        return -999, 30.5
-    elif "above" in tl:
-        if nums:
-            return int(nums[0]) - 0.5, 999
-        return 59.5, 999
-    elif "to" in tl and len(nums) >= 2:
-        return int(nums[0]) - 0.5, int(nums[1]) + 0.5
-    return 0, 100
+    if not nums:
+        return 0, 100  # Fallback
+    
+    if "below" in tl or "under" in tl:
+        # "X° or below" means temp < X+0.5
+        return -999, int(nums[0]) + 0.5
+    elif "above" in tl or "over" in tl:
+        # "X° or above" means temp > X-0.5
+        return int(nums[0]) - 0.5, 999
+    elif len(nums) >= 2:
+        # "X° to Y°" means X-0.5 < temp < Y+0.5
+        lo, hi = int(nums[0]), int(nums[1])
+        return lo - 0.5, hi + 0.5
+    else:
+        # Single number without below/above - shouldn't happen
+        return int(nums[0]) - 0.5, int(nums[0]) + 0.5
 
 def render_brackets(brackets, forecast, sigma, color_accent):
     """Render bracket list with muted colors"""
