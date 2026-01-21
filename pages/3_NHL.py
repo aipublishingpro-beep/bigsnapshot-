@@ -48,6 +48,33 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
+# MOBILE CSS
+# ============================================================
+st.markdown("""
+<style>
+@media (max-width: 768px) {
+    .stColumns > div {
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 1.2rem !important;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.8rem !important;
+    }
+    h1 { font-size: 1.5rem !important; }
+    h2 { font-size: 1.2rem !important; }
+    h3 { font-size: 1rem !important; }
+    button {
+        padding: 8px 12px !important;
+        font-size: 0.85em !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================
 # TEAM MAPPINGS
 # ============================================================
 TEAM_ABBREVS = {
