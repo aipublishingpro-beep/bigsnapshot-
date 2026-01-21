@@ -274,6 +274,10 @@ if not st.session_state.authenticated:
             <div style="font-size: 45px; margin-bottom: 15px;">🏒</div>
             <h3 style="color: #fff; margin-bottom: 10px;">NHL Edge Finder</h3>
         </div>
+        <div style="background: linear-gradient(135deg, #1a2a3a 0%, #2a3a4a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #3a4a5a;">
+            <div style="font-size: 45px; margin-bottom: 15px;">🎓</div>
+            <h3 style="color: #fff; margin-bottom: 10px;">NCAA Edge Finder</h3>
+        </div>
         <div style="background: linear-gradient(135deg, #3a2a1a 0%, #4a3a2a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #f59e0b;">
             <div style="font-size: 45px; margin-bottom: 15px;">🌡️</div>
             <h3 style="color: #f59e0b; margin-bottom: 5px;">Temp Edge Finder</h3>
@@ -394,7 +398,7 @@ st.markdown("---")
 # ============ LIVE TOOLS - PURE STREAMLIT ============
 st.header("🔥 LIVE TOOLS")
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
     st.subheader("🏀 NBA")
@@ -412,6 +416,11 @@ with col3:
         st.switch_page("pages/3_NHL.py")
 
 with col4:
+    st.subheader("🎓 NCAA")
+    if st.button("OPEN NCAA", use_container_width=True, type="primary", key="nav_ncaa"):
+        st.switch_page("pages/7_NCAA.py")
+
+with col5:
     st.subheader("🌡️ TEMP")
     if st.button("OPEN TEMP", use_container_width=True, type="primary", key="nav_temp"):
         st.switch_page("pages/5_Temp.py")
