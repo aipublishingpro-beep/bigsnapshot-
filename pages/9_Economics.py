@@ -1,4 +1,5 @@
 # FILE: pages/9_Economics.py
+# v2.0 - Added data-driven edge signals
 import streamlit as st
 import requests
 from datetime import datetime, timedelta
@@ -6,7 +7,9 @@ import pytz
 import extra_streamlit_components as stx
 from fred_data import (
     get_fed_rate, get_unemployment, get_gdp_growth, 
-    get_cpi_yoy, get_treasury_spread, get_indicator_color
+    get_cpi_yoy, get_treasury_spread, get_indicator_color,
+    generate_edge_signals, get_jobless_claims_trend, get_cpi_momentum,
+    THRESHOLDS
 )
 
 # ============================================================
@@ -27,12 +30,72 @@ def apply_styles():
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     
     .stApp {
         background: linear-gradient(135deg, #0a1628 0%, #1a2a4a 50%, #0d1a2d 100%);
+    }
+    
+    .signal-card-strong {
+        background: linear-gradient(135deg, #3d1a1a 0%, #5a2d2d 100%);
+        border: 2px solid #ff6b35;
+        border-radius: 16px;
+        padding: 24px;
+        margin: 16px 0;
+        box-shadow: 0 8px 32px rgba(255, 107, 53, 0.3);
+    }
+    
+    .signal-card-moderate {
+        background: linear-gradient(135deg, #3d3d1a 0%, #5a5a2d 100%);
+        border: 2px solid #ffcc00;
+        border-radius: 16px;
+        padding: 24px;
+        margin: 16px 0;
+        box-shadow: 0 4px 20px rgba(255, 204, 0, 0.2);
+    }
+    
+    .signal-card-watch {
+        background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%);
+        border: 1px solid #4a9eff;
+        border-radius: 16px;
+        padding: 24px;
+        margin: 16px 0;
+    }
+    
+    .signal-badge-strong {
+        background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
+        color: white;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+    
+    .signal-badge-moderate {
+        background: linear-gradient(135deg, #ffcc00 0%, #ffd93d 100%);
+        color: black;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+    
+    .signal-badge-watch {
+        background: linear-gradient(135deg, #4a9eff 0%, #2d7dd2 100%);
+        color: white;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+    
+    .data-point {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin: 4px 0;
+        font-family: monospace;
+        color: #ccc;
     }
     
     .event-card {
@@ -41,12 +104,6 @@ def apply_styles():
         border-radius: 16px;
         padding: 24px;
         margin: 16px 0;
-        transition: all 0.3s ease;
-    }
-    
-    .event-card:hover {
-        border-color: #4a9eff;
-        box-shadow: 0 4px 20px rgba(74, 158, 255, 0.2);
     }
     
     .event-card-hot {
@@ -62,27 +119,6 @@ def apply_styles():
         border-radius: 20px;
         font-size: 0.85rem;
         font-weight: 600;
-    }
-    
-    .rate-display {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #4ade80;
-    }
-    
-    .market-link {
-        display: inline-block;
-        background: linear-gradient(135deg, #4a9eff 0%, #2d7dd2 100%);
-        color: white !important;
-        padding: 10px 20px;
-        border-radius: 8px;
-        font-weight: 600;
-        text-decoration: none;
-        margin-top: 12px;
-    }
-    
-    .market-link:hover {
-        background: linear-gradient(135deg, #6bb3ff 0%, #4a9eff 100%);
     }
     
     .indicator-box {
@@ -132,17 +168,19 @@ def apply_styles():
         50% { opacity: 0.7; }
     }
     
+    .market-link {
+        display: inline-block;
+        background: linear-gradient(135deg, #4a9eff 0%, #2d7dd2 100%);
+        color: white !important;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        text-decoration: none;
+        margin-top: 12px;
+    }
+    
     a { color: #4a9eff !important; text-decoration: none !important; }
     a:hover { color: #6bb3ff !important; }
-    
-    .stButton > button {
-        background: linear-gradient(135deg, #4a9eff 0%, #2d7dd2 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 8px 24px;
-        font-weight: 600;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -184,11 +222,8 @@ st.markdown("""
 @media (max-width: 768px) {
     .stColumns > div { flex: 1 1 100% !important; min-width: 100% !important; }
     [data-testid="stMetricValue"] { font-size: 1.2rem !important; }
-    [data-testid="stMetricLabel"] { font-size: 0.8rem !important; }
     h1 { font-size: 1.5rem !important; }
     h2 { font-size: 1.2rem !important; }
-    h3 { font-size: 1rem !important; }
-    button { padding: 8px 12px !important; font-size: 0.85em !important; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -229,7 +264,7 @@ KALSHI_MARKETS = {
     "fed_decision": "https://kalshi.com/markets/kxfeddecision/fed-meeting",
     "cpi": "https://kalshi.com/markets/kxcpi/cpi",
     "cpi_yoy": "https://kalshi.com/markets/kxcpiyoy/inflation",
-    "core_cpi": "https://kalshi.com/markets/kxcpicoreyoy/core-inflation",
+    "unemployment": "https://kalshi.com/markets/kxunemployment",
     "economics": "https://kalshi.com/events/economics",
 }
 
@@ -281,57 +316,142 @@ cpi_yoy = get_cpi_yoy()
 spread = get_treasury_spread()
 
 # ============================================================
-# SIDEBAR
-# ============================================================
-with st.sidebar:
-    st.markdown("### 📈 Economics Edge Finder")
-    st.markdown("---")
-    
-    st.markdown("#### 🎯 Key Markets")
-    st.markdown("""
-    - **Fed Rate** - FOMC decisions
-    - **CPI** - Inflation data
-    - **Core CPI** - Ex food & energy
-    - **GDP** - Growth data
-    - **Jobs** - Employment reports
-    """)
-    
-    st.markdown("---")
-    st.markdown("#### 📅 Key Dates")
-    next_fomc = get_next_fomc()
-    next_cpi = get_next_cpi()
-    st.markdown(f"**Next FOMC:** {next_fomc['dates']}")
-    st.markdown(f"**Next CPI:** {next_cpi['month']}")
-    
-    st.markdown("---")
-    st.markdown("#### 📊 Live Data")
-    st.markdown(f"**Fed Rate:** {fed_rate['value']}")
-    st.markdown(f"**Unemployment:** {unemployment['value']}")
-    st.markdown(f"**CPI YoY:** {cpi_yoy['value']}")
-
-# ============================================================
 # MAIN CONTENT
 # ============================================================
 st.markdown("# 📈 Economics Edge Finder")
-st.markdown("*Fed decisions, inflation data, and economic indicators for Kalshi markets*")
+st.markdown("*Data-driven signals for Kalshi economics markets*")
 
 now = datetime.now(eastern)
 st.markdown(f"**Last Updated:** {now.strftime('%B %d, %Y at %I:%M %p ET')} <span class='live-badge'>LIVE</span>", unsafe_allow_html=True)
 
 # ============================================================
-# CURRENT ECONOMIC SNAPSHOT - LIVE DATA
+# 🔥 EDGE SIGNALS SECTION (NEW)
 # ============================================================
 st.markdown("---")
-st.markdown("### 📊 Current Economic Snapshot <span class='live-badge'>LIVE FROM FRED</span>", unsafe_allow_html=True)
+st.markdown("### 🔥 Edge Signals <span class='live-badge'>FROM FRED DATA</span>", unsafe_allow_html=True)
+st.caption("Data-driven observations — NOT predictions. Always verify with your own research.")
+
+signals = generate_edge_signals()
+
+if signals:
+    for signal in signals:
+        # Determine card class based on strength
+        if signal['strength'] == "STRONG":
+            card_class = "signal-card-strong"
+            badge_class = "signal-badge-strong"
+        elif signal['strength'] == "MODERATE":
+            card_class = "signal-card-moderate"
+            badge_class = "signal-badge-moderate"
+        else:
+            card_class = "signal-card-watch"
+            badge_class = "signal-badge-watch"
+        
+        # Build data points HTML
+        data_points_html = ""
+        for dp in signal['data_points']:
+            data_points_html += f'<div class="data-point">📊 {dp}</div>'
+        
+        # Get Kalshi link
+        kalshi_link = KALSHI_MARKETS.get(signal['kalshi_market'], KALSHI_MARKETS['economics'])
+        
+        # Get subtitle if exists
+        subtitle = signal.get('subtitle', '')
+        subtitle_html = f'<p style="color: {signal["color"]}; margin: 4px 0 0 0; font-size: 0.95rem; font-weight: 600;">→ {subtitle}</p>' if subtitle else ''
+        
+        st.markdown(f"""
+        <div class="{card_class}">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <span class="{badge_class}">{signal['strength']} SIGNAL</span>
+                    <h3 style="color: white; margin: 12px 0 4px 0;">{signal['title']}</h3>
+                    {subtitle_html}
+                    <p style="color: #888; margin: 8px 0 0 0; font-size: 0.85rem;">Market: <strong style="color: #fff;">{signal['market']}</strong></p>
+                </div>
+                <div style="text-align: right;">
+                    <p style="color: #888; margin: 0; font-size: 0.85rem;">Latest: <strong style="color: #fff;">{signal['latest_data']}</strong></p>
+                    <p style="color: #666; margin: 0; font-size: 0.75rem;">As of {signal['data_date']}</p>
+                </div>
+            </div>
+            
+            <div style="margin: 16px 0;">
+                {data_points_html}
+            </div>
+            
+            <p style="color: #aaa; font-size: 0.9rem; margin: 12px 0; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid {signal['color']};">
+                💡 <strong>Implication:</strong> {signal['implication']}
+            </p>
+            
+            <a href="{kalshi_link}" target="_blank" class="market-link">📈 View on Kalshi</a>
+        </div>
+        """, unsafe_allow_html=True)
+else:
+    st.info("📊 No strong signals detected currently. Markets may be efficiently priced or trends unclear.")
+
+# ============================================================
+# SIGNAL LEGEND
+# ============================================================
+with st.expander("📖 Understanding Edge Signals"):
+    st.markdown("""
+    ### Signal Strength Levels
+    
+    | Badge | Meaning | Requirements |
+    |-------|---------|--------------|
+    | 🟠 **STRONG** | Clear trend + confirming level | 4+ consecutive data points OR 3+ weeks with elevated/concerning level |
+    | 🟡 **MODERATE** | Trend emerging with context | 3 consecutive data points with supporting level |
+    | 🔵 **WATCH** | Early signal | Initial divergence, needs more confirmation |
+    
+    ### Signal Logic (What We Check)
+    
+    **Jobless Claims:**
+    - Track consecutive weekly increases/decreases (need 3+ for signal)
+    - Compare level to historical norms (200K = tight, 260K+ = softening)
+    - STRONG requires both trend direction AND concerning level
+    
+    **CPI Momentum:**
+    - Look at 4 months of MoM data, not just latest
+    - Compare to Fed's 2% target (~0.17% monthly)
+    - Check if trend is accelerating OR decelerating
+    - STRONG requires consistent direction + hot/cool level
+    
+    **Yield Curve:**
+    - 10Y-2Y spread: negative = inverted = recession warning
+    - Deep inversion (<-0.50%) = STRONG signal
+    - Historical lead time: 12-18 months before recession
+    
+    **Unemployment:**
+    - Track 3-month change in rate
+    - Rising 0.3%+ over 3 months = significant softening
+    - Supports Fed cut narrative
+    
+    ### What These Signals Are NOT
+    
+    ❌ **Predictions** — We don't know what CPI will print  
+    ❌ **"Locks"** — Markets can stay irrational  
+    ❌ **Financial advice** — Always do your own research  
+    
+    ### Data Sources
+    
+    All data from **FRED** (Federal Reserve Economic Data):
+    - Initial Claims: ICSA (weekly)
+    - CPI: CPIAUCSL (monthly)
+    - Unemployment: UNRATE (monthly)
+    - Treasuries: DGS10, DGS2 (daily)
+    - GDP: A191RL1Q225SBEA (quarterly)
+    """)
+
+# ============================================================
+# CURRENT ECONOMIC SNAPSHOT
+# ============================================================
+st.markdown("---")
+st.markdown("### 📊 Current Economic Snapshot", unsafe_allow_html=True)
 
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    fed_color = "#4ade80"
     st.markdown(f"""
     <div class="indicator-box">
         <p style="color: #888; margin: 0;">Fed Funds Rate</p>
-        <p style="font-size: 2rem; font-weight: 700; color: {fed_color};">{fed_rate['value']}</p>
+        <p style="font-size: 2rem; font-weight: 700; color: #4ade80;">{fed_rate['value']}</p>
         <p style="color: #888; font-size: 0.8rem;">Target Range</p>
     </div>
     """, unsafe_allow_html=True)
@@ -366,7 +486,19 @@ with col4:
     </div>
     """, unsafe_allow_html=True)
 
-# Treasury Spread Row
+# Indicator Color Legend
+st.markdown("""
+<div style="background: rgba(26, 42, 74, 0.5); border-radius: 8px; padding: 12px 16px; margin-top: 16px;">
+    <p style="color: #888; margin: 0 0 8px 0; font-size: 0.8rem; font-weight: 600;">📊 COLOR GUIDE</p>
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; font-size: 0.75rem; color: #aaa;">
+        <span><span style="color: #4ade80;">●</span> Healthy / On Target</span>
+        <span><span style="color: #ffcc00;">●</span> Caution / Elevated</span>
+        <span><span style="color: #ff6b6b;">●</span> Concern / Off Target</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Treasury Spread
 if spread:
     spread_color = "#ff6b6b" if spread['inverted'] else "#4ade80"
     spread_label = "⚠️ INVERTED YIELD CURVE" if spread['inverted'] else "10Y-2Y Treasury Spread"
@@ -379,18 +511,16 @@ if spread:
     """, unsafe_allow_html=True)
 
 # ============================================================
-# NEXT FOMC MEETING - HERO SECTION
+# NEXT FOMC MEETING
 # ============================================================
 st.markdown("---")
 st.markdown("### 🏛️ Next FOMC Meeting")
 
 next_fomc = get_next_fomc()
 countdown, days_until = get_time_until(next_fomc['decision_date'])
-
 is_soon = days_until <= 7
 card_class = "event-card event-card-hot" if is_soon else "event-card"
-
-projections_badge = "📊 Includes Projections & Dot Plot" if next_fomc['has_projections'] else ""
+proj_badge = "📊 Includes Projections & Dot Plot" if next_fomc['has_projections'] else ""
 
 st.markdown(f"""
 <div class="{card_class}">
@@ -398,7 +528,7 @@ st.markdown(f"""
         <div>
             <h2 style="margin: 0; color: white;">FOMC Meeting</h2>
             <p style="font-size: 1.3rem; color: #a0d2ff; margin: 8px 0;">{next_fomc['dates']}, 2026</p>
-            <p style="color: #888;">{projections_badge}</p>
+            <p style="color: #888;">{proj_badge}</p>
         </div>
         <div style="text-align: right;">
             <span class="countdown-badge">⏱️ {countdown}</span>
@@ -406,10 +536,8 @@ st.markdown(f"""
         </div>
     </div>
     <div style="margin-top: 20px;">
-        <p style="color: #ccc;">
-            <strong>Current Rate:</strong> {fed_rate['value']} | Check Kalshi for live odds on rate decision.
-        </p>
-        <a href="{KALSHI_MARKETS['fed_decision']}" target="_blank" class="market-link">📈 Trade Fed Decision on Kalshi</a>
+        <p style="color: #ccc;"><strong>Current Rate:</strong> {fed_rate['value']}</p>
+        <a href="{KALSHI_MARKETS['fed_decision']}" target="_blank" class="market-link">📈 Trade Fed Decision</a>
         <a href="{KALSHI_MARKETS['fed_rate']}" target="_blank" class="market-link" style="margin-left: 10px;">📊 Fed Rate Markets</a>
     </div>
 </div>
@@ -438,10 +566,8 @@ st.markdown(f"""
         </div>
     </div>
     <div style="margin-top: 20px;">
-        <p style="color: #ccc;">
-            <strong>Latest CPI YoY:</strong> {cpi_yoy['value']} | Key Markets: CPI MoM, CPI YoY, Core CPI
-        </p>
-        <a href="{KALSHI_MARKETS['cpi']}" target="_blank" class="market-link">📈 Trade CPI on Kalshi</a>
+        <p style="color: #ccc;"><strong>Latest CPI YoY:</strong> {cpi_yoy['value']}</p>
+        <a href="{KALSHI_MARKETS['cpi']}" target="_blank" class="market-link">📈 Trade CPI</a>
         <a href="{KALSHI_MARKETS['cpi_yoy']}" target="_blank" class="market-link" style="margin-left: 10px;">📊 CPI YoY Markets</a>
     </div>
 </div>
@@ -451,7 +577,7 @@ st.markdown(f"""
 # 2026 FOMC CALENDAR
 # ============================================================
 st.markdown("---")
-st.markdown("### 📅 2026 FOMC Meeting Calendar")
+st.markdown("### 📅 2026 FOMC Calendar")
 
 for meeting in FOMC_MEETINGS_2026:
     countdown_str, days = get_time_until(meeting['decision_date'])
@@ -459,9 +585,8 @@ for meeting in FOMC_MEETINGS_2026:
     is_past = countdown_str == "PASSED"
     
     row_class = "calendar-row-next" if is_next else "calendar-row"
-    status_badge = "🔥 NEXT" if is_next else ("✅ DONE" if is_past else "")
+    status_badge = "🔥 NEXT" if is_next else ("✅" if is_past else "")
     proj_badge = "📊" if meeting['has_projections'] else ""
-    
     opacity = "0.5" if is_past else "1"
     
     st.markdown(f"""
@@ -471,7 +596,7 @@ for meeting in FOMC_MEETINGS_2026:
             <span style="margin-left: 10px; color: #888;">{proj_badge}</span>
         </div>
         <div>
-            <span style="color: #888; margin-right: 15px;">{countdown_str if not is_past else "Completed"}</span>
+            <span style="color: #888; margin-right: 15px;">{countdown_str if not is_past else "Done"}</span>
             <span style="color: #ff6b35; font-weight: 600;">{status_badge}</span>
         </div>
     </div>
@@ -480,10 +605,10 @@ for meeting in FOMC_MEETINGS_2026:
 st.caption("📊 = Includes Summary of Economic Projections (SEP) and Dot Plot")
 
 # ============================================================
-# ALL ECONOMICS MARKETS
+# ALL MARKETS
 # ============================================================
 st.markdown("---")
-st.markdown("### 🎯 All Economics Markets on Kalshi")
+st.markdown("### 🎯 All Economics Markets")
 
 col1, col2 = st.columns(2)
 
@@ -495,7 +620,6 @@ with col1:
             <li>Fed Funds Rate Target</li>
             <li>FOMC Decision (Cut/Hold/Hike)</li>
             <li>Number of Rate Cuts in 2026</li>
-            <li>Next Rate Hike Timing</li>
         </ul>
         <a href="{KALSHI_MARKETS['fed_rate']}" target="_blank" class="market-link">Browse Fed Markets</a>
     </div>
@@ -508,7 +632,6 @@ with col1:
             <li>CPI Month-over-Month</li>
             <li>CPI Year-over-Year</li>
             <li>Core CPI (ex food & energy)</li>
-            <li>Inflation Surge Markets</li>
         </ul>
         <a href="{KALSHI_MARKETS['cpi_yoy']}" target="_blank" class="market-link">Browse CPI Markets</a>
     </div>
@@ -533,80 +656,10 @@ with col2:
         <ul style="color: #ccc;">
             <li>GDP Growth Rate</li>
             <li>Recession Probability</li>
-            <li>Economic State</li>
         </ul>
         <a href="{KALSHI_MARKETS['economics']}" target="_blank" class="market-link">Browse GDP Markets</a>
     </div>
     """, unsafe_allow_html=True)
-
-# ============================================================
-# TRADING EDGE FRAMEWORK
-# ============================================================
-st.markdown("---")
-with st.expander("📖 How to Trade Economics Markets"):
-    st.markdown("""
-    ## Economics Markets on Kalshi
-    
-    Economics markets are **event-driven** — they resolve based on official government data releases.
-    
-    ### Key Differences from Sports
-    
-    | Factor | Sports | Economics |
-    |--------|--------|-----------|
-    | Timing | Daily | Monthly/Quarterly |
-    | Data Source | Live scores | Government releases |
-    | Volatility | During games | Around release times |
-    | Edge Source | Real-time signals | Forecasts vs consensus |
-    
-    ### Where Edge Exists
-    
-    **1. Consensus vs Reality**
-    - Bloomberg/Reuters publish "consensus" forecasts
-    - If Kalshi prices differ significantly from consensus, potential edge exists
-    - But remember: markets aggregate information too
-    
-    **2. Timing Around Releases**
-    - Prices volatile in hours before CPI/Jobs reports
-    - Sharp moves possible on unexpected data
-    - Liquidity can be thin near release
-    
-    **3. Fed Communication**
-    - FOMC statement language matters
-    - Press conference can move markets
-    - Dot plot changes signal future path
-    
-    ### Risk Factors
-    
-    ⚠️ **Economics markets have unique risks:**
-    - Government data can be revised later
-    - "Whisper numbers" exist on Wall Street
-    - Institutional traders have more resources
-    - Binary outcomes (exact number matters)
-    
-    ### Decision Framework
-    
-    Before trading economics markets, ask:
-    
-    1. **Do I have an edge?** (Not just an opinion)
-    2. **What's the consensus?** (Check Bloomberg, WSJ)
-    3. **What's priced in?** (Check Kalshi odds)
-    4. **What's my risk?** (Binary = can go to $0)
-    
-    ### This Tool's Purpose
-    
-    Economics Edge Finder provides:
-    - ✅ Calendar of key dates
-    - ✅ Links to relevant Kalshi markets
-    - ✅ Live economic data from FRED
-    - ✅ Framework for thinking about trades
-    
-    It does **NOT** provide:
-    - ❌ Predictions of economic data
-    - ❌ "Buy/Sell" signals
-    - ❌ Guaranteed edges
-    
-    **Economics markets require more research than sports. This tool helps you know WHEN to look, not WHAT to trade.**
-    """)
 
 # ============================================================
 # DISCLAIMER
@@ -614,20 +667,104 @@ with st.expander("📖 How to Trade Economics Markets"):
 st.markdown("---")
 st.markdown("""
 <div class="legend-box">
-<strong>⚠️ Important Notice:</strong> 
-Economic data releases are high-stakes events with institutional participation. 
-This tool provides calendar information and market links only — NOT trading recommendations.
+<strong>⚠️ Important:</strong> 
+Edge signals are data observations, NOT predictions or financial advice. 
+Economic data releases have institutional participation and binary outcomes.
 Always do your own research. Event contracts can lose 100% of value.
 </div>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# FOOTER WITH FRED ATTRIBUTION
+# HOW TO USE THIS APP
+# ============================================================
+with st.expander("📖 How to Use This App"):
+    st.markdown("""
+    ## Economics Edge Finder — Quick Start
+    
+    ### Step 1: Check the Edge Signals
+    
+    The 🔥 **Edge Signals** section shows data-driven observations from FRED:
+    
+    | Badge | What It Means | Your Action |
+    |-------|---------------|-------------|
+    | 🟠 STRONG | Clear trend with confirming data | Worth investigating on Kalshi |
+    | 🟡 MODERATE | Trend emerging | Monitor, may strengthen |
+    | 🔵 WATCH | Early signal | Too early to act, keep watching |
+    
+    **Signals tell you WHERE to look, not WHAT to buy.**
+    
+    ---
+    
+    ### Step 2: Check the Calendar
+    
+    Economics markets are **event-driven**. Key dates:
+    
+    | Event | Frequency | Why It Matters |
+    |-------|-----------|----------------|
+    | FOMC Meeting | 8x/year | Fed rate decisions move markets |
+    | CPI Release | Monthly | Inflation data, high volatility |
+    | Jobs Report | Monthly | Unemployment, payrolls |
+    | GDP Release | Quarterly | Growth data |
+    
+    **Best time to trade:** 1-3 days BEFORE release (when signals suggest mispricing)
+    
+    ---
+    
+    ### Step 3: Compare Signal to Market
+    
+    1. Click **"View on Kalshi"** link on any signal
+    2. Check the current market price
+    3. Ask: Does the market already reflect this data trend?
+    
+    **Example:**
+    - Signal says: "Claims rising 4 weeks → Unemployment ABOVE may have value"
+    - Kalshi shows: Unemployment ABOVE 4.2% priced at 35¢
+    - Your job: Decide if 35¢ is too cheap given the claims trend
+    
+    ---
+    
+    ### Step 4: Size Your Risk
+    
+    Economics markets have **unique risks:**
+    
+    - ⚠️ Binary outcomes (contracts go to $0 or $1)
+    - ⚠️ Institutional traders with better models
+    - ⚠️ Data revisions can flip outcomes
+    - ⚠️ "Whisper numbers" on Wall Street
+    
+    **Rule of thumb:** Never bet more than you'd lose on a coin flip
+    
+    ---
+    
+    ### What This App Does NOT Do
+    
+    ❌ Predict exact CPI/unemployment numbers  
+    ❌ Tell you to "BUY" or "SELL"  
+    ❌ Guarantee any edge exists  
+    ❌ Replace your own research  
+    
+    ---
+    
+    ### Workflow Summary
+    
+    ```
+    1. Check signals → See what FRED data suggests
+    2. Check calendar → Know when data releases
+    3. Check Kalshi → See current market prices
+    4. Compare → Is market ignoring the trend?
+    5. Decide → Your call, your risk
+    ```
+    
+    **This app compresses your research time. The decision is still yours.**
+    """)
+
+# ============================================================
+# FOOTER
 # ============================================================
 st.markdown("""
 <div style="text-align: center; color: #666; font-size: 0.75rem; padding: 20px;">
-    <p>Economic data provided by <strong>FRED®</strong>, Federal Reserve Bank of St. Louis</p>
-    <p><a href="https://fred.stlouisfed.org/" target="_blank">https://fred.stlouisfed.org/</a></p>
+    <p>Economic data from <strong>FRED®</strong>, Federal Reserve Bank of St. Louis</p>
+    <p><a href="https://fred.stlouisfed.org/">https://fred.stlouisfed.org/</a></p>
     <p style="margin-top: 10px;">© 2025 BigSnapshot | <a href="https://bigsnapshot.com">bigsnapshot.com</a></p>
 </div>
 """, unsafe_allow_html=True)
