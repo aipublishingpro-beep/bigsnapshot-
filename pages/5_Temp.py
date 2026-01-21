@@ -805,20 +805,22 @@ for r in ml_results:
     kalshi_url = build_kalshi_ml_url(r["away"], r["home"])
     reasons = " • ".join(r["reasons"])
     
-    pick_form = r["home_form"] if r["pick"] == r["home"] else r["away_form"]
-    opp_form = r["away_form"] if r["pick"] == r["home"] else r["home_form"]
+    # Fetch form directly here
+    pick_form = fetch_team_form(r["pick"])
+    opp_team = r["away"] if r["pick"] == r["home"] else r["home"]
+    opp_form = fetch_team_form(opp_team)
+    
     pick_form_color = get_form_color(pick_form)
     opp_form_color = get_form_color(opp_form)
     streak = get_form_streak(pick_form)
+    streak_html = f'<span style="color:#ff6600;margin-left:5px">{streak}</span>' if streak else ''
     
     st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:6px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {r['color']}">
     <div>
-        <b style="color:#fff">{r['pick']}</b> <span style="color:#666">vs {r['away'] if r['pick']==r['home'] else r['home']}</span> 
+        <b style="color:#fff">{r['pick']}</b> <span style="color:#666">vs {opp_team}</span> 
         <span style="color:#38bdf8">{r['score']}/10</span> 
-        <span style="color:{pick_form_color};font-weight:bold;font-family:monospace;margin-left:8px">{pick_form}</span>
-        <span style="color:#666">vs</span>
-        <span style="color:{opp_form_color};font-family:monospace">{opp_form}</span>
-        {f'<span style="color:#ff6600;margin-left:5px">{streak}</span>' if streak else ''}
+        <span style="background:#1e293b;padding:2px 6px;border-radius:4px;margin-left:8px"><span style="color:{pick_form_color};font-weight:bold;font-family:monospace">{pick_form}</span><span style="color:#666"> v </span><span style="color:{opp_form_color};font-family:monospace">{opp_form}</span></span>
+        {streak_html}
         <span style="color:#777;font-size:0.8em;margin-left:8px">{reasons}</span>
     </div>
     <a href="{kalshi_url}" target="_blank" style="background:#16a34a;color:#fff;padding:4px 10px;border-radius:5px;font-size:0.8em;text-decoration:none;font-weight:600">BUY {r['pick'][:3].upper()}</a>
