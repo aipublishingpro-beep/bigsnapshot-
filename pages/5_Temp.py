@@ -385,10 +385,17 @@ for idx, r in relevant:
             st.markdown(f"<span style='color:#ffaa00'>🟡 {edge:+.0f}¢</span>", unsafe_allow_html=True)
     
     with c5:
-        st.markdown(f"""<div style="display:flex;gap:4px;padding-top:2px">
-            <a href="{r['kalshi_url']}" target="_blank" class="buy-yes">BUY YES</a>
-            <a href="{r['kalshi_url']}" target="_blank" class="buy-no">BUY NO</a>
-        </div>""", unsafe_allow_html=True)
+        # Show ONE clear action based on edge
+        edge = r['model_prob'] * 100 - market_price
+        if edge >= 5:
+            # Model says higher prob than market → BUY YES
+            st.markdown(f"""<a href="{r['kalshi_url']}" target="_blank" class="buy-yes">BUY YES</a>""", unsafe_allow_html=True)
+        elif edge <= -5:
+            # Model says lower prob than market → BUY NO
+            st.markdown(f"""<a href="{r['kalshi_url']}" target="_blank" class="buy-no">BUY NO</a>""", unsafe_allow_html=True)
+        else:
+            # No clear edge
+            st.markdown(f"<span style='color:#666;font-size:0.8em'>—</span>", unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -396,15 +403,23 @@ st.markdown("---")
 
 # ========== RECOMMENDED SUMMARY ==========
 rec = results[recommended_idx]
+
+# Determine if YES or NO is the play based on model vs market
+# User enters market price, we compare to model
+# For now, recommend YES on highest probability bracket (model says this is most likely)
+rec_action = "YES"
+rec_color = "#00c853"
+rec_reasoning = "Model's highest probability bracket"
+
 st.markdown(f"""
 <div style="background:linear-gradient(135deg,#3d2800,#1a1200);border:2px solid #ff9500;border-radius:12px;padding:20px;text-align:center;margin:15px 0;box-shadow:0 0 30px rgba(255,149,0,0.3)">
     <div style="color:#ff9500;font-size:0.9em;margin-bottom:8px">⭐ TOP PICK — {city.upper()}</div>
     <div style="color:#fff;font-size:1.8em;font-weight:bold;margin-bottom:5px">{rec['label']}</div>
-    <div style="color:#ff9500;font-size:1.3em;font-weight:bold;margin-bottom:15px">{rec['model_prob']*100:.1f}% Probability</div>
-    <div style="display:flex;justify-content:center;gap:15px">
-        <a href="{rec['kalshi_url']}" target="_blank" style="background:#00c853;color:#000;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:1.1em">BUY YES</a>
-        <a href="{rec['kalshi_url']}" target="_blank" style="background:#ff4444;color:#fff;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:1.1em">BUY NO</a>
-    </div>
+    <div style="color:#ff9500;font-size:1.1em;margin-bottom:5px">{rec['model_prob']*100:.1f}% Model Probability</div>
+    <div style="color:#888;font-size:0.85em;margin-bottom:15px">{rec_reasoning}</div>
+    <a href="{rec['kalshi_url']}" target="_blank" style="background:{rec_color};color:#000;padding:14px 50px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:1.2em;display:inline-block">
+        🎯 BUY {rec_action}
+    </a>
 </div>
 """, unsafe_allow_html=True)
 
