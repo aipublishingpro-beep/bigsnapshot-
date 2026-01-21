@@ -335,55 +335,53 @@ signals = generate_edge_signals()
 
 if signals:
     for signal in signals:
-        # Determine card style based on strength
+        # Determine colors based on strength
         if signal['strength'] == "STRONG":
-            card_style = "background: linear-gradient(135deg, #3d1a1a 0%, #5a2d2d 100%); border: 2px solid #ff6b35; border-radius: 16px; padding: 24px; margin: 16px 0; box-shadow: 0 8px 32px rgba(255, 107, 53, 0.3);"
-            badge_style = "background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%); color: white; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 700;"
+            badge_color = "#ff6b35"
+            border_color = "#ff6b35"
         elif signal['strength'] == "MODERATE":
-            card_style = "background: linear-gradient(135deg, #3d3d1a 0%, #5a5a2d 100%); border: 2px solid #ffcc00; border-radius: 16px; padding: 24px; margin: 16px 0; box-shadow: 0 4px 20px rgba(255, 204, 0, 0.2);"
-            badge_style = "background: linear-gradient(135deg, #ffcc00 0%, #ffd93d 100%); color: black; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 700;"
+            badge_color = "#ffcc00"
+            border_color = "#ffcc00"
         else:
-            card_style = "background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border: 1px solid #4a9eff; border-radius: 16px; padding: 24px; margin: 16px 0;"
-            badge_style = "background: linear-gradient(135deg, #4a9eff 0%, #2d7dd2 100%); color: white; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 700;"
-        
-        # Build data points HTML
-        data_points_html = ""
-        for dp in signal['data_points']:
-            data_points_html += f'<div style="background: rgba(0, 0, 0, 0.3); border-radius: 8px; padding: 8px 12px; margin: 4px 0; font-family: monospace; color: #ccc;">📊 {dp}</div>'
+            badge_color = "#4a9eff"
+            border_color = "#4a9eff"
         
         # Get Kalshi link
         kalshi_link = KALSHI_MARKETS.get(signal['kalshi_market'], KALSHI_MARKETS['economics'])
         
-        # Get subtitle if exists
-        subtitle = signal.get('subtitle', '')
-        subtitle_html = f'<p style="color: {signal["color"]}; margin: 4px 0 0 0; font-size: 0.95rem; font-weight: 600;">→ {subtitle}</p>' if subtitle else ''
-        
-        st.markdown(f"""
-        <div style="{card_style}">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
-                <div>
-                    <span style="{badge_style}">{signal['strength']} SIGNAL</span>
-                    <h3 style="color: white; margin: 12px 0 4px 0;">{signal['title']}</h3>
-                    {subtitle_html}
-                    <p style="color: #888; margin: 8px 0 0 0; font-size: 0.85rem;">Market: <strong style="color: #fff;">{signal['market']}</strong></p>
-                </div>
-                <div style="text-align: right;">
-                    <p style="color: #888; margin: 0; font-size: 0.85rem;">Latest: <strong style="color: #fff;">{signal['latest_data']}</strong></p>
-                    <p style="color: #666; margin: 0; font-size: 0.75rem;">As of {signal['data_date']}</p>
-                </div>
+        # Create card container
+        with st.container():
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); 
+                        border: 2px solid {border_color}; border-radius: 16px; 
+                        padding: 24px; margin: 16px 0;">
+                <span style="background: {badge_color}; color: {'black' if signal['strength'] == 'MODERATE' else 'white'}; 
+                            padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 700;">
+                    {signal['strength']} SIGNAL
+                </span>
+                <h3 style="color: white; margin: 12px 0 4px 0;">{signal['title']}</h3>
+                <p style="color: {signal['color']}; margin: 4px 0 0 0; font-size: 0.95rem; font-weight: 600;">
+                    → {signal.get('subtitle', '')}
+                </p>
+                <p style="color: #888; margin: 8px 0 0 0; font-size: 0.85rem;">
+                    Market: <strong style="color: #fff;">{signal['market']}</strong> | 
+                    Latest: <strong style="color: #fff;">{signal['latest_data']}</strong>
+                    <span style="color: #666; font-size: 0.75rem;"> (as of {signal['data_date']})</span>
+                </p>
             </div>
+            """, unsafe_allow_html=True)
             
-            <div style="margin: 16px 0;">
-                {data_points_html}
-            </div>
+            # Data points using native Streamlit
+            for dp in signal['data_points']:
+                st.code(f"📊 {dp}", language=None)
             
-            <p style="color: #aaa; font-size: 0.9rem; margin: 12px 0; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid {signal['color']};">
-                💡 <strong>Implication:</strong> {signal['implication']}
-            </p>
+            # Implication
+            st.info(f"💡 **Implication:** {signal['implication']}")
             
-            <a href="{kalshi_link}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #4a9eff 0%, #2d7dd2 100%); color: white; padding: 10px 20px; border-radius: 8px; font-weight: 600; text-decoration: none; margin-top: 12px;">📈 View on Kalshi</a>
-        </div>
-        """, unsafe_allow_html=True)
+            # Kalshi link button
+            st.link_button("📈 View on Kalshi", kalshi_link)
+            
+            st.markdown("---")
 else:
     st.info("📊 No strong signals detected currently. Markets may be efficiently priced or trends unclear.")
 
