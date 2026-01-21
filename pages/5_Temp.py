@@ -330,81 +330,47 @@ st.divider()
 st.subheader("📖 How to Use Temp Edge Finder")
 
 with st.expander("🌡️ Reading the Forecast", expanded=False):
-    st.markdown("""
-**Data Sources:**
-- **NWS High/Low** = Official National Weather Service forecast
-- **Kalshi Markets** = Live prediction market prices
-
-**Orange Highlight:**
-- Orange bracket = Where NWS predicts temp will land
-- This is your target — buy YES on orange bracket for best edge
-
-**Best Practice:** NWS forecasts are updated multiple times daily. Check back before trading for the latest prediction.
-""")
+    st.markdown("**Data Sources:**")
+    st.markdown("- **NWS High/Low** = Official National Weather Service forecast")
+    st.markdown("- **Kalshi Markets** = Live prediction market prices")
+    st.markdown("**Orange Highlight:**")
+    st.markdown("- Orange bracket = Where NWS predicts temp will land")
+    st.markdown("- This is your target - buy YES on orange bracket for best edge")
+    st.markdown("**Best Practice:** NWS forecasts are updated multiple times daily. Check back before trading.")
 
 with st.expander("📊 Understanding the Markets", expanded=False):
-    st.markdown("""
-**Column Definitions:**
-- **Bracket** = Temperature range (e.g., 45° to 46°)
-- **Chance** = Market's implied probability (midpoint of bid/ask)
-- **Yes** = Cost to buy YES contract
-
-**Finding Edge:**
-- If NWS says 45°F and market shows 45-46° bracket at 30¢ → potential edge
-- Lower price + correct bracket = bigger profit
-- YES contract pays $1 if correct, so 30¢ buy = 70¢ profit
-
-**Risk Note:** Weather can change. NWS updates forecasts throughout the day.
-""")
+    st.markdown("**Column Definitions:**")
+    st.markdown("- **Bracket** = Temperature range (e.g., 45 to 46)")
+    st.markdown("- **Chance** = Market implied probability (midpoint of bid/ask)")
+    st.markdown("- **Yes** = Cost to buy YES contract")
+    st.markdown("**Finding Edge:**")
+    st.markdown("- If NWS says 45F and market shows 45-46 bracket at 30c = potential edge")
+    st.markdown("- Lower price + correct bracket = bigger profit")
+    st.markdown("- YES contract pays $1 if correct, so 30c buy = 70c profit")
 
 with st.expander("🏙️ Selecting Cities", expanded=False):
-    st.markdown("""
-**15 Cities Available:**
-Atlanta, Austin, Boston, Chicago, Dallas, Denver, Houston, Los Angeles, Miami, New York City, Philadelphia, Phoenix, San Francisco, Seattle, Washington DC
-
-**Set Default City:**
-- Click ⭐ "Set as Default" to remember your preferred city
-- URL will update with `?city=YourCity`
-
-**Pro Tip:** Check multiple cities — some have more volatile weather = bigger edges.
-""")
+    st.markdown("**15 Cities Available:** Atlanta, Austin, Boston, Chicago, Dallas, Denver, Houston, Los Angeles, Miami, New York City, Philadelphia, Phoenix, San Francisco, Seattle, Washington DC")
+    st.markdown("**Set Default City:** Click the star button to remember your preferred city")
+    st.markdown("**Pro Tip:** Check multiple cities - some have more volatile weather = bigger edges")
 
 with st.expander("📅 7-Day Edge Overview (Owner Only)", expanded=False):
-    st.markdown("""
-**What It Shows:**
-- Full week of NWS forecasts at a glance
-- Target brackets for each day
-- Market open status
-
-**Market Timing:**
-- 🟢 **OPEN** = Trade now
-- 🟢 **2AM** = Market opens tomorrow at 2AM ET
-- 🟡 **Xd** = Days until market opens
-
-**The Edge:** You see the NWS forecast BEFORE markets open. Position early for best prices.
-""")
+    st.markdown("**What It Shows:**")
+    st.markdown("- Full week of NWS forecasts at a glance")
+    st.markdown("- Target brackets for each day")
+    st.markdown("- Market open status")
+    st.markdown("**Market Timing:**")
+    st.markdown("- 🟢 OPEN = Trade now")
+    st.markdown("- 🟢 2AM = Market opens tomorrow at 2AM ET")
+    st.markdown("- 🟡 Xd = Days until market opens")
+    st.markdown("**The Edge:** You see the NWS forecast BEFORE markets open. Position early for best prices.")
 
 with st.expander("💡 Pro Tips", expanded=False):
-    st.markdown("""
-**Timing Your Trades:**
-- NWS updates forecasts ~4x daily
-- Best edge: Trade right after NWS update, before market adjusts
-- Check "Last NWS update" timestamp
-
-**Weather Volatility:**
-- Stable weather (Phoenix summer) = tighter brackets, less edge
-- Volatile weather (Denver, Chicago) = wider swings, bigger edge
-
-**Position Sizing:**
-- High confidence (forecast unchanged for 24h+) = larger position
-- Uncertain (forecast keeps changing) = smaller position
-
-**Multiple Cities:**
-- Scan all 15 cities for best opportunities
-- Some days have no edge — that's okay, wait for better setups
-""")
+    st.markdown("**Timing:** NWS updates forecasts ~4x daily. Trade right after update, before market adjusts.")
+    st.markdown("**Volatility:** Stable weather (Phoenix) = less edge. Volatile weather (Denver, Chicago) = bigger edge.")
+    st.markdown("**Sizing:** High confidence = larger position. Uncertain = smaller position.")
+    st.markdown("**Scan:** Check all 15 cities for best opportunities. No edge some days - wait for better setups.")
 
 # --- FOOTER ---
 st.divider()
 st.caption("⚠️ Entertainment only. Not financial advice. v3.1")
-st.caption("BigSnapshot.com | Temp Edge Finder
+st.caption("BigSnapshot.com | Temp Edge Finder")
