@@ -29,20 +29,46 @@ CITY_CONFIG = {
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
 def get_bracket_bounds(range_str):
+    """Parse temperature bracket from Kalshi subtitle - only match temp numbers with °"""
     tl = range_str.lower()
-    nums = re.findall(r'(\d+)', range_str)
     
-    if not nums:
-        return 0, 100
+    # Pattern: "<12°" or "be <12°"
+    below_match = re.search(r'<\s*(\d+)°', range_str)
+    if below_match:
+        return -999, int(below_match.group(1)) - 0.5
     
-    if "below" in tl or "under" in tl:
-        return -999, int(nums[0]) + 0.5
-    elif "above" in tl or "over" in tl:
-        return int(nums[0]) - 0.5, 999
-    elif len(nums) >= 2:
+    # Pattern: ">19°" or "be >19°"  
+    above_match = re.search(r'>\s*(\d+)°', range_str)
+    if above_match:
+        return int(above_match.group(1)) + 0.5, 999
+    
+    # Pattern: "16-17°" or "16° to 17°" or "16 to 17°"
+    range_match = re.search(r'(\d+)[-–]\s*(\d+)°|(\d+)°?\s*to\s*(\d+)°', range_str)
+    if range_match:
+        if range_match.group(1) and range_match.group(2):
+            low, high = int(range_match.group(1)), int(range_match.group(2))
+        else:
+            low, high = int(range_match.group(3)), int(range_match.group(4))
+        return low - 0.5, high + 0.5
+    
+    # Pattern: "32° or below" or "41° or above"
+    if "or below" in tl or "below" in tl:
+        nums = re.findall(r'(\d+)°', range_str)
+        if nums:
+            return -999, int(nums[0]) + 0.5
+    if "or above" in tl or "above" in tl:
+        nums = re.findall(r'(\d+)°', range_str)
+        if nums:
+            return int(nums[0]) - 0.5, 999
+    
+    # Fallback: only numbers with degree symbol
+    nums = re.findall(r'(\d+)°', range_str)
+    if len(nums) >= 2:
         return int(nums[0]) - 0.5, int(nums[1]) + 0.5
-    else:
+    elif nums:
         return int(nums[0]) - 0.5, int(nums[0]) + 0.5
+    
+    return 0, 100
 
 def temp_in_bracket(temp, range_str):
     """Check if temperature falls within bracket"""
@@ -70,11 +96,9 @@ def fetch_kalshi_brackets(series_ticker):
         
         brackets = []
         for m in today_markets:
-            # Use subtitle directly from Kalshi - it's already formatted correctly!
             range_txt = m.get("subtitle", "") or m.get("title", "")
             ticker = m.get("ticker", "")
             
-            # Calculate mid for sorting
             low, high = get_bracket_bounds(range_txt)
             if low == -999:
                 mid = high - 1
@@ -91,7 +115,7 @@ def fetch_kalshi_brackets(series_ticker):
                 yes_price = ya or yb or 0
             
             brackets.append({
-                "range": range_txt,  # Use Kalshi's exact text
+                "range": range_txt,
                 "mid": mid,
                 "yes": yes_price,
                 "ticker": ticker,
@@ -116,9 +140,7 @@ def fetch_nws_observations(station):
         if not observations:
             return None, None, None, []
         
-        # Get today's date in local timezone
         today = datetime.now(eastern).date()
-        
         temps = []
         readings = []
         
@@ -130,19 +152,14 @@ def fetch_nws_observations(station):
             if not timestamp_str or temp_c is None:
                 continue
             
-            # Parse timestamp
             try:
                 ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
                 ts_local = ts.astimezone(eastern)
                 
-                # Only include today's readings
                 if ts_local.date() == today:
                     temp_f = round(temp_c * 9/5 + 32, 1)
                     temps.append(temp_f)
-                    readings.append({
-                        "time": ts_local.strftime("%H:%M"),
-                        "temp": temp_f
-                    })
+                    readings.append({"time": ts_local.strftime("%H:%M"), "temp": temp_f})
             except:
                 continue
         
@@ -153,10 +170,38 @@ def fetch_nws_observations(station):
         low = min(temps)
         high = max(temps)
         
-        return current, low, high, readings[:12]  # Last 12 readings
+        return current, low, high, readings[:12]
         
-    except Exception as e:
+    except:
         return None, None, None, []
+
+@st.cache_data(ttl=300)
+def fetch_nws_forecast(lat, lon):
+    """Fetch NWS forecast for display"""
+    try:
+        # First get the forecast URL from points endpoint
+        points_url = f"https://api.weather.gov/points/{lat},{lon}"
+        resp = requests.get(points_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        
+        forecast_url = resp.json().get("properties", {}).get("forecast")
+        if not forecast_url:
+            return None
+        
+        # Fetch the actual forecast
+        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        
+        periods = resp.json().get("properties", {}).get("periods", [])
+        if not periods:
+            return None
+        
+        # Return first 4 periods (today/tonight/tomorrow/tomorrow night)
+        return periods[:4]
+    except:
+        return None
 
 def render_brackets_with_actual(brackets, actual_temp, temp_type):
     """Render brackets highlighting the actual winning bracket"""
@@ -164,7 +209,6 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
         st.error("Could not load brackets")
         return
     
-    # Find which bracket the actual temp falls into
     winning_bracket = None
     for b in brackets:
         if temp_in_bracket(actual_temp, b['range']):
@@ -178,16 +222,12 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
         is_winner = b['range'] == winning_bracket
         is_market_fav = b['range'] == market_fav['range']
         
-        # Calculate edge: if this is the actual winner, edge = 100 - kalshi price
         if is_winner:
-            edge = 100 - b['yes']
             box_style = "background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;box-shadow:0 0 15px rgba(245,158,11,0.4);border-radius:6px;padding:12px 14px;margin:8px 0"
             name_style = "color:#fbbf24;font-weight:700;font-size:1.05em"
-            edge_color = "#fbbf24"
             icon = " 🎯"
             model_txt = "ACTUAL"
         else:
-            edge = 0 - b['yes']  # Would lose full amount
             if is_market_fav:
                 box_style = "background:#1a1a2e;border:1px solid #4a4a6a;border-radius:6px;padding:10px 12px;margin:5px 0"
                 icon = " ⭐"
@@ -195,7 +235,6 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
                 box_style = "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
                 icon = ""
             name_style = "color:#e5e7eb;font-weight:500"
-            edge_color = "#6b7280"
             model_txt = "—"
         
         html = f'''<div style="{box_style}">
@@ -209,7 +248,6 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
         </div>'''
         st.markdown(html, unsafe_allow_html=True)
     
-    # Show actual temp and winning bracket
     if winning_bracket:
         winner_data = next((b for b in brackets if b['range'] == winning_bracket), None)
         if winner_data:
@@ -224,12 +262,6 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
             st.markdown(card, unsafe_allow_html=True)
 
 # ========== HEADER ==========
-st.markdown("""
-<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center">
-<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.0 (Actual Observations)</span>
-</div>
-""", unsafe_allow_html=True)
-
 st.title("🌡️ TEMP EDGE FINDER")
 st.caption(f"Live NWS Observations + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')}")
 
@@ -265,7 +297,6 @@ if current_temp:
     </div>
     """, unsafe_allow_html=True)
     
-    # Show recent readings
     if readings:
         with st.expander("📊 Recent Readings"):
             reading_text = " | ".join([f"{r['time']}: {r['temp']}°F" for r in readings[:8]])
@@ -279,20 +310,17 @@ col_high, col_low = st.columns(2)
 
 with col_high:
     st.subheader("☀️ HIGH TEMP")
-    
     hour = now.hour
     
     if obs_high:
         st.metric("📈 High So Far", f"{obs_high}°F")
-        
         brackets_high = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY"))
         
-        if hour >= 15:  # After 3 PM - HIGH is locked in
+        if hour >= 15:
             st.caption("✅ High likely locked in (after 3 PM)")
             render_brackets_with_actual(brackets_high, obs_high, "HIGH")
         else:
             st.caption(f"⏳ Too early — HIGH peaks 12-5 PM. Check back later.")
-            # Just show brackets without highlighting winner
             if brackets_high:
                 market_fav = max(brackets_high, key=lambda b: b['yes'])
                 st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
@@ -316,20 +344,17 @@ with col_high:
 
 with col_low:
     st.subheader("🌙 LOW TEMP")
-    
     hour = now.hour
     
     if obs_low:
         st.metric("📉 Today's Low", f"{obs_low}°F")
-        
         brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
         
-        if hour >= 8:  # After 8 AM - LOW is locked in
-            st.caption("✅ Low locked in (after 8 AM)")
+        if hour >= 6:  # LOW locks in by 6 AM
+            st.caption("✅ Low locked in (after 6 AM)")
             render_brackets_with_actual(brackets_low, obs_low, "LOW")
         else:
-            st.caption(f"⏳ Low may still drop (before 8 AM)")
-            # Just show brackets without highlighting winner
+            st.caption(f"⏳ Low may still drop (before 6 AM)")
             if brackets_low:
                 market_fav = max(brackets_low, key=lambda b: b['yes'])
                 st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
@@ -351,5 +376,42 @@ with col_low:
     else:
         st.error("Could not fetch observations")
 
+# ========== NWS FORECAST SECTION ==========
 st.markdown("---")
-st.caption("⚠️ Based on actual NWS observations. Not financial advice. v3.0")
+st.subheader("📡 NWS Forecast")
+
+forecast = fetch_nws_forecast(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
+if forecast:
+    fcols = st.columns(len(forecast))
+    for i, period in enumerate(forecast):
+        with fcols[i]:
+            name = period.get("name", "")
+            temp = period.get("temperature", "")
+            unit = period.get("temperatureUnit", "F")
+            short = period.get("shortForecast", "")
+            
+            # Color based on day/night
+            if "night" in name.lower() or "tonight" in name.lower():
+                bg = "#1a1a2e"
+                temp_color = "#3b82f6"
+            else:
+                bg = "#1f2937"
+                temp_color = "#ef4444"
+            
+            st.markdown(f"""
+            <div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center">
+                <div style="color:#9ca3af;font-size:0.8em;font-weight:600">{name}</div>
+                <div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div>
+                <div style="color:#6b7280;font-size:0.75em;margin-top:5px">{short}</div>
+            </div>
+            """, unsafe_allow_html=True)
+else:
+    st.caption("Could not load NWS forecast")
+
+st.markdown("---")
+st.markdown("""
+<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center">
+<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.1</span>
+</div>
+""", unsafe_allow_html=True)
+st.caption("⚠️ Based on actual NWS observations. Not financial advice. v3.1")
