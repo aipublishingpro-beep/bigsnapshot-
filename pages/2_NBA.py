@@ -631,11 +631,15 @@ if team_a and team_b and team_a != team_b:
         tier, color = get_signal_tier(score)
         form_a, form_b = last_5.get(team_a, {}).get('form', '-----'), last_5.get(team_b, {}).get('form', '-----')
         
+        # Highlight picked team in blue
+        away_color = color if pick == team_a else "#fff"
+        home_color = color if pick == team_b else "#fff"
+        
         st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:20px;border-radius:12px;border:2px solid {color};margin:15px 0">
             <div style="text-align:center;margin-bottom:15px">
-                <span style="font-size:1.8em;color:#fff;font-weight:bold">{KALSHI_CODES.get(team_a, '???')}</span>
+                <span style="font-size:1.8em;color:{away_color};font-weight:bold">{KALSHI_CODES.get(team_a, '???')}</span>
                 <span style="color:#888;margin:0 20px;font-size:1.4em">@</span>
-                <span style="font-size:1.8em;color:#fff;font-weight:bold">{KALSHI_CODES.get(team_b, '???')}</span>
+                <span style="font-size:1.8em;color:{home_color};font-weight:bold">{KALSHI_CODES.get(team_b, '???')}</span>
             </div>
             <div style="text-align:center">
                 <span style="color:{color};font-size:1.5em;font-weight:bold">{tier}</span>
