@@ -141,7 +141,6 @@ def fetch_nws_observations(station):
             return None, None, None, []
         
         today = datetime.now(eastern).date()
-        temps = []
         readings = []
         
         for obs in observations:
@@ -158,19 +157,26 @@ def fetch_nws_observations(station):
                 
                 if ts_local.date() == today:
                     temp_f = round(temp_c * 9/5 + 32, 1)
-                    temps.append(temp_f)
-                    readings.append({"time": ts_local.strftime("%H:%M"), "temp": temp_f})
+                    readings.append({"time": ts_local, "temp": temp_f})
             except:
                 continue
         
-        if not temps:
+        if not readings:
             return None, None, None, []
         
-        current = temps[0] if temps else None
-        low = min(temps)
-        high = max(temps)
+        readings.sort(key=lambda x: x["time"], reverse=True)
         
-        return current, low, high, readings[:12]
+        current = readings[0]["temp"]
+        low = min(r["temp"] for r in readings)
+        high = max(r["temp"] for r in readings)
+        
+        # format time only for display
+        display_readings = [
+            {"time": r["time"].strftime("%H:%M"), "temp": r["temp"]}
+            for r in readings[:12]
+        ]
+        
+        return current, low, high, display_readings
         
     except:
         return None, None, None, []
