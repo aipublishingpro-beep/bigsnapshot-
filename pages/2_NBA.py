@@ -166,7 +166,7 @@ with st.sidebar:
     st.header("🔗 KALSHI")
     st.caption("⚠️ NBA not on trade API yet")
     st.divider()
-    st.caption("v15.56 🛡️+2 SAFE")
+    st.caption("v15.57 🛡️+2 SAFE")
 
 def build_kalshi_ml_url(away_team, home_team):
     away_code = KALSHI_CODES.get(away_team, "xxx").upper()
@@ -429,7 +429,7 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # HEADER
 st.title("🏀 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.56")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.57")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
@@ -644,7 +644,6 @@ if cush_results:
         <div style="display:flex;gap:12px;align-items:center">
         <span style="color:#888">Total: <b style="color:#fff">{r['total']}</b></span>
         <span style="color:#888">Proj: <b style="color:#fff">{r['proj']}</b></span>
-        <span style="background:#ff6600;color:#000;padding:3px 10px;border-radius:5px;font-weight:bold">🎯 {cush_side} {r['safe_line']}</span>
         <span style="color:#00ff00;font-weight:bold">+{r['cushion']:.0f}</span>
         <span style="color:{pclr}">{r['pace']:.2f}/min</span>
         <span style="color:#888;font-size:0.8em">🛡️+2</span>
@@ -741,4 +740,4 @@ with st.expander("🔥 Pace Scanner — Game Flow", expanded=False):
 **🛡️+2 = Safety buffer.** We recommend 2 brackets above/below projection for extra margin.""")
 
 st.divider()
-st.caption("⚠️ Entertainment only. Not financial advice. v15.56")
+st.caption("⚠️ Entertainment only. Not financial advice. v15.57")
