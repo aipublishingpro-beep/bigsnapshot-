@@ -677,4 +677,3 @@ Click **BUY** buttons to go directly to Kalshi markets.
 
 st.divider()
 st.caption("⚠️ Educational only. Not financial advice. v1.0 NCAA EDGE")
-st.caption("📧 Contact: william@bigsnapshot.com")
