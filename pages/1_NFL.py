@@ -12,15 +12,11 @@ except ImportError:
 
 st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide")
 
-# ============================================================
-# AUTH CHECK
-# ============================================================
 if 'authenticated' not in st.session_state or not st.session_state.authenticated:
     st.warning("⚠️ Please log in from the Home page first.")
     st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
     st.stop()
 
-# ========== INIT ==========
 if "sid" not in st.session_state:
     st.session_state["sid"] = str(uuid.uuid4())
 if "last_ball_positions" not in st.session_state:
@@ -30,7 +26,6 @@ eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 today_str = now.strftime("%Y-%m-%d")
 
-# ========== HIDE STREAMLIT STUFF ==========
 st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
@@ -41,13 +36,11 @@ header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-# ========== GA4 TRACKING ==========
 st.markdown("""
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
 <script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
 """, unsafe_allow_html=True)
 
-# ========== NFL TEAM CODES ==========
 KALSHI_CODES = {
     "Kansas City Chiefs": "KC", "Buffalo Bills": "BUF", "Baltimore Ravens": "BAL",
     "Philadelphia Eagles": "PHI", "Detroit Lions": "DET", "San Francisco 49ers": "SF",
@@ -64,7 +57,6 @@ KALSHI_CODES = {
 
 TEAM_ABBR_TO_FULL = {v: k for k, v in KALSHI_CODES.items()}
 
-# ========== KALSHI MARKET FUNCTIONS ==========
 @st.cache_data(ttl=120)
 def fetch_kalshi_market(ticker):
     try:
@@ -115,37 +107,17 @@ def calc_market_pressure(ticker, pick_abbr, home_abbr):
     avg_older = sum(older_prices) / len(older_prices) if older_prices else 50
     
     price_move = avg_recent - avg_older
-    
     pick_is_home = pick_abbr == home_abbr
     
     if pick_is_home:
-        if price_move > 3:
-            return market, "CONFIRMING", "#00ff00"
-        elif price_move < -3:
-            return market, "FADING", "#ff4444"
-        else:
-            return market, "NEUTRAL", "#ffaa00"
+        if price_move > 3: return market, "CONFIRMING", "#00ff00"
+        elif price_move < -3: return market, "FADING", "#ff4444"
+        else: return market, "NEUTRAL", "#ffaa00"
     else:
-        if price_move < -3:
-            return market, "CONFIRMING", "#00ff00"
-        elif price_move > 3:
-            return market, "FADING", "#ff4444"
-        else:
-            return market, "NEUTRAL", "#ffaa00"
+        if price_move < -3: return market, "CONFIRMING", "#00ff00"
+        elif price_move > 3: return market, "FADING", "#ff4444"
+        else: return market, "NEUTRAL", "#ffaa00"
 
-@st.cache_data(ttl=300)
-def check_kalshi_market_exists(ticker):
-    try:
-        url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker.upper()}"
-        resp = requests.get(url, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            return data.get("market") is not None
-        return False
-    except:
-        return False
-
-# ========== ESPN NFL DATA ==========
 @st.cache_data(ttl=60)
 def fetch_nfl_games():
     try:
@@ -186,7 +158,7 @@ def fetch_nfl_games():
                 "game_date": game_date
             }
         return games
-    except Exception as e:
+    except:
         return {}
 
 @st.cache_data(ttl=300)
@@ -212,7 +184,6 @@ def fetch_nfl_injuries():
     except:
         return {}
 
-# ========== FOOTBALL FIELD ==========
 def draw_football_field(yard_line, possession_abbr, home_abbr, away_abbr, is_red_zone=False):
     if possession_abbr == home_abbr:
         ball_pos = 100 - yard_line
@@ -229,84 +200,35 @@ def draw_football_field(yard_line, possession_abbr, home_abbr, away_abbr, is_red
     </div>
     """
 
-# ========== SIDEBAR ==========
 with st.sidebar:
     st.page_link("Home.py", label="🏠 Home", use_container_width=True)
     st.divider()
-    
-    st.header("🎯 ML Signal Legend")
-    st.markdown("""
-    🟢 **STRONG BUY** → 8.0+
-    
-    🔵 **BUY** → 6.5-7.9
-    
-    🟡 **LEAN** → 5.5-6.4
-    
-    ⚪ **WEAK / NO EDGE** → Below 5.5
-    """)
-    
+    st.header("🔗 KALSHI")
+    st.caption("NFL Championship Markets")
     st.divider()
-    
-    st.header("📊 Market Pressure")
-    st.markdown("""
-    🟢 **CONFIRMING** → Market agrees
-    
-    🟡 **NEUTRAL** → No clear flow
-    
-    🔴 **FADING** → Market disagrees
-    """)
-    
-    st.divider()
-    
-    st.header("⚡ LiveState Legend")
-    st.markdown("""
-    🔴 **MAX** → 3-7¢ swings
-    
-    🟠 **ELEVATED** → 1-4¢ swings
-    
-    🟢 **NORMAL** → Stable pricing
-    """)
-    
-    st.divider()
-    
     st.header("⚙️ Settings")
     auto_refresh = st.checkbox("Auto-refresh (30s)", value=False, key="nfl_auto")
     if auto_refresh and HAS_AUTOREFRESH:
         st_autorefresh(interval=30000, key="nfl_refresh")
-    
     st.divider()
-    st.caption("v2.4.0 | 10-Factor ML + Market Pressure")
+    st.caption("v2.4.1")
 
-# ========== TITLE ==========
 st.title("🏈 NFL Edge Finder")
-st.caption(f"v2.4.0 | {now.strftime('%I:%M:%S %p ET')} | Conference Championships")
+st.caption(f"v2.4.1 | {now.strftime('%I:%M:%S %p ET')} | Conference Championships")
 
 games = fetch_nfl_games()
 injuries = fetch_nfl_injuries()
 
 st.divider()
 
-# ========== ML PICKS SECTION ==========
 st.subheader("🎯 ML PICKS")
 
 # NFC Championship
 nfc_ticker = "KXNFLGAME-26JAN26PHIWAS"
 nfc_market = fetch_kalshi_market(nfc_ticker)
 nfc_exists = nfc_market.get("exists", False)
-
 nfc_score = 7.5
-nfc_pick = "PHI"
-nfc_factors = ["📈", "🛡️", "⚔️", "🏆"]
-
-if nfc_score >= 8.0:
-    nfc_border = "#00ff00"
-elif nfc_score >= 6.5:
-    nfc_border = "#00aaff"
-elif nfc_score >= 5.5:
-    nfc_border = "#ffff00"
-else:
-    nfc_border = "#888888"
-
+nfc_border = "#00aaff"
 nfc_market_data, nfc_pressure, nfc_pressure_color = calc_market_pressure(nfc_ticker, "PHI", "WAS")
 nfc_price_info = f" | {nfc_market.get('yes_price', 0)}¢" if nfc_exists else ""
 
@@ -317,7 +239,6 @@ st.markdown(f"""
         <span style="font-weight: bold; color: white;">PHI</span>
         <span style="color: #888;"> @ WAS 🏠</span>
         <span style="color: {nfc_border}; font-weight: bold; margin-left: 8px;">{nfc_score}/10</span>
-        <span style="color: #888; font-size: 0.9em;"> {' '.join(nfc_factors)}</span>
         <span style="background: {nfc_pressure_color}22; color: {nfc_pressure_color}; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 8px;">{nfc_pressure}{nfc_price_info}</span>
     </div>
     <div>
@@ -342,7 +263,7 @@ with st.expander(f"📈 PHI @ WAS Line Movement", expanded=False):
         else:
             st.info("No price history available yet")
     else:
-        st.info("⏳ Market not live yet — typically opens 2-3 days before game")
+        st.info("⏳ Market not live yet")
 
 st.markdown("---")
 
@@ -350,20 +271,8 @@ st.markdown("---")
 afc_ticker = "KXNFLGAME-26JAN26BUFKC"
 afc_market = fetch_kalshi_market(afc_ticker)
 afc_exists = afc_market.get("exists", False)
-
 afc_score = 5.5
-afc_pick = "TOSS-UP"
-afc_factors = ["📈", "🛡️", "🏠", "🏆"]
-
-if afc_score >= 8.0:
-    afc_border = "#00ff00"
-elif afc_score >= 6.5:
-    afc_border = "#00aaff"
-elif afc_score >= 5.5:
-    afc_border = "#ffff00"
-else:
-    afc_border = "#888888"
-
+afc_border = "#ffff00"
 afc_market_data, afc_pressure, afc_pressure_color = calc_market_pressure(afc_ticker, "BUF", "KC")
 afc_price_info = f" | {afc_market.get('yes_price', 0)}¢" if afc_exists else ""
 
@@ -374,7 +283,7 @@ st.markdown(f"""
         <span style="font-weight: bold; color: white;">BUF</span>
         <span style="color: #888;"> @ KC 🏠</span>
         <span style="color: {afc_border}; font-weight: bold; margin-left: 8px;">{afc_score}/10</span>
-        <span style="color: #888; font-size: 0.9em;"> {' '.join(afc_factors)} ⚔️ TOSS-UP</span>
+        <span style="color: #888; font-size: 0.9em;"> ⚔️ TOSS-UP</span>
         <span style="background: {afc_pressure_color}22; color: {afc_pressure_color}; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 8px;">{afc_pressure}{afc_price_info}</span>
     </div>
     <div style="display: flex; gap: 8px;">
@@ -400,9 +309,8 @@ with st.expander(f"📈 BUF @ KC Line Movement", expanded=False):
         else:
             st.info("No price history available yet")
     else:
-        st.info("⏳ Market not live yet — typically opens 2-3 days before game")
+        st.info("⏳ Market not live yet")
 
-# ========== SUPER BOWL INFO ==========
 st.divider()
 st.markdown("""
 <div style="background:linear-gradient(135deg,#4a1942,#2d132c);border-radius:12px;padding:20px;text-align:center;border:1px solid #801336">
@@ -413,7 +321,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ========== LIVESTATE TRACKER ==========
 st.divider()
 st.subheader("📡 LIVESTATE TRACKER")
 
@@ -428,23 +335,22 @@ final_games = {k: v for k, v in games.items()
 if live_games:
     st.success(f"🔴 {len(live_games)} LIVE GAME(S)")
     for gid, g in live_games.items():
-        with st.container():
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.markdown(f"**{g['away_team']}** {g['away_score']} @ **{g['home_team']}** 🏠 {g['home_score']}")
-                st.caption(f"Q{g['period']} {g['clock']} | Total: {g['total']} pts")
-                if g['down'] > 0:
-                    st.caption(f"📍 {g['down']} & {g['distance']} at {g['yard_line']} yd line")
-            with col2:
-                if g['is_red_zone']:
-                    st.error("🔴 RED ZONE")
-            
-            poss_abbr = g.get('possession', g['home_abbr'])
-            st.markdown(draw_football_field(g['yard_line'], poss_abbr, g['home_abbr'], g['away_abbr'], g['is_red_zone']), unsafe_allow_html=True)
-            st.divider()
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"**{g['away_team']}** {g['away_score']} @ **{g['home_team']}** 🏠 {g['home_score']}")
+            st.caption(f"Q{g['period']} {g['clock']} | Total: {g['total']} pts")
+            if g['down'] > 0:
+                st.caption(f"📍 {g['down']} & {g['distance']} at {g['yard_line']} yd line")
+        with col2:
+            if g['is_red_zone']:
+                st.error("🔴 RED ZONE")
+        
+        poss_abbr = g.get('possession', g['home_abbr'])
+        st.markdown(draw_football_field(g['yard_line'], poss_abbr, g['home_abbr'], g['away_abbr'], g['is_red_zone']), unsafe_allow_html=True)
+        st.divider()
 else:
     st.info("🕐 No live games right now — Conference Championships are Sunday, Jan 26")
-    st.caption("Sample field visualization (active during live games):")
+    st.caption("Sample field visualization:")
     st.markdown(draw_football_field(35, "BUF", "KC", "BUF", False), unsafe_allow_html=True)
 
 if final_games:
@@ -453,7 +359,6 @@ if final_games:
         winner = g['away_team'] if g['away_score'] > g['home_score'] else g['home_team']
         st.markdown(f"**{g['away_team']}** {g['away_score']} @ **{g['home_team']}** 🏠 {g['home_score']} — **{winner} WIN**")
 
-# ========== INJURY REPORT ==========
 st.divider()
 st.subheader("🏥 CHAMPIONSHIP TEAM INJURIES")
 
@@ -470,110 +375,5 @@ for i, team in enumerate(champ_teams):
         else:
             st.caption("✅ No major injuries")
 
-# ========== HOW TO USE ==========
 st.divider()
-st.subheader("📖 How to Use NFL Edge Finder")
-
-with st.expander("🎯 ML Picks — Moneyline Strategy", expanded=False):
-    st.markdown("""
-    **What it does:** Analyzes 10 factors to find moneyline value on Kalshi NFL markets.
-    
-    **The 10 Factors:**
-    - 🏠 **Home Field** — Stadium advantage and crowd noise
-    - 😴 **Rest Days** — Short week vs long week edge
-    - 📈 **DVOA Differential** — Football Outsiders efficiency gap
-    - 🛡️ **Defensive Rank** — Points allowed and DVOA defense
-    - 🚑 **Injury Impact** — Key player availability weighted by position
-    - 🌡️ **Weather** — Cold, wind, precipitation effects
-    - 🔥 **Momentum** — Recent form and win streaks
-    - 🏆 **Playoff Experience** — QB playoff record and big-game history
-    - ⚔️ **H2H History** — Recent head-to-head results
-    - 💰 **Public Money** — Sharp vs public betting splits
-    
-    **Signal Tiers:**
-    - 🟢 **STRONG BUY (8.0+)** — Multiple factors aligned, high confidence
-    - 🔵 **BUY (6.5-7.9)** — Good edge, worth sizing up
-    - 🟡 **LEAN (5.5-6.4)** — Slight edge or toss-up
-    - ⚪ **WEAK (<5.5)** — No clear edge, pass
-    
-    **Market Pressure:**
-    - 🟢 **CONFIRMING** — Kalshi price moving toward our pick
-    - 🟡 **NEUTRAL** — No clear money flow
-    - 🔴 **FADING** — Market disagrees (caution or contrarian opportunity)
-    
-    **Best Practice:** Wait for 🟢 STRONG BUY + 🟢 CONFIRMING for highest conviction plays.
-    """)
-
-with st.expander("📡 LiveState Tracker — Live Game Volatility", expanded=False):
-    st.markdown("""
-    **What it does:** Monitors live game situations to identify high-volatility trading moments.
-    
-    **LiveState Levels:**
-    - 🔴 **MAX** — Red zone, 2-minute drill, 4th down (3-7¢ price swings)
-    - 🟠 **ELEVATED** — Close game, momentum shift (1-4¢ swings)
-    - 🟢 **NORMAL** — Standard game flow, stable pricing
-    
-    **How to use:**
-    - MAX volatility = best time to enter/exit positions
-    - Field visualization shows ball position and red zone status
-    - Down & distance helps predict next play impact
-    
-    **Pro tip:** Price spikes happen BEFORE touchdowns are scored — watch red zone entries.
-    """)
-
-with st.expander("🏥 Injury Report — Impact Analysis", expanded=False):
-    st.markdown("""
-    **What it does:** Shows key injuries for championship teams weighted by position impact.
-    
-    **Position Impact Tiers:**
-    - **QB** — Massive impact (can swing line 10+ points)
-    - **Edge/CB/WR1** — Significant impact (2-5 point swing)
-    - **RB/TE/LB** — Moderate impact (1-3 point swing)
-    - **OL/Depth** — Minor impact unless multiple injuries
-    
-    **Status Codes:**
-    - 🔴 **OUT** — Confirmed not playing
-    - 🟡 **QUESTIONABLE** — Game-time decision (50/50)
-    - 🟡 **DOUBTFUL** — Likely out (75% chance)
-    
-    **How ML Picks use injuries:** Star player OUT adds major weight to opposing team.
-    """)
-
-with st.expander("📈 Line Movement Charts — Market Analysis", expanded=False):
-    st.markdown("""
-    **What it does:** Shows Kalshi price history to identify market direction.
-    
-    **How to read:**
-    - Rising YES price = Market favoring home team
-    - Falling YES price = Market favoring away team
-    - Flat line = No consensus, wait for clarity
-    
-    **Volume & Open Interest:**
-    - High volume = Active trading, liquid market
-    - High OI = Large positions held, potential for big moves
-    
-    **Strategy:**
-    - Buy when model score is HIGH but price is LOW (value)
-    - Fade when model score is LOW but price is HIGH (overpriced)
-    """)
-
-with st.expander("⚙️ Market Status — When to Trade", expanded=False):
-    st.markdown("""
-    **Market Status Indicators:**
-    - ✅ **Market LIVE** — Click to trade on Kalshi immediately
-    - ⏳ **PENDING** — Market not live yet (typically opens 2-3 days before game)
-    
-    **Best Trading Windows:**
-    - **Early week** — Lines are soft, value available
-    - **48 hours before** — Sharp money starts moving
-    - **Game day** — Highest volume, tightest spreads
-    - **Live in-game** — MAX volatility, biggest swings
-    
-    **Kalshi NFL Ticker Format:** `KXNFLGAME-{DATE}{AWAY}{HOME}`
-    
-    Example: `KXNFLGAME-26JAN26BUFKC` = Bills @ Chiefs on Jan 26
-    """)
-
-st.divider()
-
-st.caption("⚠️ For entertainment only. Not financial advice. v2.4.0 | 10-Factor ML + Market Pressure")
+st.caption("⚠️ Entertainment only. Not financial advice. v2.4.1")
