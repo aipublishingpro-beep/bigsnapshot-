@@ -306,12 +306,13 @@ if current_temp:
                     low_reversal_idx = i
                     break
             
-            # Find HIGH reversal (temp higher than both neighbors)
+            # Find HIGH reversal (temp higher than both neighbors) - only after noon
             high_reversal_idx = None
-            for i in range(1, len(readings) - 1):
-                if readings[i]['temp'] > readings[i-1]['temp'] and readings[i]['temp'] > readings[i+1]['temp']:
-                    high_reversal_idx = i
-                    break
+            if now.hour >= 12:
+                for i in range(1, len(readings) - 1):
+                    if readings[i]['temp'] > readings[i-1]['temp'] and readings[i]['temp'] > readings[i+1]['temp']:
+                        high_reversal_idx = i
+                        break
             
             for i, r in enumerate(readings[:8]):
                 # Highlight LOW reversal in orange
