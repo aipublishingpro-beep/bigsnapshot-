@@ -229,13 +229,29 @@ def fetch_nfl_news():
 
 @st.cache_data(ttl=60)
 def fetch_nfl_scoreboard():
+    # Try current week first, then fetch by date range for upcoming games
     url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
         games = []
-        week_info = data.get("week", {}).get("text", "")
+        week_info = data.get("week", {}).get("text", "Week")
         season_type = data.get("season", {}).get("type", {}).get("name", "")
+        
+        # If no events, try fetching next 7 days
+        if not data.get("events"):
+            for days_ahead in range(1, 8):
+                future_date = (datetime.now(eastern) + timedelta(days=days_ahead)).strftime('%Y%m%d')
+                url2 = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={future_date}"
+                try:
+                    resp2 = requests.get(url2, timeout=5)
+                    data2 = resp2.json()
+                    if data2.get("events"):
+                        data = data2
+                        week_info = data2.get("week", {}).get("text", "Upcoming")
+                        break
+                except:
+                    continue
         
         for event in data.get("events", []):
             comp = event.get("competitions", [{}])[0]
@@ -448,25 +464,67 @@ injuries = fetch_nfl_injuries()
 st.divider()
 
 # ============================================================
-# 🏆 SUPER BOWL / PLAYOFFS INFO
+# 🏆 PLAYOFFS & SUPER BOWL INFO
 # ============================================================
-if season_type in ["Post Season", "Off Season"]:
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 15px 20px; border-radius: 10px; border-left: 4px solid #ffd700; margin-bottom: 20px;">
-        <span style="font-size: 1.3em; font-weight: bold; color: #ffd700;">🏆 SUPER BOWL LIX</span><br>
-        <span style="color: #ccc;">February 9, 2025 • Caesars Superdome, New Orleans</span><br>
-        <span style="color: #888; font-size: 0.9em;">AFC vs NFC Championship Winners</span>
+st.markdown("""
+<div style="background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 18px 22px; border-radius: 12px; border-left: 5px solid #ffd700; margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+        <div>
+            <span style="font-size: 1.4em; font-weight: bold; color: #ffd700;">🏆 SUPER BOWL LIX</span><br>
+            <span style="color: #fff; font-size: 1.1em;">February 9, 2025</span><br>
+            <span style="color: #aaa;">Caesars Superdome • New Orleans, LA</span>
+        </div>
+        <div style="text-align: right;">
+            <span style="color: #888; font-size: 0.9em;">CONFERENCE CHAMPIONSHIPS</span><br>
+            <span style="color: #fff;">January 26, 2025</span><br>
+            <span style="color: #aaa;">AFC & NFC Title Games</span>
+        </div>
     </div>
-    """, unsafe_allow_html=True)
-else:
-    # Show playoff picture during regular season
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #0f172a, #1e293b); padding: 12px 18px; border-radius: 8px; margin-bottom: 15px;">
-        <span style="font-weight: bold; color: #ffd700;">🏆 PLAYOFF PICTURE</span>
-        <span style="color: #888; margin-left: 15px;">AFC: KC, BUF, BAL, HOU, LAC, PIT, DEN</span>
-        <span style="color: #888; margin-left: 15px;">NFC: DET, PHI, MIN, LAR, TB, WAS, GB</span>
+</div>
+""", unsafe_allow_html=True)
+
+# Playoff Bracket
+st.markdown("""
+<div style="background: #0f172a; padding: 15px 20px; border-radius: 10px; margin-bottom: 15px;">
+    <div style="font-weight: bold; color: #3b82f6; margin-bottom: 10px;">🔵 AFC PLAYOFF BRACKET</div>
+    <div style="display: flex; gap: 20px; flex-wrap: wrap; color: #ccc; font-size: 0.95em;">
+        <div><span style="color: #ffd700;">1.</span> KC (15-2) — BYE</div>
+        <div><span style="color: #c0c0c0;">2.</span> BUF (13-4) — BYE</div>
+        <div><span style="color: #cd7f32;">3.</span> BAL (12-5)</div>
+        <div>4. HOU (10-7)</div>
+        <div>5. LAC (11-6)</div>
+        <div>6. PIT (10-7)</div>
+        <div>7. DEN (10-7)</div>
     </div>
-    """, unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div style="background: #0f172a; padding: 15px 20px; border-radius: 10px; margin-bottom: 15px;">
+    <div style="font-weight: bold; color: #ef4444; margin-bottom: 10px;">🔴 NFC PLAYOFF BRACKET</div>
+    <div style="display: flex; gap: 20px; flex-wrap: wrap; color: #ccc; font-size: 0.95em;">
+        <div><span style="color: #ffd700;">1.</span> DET (15-2) — BYE</div>
+        <div><span style="color: #c0c0c0;">2.</span> PHI (14-3) — BYE</div>
+        <div><span style="color: #cd7f32;">3.</span> MIN (14-3)</div>
+        <div>4. LAR (10-7)</div>
+        <div>5. TB (10-7)</div>
+        <div>6. WAS (12-5)</div>
+        <div>7. GB (11-6)</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Key Dates
+st.markdown("""
+<div style="background: #1e293b; padding: 12px 18px; border-radius: 8px; margin-bottom: 15px;">
+    <span style="font-weight: bold; color: #fff;">📅 KEY DATES</span>
+    <span style="color: #888; margin-left: 20px;">Wild Card: Jan 11-13</span>
+    <span style="color: #888; margin-left: 15px;">Divisional: Jan 18-19</span>
+    <span style="color: #888; margin-left: 15px;">Conf Champ: Jan 26</span>
+    <span style="color: #888; margin-left: 15px;">Pro Bowl: Feb 2</span>
+    <span style="color: #ffd700; margin-left: 15px; font-weight: bold;">Super Bowl: Feb 9</span>
+</div>
+""", unsafe_allow_html=True)
 
 # ============================================================
 # 📰 BREAKING NEWS
@@ -577,7 +635,32 @@ if games:
             for r in tossups:
                 st.caption(f"{r['away_abbr']} @ {r['home_abbr']} — No clear edge")
 else:
-    st.info("No games scheduled. Check back closer to game day!")
+    st.info("No games scheduled for today. Showing upcoming week preview.")
+    
+    # Show Power Rankings when no games
+    st.markdown("### 🏆 POWER RANKINGS")
+    sorted_teams = sorted(TEAM_STATS.items(), key=lambda x: x[1].get('rank', 99))
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("**TOP 10**")
+        for abbr, stats in sorted_teams[:10]:
+            rank = stats.get('rank', 99)
+            form_html = format_form(stats.get('form', ''))
+            st.markdown(f"{rank}. **{abbr}** ({stats.get('record', '')}) {form_html}", unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("**MIDDLE 12**")
+        for abbr, stats in sorted_teams[10:22]:
+            rank = stats.get('rank', 99)
+            st.markdown(f"{rank}. **{abbr}** ({stats.get('record', '')})", unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("**BOTTOM 10**")
+        for abbr, stats in sorted_teams[22:]:
+            rank = stats.get('rank', 99)
+            form_html = format_form(stats.get('form', ''))
+            st.markdown(f"{rank}. **{abbr}** ({stats.get('record', '')}) {form_html}", unsafe_allow_html=True)
 
 st.divider()
 
@@ -623,7 +706,30 @@ if games:
             </div>
             """, unsafe_allow_html=True)
 else:
-    st.info("No games scheduled")
+    st.info("No games today. NFL games typically on Sun/Mon/Thu.")
+    
+    # Show division standings as fallback
+    st.markdown("### 🏈 DIVISION STANDINGS")
+    DIVISIONS = {
+        "AFC East": ["BUF", "MIA", "NYJ", "NE"],
+        "AFC North": ["BAL", "PIT", "CIN", "CLE"],
+        "AFC South": ["HOU", "IND", "JAX", "TEN"],
+        "AFC West": ["KC", "LAC", "DEN", "LV"],
+        "NFC East": ["PHI", "WAS", "DAL", "NYG"],
+        "NFC North": ["DET", "MIN", "GB", "CHI"],
+        "NFC South": ["TB", "ATL", "NO", "CAR"],
+        "NFC West": ["LAR", "SEA", "SF", "ARI"]
+    }
+    
+    cols = st.columns(4)
+    for idx, (div_name, teams) in enumerate(DIVISIONS.items()):
+        with cols[idx % 4]:
+            st.markdown(f"**{div_name}**")
+            sorted_div = sorted(teams, key=lambda t: TEAM_STATS.get(t, {}).get('rank', 99))
+            for team in sorted_div:
+                record = TEAM_STATS.get(team, {}).get('record', '')
+                form = format_form(TEAM_STATS.get(team, {}).get('form', ''))
+                st.markdown(f"{team} ({record}) {form}", unsafe_allow_html=True)
 
 st.divider()
 
@@ -632,15 +738,8 @@ st.divider()
 # ============================================================
 st.subheader("🏥 INJURY REPORT")
 
-teams_playing = set()
-for g in games:
-    if g["home"].get("abbr"):
-        teams_playing.add(g["home"]["abbr"])
-    if g["away"].get("abbr"):
-        teams_playing.add(g["away"]["abbr"])
-
-if not teams_playing:
-    teams_playing = set(TEAM_STATS.keys())
+# Always show injuries for all 32 teams
+teams_playing = set(TEAM_STATS.keys())
 
 injury_shown = False
 cols = st.columns(4)
