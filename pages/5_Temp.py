@@ -461,12 +461,16 @@ with st.expander("❓ How to Use This App"):
     
     **↩️ Reversal Point (Orange Highlight)**
     
-    In "Recent NWS Observations", we highlight the **reversal point** — the exact moment temps bottomed out and started climbing back up. Example:
-    
-    • 07:51 → 19.0°F (warming up)
-    • 06:51 → 17.1°F ↩️ REVERSAL (lowest point)
-    • 05:51 → 18.0°F (was cooling down)
-    
+    In "Recent NWS Observations", we highlight the **reversal point** — the exact moment temps bottomed out and started climbing back up:
+    """)
+    st.markdown("""
+    <div style="background:#161b22;border-radius:6px;padding:10px;margin:10px 0">
+        <div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"><span style="color:#9ca3af">07:51</span><span style="color:#fff">19.0°F (warming up)</span></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"><span style="color:#fbbf24;font-weight:600">06:51</span><span style="color:#fbbf24;font-weight:700">17.1°F ↩️ REVERSAL</span></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"><span style="color:#9ca3af">05:51</span><span style="color:#fff">18.0°F (cooling down)</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("""
     When you see a reversal, it confirms the LOW is locked in. The temperature hit bottom and reversed direction — it's not going lower.
     
     **🎯 Reading the Display**
