@@ -310,11 +310,30 @@ def get_signal_tier(score):
     else:
         return "⚪ PASS", "#666666", False
 
+@st.cache_data(ttl=1800)
+def fetch_cbb_news():
+    """Fetch college basketball news from ESPN"""
+    url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/news?limit=5"
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        articles = []
+        for article in data.get("articles", [])[:5]:
+            articles.append({
+                "headline": article.get("headline", ""),
+                "description": article.get("description", "")[:100] + "..." if article.get("description") else "",
+                "link": article.get("links", {}).get("web", {}).get("href", "")
+            })
+        return articles
+    except:
+        return []
+
 # FETCH DATA
 games = fetch_espn_ncaa_scores()
 game_list = sorted(list(games.keys()))
 yesterday_teams = fetch_yesterday_teams()
 rankings = fetch_ap_rankings()
+news = fetch_cbb_news()
 now = datetime.now(eastern)
 
 # Filter yesterday teams to only include today's teams
@@ -371,6 +390,57 @@ with col3:
     st.metric("B2B Teams", len(yesterday_teams))
 
 st.divider()
+
+# 📰 BREAKING NEWS
+if news:
+    st.subheader("📰 BREAKING NEWS")
+    for article in news[:3]:
+        if article.get("headline"):
+            link = article.get("link", "#")
+            st.markdown(f"""<div style="background:#0f172a;padding:10px 12px;border-radius:6px;margin-bottom:6px;border-left:3px solid #38bdf8">
+                <a href="{link}" target="_blank" style="color:#fff;text-decoration:none;font-weight:bold;font-size:0.95em">{escape_html(article['headline'])}</a>
+                <div style="color:#666;font-size:0.8em;margin-top:4px">{escape_html(article.get('description', ''))}</div>
+            </div>""", unsafe_allow_html=True)
+    st.divider()
+
+# 🔥 MARQUEE MATCHUPS (Ranked vs Ranked)
+marquee = [g for g in games.values() if g['home_rank'] > 0 and g['away_rank'] > 0]
+if marquee:
+    st.subheader("🔥 MARQUEE MATCHUPS")
+    st.caption("Ranked vs Ranked — Must-watch games")
+    for g in sorted(marquee, key=lambda x: x['home_rank'] + x['away_rank']):
+        kalshi_url = build_kalshi_ncaa_url(g['away_abbrev'], g['home_abbrev'])
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#1a2a1a,#0a1a0a);padding:12px;border-radius:8px;border:2px solid #00ff00;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <div>
+                    <span style="color:#ffaa00;font-weight:bold">#{g['away_rank']}</span> <b style="color:#fff">{escape_html(g['away_abbrev'])}</b>
+                    <span style="color:#888"> @ </span>
+                    <span style="color:#ffaa00;font-weight:bold">#{g['home_rank']}</span> <b style="color:#fff">{escape_html(g['home_abbrev'])}</b>
+                </div>
+                <a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:4px 12px;border-radius:4px;font-size:0.8em;font-weight:bold;text-decoration:none">BUY</a>
+            </div>
+            <div style="color:#888;font-size:0.8em;margin-top:6px">🏆 {escape_html(g.get('away_record', ''))} vs {escape_html(g.get('home_record', ''))}</div>
+        </div>""", unsafe_allow_html=True)
+    st.divider()
+
+# ⚠️ UPSET WATCH (Unranked home vs Ranked road)
+upset_watch = [g for g in games.values() if g['away_rank'] > 0 and g['home_rank'] == 0]
+if upset_watch:
+    st.subheader("⚠️ UPSET WATCH")
+    st.caption("Ranked teams on the road — Upset potential")
+    for g in sorted(upset_watch, key=lambda x: x['away_rank']):
+        kalshi_url = build_kalshi_ncaa_url(g['away_abbrev'], g['home_abbrev'])
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#2a1a1a,#1a0a0a);padding:10px 12px;border-radius:6px;border-left:3px solid #ff6666;margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <div>
+                    <span style="color:#ff6666;font-weight:bold">#{g['away_rank']}</span> <b style="color:#fff">{escape_html(g['away_abbrev'])}</b>
+                    <span style="color:#888"> @ </span>
+                    <b style="color:#fff">{escape_html(g['home_abbrev'])}</b> <span style="color:#ff6666;font-size:0.8em">🏠</span>
+                </div>
+                <a href="{kalshi_url}" target="_blank" style="background:#ff6666;color:#000;padding:4px 10px;border-radius:4px;font-size:0.75em;font-weight:bold;text-decoration:none">WATCH</a>
+            </div>
+        </div>""", unsafe_allow_html=True)
+    st.divider()
 
 # LIVE GAMES
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
