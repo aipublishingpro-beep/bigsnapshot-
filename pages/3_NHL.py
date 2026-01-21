@@ -301,7 +301,7 @@ with st.sidebar:
     st.divider()
     
     st.header("🔗 KALSHI")
-    st.markdown("[NHL Markets](https://kalshi.com/?search=nhl)")
+    st.markdown('<a href="https://kalshi.com/?search=nhl" target="_blank" style="color: #00aaff;">NHL Markets ↗</a>', unsafe_allow_html=True)
     st.divider()
     st.caption(f"v{VERSION}")
 
