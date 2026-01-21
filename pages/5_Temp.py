@@ -299,21 +299,33 @@ if current_temp:
     
     if readings:
         with st.expander("📊 Recent NWS Observations"):
-            # Find reversal point (LOW: temp lower than both neighbors)
-            reversal_idx = None
+            # Find LOW reversal (temp lower than both neighbors)
+            low_reversal_idx = None
             for i in range(1, len(readings) - 1):
-                # readings are newest first, so check if this is lower than both neighbors
                 if readings[i]['temp'] < readings[i-1]['temp'] and readings[i]['temp'] < readings[i+1]['temp']:
-                    reversal_idx = i
+                    low_reversal_idx = i
+                    break
+            
+            # Find HIGH reversal (temp higher than both neighbors)
+            high_reversal_idx = None
+            for i in range(1, len(readings) - 1):
+                if readings[i]['temp'] > readings[i-1]['temp'] and readings[i]['temp'] > readings[i+1]['temp']:
+                    high_reversal_idx = i
                     break
             
             for i, r in enumerate(readings[:8]):
-                # Highlight the reversal point in orange
-                if i == reversal_idx:
+                # Highlight LOW reversal in orange
+                if i == low_reversal_idx:
                     row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
                     time_style = "color:#fbbf24;font-weight:600"
                     temp_style = "color:#fbbf24;font-weight:700"
-                    label = " ↩️ REVERSAL"
+                    label = " ↩️ LOW"
+                # Highlight HIGH reversal in red
+                elif i == high_reversal_idx:
+                    row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d0a0a,#1a0808);border:1px solid #ef4444;margin:2px 0"
+                    time_style = "color:#f87171;font-weight:600"
+                    temp_style = "color:#f87171;font-weight:700"
+                    label = " ↩️ HIGH"
                 else:
                     row_style = "display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #30363d"
                     time_style = "color:#9ca3af"
@@ -454,10 +466,20 @@ with st.expander("❓ How to Use This App"):
     
     Compares actual NWS temperature observations against Kalshi prediction market prices to find edge opportunities.
     
-    **⏰ Timing Windows**
+    **⏰ When to Check**
     
-    • **LOW Temperature**: Locks in by ~6 AM. The overnight low is set — it only warms up from there.
-    • **HIGH Temperature**: Locks in by ~3 PM. Peak heat typically occurs 12-5 PM.
+    • **LOW Temperature**: Usually bottoms out between 4-7 AM. Look for the ↩️ REVERSAL in observations — that confirms the low is set.
+    • **HIGH Temperature**: Usually peaks between 12-5 PM. Once you see temps dropping after the peak, the high is locked.
+    
+    The app highlights the reversal point when detected — that's your confirmation.
+    
+    **🧠 Philosophy**
+    
+    This app doesn't predict. It shows you what's already happened so you can avoid bad trades.
+    
+    • No reversal yet? Don't bet — the low/high isn't confirmed.
+    • See a reversal + market mispriced? Now you have information the market hasn't processed.
+    • No edge visible? Skip it. Discipline is edge.
     
     **↩️ Reversal Point (Orange Highlight)**
     
