@@ -28,40 +28,6 @@ CITY_CONFIG = {
 
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
-def extract_range_text(market):
-    subtitle = market.get("subtitle", "")
-    title = market.get("title", "")
-    txt = title + " " + subtitle
-    
-    range_hyphen = re.search(r'(\d+)\s*-\s*(\d+)', txt)
-    range_to = re.search(r'(\d+)\s*to\s*(\d+)', txt, re.IGNORECASE)
-    
-    if range_hyphen:
-        return f"{range_hyphen.group(1)}° to {range_hyphen.group(2)}°"
-    if range_to:
-        return f"{range_to.group(1)}° to {range_to.group(2)}°"
-    
-    below_pattern = re.search(r'[<≤]\s*(\d+)|(\d+)\s*or\s*below|below\s*(\d+)', txt, re.IGNORECASE)
-    if below_pattern:
-        num = below_pattern.group(1) or below_pattern.group(2) or below_pattern.group(3)
-        return f"{num}° or below"
-    
-    above_pattern = re.search(r'[>≥]\s*(\d+)|(\d+)\s*or\s*above|above\s*(\d+)', txt, re.IGNORECASE)
-    if above_pattern:
-        num = above_pattern.group(1) or above_pattern.group(2) or above_pattern.group(3)
-        return f"{num}° or above"
-    
-    nums = re.findall(r'(\d+)', txt)
-    if len(nums) >= 2:
-        return f"{nums[0]}° to {nums[1]}°"
-    elif len(nums) == 1:
-        if any(w in txt.lower() for w in ['below', 'under', 'less', '<']):
-            return f"{nums[0]}° or below"
-        else:
-            return f"{nums[0]}° or above"
-    
-    return subtitle if subtitle else "Unknown"
-
 def get_bracket_bounds(range_str):
     tl = range_str.lower()
     nums = re.findall(r'(\d+)', range_str)
@@ -104,9 +70,11 @@ def fetch_kalshi_brackets(series_ticker):
         
         brackets = []
         for m in today_markets:
-            range_txt = extract_range_text(m)
+            # Use subtitle directly from Kalshi - it's already formatted correctly!
+            range_txt = m.get("subtitle", "") or m.get("title", "")
             ticker = m.get("ticker", "")
             
+            # Calculate mid for sorting
             low, high = get_bracket_bounds(range_txt)
             if low == -999:
                 mid = high - 1
@@ -123,7 +91,7 @@ def fetch_kalshi_brackets(series_ticker):
                 yes_price = ya or yb or 0
             
             brackets.append({
-                "range": range_txt,
+                "range": range_txt,  # Use Kalshi's exact text
                 "mid": mid,
                 "yes": yes_price,
                 "ticker": ticker,
@@ -312,32 +280,74 @@ col_high, col_low = st.columns(2)
 with col_high:
     st.subheader("☀️ HIGH TEMP")
     
+    hour = now.hour
+    
     if obs_high:
-        st.metric("📈 Today's High So Far", f"{obs_high}°F")
-        hour = now.hour
-        if hour < 15:
-            st.caption("⏳ High may still increase (before 3 PM)")
-        else:
-            st.caption("✅ High likely locked in (after 3 PM)")
+        st.metric("📈 High So Far", f"{obs_high}°F")
         
         brackets_high = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY"))
-        render_brackets_with_actual(brackets_high, obs_high, "HIGH")
+        
+        if hour >= 15:  # After 3 PM - HIGH is locked in
+            st.caption("✅ High likely locked in (after 3 PM)")
+            render_brackets_with_actual(brackets_high, obs_high, "HIGH")
+        else:
+            st.caption(f"⏳ Too early — HIGH peaks 12-5 PM. Check back later.")
+            # Just show brackets without highlighting winner
+            if brackets_high:
+                market_fav = max(brackets_high, key=lambda b: b['yes'])
+                st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
+                for b in brackets_high:
+                    is_fav = b['range'] == market_fav['range']
+                    if is_fav:
+                        box_style = "background:#1a1a2e;border:1px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:5px 0"
+                        icon = " ⭐"
+                    else:
+                        box_style = "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
+                        icon = ""
+                    html = f'''<div style="{box_style}">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <span style="color:#e5e7eb">{b['range']}{icon}</span>
+                            <span style="color:#f59e0b">Kalshi {b['yes']:.0f}¢</span>
+                        </div>
+                    </div>'''
+                    st.markdown(html, unsafe_allow_html=True)
     else:
         st.error("Could not fetch observations")
 
 with col_low:
     st.subheader("🌙 LOW TEMP")
     
+    hour = now.hour
+    
     if obs_low:
-        st.metric("📉 Today's Low So Far", f"{obs_low}°F")
-        hour = now.hour
-        if hour < 8:
-            st.caption("⏳ Low may still drop (before 8 AM)")
-        else:
-            st.caption("✅ Low likely locked in (after 8 AM)")
+        st.metric("📉 Today's Low", f"{obs_low}°F")
         
         brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
-        render_brackets_with_actual(brackets_low, obs_low, "LOW")
+        
+        if hour >= 8:  # After 8 AM - LOW is locked in
+            st.caption("✅ Low locked in (after 8 AM)")
+            render_brackets_with_actual(brackets_low, obs_low, "LOW")
+        else:
+            st.caption(f"⏳ Low may still drop (before 8 AM)")
+            # Just show brackets without highlighting winner
+            if brackets_low:
+                market_fav = max(brackets_low, key=lambda b: b['yes'])
+                st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
+                for b in brackets_low:
+                    is_fav = b['range'] == market_fav['range']
+                    if is_fav:
+                        box_style = "background:#1a1a2e;border:1px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:5px 0"
+                        icon = " ⭐"
+                    else:
+                        box_style = "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
+                        icon = ""
+                    html = f'''<div style="{box_style}">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <span style="color:#e5e7eb">{b['range']}{icon}</span>
+                            <span style="color:#f59e0b">Kalshi {b['yes']:.0f}¢</span>
+                        </div>
+                    </div>'''
+                    st.markdown(html, unsafe_allow_html=True)
     else:
         st.error("Could not fetch observations")
 
