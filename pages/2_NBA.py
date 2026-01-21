@@ -451,7 +451,7 @@ with st.sidebar:
     st.header("📊 MODEL INFO")
     st.markdown("Proprietary multi-factor model analyzing matchups, injuries, rest, travel, momentum, and historical edges.")
     st.divider()
-    st.caption("v17.2 NBA EDGE")
+    st.caption("v17.4 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
@@ -544,11 +544,12 @@ if games:
         with col_btn:
             st.link_button(f"BUY {r['pick']}", kalshi_url, use_container_width=True)
     
-    strong = [r for r in ml_results if r["score"] >= 6.5]
-    if strong:
-        if st.button(f"➕ Add {len(strong)} Picks to Tracker", use_container_width=True):
+    # Only allow adding picks for scheduled games
+    scheduled_strong = [r for r in ml_results if r["score"] >= 6.5 and games.get(f"{r['away']}@{r['home']}", {}).get('status_type') == "STATUS_SCHEDULED"]
+    if scheduled_strong:
+        if st.button(f"➕ Add {len(scheduled_strong)} Picks to Tracker", use_container_width=True, key="add_ml_picks"):
             added = 0
-            for r in strong:
+            for r in scheduled_strong:
                 gk = f"{r['away']}@{r['home']}"
                 if not any(p.get('game') == gk and p.get('pick') == r['pick'] for p in st.session_state.positions):
                     st.session_state.positions.append({"game": gk, "type": "ml", "pick": r['pick'], "price": 50, "contracts": 1})
