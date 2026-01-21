@@ -1,10 +1,13 @@
 import streamlit as st
+from styles import apply_styles
 
 st.set_page_config(
     page_title="MLB Edge Finder | BigSnapshot",
     page_icon="⚾",
     layout="wide"
 )
+
+apply_styles()
 
 # ============================================================
 # AUTH CHECK
@@ -15,13 +18,10 @@ if 'authenticated' not in st.session_state or not st.session_state.authenticated
     st.stop()
 
 # ============================================================
-# CUSTOM CSS
+# PAGE-SPECIFIC CSS
 # ============================================================
 st.markdown("""
 <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
     .stApp {
         background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%);
     }
