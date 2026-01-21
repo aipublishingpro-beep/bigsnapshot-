@@ -342,6 +342,8 @@ if current_temp:
 else:
     st.warning("⚠️ Could not fetch NWS observations")
 
+st.caption("💡 Both LOW and HIGH temps can shift throughout the day — check back often for updates.")
+
 st.markdown("---")
 
 col_high, col_low = st.columns(2)
@@ -477,6 +479,7 @@ with st.expander("❓ How to Use This App"):
     
     • **LOW Temperature**: Usually bottoms out between 4-7 AM. Look for the ↩️ REVERSAL in observations — that confirms the low is set.
     • **HIGH Temperature**: Usually peaks between 12-5 PM. Once you see temps dropping after the peak, the high is locked.
+    • **Check back often**: Temps and market prices shift throughout the day. What you see now may change in an hour.
     
     The app highlights the reversal point when detected — that's your confirmation.
     
