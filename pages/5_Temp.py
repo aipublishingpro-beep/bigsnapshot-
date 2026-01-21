@@ -339,6 +339,13 @@ with col_high:
                         </div>
                     </div>'''
                     st.markdown(html, unsafe_allow_html=True)
+                
+                # Add BUY button for market favorite
+                st.markdown(f'''
+                <div style="text-align:center;margin-top:12px">
+                    <a href="{market_fav['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a>
+                </div>
+                ''', unsafe_allow_html=True)
     else:
         st.error("Could not fetch observations")
 
@@ -373,6 +380,13 @@ with col_low:
                         </div>
                     </div>'''
                     st.markdown(html, unsafe_allow_html=True)
+                
+                # Add BUY button for market favorite
+                st.markdown(f'''
+                <div style="text-align:center;margin-top:12px">
+                    <a href="{market_fav['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a>
+                </div>
+                ''', unsafe_allow_html=True)
     else:
         st.error("Could not fetch observations")
 
