@@ -3,20 +3,41 @@ import requests
 from datetime import datetime, timedelta
 import pytz
 from styles import apply_styles
+import extra_streamlit_components as stx
 
 st.set_page_config(page_title="NHL Edge Finder", page_icon="🏒", layout="wide")
-
 apply_styles()
+
+# ============================================================
+# COOKIE MANAGER FOR PERSISTENT LOGIN
+# ============================================================
+cookie_manager = stx.CookieManager()
+
+# ============================================================
+# SESSION STATE
+# ============================================================
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None
+
+# ============================================================
+# CHECK COOKIE FOR PERSISTENT LOGIN
+# ============================================================
+auth_cookie = cookie_manager.get("bigsnapshot_auth")
+if auth_cookie and not st.session_state.authenticated:
+    st.session_state.authenticated = True
+    st.session_state.user_type = auth_cookie
 
 # ============================================================
 # AUTH CHECK
 # ============================================================
-if 'authenticated' not in st.session_state or not st.session_state.authenticated:
+if not st.session_state.authenticated:
     st.warning("⚠️ Please log in from the Home page first.")
     st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
     st.stop()
 
-VERSION = "2.0"
+VERSION = "3.0"
 
 # ============================================================
 # GA4 TRACKING
@@ -53,8 +74,10 @@ KALSHI_CODES = {
     "VGK": "vgk", "WSH": "wsh", "WPG": "wpg"
 }
 
+TEAM_FULL_NAMES = {v: k for k, v in TEAM_ABBREVS.items()}
+
 # ============================================================
-# TEAM STATS (Updated Jan 2026 - update periodically)
+# TEAM STATS (Updated Jan 2026)
 # ============================================================
 TEAM_STATS = {
     "ANA": {"win_pct": 0.380, "home_win_pct": 0.420, "goals_for": 2.65, "goals_against": 3.35, "pp_pct": 17.8, "pk_pct": 76.5},
@@ -190,6 +213,49 @@ def fetch_nhl_injuries():
         pass
     return injuries
 
+@st.cache_data(ttl=300)
+def fetch_nhl_news():
+    try:
+        url = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/news?limit=5"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        articles = []
+        for article in data.get("articles", [])[:5]:
+            articles.append({
+                "headline": article.get("headline", ""),
+                "link": article.get("links", {}).get("web", {}).get("href", "")
+            })
+        return articles
+    except:
+        return []
+
+@st.cache_data(ttl=300)
+def fetch_team_records():
+    records = {}
+    try:
+        url = "https://site.api.espn.com/apis/v2/sports/hockey/nhl/standings"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        for group in data.get("children", []):
+            for team_standing in group.get("standings", {}).get("entries", []):
+                team_name = team_standing.get("team", {}).get("displayName", "")
+                abbr = TEAM_ABBREVS.get(team_name, "")
+                if not abbr:
+                    continue
+                stats = {s.get("name"): s.get("value") for s in team_standing.get("stats", [])}
+                streak_val = stats.get("streak", 0)
+                streak_type = "W" if streak_val > 0 else "L"
+                records[abbr] = {
+                    "wins": int(stats.get("wins", 0)),
+                    "losses": int(stats.get("losses", 0)),
+                    "otl": int(stats.get("otLosses", 0)),
+                    "streak": abs(int(streak_val)),
+                    "streak_type": streak_type
+                }
+    except:
+        pass
+    return records
+
 # ============================================================
 # ML SCORING MODEL - 10 FACTORS
 # ============================================================
@@ -281,13 +347,13 @@ def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
 
 def get_signal_tier(score):
     if score >= 8.0:
-        return "🟢 STRONG BUY", "#00ff00"
+        return "🔒 STRONG", "#00ff00"
     elif score >= 6.5:
         return "🔵 BUY", "#00aaff"
     elif score >= 5.5:
         return "🟡 LEAN", "#ffff00"
     else:
-        return "⚪ TOSS-UP", "#888888"
+        return "⚪ PASS", "#888888"
 
 # ============================================================
 # SIDEBAR
@@ -297,7 +363,7 @@ with st.sidebar:
     st.divider()
     
     st.header("📖 ML LEGEND")
-    st.markdown("🟢 **STRONG BUY** → 8.0+\n\n🔵 **BUY** → 6.5-7.9\n\n🟡 **LEAN** → 5.5-6.4\n\n⚪ **TOSS-UP** → Below 5.5")
+    st.markdown("🔒 **STRONG** → 8.0+\n\n🔵 **BUY** → 6.5-7.9\n\n🟡 **LEAN** → 5.5-6.4\n\n⚪ **PASS** → Below 5.5")
     st.divider()
     
     st.header("🔗 KALSHI")
@@ -313,22 +379,70 @@ now = datetime.now(eastern)
 
 st.title("🏒 NHL EDGE FINDER")
 st.caption(f"v{VERSION} | {now.strftime('%I:%M:%S %p ET')} | Real ESPN Data")
+st.markdown("🔒 *Only STRONG picks are tracked for performance*")
 
 games = fetch_nhl_games()
 yesterday_teams = fetch_yesterday_teams()
 injuries = fetch_nhl_injuries()
+news = fetch_nhl_news()
+team_records = fetch_team_records()
 
 if not games:
     st.warning("No NHL games scheduled today.")
     st.stop()
 
+# Filter yesterday teams to only include today's teams
+today_teams = set()
+for gk in games.keys():
+    parts = gk.split("@")
+    today_teams.add(parts[0])
+    today_teams.add(parts[1])
+yesterday_teams = yesterday_teams.intersection(today_teams)
+
+# Define live_games early
+live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
+final_games = {k: v for k, v in games.items() if v['status_type'] == "STATUS_FINAL"}
+scheduled_games = {k: v for k, v in games.items() if v['status_type'] == "STATUS_SCHEDULED"}
+
+# ============================================================
+# ⏰ STATUS BAR
+# ============================================================
+if live_games:
+    st.success(f"⏰ **{len(live_games)} GAME{'S' if len(live_games) > 1 else ''} LIVE NOW** | {len(final_games)} Final | {len(scheduled_games)} Scheduled")
+else:
+    st.info(f"📅 **{len(games)} game{'s' if len(games) > 1 else ''} scheduled today** | {len(final_games)} Final")
+
+# ============================================================
+# 📊 STATS ROW
+# ============================================================
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("Games Today", len(games))
+with col2:
+    st.metric("Live Now", len(live_games))
+with col3:
+    b2b_count = len(yesterday_teams)
+    st.metric("B2B Teams", b2b_count)
+with col4:
+    st.metric("Today's Record", "—")
+
+# ============================================================
+# 📖 LEGEND BOX
+# ============================================================
+st.markdown("""
+<div style="background: #1a1a2e; border-radius: 8px; padding: 10px 15px; margin: 10px 0;">
+    <span style="color: #00ff00;">🔒 STRONG 8.0+</span> &nbsp;|&nbsp;
+    <span style="color: #00aaff;">🔵 BUY 6.5+</span> &nbsp;|&nbsp;
+    <span style="color: #ffff00;">🟡 LEAN 5.5+</span> &nbsp;|&nbsp;
+    <span style="color: #888;">⚪ PASS &lt;5.5</span>
+</div>
+""", unsafe_allow_html=True)
+
 st.divider()
 
 # ============================================================
-# 🎯 ML PICKS
+# 🎯 BUILD ML RESULTS
 # ============================================================
-st.subheader("🎯 ML PICKS")
-
 ml_results = []
 for game_key, g in games.items():
     away_abbr = g["away_abbr"]
@@ -344,14 +458,71 @@ for game_key, g in games.items():
         "pick": pick,
         "opponent": opponent,
         "score": score,
+        "tier": tier,
         "color": color,
         "reasons": reasons,
         "kalshi_url": kalshi_url,
         "game_key": game_key,
-        "status": g["status_type"]
+        "status": g["status_type"],
+        "away_abbr": away_abbr,
+        "home_abbr": home_abbr
     })
 
 ml_results.sort(key=lambda x: x["score"], reverse=True)
+
+# ============================================================
+# 💰 TOP PICK OF THE DAY
+# ============================================================
+if ml_results and ml_results[0]["score"] >= 6.5:
+    top = ml_results[0]
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #064e3b, #022c22); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 2px solid #10b981;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+            <div>
+                <span style="color: #10b981; font-size: 0.9em;">💰 TOP PICK OF THE DAY</span>
+                <h2 style="color: #fff; margin: 5px 0;">{top['pick']} <span style="color: #888; font-weight: normal;">vs {top['opponent']}</span></h2>
+                <span style="color: {top['color']}; font-size: 1.3em; font-weight: bold;">{top['score']}/10</span>
+                <span style="color: #888; margin-left: 15px;">{' • '.join(top['reasons'])}</span>
+            </div>
+            <a href="{top['kalshi_url']}" target="_blank" style="text-decoration: none;">
+                <button style="background: linear-gradient(135deg, #16a34a, #22c55e); color: white; padding: 12px 28px; border: none; border-radius: 8px; font-size: 1em; font-weight: 700; cursor: pointer;">
+                    BUY {top['pick']} →
+                </button>
+            </a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ============================================================
+# 🔥 HOT STREAKS + ❄️ FADE ALERTS
+# ============================================================
+hot_teams = []
+cold_teams = []
+for team in today_teams:
+    rec = team_records.get(team, {})
+    streak = rec.get("streak", 0)
+    streak_type = rec.get("streak_type", "")
+    if streak >= 4 and streak_type == "W":
+        hot_teams.append((team, streak))
+    elif streak >= 4 and streak_type == "L":
+        cold_teams.append((team, streak))
+
+col1, col2 = st.columns(2)
+with col1:
+    if hot_teams:
+        hot_str = " • ".join([f"**{t}** ({s}W)" for t, s in sorted(hot_teams, key=lambda x: -x[1])])
+        st.success(f"🔥 **HOT STREAKS:** {hot_str}")
+with col2:
+    if cold_teams:
+        cold_str = " • ".join([f"**{t}** ({s}L)" for t, s in sorted(cold_teams, key=lambda x: -x[1])])
+        st.error(f"❄️ **FADE ALERT:** {cold_str}")
+
+st.divider()
+
+# ============================================================
+# 🎯 ML PICKS
+# ============================================================
+st.subheader("🎯 ML PICKS")
 
 shown = 0
 for r in ml_results:
@@ -361,15 +532,15 @@ for r in ml_results:
     reasons_str = " • ".join(r["reasons"]) if r["reasons"] else ""
     
     st.markdown(f"""
-    <div style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #0f172a, #020617); padding: 10px 15px; margin-bottom: 6px; border-radius: 8px; border-left: 4px solid {r['color']};">
+    <div style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #0f172a, #020617); padding: 12px 15px; margin-bottom: 8px; border-radius: 8px; border-left: 4px solid {r['color']};">
         <div>
-            <span style="font-weight: bold; color: #fff;">{r['pick']}</span>
+            <span style="font-weight: bold; color: #fff; font-size: 1.1em;">{r['pick']}</span>
             <span style="color: #666;"> vs {r['opponent']}</span>
-            <span style="color: {r['color']}; font-weight: bold; margin-left: 10px;">{r['score']}/10</span>
-            <span style="color: #888; font-size: 0.85em; margin-left: 10px;">{reasons_str}</span>
+            <span style="color: {r['color']}; font-weight: bold; margin-left: 12px;">{r['score']}/10</span>
+            <span style="color: #888; font-size: 0.85em; margin-left: 12px;">{reasons_str}</span>
         </div>
         <a href="{r['kalshi_url']}" target="_blank" style="text-decoration: none;">
-            <button style="background-color: #16a34a; color: white; padding: 6px 14px; border: none; border-radius: 6px; font-size: 0.85em; font-weight: 600; cursor: pointer;">
+            <button style="background-color: #16a34a; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-size: 0.9em; font-weight: 600; cursor: pointer;">
                 BUY {r['pick']}
             </button>
         </a>
@@ -382,19 +553,30 @@ if shown == 0:
 st.divider()
 
 # ============================================================
+# 📰 BREAKING NEWS
+# ============================================================
+st.subheader("📰 BREAKING NEWS")
+if news:
+    for article in news[:4]:
+        if article["link"]:
+            st.markdown(f"• [{article['headline']}]({article['link']})")
+        else:
+            st.markdown(f"• {article['headline']}")
+else:
+    st.caption("No recent news available")
+
+st.divider()
+
+# ============================================================
 # 🏥 INJURY REPORT
 # ============================================================
 st.subheader("🏥 INJURY REPORT")
 
-teams_today = set()
-for g in games.values():
-    teams_today.add(g["away_abbr"])
-    teams_today.add(g["home_abbr"])
-
 injury_shown = False
 cols = st.columns(4)
 col_idx = 0
-for team in sorted(teams_today):
+
+for team in sorted(today_teams):
     team_inj = injuries.get(team, [])
     key_injuries = [i for i in team_inj if 'out' in i.get('status', '').lower()]
     if key_injuries:
@@ -408,9 +590,8 @@ for team in sorted(teams_today):
 if not injury_shown:
     st.info("✅ No major injuries reported for today's teams")
 
-b2b_today = yesterday_teams.intersection(teams_today)
-if b2b_today:
-    st.info(f"📅 **Back-to-Back**: {', '.join(sorted(b2b_today))}")
+if yesterday_teams:
+    st.info(f"📅 **Back-to-Back:** {', '.join(sorted(yesterday_teams))}")
 
 st.divider()
 
@@ -437,21 +618,32 @@ st.divider()
 # ============================================================
 with st.expander("📖 How to Use This App", expanded=False):
     st.markdown("""
-    **What is NHL Edge Finder?**
-    
-    This tool analyzes NHL games and identifies moneyline betting opportunities on Kalshi prediction markets.
-    
-    **Understanding the Signals:**
-    - **🟢 STRONG BUY (8.0+):** High confidence pick
-    - **🔵 BUY (6.5-7.9):** Good edge detected
-    - **🟡 LEAN (5.5-6.4):** Slight edge
-    - **⚪ TOSS-UP (Below 5.5):** No clear edge
-    
-    **Key Indicators:**
-    - **🛏️ Opp B2B:** Opponent playing back-to-back games
-    - **🏠 Home Ice:** Home team advantage percentage
-    - **🏥 Injuries:** Key players out for opponent
-    """)
+**What is NHL Edge Finder?**
+
+This tool analyzes NHL games and identifies moneyline betting opportunities on Kalshi prediction markets.
+
+**Understanding the Signals:**
+
+🔒 **STRONG (8.0+):** High confidence pick — these are tracked for performance
+
+🔵 **BUY (6.5-7.9):** Good edge detected
+
+🟡 **LEAN (5.5-6.4):** Slight edge
+
+⚪ **PASS (Below 5.5):** No clear edge
+
+**Key Indicators:**
+
+🛏️ **Opp B2B:** Opponent playing back-to-back games
+
+🏠 **Home Ice:** Home team advantage percentage
+
+🏥 **Injuries:** Key players out for opponent
+
+🔥 **Hot Streak:** Team on 4+ game win streak
+
+❄️ **Fade Alert:** Team on 4+ game losing streak
+""")
 
 st.divider()
 st.caption(f"⚠️ Entertainment only. Not financial advice. v{VERSION}")
