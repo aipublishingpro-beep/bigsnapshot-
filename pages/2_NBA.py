@@ -30,6 +30,14 @@ st.markdown("""
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
 footer {visibility: hidden;}
+html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+}
+div[data-testid="stMarkdownContainer"] > div {
+    overflow-x: auto !important;
+    max-width: 100% !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
