@@ -733,11 +733,11 @@ with st.sidebar:
     st.divider()
     if HAS_AUTOREFRESH: st.caption("✅ autorefresh installed")
     else: st.caption("⚠️ pip install streamlit-autorefresh")
-    st.caption("v2.2.1 NFL EDGE")
+    st.caption("v2.2.2 NFL EDGE")
 
 # TITLE
 st.title("🏈 NFL EDGE FINDER")
-st.caption("10-Factor ML Model + LiveState Tracker | v2.2.1")
+st.caption("10-Factor ML Model + LiveState Tracker | v2.2.2")
 
 # LIVESTATE
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
@@ -1181,8 +1181,9 @@ else:
     st.info("No major injuries reported")
 st.divider()
 
-# ==================== ML PICKS ====================
-st.subheader("🎯 PRE-GAME NFL MONEYLINE PICKS")
+# ==================== TOP ML PICKS (STRONG & BUY ONLY) ====================
+st.subheader("🎯 TOP ML PICKS")
+st.caption("🟢 STRONG BUY (8.0+) and 🔵 BUY (6.5-7.9) signals only")
 
 ml_results = []
 for game_key, g in games.items():
@@ -1196,41 +1197,85 @@ for game_key, g in games.items():
         pick_form = last_5.get(pick, {}).get('form', '-----')
         opp_team = away if pick == home else home
         opp_form = last_5.get(opp_team, {}).get('form', '-----')
-        ml_results.append({"pick": pick, "score": score, "color": color, "reasons": reasons, "away": away, "home": home, "game_date": g.get('game_date'), "game_key": game_key, "weather": weather_data, "home_out": home_out, "away_out": away_out, "home_dvoa": home_dvoa, "away_dvoa": away_dvoa, "pick_form": pick_form, "opp_form": opp_form, "opp_team": opp_team})
+        ml_results.append({"pick": pick, "score": score, "color": color, "tier": tier, "reasons": reasons, "away": away, "home": home, "game_date": g.get('game_date'), "game_key": game_key, "weather": weather_data, "home_out": home_out, "away_out": away_out, "home_dvoa": home_dvoa, "away_dvoa": away_dvoa, "pick_form": pick_form, "opp_form": opp_form, "opp_team": opp_team})
     except: continue
 
 ml_results.sort(key=lambda x: x["score"], reverse=True)
-if ml_results:
-    for r in ml_results:
+
+# Filter to only STRONG (8.0+) and BUY (6.5+)
+top_picks = [r for r in ml_results if r["score"] >= 6.5]
+
+if top_picks:
+    for r in top_picks:
         pick_team, opponent = r["pick"], r["opp_team"]
         pick_code = KALSHI_CODES.get(pick_team, pick_team[:3].upper())
         reasons_str = " • ".join(r["reasons"])
+        
+        # Weather badge
         weather = r.get("weather", {})
         weather_badge = "🏟️ Dome" if weather.get("dome") else f"⛈️ {weather.get('wind', 0):.0f}mph" if weather.get("impact") == "severe" else f"🌧️ {weather.get('wind', 0):.0f}mph" if weather.get("impact") == "moderate" else f"☀️ {weather.get('temp', 70):.0f}°F"
+        
+        # Build Kalshi URL
         away_code, home_code = KALSHI_CODES.get(r["away"], "XXX"), KALSHI_CODES.get(r["home"], "XXX")
         date_str = r["game_date"].strftime("%y%b%d").upper() if r["game_date"] else datetime.now(eastern).strftime("%y%b%d").upper()
-        this_url = f"https://kalshi.com/markets/KXNFLGAME/KXNFLGAME-{date_str}{away_code}{home_code}"
+        kalshi_url = f"https://kalshi.com/markets/KXNFLGAME/KXNFLGAME-{date_str}{away_code}{home_code}"
+        
+        # Form display
         pick_form, opp_form = r.get("pick_form", "-----"), r.get("opp_form", "-----")
         pw, ow = pick_form.count("W"), opp_form.count("W")
         pclr = "#00ff00" if pw >= 4 else "#88ff00" if pw >= 3 else "#ffff00" if pw >= 2 else "#ff4444"
         oclr = "#00ff00" if ow >= 4 else "#88ff00" if ow >= 3 else "#ffff00" if ow >= 2 else "#ff4444"
-        st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:10px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {r['color']}">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-            <div><b style="color:#fff">{pick_team}</b> <span style="color:#666">vs {opponent}</span></div>
-            <div><span style="background:#1e3a5f;padding:2px 8px;border-radius:4px;color:#88ccff;font-size:0.8em;margin-right:8px">{weather_badge}</span>
-            <span style="color:#38bdf8;font-weight:bold">{r['score']}/10</span></div>
+        
+        # Different styling for STRONG vs BUY
+        if r["score"] >= 8.0:
+            badge = "🟢 STRONG BUY"
+            btn_bg = "#00aa00"
+            border_width = "4px"
+        else:
+            badge = "🔵 BUY"
+            btn_bg = "#0066cc"
+            border_width = "3px"
+        
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:15px;margin-bottom:10px;border-radius:10px;border-left:{border_width} solid {r['color']}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div>
+                <span style="color:{r['color']};font-weight:bold;font-size:0.9em">{badge}</span>
+                <b style="color:#fff;font-size:1.3em;margin-left:10px">{pick_team}</b> 
+                <span style="color:#666;font-size:1.1em">vs {opponent}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+                <span style="background:#1e3a5f;padding:3px 10px;border-radius:5px;color:#88ccff;font-size:0.85em">{weather_badge}</span>
+                <span style="color:#38bdf8;font-weight:bold;font-size:1.4em">{r['score']}/10</span>
+            </div>
         </div>
-        <div style="display:flex;align-items:center;gap:15px;margin-top:4px">
-            <span style="color:#888;font-size:0.85em">📊 Form:</span>
-            <span style="color:{pclr};font-weight:bold;font-family:monospace;letter-spacing:2px">{pick_form}</span>
+        <div style="display:flex;align-items:center;gap:15px;margin-bottom:10px">
+            <span style="color:#888">📊 Form:</span>
+            <span style="color:{pclr};font-weight:bold;font-family:monospace;font-size:1.1em;letter-spacing:2px">{pick_form}</span>
             <span style="color:#555">vs</span>
-            <span style="color:{oclr};font-family:monospace;letter-spacing:2px">{opp_form}</span>
-            <span style="color:#666;font-size:0.8em">({pw}-{5-pw} vs {ow}-{5-ow})</span>
+            <span style="color:{oclr};font-family:monospace;font-size:1.1em;letter-spacing:2px">{opp_form}</span>
+            <span style="color:#666;font-size:0.85em">({pw}-{5-pw} vs {ow}-{5-ow})</span>
         </div>
-        <div style="color:#777;font-size:0.85em;margin-top:4px">{reasons_str}</div></div>""", unsafe_allow_html=True)
-        st.link_button(f"BUY {pick_code}", this_url, use_container_width=True)
+        <div style="color:#aaa;font-size:0.9em;margin-bottom:12px">{reasons_str}</div>
+        </div>""", unsafe_allow_html=True)
+        
+        st.link_button(f"🎯 BUY {pick_team.upper()} TO WIN", kalshi_url, use_container_width=True)
+        st.markdown("<div style='height:5px'></div>", unsafe_allow_html=True)
+    
+    # Bulk add button
+    if st.button(f"➕ Add All {len(top_picks)} Picks to Tracker", use_container_width=True, type="secondary"):
+        added = 0
+        for r in top_picks:
+            game_key = f"{r['away']}@{r['home']}"
+            if not any(p.get('game') == game_key and p.get('type') == 'ml' for p in st.session_state.positions):
+                st.session_state.positions.append({"game": game_key, "type": "ml", "pick": r['pick'], "price": 50, "contracts": 1})
+                added += 1
+        if added > 0:
+            save_positions(st.session_state.positions)
+            st.success(f"✅ Added {added} picks to tracker!")
+            st.rerun()
 else:
-    st.info("No scheduled games with picks")
+    st.info("🔍 No STRONG BUY or BUY signals today. Check back closer to game time!")
+
 st.divider()
 
 # ==================== ADD POSITION ====================
@@ -1303,4 +1348,4 @@ with st.expander("📊 Model Performance — Track Record", expanded=False):
     st.markdown("""Shows historical win rates by signal tier. STRONG picks should hit 75%+, BUY picks 65%+, LEAN picks 55%+. Profit tracks cumulative returns assuming $1 bets at 50¢.""")
 
 st.divider()
-st.caption("⚠️ Educational analysis only. Not financial advice. v2.2.1")
+st.caption("⚠️ Educational analysis only. Not financial advice. v2.2.2")
