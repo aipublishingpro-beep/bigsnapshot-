@@ -299,8 +299,27 @@ if current_temp:
     
     if readings:
         with st.expander("📊 Recent NWS Observations"):
-            for r in readings[:8]:
-                st.markdown(f"<div style='display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #30363d'><span style='color:#9ca3af'>{r['time']}</span><span style='color:#fff;font-weight:600'>{r['temp']}°F</span></div>", unsafe_allow_html=True)
+            # Find reversal point (LOW: temp lower than both neighbors)
+            reversal_idx = None
+            for i in range(1, len(readings) - 1):
+                # readings are newest first, so check if this is lower than both neighbors
+                if readings[i]['temp'] < readings[i-1]['temp'] and readings[i]['temp'] < readings[i+1]['temp']:
+                    reversal_idx = i
+                    break
+            
+            for i, r in enumerate(readings[:8]):
+                # Highlight the reversal point in orange
+                if i == reversal_idx:
+                    row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
+                    time_style = "color:#fbbf24;font-weight:600"
+                    temp_style = "color:#fbbf24;font-weight:700"
+                    label = " ↩️ REVERSAL"
+                else:
+                    row_style = "display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #30363d"
+                    time_style = "color:#9ca3af"
+                    temp_style = "color:#fff;font-weight:600"
+                    label = ""
+                st.markdown(f"<div style='{row_style}'><span style='{time_style}'>{r['time']}</span><span style='{temp_style}'>{r['temp']}°F{label}</span></div>", unsafe_allow_html=True)
 else:
     st.warning("⚠️ Could not fetch NWS observations")
 
@@ -439,6 +458,16 @@ with st.expander("❓ How to Use This App"):
     
     • **LOW Temperature**: Locks in by ~6 AM. The overnight low is set — it only warms up from there.
     • **HIGH Temperature**: Locks in by ~3 PM. Peak heat typically occurs 12-5 PM.
+    
+    **↩️ Reversal Point (Orange Highlight)**
+    
+    In "Recent NWS Observations", we highlight the **reversal point** — the exact moment temps bottomed out and started climbing back up. Example:
+    
+    • 07:51 → 19.0°F (warming up)
+    • 06:51 → 17.1°F ↩️ REVERSAL (lowest point)
+    • 05:51 → 18.0°F (was cooling down)
+    
+    When you see a reversal, it confirms the LOW is locked in. The temperature hit bottom and reversed direction — it's not going lower.
     
     **🎯 Reading the Display**
     
