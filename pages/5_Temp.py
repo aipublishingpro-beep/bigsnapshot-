@@ -353,17 +353,6 @@ with st.expander("🏙️ Selecting Cities", expanded=False):
     st.markdown("**Set Default City:** Click the star button to remember your preferred city")
     st.markdown("**Pro Tip:** Check multiple cities - some have more volatile weather = bigger edges")
 
-with st.expander("📅 7-Day Edge Overview (Owner Only)", expanded=False):
-    st.markdown("**What It Shows:**")
-    st.markdown("- Full week of NWS forecasts at a glance")
-    st.markdown("- Target brackets for each day")
-    st.markdown("- Market open status")
-    st.markdown("**Market Timing:**")
-    st.markdown("- 🟢 OPEN = Trade now")
-    st.markdown("- 🟢 2AM = Market opens tomorrow at 2AM ET")
-    st.markdown("- 🟡 Xd = Days until market opens")
-    st.markdown("**The Edge:** You see the NWS forecast BEFORE markets open. Position early for best prices.")
-
 with st.expander("💡 Pro Tips", expanded=False):
     st.markdown("**Timing:** NWS updates forecasts ~4x daily. Trade right after update, before market adjusts.")
     st.markdown("**Volatility:** Stable weather (Phoenix) = less edge. Volatile weather (Denver, Chicago) = bigger edge.")
