@@ -8,18 +8,6 @@ import os
 
 st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
 
-# ========== GOOGLE ANALYTICS ==========
-st.markdown("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-XXXXXXXXXX');
-</script>
-""", unsafe_allow_html=True)
-
-# ========== CSS ==========
 st.markdown("""
 <style>
 .stApp {background-color: #0a0a0f;}
@@ -31,17 +19,15 @@ div[data-testid="stMarkdownContainer"] p {color: #fff;}
 </style>
 """, unsafe_allow_html=True)
 
-# ========== BANNER ==========
 st.markdown("""
 <div style="background:linear-gradient(90deg,#ff6b00,#ff9500);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center">
-<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v2.1</span>
+<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v2.2</span>
 </div>
 """, unsafe_allow_html=True)
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-# ========== CITY CONFIG ==========
 CITY_CONFIG = {
     "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "tz": "US/Central", "station": "KAUS", "lat": 30.19, "lon": -97.67},
     "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "tz": "US/Central", "station": "KMDW", "lat": 41.79, "lon": -87.75},
@@ -54,7 +40,6 @@ CITY_CONFIG = {
 
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
-# ========== PREFERENCES ==========
 PREFS_FILE = "temp_prefs.json"
 def load_prefs():
     try:
@@ -73,10 +58,8 @@ def save_prefs(prefs):
 if "prefs" not in st.session_state:
     st.session_state.prefs = load_prefs()
 
-# ========== FETCH KALSHI BRACKETS (REAL DATA) ==========
 @st.cache_data(ttl=60)
 def fetch_kalshi_brackets(series_ticker):
-    """Fetch LIVE brackets from Kalshi API"""
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
     try:
         resp = requests.get(url, timeout=10)
@@ -86,13 +69,11 @@ def fetch_kalshi_brackets(series_ticker):
         if not markets:
             return None
         
-        # Get today's markets
         today = datetime.now(eastern)
         today_str = today.strftime('%y%b%d').upper()
         
         today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
         if not today_markets:
-            # Fallback to first event
             first_event = markets[0].get("event_ticker", "")
             today_markets = [m for m in markets if m.get("event_ticker") == first_event]
         
@@ -103,7 +84,6 @@ def fetch_kalshi_brackets(series_ticker):
             mid = None
             tl = txt.lower()
             
-            # Parse temperature range
             if "below" in tl:
                 try: mid = int(''.join(filter(str.isdigit, txt.split('°')[0]))) - 1
                 except: mid = 30
@@ -116,7 +96,6 @@ def fetch_kalshi_brackets(series_ticker):
                     mid = (int(''.join(filter(str.isdigit, p[0]))) + int(''.join(filter(str.isdigit, p[1])))) / 2
                 except: mid = 45
             
-            # Get prices
             yb, ya = m.get("yes_bid", 0), m.get("yes_ask", 0)
             yes_price = (yb + ya) / 2 if yb and ya else ya or yb or 0
             
@@ -131,15 +110,14 @@ def fetch_kalshi_brackets(series_ticker):
         
         brackets.sort(key=lambda x: x['mid'] or 0)
         return brackets
-    except Exception as e:
+    except:
         return None
 
-# ========== FETCH NWS CURRENT TEMP ==========
 @st.cache_data(ttl=300)
 def fetch_nws_temp(station):
     url = f"https://api.weather.gov/stations/{station}/observations/latest"
     try:
-        resp = requests.get(url, headers={"User-Agent": "TempEdge/2.1"}, timeout=10)
+        resp = requests.get(url, headers={"User-Agent": "TempEdge/2.2"}, timeout=10)
         if resp.status_code == 200:
             tc = resp.json().get("properties", {}).get("temperature", {}).get("value")
             if tc is not None:
@@ -148,12 +126,40 @@ def fetch_nws_temp(station):
         pass
     return None
 
-# ========== PROBABILITY MODEL ==========
+@st.cache_data(ttl=1800)
+def fetch_nws_forecast(city):
+    try:
+        cfg = CITY_CONFIG.get(city, {})
+        lat, lon = cfg.get("lat", 40.78), cfg.get("lon", -73.97)
+        
+        point_url = f"https://api.weather.gov/points/{lat},{lon}"
+        resp = requests.get(point_url, headers={"User-Agent": "TempEdge/2.2"}, timeout=10)
+        props = resp.json().get("properties", {})
+        forecast_url = props.get("forecast", "")
+        
+        if not forecast_url:
+            return None, None
+        
+        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/2.2"}, timeout=10)
+        periods = resp.json().get("properties", {}).get("periods", [])
+        
+        high_temp, low_temp = None, None
+        for p in periods[:6]:
+            name = p.get("name", "").lower()
+            temp = p.get("temperature", 0)
+            if ("tonight" in name or "night" in name) and low_temp is None:
+                low_temp = temp
+            elif p.get("isDaytime", True) and high_temp is None:
+                high_temp = temp
+        
+        return high_temp, low_temp
+    except:
+        return None, None
+
 def normal_cdf(x, mu, sigma):
     return 0.5 * (1 + math.erf((x - mu) / (sigma * math.sqrt(2))))
 
 def calc_model_prob(forecast, low, high, sigma):
-    """Calculate model probability for a bracket"""
     if low == -999:
         return normal_cdf(high, forecast, sigma)
     elif high == 999:
@@ -162,7 +168,6 @@ def calc_model_prob(forecast, low, high, sigma):
         return normal_cdf(high, forecast, sigma) - normal_cdf(low, forecast, sigma)
 
 def get_bracket_bounds(range_str):
-    """Parse bracket string to get low/high bounds"""
     tl = range_str.lower()
     if "below" in tl:
         try:
@@ -186,11 +191,9 @@ def get_bracket_bounds(range_str):
             return 40, 50
     return 0, 100
 
-# ========== HEADER ==========
 st.title("🌡️ TEMP EDGE FINDER")
 st.caption(f"Live Kalshi Data | {now.strftime('%b %d, %Y %I:%M %p ET')}")
 
-# ========== CITY SELECTION ==========
 c1, c2, c3 = st.columns([3, 1, 1])
 with c1:
     default_idx = CITY_LIST.index(st.session_state.prefs.get("default_city", "New York City")) if st.session_state.prefs.get("default_city") in CITY_LIST else 5
@@ -205,74 +208,52 @@ with c3:
     nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
     st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#38bdf8;color:#000;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:bold;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
 
-# Current NWS temp
 nws_temp = fetch_nws_temp(cfg.get("station", "KNYC"))
+nws_high, nws_low = fetch_nws_forecast(city)
+
 if nws_temp:
-    st.caption(f"📡 Current: **{nws_temp}°F** | Station: {cfg.get('station')}")
+    st.caption(f"📡 Current: **{nws_temp}°F** | NWS High: **{nws_high or '?'}°F** | NWS Low: **{nws_low or '?'}°F**")
 else:
-    st.caption(f"📡 Station: {cfg.get('station')}")
+    st.caption(f"📡 NWS High: **{nws_high or '?'}°F** | NWS Low: **{nws_low or '?'}°F**")
 
 st.markdown("---")
 
-# ========== MODEL SETTINGS ==========
-st.subheader("⚙️ Your Forecast")
-m1, m2 = st.columns(2)
-with m1:
-    default_forecast = int(nws_temp) if nws_temp else 45
-    user_forecast = st.number_input("🎯 Your forecast (°F)", value=default_forecast, min_value=-20, max_value=120, 
-                                     help="Your prediction for today's high/low")
-with m2:
-    sigma = st.slider("σ (spread)", 1.0, 3.0, 1.8, 0.1,
-                      help="1.5=tight, 2.5=spread. Match to Kalshi's distribution")
-
-st.markdown("---")
-
-# ========== SIDE BY SIDE: HIGH | LOW ==========
 col_high, col_low = st.columns(2)
 
-# ========== HIGH TEMPERATURE (LEFT) ==========
+# ========== HIGH TEMPERATURE ==========
 with col_high:
     st.subheader("☀️ HIGH TEMP")
+    
+    h1, h2 = st.columns(2)
+    with h1:
+        default_high = int(nws_high) if nws_high else (int(nws_temp) if nws_temp else 45)
+        high_forecast = st.number_input("🎯 High forecast", value=default_high, min_value=-20, max_value=120, key="high_fc")
+    with h2:
+        high_sigma = st.slider("σ (High)", 1.0, 3.0, 1.8, 0.1, key="high_sig")
     
     brackets_high = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY"))
     
     if brackets_high:
-        # Find market favorite
         market_fav = max(brackets_high, key=lambda b: b['yes'])
-        
         st.caption(f"Market favorite: **{market_fav['range']}** @ {market_fav['yes']:.0f}¢")
         
-        # Show all brackets with edge calculation
         for b in brackets_high:
             is_fav = b['range'] == market_fav['range']
             low, high = get_bracket_bounds(b['range'])
-            model_prob = calc_model_prob(user_forecast, low, high, sigma) * 100
+            model_prob = calc_model_prob(high_forecast, low, high, high_sigma) * 100
             market_prob = b['yes']
             edge = model_prob - market_prob
             
-            # Determine styling
             if is_fav:
-                bg = "linear-gradient(90deg,#3d2800,#1a1200)"
-                border = "2px solid #ff9500"
-                icon = " ⭐"
+                bg, border, icon = "linear-gradient(90deg,#3d2800,#1a1200)", "2px solid #ff9500", " ⭐"
             elif edge >= 5:
-                bg = "#0a2e0a"
-                border = "1px solid #00ff00"
-                icon = " 🟢"
+                bg, border, icon = "#0a2e0a", "1px solid #00ff00", " 🟢"
             elif edge <= -5:
-                bg = "#2e0a0a"
-                border = "1px solid #ff4444"
-                icon = " 🔴"
+                bg, border, icon = "#2e0a0a", "1px solid #ff4444", " 🔴"
             else:
-                bg = "#0f172a"
-                border = "1px solid #333"
-                icon = ""
+                bg, border, icon = "#0f172a", "1px solid #333", ""
             
-            # Edge display
-            if abs(edge) >= 5:
-                edge_txt = f"<span style='color:{'#00ff00' if edge > 0 else '#ff4444'};font-weight:bold'>{edge:+.0f}¢</span>"
-            else:
-                edge_txt = f"<span style='color:#666'>{edge:+.0f}¢</span>"
+            edge_txt = f"<span style='color:{'#00ff00' if edge > 0 else '#ff4444'};font-weight:bold'>{edge:+.0f}¢</span>" if abs(edge) >= 5 else f"<span style='color:#666'>{edge:+.0f}¢</span>"
             
             st.markdown(f"""<div style="background:{bg};border:{border};border-radius:6px;padding:8px 10px;margin:4px 0">
                 <div style="display:flex;justify-content:space-between;align-items:center">
@@ -285,9 +266,8 @@ with col_high:
                 </div>
             </div>""", unsafe_allow_html=True)
         
-        # Best edge recommendation
-        best_yes = max(brackets_high, key=lambda b: calc_model_prob(user_forecast, *get_bracket_bounds(b['range']), sigma) * 100 - b['yes'])
-        best_edge = calc_model_prob(user_forecast, *get_bracket_bounds(best_yes['range']), sigma) * 100 - best_yes['yes']
+        best_yes = max(brackets_high, key=lambda b: calc_model_prob(high_forecast, *get_bracket_bounds(b['range']), high_sigma) * 100 - b['yes'])
+        best_edge = calc_model_prob(high_forecast, *get_bracket_bounds(best_yes['range']), high_sigma) * 100 - best_yes['yes']
         
         if best_edge >= 5:
             st.markdown(f"""
@@ -308,49 +288,40 @@ with col_high:
     else:
         st.error("❌ Could not load HIGH temp brackets")
 
-# ========== LOW TEMPERATURE (RIGHT) ==========
+# ========== LOW TEMPERATURE ==========
 with col_low:
     st.subheader("🌙 LOW TEMP")
+    
+    l1, l2 = st.columns(2)
+    with l1:
+        default_low = int(nws_low) if nws_low else 30
+        low_forecast = st.number_input("🎯 Low forecast", value=default_low, min_value=-20, max_value=120, key="low_fc")
+    with l2:
+        low_sigma = st.slider("σ (Low)", 1.0, 3.0, 1.8, 0.1, key="low_sig")
     
     brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
     
     if brackets_low:
-        # Find market favorite
         market_fav = max(brackets_low, key=lambda b: b['yes'])
-        
         st.caption(f"Market favorite: **{market_fav['range']}** @ {market_fav['yes']:.0f}¢")
         
-        # Show all brackets with edge calculation
         for b in brackets_low:
             is_fav = b['range'] == market_fav['range']
             low, high = get_bracket_bounds(b['range'])
-            model_prob = calc_model_prob(user_forecast, low, high, sigma) * 100
+            model_prob = calc_model_prob(low_forecast, low, high, low_sigma) * 100
             market_prob = b['yes']
             edge = model_prob - market_prob
             
-            # Determine styling
             if is_fav:
-                bg = "linear-gradient(90deg,#002a3d,#001a20)"
-                border = "2px solid #38bdf8"
-                icon = " ⭐"
+                bg, border, icon = "linear-gradient(90deg,#002a3d,#001a20)", "2px solid #38bdf8", " ⭐"
             elif edge >= 5:
-                bg = "#0a2e0a"
-                border = "1px solid #00ff00"
-                icon = " 🟢"
+                bg, border, icon = "#0a2e0a", "1px solid #00ff00", " 🟢"
             elif edge <= -5:
-                bg = "#2e0a0a"
-                border = "1px solid #ff4444"
-                icon = " 🔴"
+                bg, border, icon = "#2e0a0a", "1px solid #ff4444", " 🔴"
             else:
-                bg = "#0f172a"
-                border = "1px solid #333"
-                icon = ""
+                bg, border, icon = "#0f172a", "1px solid #333", ""
             
-            # Edge display
-            if abs(edge) >= 5:
-                edge_txt = f"<span style='color:{'#00ff00' if edge > 0 else '#ff4444'};font-weight:bold'>{edge:+.0f}¢</span>"
-            else:
-                edge_txt = f"<span style='color:#666'>{edge:+.0f}¢</span>"
+            edge_txt = f"<span style='color:{'#00ff00' if edge > 0 else '#ff4444'};font-weight:bold'>{edge:+.0f}¢</span>" if abs(edge) >= 5 else f"<span style='color:#666'>{edge:+.0f}¢</span>"
             
             st.markdown(f"""<div style="background:{bg};border:{border};border-radius:6px;padding:8px 10px;margin:4px 0">
                 <div style="display:flex;justify-content:space-between;align-items:center">
@@ -363,9 +334,8 @@ with col_low:
                 </div>
             </div>""", unsafe_allow_html=True)
         
-        # Best edge recommendation
-        best_yes = max(brackets_low, key=lambda b: calc_model_prob(user_forecast, *get_bracket_bounds(b['range']), sigma) * 100 - b['yes'])
-        best_edge = calc_model_prob(user_forecast, *get_bracket_bounds(best_yes['range']), sigma) * 100 - best_yes['yes']
+        best_yes = max(brackets_low, key=lambda b: calc_model_prob(low_forecast, *get_bracket_bounds(b['range']), low_sigma) * 100 - b['yes'])
+        best_edge = calc_model_prob(low_forecast, *get_bracket_bounds(best_yes['range']), low_sigma) * 100 - best_yes['yes']
         
         if best_edge >= 5:
             st.markdown(f"""
@@ -388,12 +358,11 @@ with col_low:
 
 st.markdown("---")
 
-# ========== HOW TO USE ==========
 with st.expander("📖 HOW TO USE", expanded=False):
     st.markdown("""
 ### 🎯 Finding Edge
 
-1. **Set your forecast** — What YOU think the temp will be
+1. **Set your forecast** — HIGH and LOW have separate inputs now!
 2. **Adjust σ** — Lower = more confident, Higher = more uncertainty
 3. **Compare** — Your model % vs Kalshi's market %
 4. **Find edge** — Green 🟢 = BUY YES, Red 🔴 = BUY NO
@@ -412,11 +381,7 @@ with st.expander("📖 HOW TO USE", expanded=False):
 - **10 AM-12 PM** — Good, prices rising
 - **After 12 PM** — Late, prices already reflect outcome
 
-### ⭐ Market Favorite
-
-The ⭐ bracket is Kalshi's highest-priced bracket (market consensus).
-
-*v2.1 — Live Kalshi Data*
+*v2.2 — Separate HIGH/LOW forecasts*
 """)
 
-st.caption("⚠️ Experimental. Not financial advice. v2.1")
+st.caption("⚠️ Experimental. Not financial advice. v2.2")
