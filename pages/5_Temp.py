@@ -299,8 +299,8 @@ if current_temp:
     
     if readings:
         with st.expander("📊 Recent Readings"):
-            reading_text = " | ".join([f"{r['time']}: {r['temp']}°F" for r in readings[:8]])
-            st.caption(reading_text)
+            for r in readings[:8]:
+                st.markdown(f"<div style='display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #30363d'><span style='color:#9ca3af'>{r['time']}</span><span style='color:#fff;font-weight:600'>{r['temp']}°F</span></div>", unsafe_allow_html=True)
 else:
     st.warning("⚠️ Could not fetch NWS observations")
 
