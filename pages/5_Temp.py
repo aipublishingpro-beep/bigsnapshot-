@@ -290,32 +290,28 @@ col_high, col_low = st.columns(2)
 
 with col_high:
     st.subheader("☀️ HIGH TEMP")
-    h1, h2 = st.columns(2)
-    with h1:
-        if nws_high:
-            default_high = int(nws_high)
-        elif nws_temp:
-            default_high = int(nws_temp)
-        else:
-            default_high = 40
-        high_forecast = st.number_input("🎯 Your forecast", value=default_high, min_value=-20, max_value=120, key="high_fc")
-    with h2:
-        high_sigma = st.slider("σ uncertainty", 0.1, 3.0, 1.8, 0.1, key="high_sig")
+    
+    if nws_high:
+        high_forecast = int(nws_high)
+        st.metric("🎯 NWS Forecast", f"{high_forecast}°F")
+    else:
+        high_forecast = st.number_input("🎯 Your forecast (NWS unavailable)", value=40, min_value=-20, max_value=120, key="high_fc")
+    
+    high_sigma = st.slider("σ uncertainty", 0.1, 3.0, 1.8, 0.1, key="high_sig")
     
     brackets_high = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY"))
     render_brackets(brackets_high, high_forecast, high_sigma)
 
 with col_low:
     st.subheader("🌙 LOW TEMP")
-    l1, l2 = st.columns(2)
-    with l1:
-        if nws_low:
-            default_low = int(nws_low)
-        else:
-            default_low = 25
-        low_forecast = st.number_input("🎯 Your forecast", value=default_low, min_value=-20, max_value=120, key="low_fc")
-    with l2:
-        low_sigma = st.slider("σ uncertainty", 0.1, 3.0, 1.8, 0.1, key="low_sig")
+    
+    if nws_low:
+        low_forecast = int(nws_low)
+        st.metric("🎯 NWS Forecast", f"{low_forecast}°F")
+    else:
+        low_forecast = st.number_input("🎯 Your forecast (NWS unavailable)", value=25, min_value=-20, max_value=120, key="low_fc")
+    
+    low_sigma = st.slider("σ uncertainty", 0.1, 3.0, 1.8, 0.1, key="low_sig")
     
     brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
     render_brackets(brackets_low, low_forecast, low_sigma)
