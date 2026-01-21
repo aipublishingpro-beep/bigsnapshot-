@@ -180,13 +180,13 @@ st.markdown("""
 eastern = pytz.timezone('US/Eastern')
 
 LEAGUES = {
-    "EPL": {"name": "Premier League", "code": "eng.1", "color": "#3d195b"},
-    "LALIGA": {"name": "La Liga", "code": "esp.1", "color": "#ee8707"},
-    "BUNDESLIGA": {"name": "Bundesliga", "code": "ger.1", "color": "#d20515"},
-    "SERIEA": {"name": "Serie A", "code": "ita.1", "color": "#024494"},
-    "LIGUE1": {"name": "Ligue 1", "code": "fra.1", "color": "#091c3e"},
-    "MLS": {"name": "MLS", "code": "usa.1", "color": "#000000"},
-    "UCL": {"name": "Champions League", "code": "uefa.champions", "color": "#0a1128"},
+    "EPL": {"name": "Premier League", "code": "eng.1", "color": "#3d195b", "kalshi_page": "https://kalshi.com/sports/soccer/EPL"},
+    "LALIGA": {"name": "La Liga", "code": "esp.1", "color": "#ee8707", "kalshi_page": "https://kalshi.com/sports/soccer/LALIGA"},
+    "BUNDESLIGA": {"name": "Bundesliga", "code": "ger.1", "color": "#d20515", "kalshi_page": "https://kalshi.com/sports/soccer/BUNDESLIGA"},
+    "SERIEA": {"name": "Serie A", "code": "ita.1", "color": "#024494", "kalshi_page": "https://kalshi.com/sports/soccer/SERIEA"},
+    "LIGUE1": {"name": "Ligue 1", "code": "fra.1", "color": "#091c3e", "kalshi_page": "https://kalshi.com/sports/soccer/LIGUE1"},
+    "MLS": {"name": "MLS", "code": "usa.1", "color": "#000000", "kalshi_page": "https://kalshi.com/sports/soccer/MLS"},
+    "UCL": {"name": "Champions League", "code": "uefa.champions", "color": "#0a1128", "kalshi_page": "https://kalshi.com/sports/soccer/UCL"},
 }
 
 # Team strength ratings (1-100 scale)
@@ -465,7 +465,7 @@ def parse_games(data, league_key):
             
             # Build URLs with fallback
             kalshi_url = build_kalshi_url(league_key, home_team, away_team, game_time_et)
-            fallback_url = "https://kalshi.com/sports/soccer"
+            fallback_url = LEAGUES[league_key].get('kalshi_page', 'https://kalshi.com/sports/soccer')
             
             games.append({
                 'id': event.get('id'),
