@@ -111,11 +111,35 @@ if not st.session_state.authenticated:
     </div>
     """, unsafe_allow_html=True)
     
+    # ============ FREE TEMP BUTTON ============
+    st.markdown(
+        """
+        <div style="text-align: center; margin: 30px 0 15px 0;">
+            <a href="/Temp" target="_self">
+                <button style="
+                    background-color:#f59e0b;
+                    color:black;
+                    padding:14px 36px;
+                    border:none;
+                    border-radius:10px;
+                    font-size:16px;
+                    font-weight:700;
+                    cursor:pointer;
+                ">
+                    🌡️ Try Temp Edge Finder FREE
+                </button>
+            </a>
+            <p style="color: #888; font-size: 12px; margin-top: 10px;">No signup required. See it in action.</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
     # ============ STRIPE BUY BUTTON (TOP) ============
     if not from_payment:
         st.markdown(
             f"""
-            <div style="text-align: center; margin: 30px 0;">
+            <div style="text-align: center; margin: 15px 0 30px 0;">
                 <a href="{STRIPE_LINK}" target="_blank">
                     <button style="
                         background-color:#22c55e;
@@ -127,7 +151,7 @@ if not st.session_state.authenticated:
                         font-weight:700;
                         cursor:pointer;
                     ">
-                        🔓 Unlock Early Access – $49.99
+                        🔓 Unlock All Tools – $49.99
                     </button>
                 </a>
                 <p style="color: #888; font-size: 13px; margin-top: 12px;">One-time payment. Refund available if not a fit.</p>
@@ -250,9 +274,10 @@ if not st.session_state.authenticated:
             <div style="font-size: 45px; margin-bottom: 15px;">🏒</div>
             <h3 style="color: #fff; margin-bottom: 10px;">NHL Edge Finder</h3>
         </div>
-        <div style="background: linear-gradient(135deg, #3a2a2a 0%, #4a3a3a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #5a4a4a;">
+        <div style="background: linear-gradient(135deg, #3a2a1a 0%, #4a3a2a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #f59e0b;">
             <div style="font-size: 45px; margin-bottom: 15px;">🌡️</div>
-            <h3 style="color: #fff; margin-bottom: 10px;">Temp Edge Finder</h3>
+            <h3 style="color: #f59e0b; margin-bottom: 5px;">Temp Edge Finder</h3>
+            <span style="background:#f59e0b;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -309,7 +334,7 @@ if not st.session_state.authenticated:
                         font-weight:700;
                         cursor:pointer;
                     ">
-                        🔓 Unlock Early Access – $49.99
+                        🔓 Unlock All Tools – $49.99
                     </button>
                 </a>
                 <p style="color: #888; font-size: 13px; margin-top: 12px;">One-time payment. Refund available if not a fit.</p>
