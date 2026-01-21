@@ -6,6 +6,34 @@ import re
 
 st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
 
+# ============================================================
+# GA4 TRACKING
+# ============================================================
+st.markdown("""
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
+<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# MOBILE CSS
+# ============================================================
+st.markdown("""
+<style>
+@media (max-width: 768px) {
+    .stColumns > div { flex: 1 1 100% !important; min-width: 100% !important; }
+    [data-testid="stMetricValue"] { font-size: 1.2rem !important; }
+    [data-testid="stMetricLabel"] { font-size: 0.8rem !important; }
+    h1 { font-size: 1.5rem !important; }
+    h2 { font-size: 1.2rem !important; }
+    h3 { font-size: 1rem !important; }
+    button { padding: 8px 12px !important; font-size: 0.85em !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# PAGE STYLES
+# ============================================================
 st.markdown("""
 <style>
 .stApp {background-color: #0d1117;}
