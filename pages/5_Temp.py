@@ -428,4 +428,42 @@ st.markdown("""
 <b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.1</span>
 </div>
 """, unsafe_allow_html=True)
+
+with st.expander("❓ How to Use This App"):
+    st.markdown("""
+    **🌡️ What This App Does**
+    
+    Compares actual NWS temperature observations against Kalshi prediction market prices to find edge opportunities.
+    
+    **⏰ Timing Windows**
+    
+    • **LOW Temperature**: Locks in by ~6 AM. The overnight low is set — it only warms up from there.
+    • **HIGH Temperature**: Locks in by ~3 PM. Peak heat typically occurs 12-5 PM.
+    
+    **🎯 Reading the Display**
+    
+    • **⭐ Star** = Market favorite (highest Kalshi price)
+    • **🎯 ACTUAL** = The bracket where the observed temperature actually falls
+    • **Kalshi price** = What the market thinks the probability is (e.g., 40¢ = 40% chance)
+    
+    **💰 Finding Edge**
+    
+    When ACTUAL bracket ≠ Market favorite, there may be edge:
+    • If actual temp falls in a bracket priced at 1¢, buying YES pays +99¢ profit
+    • If actual temp falls in a bracket priced at 50¢, buying YES pays +50¢ profit
+    
+    **📊 Data Sources**
+    
+    • **Observations**: Live hourly readings from NWS weather stations
+    • **Brackets**: Real-time prices from Kalshi API
+    • **Forecast**: NWS official forecast for reference
+    
+    **⚠️ Important Notes**
+    
+    • This is NOT financial advice
+    • Weather can change — especially HIGH temps before 3 PM
+    • Always verify on Kalshi before trading
+    • Kalshi uses specific weather stations — slight differences possible
+    """)
+
 st.caption("⚠️ Based on actual NWS observations. Not financial advice. v3.1")
