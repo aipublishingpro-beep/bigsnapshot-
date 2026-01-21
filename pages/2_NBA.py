@@ -343,6 +343,12 @@ def get_minutes_played(period, clock, status_type):
         else: return 48 + (period - 5) * 5 + (5 - time_left)
     except: return (period - 1) * 12 if period <= 4 else 48 + (period - 5) * 5
 
+def escape_html(text):
+    """Escape HTML special characters"""
+    if not text:
+        return ""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
 def calc_ml_score(home_team, away_team, yesterday_teams, injuries, last_5):
     home, away = TEAM_STATS.get(home_team, {}), TEAM_STATS.get(away_team, {})
     home_loc, away_loc = TEAM_LOCATIONS.get(home_team, (0, 0)), TEAM_LOCATIONS.get(away_team, (0, 0))
@@ -365,8 +371,8 @@ def calc_ml_score(home_team, away_team, yesterday_teams, injuries, last_5):
     
     home_out, home_inj = get_injury_impact(home_team, injuries)
     away_out, away_inj = get_injury_impact(away_team, injuries)
-    if away_inj - home_inj > 3: sh += 2.0; rh.append(f"🏥 {away_out[0][:10]} OUT" if away_out else "🏥 Opp Injured")
-    elif home_inj - away_inj > 3: sa += 2.0; ra.append(f"🏥 {home_out[0][:10]} OUT" if home_out else "🏥 Opp Injured")
+    if away_inj - home_inj > 3: sh += 2.0; rh.append(f"🏥 {escape_html(away_out[0][:10])} OUT" if away_out else "🏥 Opp Injured")
+    elif home_inj - away_inj > 3: sa += 2.0; ra.append(f"🏥 {escape_html(home_out[0][:10])} OUT" if home_out else "🏥 Opp Injured")
     
     travel = calc_distance(away_loc, home_loc)
     if travel > 2000: sh += 1.0; rh.append(f"✈️ {int(travel)}mi")
@@ -399,19 +405,19 @@ def calc_ml_score(home_team, away_team, yesterday_teams, injuries, last_5):
     hf = round((sh / total) * 10, 1) if total > 0 else 5.0
     af = round((sa / total) * 10, 1) if total > 0 else 5.0
     
-    if hf >= af: return home_team, hf, rh[:5], home_out, away_out, home_net, away_net
-    else: return away_team, af, ra[:5], home_out, away_out, home_net, away_net
+    if hf >= af: return home_team, hf, rh[:4], home_out, away_out, home_net, away_net
+    else: return away_team, af, ra[:4], home_out, away_out, home_net, away_net
 
 def get_signal_tier(score):
     """STRICT TIER SYSTEM - Only 10.0 = STRONG BUY (tracked)"""
     if score >= 10.0:
-        return "🔒 STRONG BUY", "#00ff00", True  # Bright green, tracked
+        return "🔒 STRONG", "#00ff00", True
     elif score >= 8.0:
-        return "🔵 BUY", "#00aaff", False  # Blue, NOT tracked
+        return "🔵 BUY", "#00aaff", False
     elif score >= 5.5:
-        return "🟡 LEAN", "#ffaa00", False  # Amber, NOT tracked
+        return "🟡 LEAN", "#ffaa00", False
     else:
-        return "⚪ PASS", "#666666", False  # Grey, NOT tracked
+        return "⚪ PASS", "#666666", False
 
 # FETCH DATA
 games = fetch_espn_scores()
@@ -432,7 +438,7 @@ yesterday_teams = yesterday_teams.intersection(today_teams)
 with st.sidebar:
     st.header("📖 SIGNAL TIERS")
     st.markdown("""
-🔒 **STRONG BUY** → 10.0
+🔒 **STRONG** → 10.0
 <span style="color:#888;font-size:0.85em">Tracked in stats</span>
 
 🔵 **BUY** → 8.0-9.9
@@ -448,11 +454,11 @@ with st.sidebar:
     st.header("📊 MODEL INFO")
     st.markdown("Proprietary multi-factor model analyzing matchups, injuries, rest, travel, momentum, and historical edges.")
     st.divider()
-    st.caption("v17.7 NBA EDGE")
+    st.caption("v17.8 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
-st.caption("Proprietary ML Model + Live Tracker | v17.7")
+st.caption("Proprietary ML Model + Live Tracker | v17.8")
 
 # LIVE GAMES
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
@@ -476,14 +482,14 @@ if live_games:
         elif qtr == 4 and diff <= 8: state, clr = "CLOSE", "#ffaa00"
         else: state, clr = "LIVE", "#44ff44"
         
-        st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#0a0a1e);padding:15px;border-radius:12px;border:2px solid {clr};margin-bottom:10px">
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#0a0a1e);padding:12px;border-radius:10px;border:2px solid {clr};margin-bottom:8px">
             <div style="display:flex;justify-content:space-between;align-items:center">
-                <b style="color:#fff;font-size:1.3em">{g['away_team']} {g['away_score']} @ {g['home_team']} {g['home_score']}</b>
-                <div><span style="color:{clr};font-weight:bold">Q{qtr} {clock}</span> | <span style="color:#888">Pace: {pace}/min → {proj}</span></div>
+                <b style="color:#fff;font-size:1.2em">{escape_html(g['away_team'])} {g['away_score']} @ {escape_html(g['home_team'])} {g['home_score']}</b>
+                <div><span style="color:{clr};font-weight:bold">Q{qtr} {escape_html(clock)}</span> | <span style="color:#888">Pace: {pace}/min → {proj}</span></div>
             </div></div>""", unsafe_allow_html=True)
     st.divider()
 
-# ML PICKS
+# ML PICKS - COMPACT DESIGN
 st.subheader("🎯 ML PICKS")
 
 if games:
@@ -511,51 +517,47 @@ if games:
     
     ml_results.sort(key=lambda x: x["score"], reverse=True)
     
-    # Count tracked picks for stats
-    tracked_picks = [r for r in ml_results if r["is_tracked"]]
-    
     for r in ml_results:
         if r["score"] < 5.5: continue
         kalshi_url = build_kalshi_ml_url(r["away"], r["home"])
-        reasons_str = " • ".join(r["reasons"])
-        injury_str = f" • 🏥 {r['opp_out'][0][:12]} OUT" if r["opp_out"] else ""
+        # Escape all dynamic content and limit reasons to 3
+        reasons_safe = [escape_html(reason) for reason in r["reasons"][:3]]
+        reasons_str = " · ".join(reasons_safe)
         
         g = games.get(f"{r['away']}@{r['home']}", {})
         if g.get('status_type') == "STATUS_FINAL":
             status_badge = "FINAL"
             status_color = "#888"
         elif g.get('period', 0) > 0:
-            status_badge = f"Q{g.get('period')} {g.get('clock', '')}"
+            status_badge = f"Q{g.get('period')} {escape_html(g.get('clock', ''))}"
             status_color = "#ff4444"
         else:
             status_badge = "PRE"
             status_color = "#00ff00"
         
-        # STRONG BUY gets thick border + tracked label
-        if r["is_tracked"]:
-            border_style = f"border-left: 6px solid {r['color']}; border: 2px solid {r['color']};"
-            tracked_label = '<span style="background:#00ff00;color:#000;padding:2px 6px;border-radius:4px;font-size:0.7em;margin-left:8px;">📊 TRACKED</span>'
-        else:
-            border_style = f"border-left: 4px solid {r['color']};"
-            tracked_label = ""
+        # Compact single-line design
+        tracked_badge = ' <span style="background:#00ff00;color:#000;padding:1px 4px;border-radius:3px;font-size:0.65em">📊</span>' if r["is_tracked"] else ""
+        border_width = "3px" if r["is_tracked"] else "2px"
         
-        st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:12px 14px;border-radius:8px;{border_style}">
-            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
-                <span style="color:{r['color']};font-weight:bold;">{r['tier']}</span>
-                <b style="color:#fff;font-size:1.1em">{r['pick']}</b>
-                <span style="color:#666">vs {r['opp']}</span>
-                <span style="color:#38bdf8;font-weight:bold">{r['score']}/10</span>
-                <span style="color:{status_color};font-size:0.8em">⏱️ {status_badge}</span>
-                {tracked_label}
-            </div>
-            <div style="color:#777;font-size:0.85em;margin-top:6px">{reasons_str}{injury_str}</div>
-        </div>""", unsafe_allow_html=True)
-        st.markdown(buy_button(kalshi_url, f"BUY {r['pick']}"), unsafe_allow_html=True)
+        pick_safe = escape_html(r['pick_code'])
+        opp_safe = escape_html(r['opp_code'])
+        
+        st.markdown(f"""<div style="background:#0f172a;padding:8px 12px;border-radius:6px;border-left:{border_width} solid {r['color']};margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+<span style="color:{r['color']};font-weight:bold;font-size:0.85em">{escape_html(r['tier'])}</span>
+<b style="color:#fff">{pick_safe}</b>
+<span style="color:#555">v {opp_safe}</span>
+<span style="color:#38bdf8;font-weight:bold">{r['score']}</span>{tracked_badge}
+<span style="color:{status_color};font-size:0.75em">{status_badge}</span>
+</div>
+<a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:4px 10px;border-radius:4px;font-size:0.75em;font-weight:bold;text-decoration:none">BUY</a>
+</div>
+<div style="color:#666;font-size:0.75em;margin:-2px 0 6px 14px">{reasons_str}</div>""", unsafe_allow_html=True)
     
     # Only add STRONG BUY (tracked) picks to tracker
     scheduled_strong = [r for r in ml_results if r["is_tracked"] and games.get(f"{r['away']}@{r['home']}", {}).get('status_type') == "STATUS_SCHEDULED"]
     if scheduled_strong:
-        if st.button(f"➕ Add {len(scheduled_strong)} STRONG BUY Picks to Tracker", use_container_width=True, key="add_ml_picks"):
+        if st.button(f"➕ Add {len(scheduled_strong)} STRONG Picks to Tracker", use_container_width=True, key="add_ml_picks"):
             added = 0
             for r in scheduled_strong:
                 gk = f"{r['away']}@{r['home']}"
@@ -591,12 +593,12 @@ for i, f in enumerate(form_list):
         elif streak >= 0: badge, clr = f"➖ {'W' if streak > 0 else 'E'}{abs(streak)}", "#ffff00"
         elif streak >= -2: badge, clr = f"📉 L{abs(streak)}", "#ff8800"
         else: badge, clr = f"❄️ L{abs(streak)}", "#ff4444"
-        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:#0f172a;padding:6px 10px;margin-bottom:3px;border-radius:5px;border-left:3px solid {clr}">
-            <div style="display:flex;align-items:center;gap:8px">
-                <span style="color:#fff;font-weight:bold;width:40px">{code}</span>
-                <span style="color:{clr};font-family:monospace;letter-spacing:2px">{f['form']}</span>
+        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:#0f172a;padding:5px 8px;margin-bottom:2px;border-radius:4px;border-left:2px solid {clr}">
+            <div style="display:flex;align-items:center;gap:6px">
+                <span style="color:#fff;font-weight:bold;width:36px;font-size:0.85em">{escape_html(code)}</span>
+                <span style="color:{clr};font-family:monospace;letter-spacing:1px;font-size:0.8em">{escape_html(f['form'])}</span>
             </div>
-            <span style="color:{clr};font-size:0.85em">{badge}</span>
+            <span style="color:{clr};font-size:0.75em">{escape_html(badge)}</span>
         </div>""", unsafe_allow_html=True)
 st.divider()
 
@@ -607,8 +609,8 @@ if yesterday_teams:
     for i, team in enumerate(sorted(yesterday_teams)):
         with b2b_cols[i % 4]:
             code = KALSHI_CODES.get(team, "???")
-            st.markdown(f"""<div style="background:#2a1a1a;padding:8px;border-radius:6px;border:1px solid #ff6666;text-align:center">
-                <span style="color:#ff6666;font-weight:bold">{code}</span> <span style="color:#888">B2B</span>
+            st.markdown(f"""<div style="background:#2a1a1a;padding:6px;border-radius:5px;border:1px solid #ff6666;text-align:center">
+                <span style="color:#ff6666;font-weight:bold;font-size:0.9em">{escape_html(code)}</span> <span style="color:#888;font-size:0.8em">B2B</span>
             </div>""", unsafe_allow_html=True)
     st.divider()
 
@@ -630,27 +632,27 @@ if team_a and team_b and team_a != team_b:
         away_color = color if pick == team_a else "#fff"
         home_color = color if pick == team_b else "#fff"
         
-        tracked_note = '<div style="text-align:center;margin-top:10px;"><span style="background:#00ff00;color:#000;padding:4px 10px;border-radius:4px;font-size:0.8em;">📊 Counts toward performance stats</span></div>' if is_tracked else '<div style="text-align:center;margin-top:10px;color:#888;font-size:0.8em;">ℹ️ Informational only — not tracked in stats</div>'
+        tracked_note = '<div style="text-align:center;margin-top:8px"><span style="background:#00ff00;color:#000;padding:3px 8px;border-radius:4px;font-size:0.75em">📊 Tracked</span></div>' if is_tracked else ''
         
-        st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:20px;border-radius:12px;border:2px solid {color};margin:15px 0">
-            <div style="text-align:center;margin-bottom:15px">
-                <span style="font-size:1.8em;color:{away_color};font-weight:bold">{KALSHI_CODES.get(team_a, '???')}</span>
-                <span style="color:#888;margin:0 20px;font-size:1.4em">@</span>
-                <span style="font-size:1.8em;color:{home_color};font-weight:bold">{KALSHI_CODES.get(team_b, '???')}</span>
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:15px;border-radius:10px;border:2px solid {color};margin:10px 0">
+            <div style="text-align:center;margin-bottom:10px">
+                <span style="font-size:1.5em;color:{away_color};font-weight:bold">{escape_html(KALSHI_CODES.get(team_a, '???'))}</span>
+                <span style="color:#888;margin:0 15px;font-size:1.2em">@</span>
+                <span style="font-size:1.5em;color:{home_color};font-weight:bold">{escape_html(KALSHI_CODES.get(team_b, '???'))}</span>
             </div>
             <div style="text-align:center">
-                <span style="color:{color};font-size:1.5em;font-weight:bold">{tier}</span>
-                <span style="color:#888;margin-left:15px;font-size:1.2em">{KALSHI_CODES.get(pick, '???')} {score}/10</span>
+                <span style="color:{color};font-size:1.3em;font-weight:bold">{escape_html(tier)}</span>
+                <span style="color:#888;margin-left:10px">{escape_html(KALSHI_CODES.get(pick, '???'))} {score}/10</span>
             </div>
-            <div style="display:flex;justify-content:center;gap:40px;margin-top:15px">
-                <div style="text-align:center"><div style="color:#888">Away Form</div><div style="color:#fff;font-family:monospace;font-size:1.2em">{form_a}</div></div>
-                <div style="text-align:center"><div style="color:#888">Home Form</div><div style="color:#fff;font-family:monospace;font-size:1.2em">{form_b}</div></div>
+            <div style="display:flex;justify-content:center;gap:30px;margin-top:10px">
+                <div style="text-align:center"><div style="color:#888;font-size:0.8em">Away</div><div style="color:#fff;font-family:monospace">{escape_html(form_a)}</div></div>
+                <div style="text-align:center"><div style="color:#888;font-size:0.8em">Home</div><div style="color:#fff;font-family:monospace">{escape_html(form_b)}</div></div>
             </div>
             {tracked_note}
         </div>""", unsafe_allow_html=True)
         
         kalshi_url = build_kalshi_ml_url(team_a, team_b)
-        st.markdown(buy_button(kalshi_url, f"🎯 BUY {pick.upper()} TO WIN"), unsafe_allow_html=True)
+        st.markdown(buy_button(kalshi_url, f"🎯 BUY {escape_html(pick.upper())} TO WIN"), unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Error: {e}")
 st.divider()
@@ -688,20 +690,22 @@ if st.session_state.positions:
                 label, clr = "⏳ PENDING", "#888"
                 pnl = f"Win: +${potential:.2f}"
             
-            status = "FINAL" if is_final else f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "Scheduled"
-            tracked_badge = '<span style="background:#00ff00;color:#000;padding:1px 4px;border-radius:3px;font-size:0.7em;margin-left:6px;">TRACKED</span>' if is_tracked_pos else ''
+            status = "FINAL" if is_final else f"Q{g['period']} {escape_html(g['clock'])}" if g['period'] > 0 else "Scheduled"
+            tracked_badge = '<span style="background:#00ff00;color:#000;padding:1px 4px;border-radius:3px;font-size:0.7em;margin-left:6px;">📊</span>' if is_tracked_pos else ''
             
-            st.markdown(f"""<div style='background:#1a1a2e;padding:12px;border-radius:8px;border-left:3px solid {clr};margin-bottom:8px'>
-                <div style='display:flex;justify-content:space-between'><b style='color:#fff'>{gk.replace('@', ' @ ')}</b>{tracked_badge} <span style='color:#888'>{status}</span> <b style='color:{clr}'>{label}</b></div>
-                <div style='color:#aaa;margin-top:5px'>🎯 {pick} | {contracts}x @ {price}¢ | Lead: {lead:+d} | {pnl}</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='background:#1a1a2e;padding:10px;border-radius:6px;border-left:3px solid {clr};margin-bottom:6px'>
+                <div style='display:flex;justify-content:space-between;font-size:0.9em'><b style='color:#fff'>{escape_html(gk.replace('@', ' @ '))}</b>{tracked_badge} <span style='color:#888'>{status}</span> <b style='color:{clr}'>{label}</b></div>
+                <div style='color:#aaa;margin-top:4px;font-size:0.8em'>🎯 {escape_html(pick)} | {contracts}x @ {price}¢ | Lead: {lead:+d} | {pnl}</div></div>""", unsafe_allow_html=True)
             
             kalshi_url = build_kalshi_ml_url(parts[0], parts[1])
-            st.markdown(buy_button(kalshi_url, "🔗 Trade on Kalshi"), unsafe_allow_html=True)
-            
-            if st.button("🗑️ Remove", key=f"del_{idx}"):
-                st.session_state.positions.pop(idx)
-                save_positions(st.session_state.positions)
-                st.rerun()
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.markdown(f"<a href='{kalshi_url}' target='_blank' style='color:#38bdf8;font-size:0.8em'>🔗 Trade</a>", unsafe_allow_html=True)
+            with col2:
+                if st.button("🗑️", key=f"del_{idx}"):
+                    st.session_state.positions.pop(idx)
+                    save_positions(st.session_state.positions)
+                    st.rerun()
 else:
     st.info("No active positions")
 st.divider()
@@ -735,7 +739,7 @@ if sel != "Select...":
 
 st.divider()
 
-# ALL GAMES
+# ALL GAMES - COMPACT
 st.subheader("📺 ALL GAMES")
 if games:
     for gk, g in games.items():
@@ -743,13 +747,13 @@ if games:
         ac, hc = KALSHI_CODES.get(away, "???"), KALSHI_CODES.get(home, "???")
         if g['status_type'] == "STATUS_FINAL":
             winner = home if g['home_score'] > g['away_score'] else away
-            status, clr = f"✅ FINAL | {KALSHI_CODES.get(winner, '???')} WIN", "#44ff44"
+            status, clr = f"✅ {escape_html(KALSHI_CODES.get(winner, '???'))}", "#44ff44"
         elif g['period'] > 0:
-            status, clr = f"🔴 Q{g['period']} {g['clock']}", "#ff4444"
+            status, clr = f"🔴 Q{g['period']} {escape_html(g['clock'])}", "#ff4444"
         else:
-            status, clr = "📅 Scheduled", "#888"
-        st.markdown(f"""<div style="display:flex;justify-content:space-between;background:#0f172a;padding:8px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {clr}">
-            <div><b style="color:#fff">{ac}</b> {g['away_score']} @ <b style="color:#fff">{hc}</b> {g['home_score']}</div>
+            status, clr = "📅", "#888"
+        st.markdown(f"""<div style="display:flex;justify-content:space-between;background:#0f172a;padding:6px 10px;margin-bottom:3px;border-radius:5px;border-left:2px solid {clr};font-size:0.9em">
+            <div><b style="color:#fff">{escape_html(ac)}</b> {g['away_score']} @ <b style="color:#fff">{escape_html(hc)}</b> {g['home_score']}</div>
             <span style="color:{clr}">{status}</span>
         </div>""", unsafe_allow_html=True)
 else:
@@ -770,12 +774,12 @@ with st.expander("📖 HOW TO USE THIS APP", expanded=False):
 
 | Tier | Score | Tracked? | Meaning |
 |------|-------|----------|---------|
-| 🔒 **STRONG BUY** | 10.0 | ✅ YES | Headline pick — counts in stats |
+| 🔒 **STRONG** | 10.0 | ✅ YES | Headline pick — counts in stats |
 | 🔵 **BUY** | 8.0-9.9 | ❌ NO | Good value — informational only |
 | 🟡 **LEAN** | 5.5-7.9 | ❌ NO | Slight edge |
 | ⚪ **PASS** | <5.5 | ❌ NO | No clear edge |
 
-**Important:** Only 🔒 STRONG BUY (10.0/10) picks count toward our published success rate.
+**Important:** Only 🔒 STRONG (10.0/10) picks count toward our published success rate.
 
 ---
 
@@ -792,7 +796,7 @@ with st.expander("📖 HOW TO USE THIS APP", expanded=False):
 
 ### 💡 **Tips**
 
-- **STRONG BUY** = headline bets we stand behind
+- **STRONG** = headline bets we stand behind
 - **BUY** = informational, trade at your discretion
 - Check **B2B status** — fatigued teams lose
 - Watch for **star injuries**
@@ -805,8 +809,8 @@ Click **BUY** buttons to go directly to Kalshi markets (opens in new tab).
 
 ---
 
-*Built for Kalshi. v17.7*
+*Built for Kalshi. v17.8*
 """)
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v17.7")
+st.caption("⚠️ Educational only. Not financial advice. v17.8")
