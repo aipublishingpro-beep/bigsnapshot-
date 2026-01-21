@@ -6,10 +6,31 @@ import json
 import os
 import time
 from styles import apply_styles, buy_button
+import extra_streamlit_components as stx
 
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
 
 apply_styles()
+
+# ============================================================
+# COOKIE MANAGER FOR PERSISTENT LOGIN
+# ============================================================
+cookie_manager = stx.CookieManager()
+
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None
+
+auth_cookie = cookie_manager.get("bigsnapshot_auth")
+if auth_cookie and not st.session_state.authenticated:
+    st.session_state.authenticated = True
+    st.session_state.user_type = auth_cookie
+
+if not st.session_state.authenticated:
+    st.warning("⚠️ Please log in from the Home page first.")
+    st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
+    st.stop()
 
 # ========== GOOGLE ANALYTICS G4 ==========
 st.markdown("""
