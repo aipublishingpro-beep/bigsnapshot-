@@ -296,6 +296,9 @@ current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("stat
 if current_temp:
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
+        <div style="text-align:center;margin-bottom:10px">
+            <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#3b82f6">{cfg.get('station', 'N/A')}</strong></span>
+        </div>
         <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
             <div>
                 <div style="color:#6b7280;font-size:0.8em">CURRENT</div>
