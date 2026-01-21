@@ -5,8 +5,11 @@ import pytz
 import json
 import os
 import time
+from styles import apply_styles
 
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
+
+apply_styles()
 
 # ========== GOOGLE ANALYTICS G4 ==========
 st.markdown("""
@@ -22,24 +25,6 @@ st.markdown("""
 
 eastern = pytz.timezone("US/Eastern")
 today_str = datetime.now(eastern).strftime("%Y-%m-%d")
-
-st.markdown("""
-<style>
-.stLinkButton > a {background-color: #00aa00 !important;border-color: #00aa00 !important;color: white !important;}
-.stLinkButton > a:hover {background-color: #00cc00 !important;border-color: #00cc00 !important;}
-#MainMenu {visibility: hidden;}
-header {visibility: hidden;}
-footer {visibility: hidden;}
-html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-    overflow-x: hidden !important;
-    max-width: 100vw !important;
-}
-div[data-testid="stMarkdownContainer"] > div {
-    overflow-x: auto !important;
-    max-width: 100% !important;
-}
-</style>
-""", unsafe_allow_html=True)
 
 POSITIONS_FILE = "nba_positions.json"
 
@@ -174,6 +159,19 @@ H2H_EDGES = {
     ("Phoenix", "Portland"): 0.5, ("Miami", "Orlando"): 0.5,
     ("Dallas", "San Antonio"): 0.5, ("Memphis", "New Orleans"): 0.3,
 }
+
+def buy_button(url, text="BUY"):
+    return f'''<a href="{url}" target="_blank" style="
+        display: block;
+        background: linear-gradient(135deg, #00c853, #00a844);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        text-align: center;
+        margin: 5px 0;
+    ">{text}</a>'''
 
 def build_kalshi_ml_url(away_team, home_team):
     away_code = KALSHI_CODES.get(away_team, "XXX")
@@ -525,16 +523,13 @@ if games:
             status_badge = "PRE"
             status_color = "#00ff00"
         
-        col_info, col_btn = st.columns([5, 1])
-        with col_info:
-            st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:12px 14px;border-radius:8px;border-left:4px solid {r['color']}">
-                <b style="color:#fff;font-size:1.1em">{r['pick']}</b> <span style="color:#666">vs {r['opp']}</span>
-                <span style="color:#38bdf8;margin-left:8px;font-weight:bold">{r['score']}/10</span>
-                <span style="color:{status_color};margin-left:8px;font-size:0.8em">⏱️ {status_badge}</span>
-                <span style="color:#777;font-size:0.85em;margin-left:10px">{reasons_str}{injury_str}</span>
-            </div>""", unsafe_allow_html=True)
-        with col_btn:
-            st.link_button(f"BUY {r['pick']}", kalshi_url, use_container_width=True)
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:12px 14px;border-radius:8px;border-left:4px solid {r['color']}">
+            <b style="color:#fff;font-size:1.1em">{r['pick']}</b> <span style="color:#666">vs {r['opp']}</span>
+            <span style="color:#38bdf8;margin-left:8px;font-weight:bold">{r['score']}/10</span>
+            <span style="color:{status_color};margin-left:8px;font-size:0.8em">⏱️ {status_badge}</span>
+            <span style="color:#777;font-size:0.85em;margin-left:10px">{reasons_str}{injury_str}</span>
+        </div>""", unsafe_allow_html=True)
+        st.markdown(buy_button(kalshi_url, f"BUY {r['pick']}"), unsafe_allow_html=True)
     
     scheduled_strong = [r for r in ml_results if r["score"] >= 6.5 and games.get(f"{r['away']}@{r['home']}", {}).get('status_type') == "STATUS_SCHEDULED"]
     if scheduled_strong:
@@ -628,6 +623,9 @@ if team_a and team_b and team_a != team_b:
                 <div style="text-align:center"><div style="color:#888">Home Form</div><div style="color:#fff;font-family:monospace;font-size:1.2em">{form_b}</div></div>
             </div>
         </div>""", unsafe_allow_html=True)
+        
+        kalshi_url = build_kalshi_ml_url(team_a, team_b)
+        st.markdown(buy_button(kalshi_url, f"🎯 BUY {pick.upper()} TO WIN"), unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Error: {e}")
 st.divider()
@@ -670,6 +668,9 @@ if st.session_state.positions:
                 <div style='display:flex;justify-content:space-between'><b style='color:#fff'>{gk.replace('@', ' @ ')}</b> <span style='color:#888'>{status}</span> <b style='color:{clr}'>{label}</b></div>
                 <div style='color:#aaa;margin-top:5px'>🎯 {pick} | {contracts}x @ {price}¢ | Lead: {lead:+d} | {pnl}</div></div>""", unsafe_allow_html=True)
             
+            kalshi_url = build_kalshi_ml_url(parts[0], parts[1])
+            st.markdown(buy_button(kalshi_url, "🔗 Trade on Kalshi"), unsafe_allow_html=True)
+            
             if st.button("🗑️ Remove", key=f"del_{idx}"):
                 st.session_state.positions.pop(idx)
                 save_positions(st.session_state.positions)
@@ -686,9 +687,13 @@ sel = st.selectbox("Game", game_opts)
 
 if sel != "Select...":
     parts = sel.replace(" @ ", "@").split("@")
+    ml_url = build_kalshi_ml_url(parts[0], parts[1])
+    totals_url = build_kalshi_totals_url(parts[0], parts[1])
     c1, c2 = st.columns(2)
-    c1.link_button("🔗 ML Market", build_kalshi_ml_url(parts[0], parts[1]), use_container_width=True)
-    c2.link_button("🔗 Totals Market", build_kalshi_totals_url(parts[0], parts[1]), use_container_width=True)
+    with c1:
+        st.markdown(buy_button(ml_url, "🔗 ML Market"), unsafe_allow_html=True)
+    with c2:
+        st.markdown(buy_button(totals_url, "🔗 Totals Market"), unsafe_allow_html=True)
     
     p1, p2, p3 = st.columns(3)
     with p1: st.session_state.selected_ml_pick = st.radio("Pick", [parts[1], parts[0]], horizontal=True)
