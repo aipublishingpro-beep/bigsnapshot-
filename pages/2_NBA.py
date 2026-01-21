@@ -31,7 +31,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 POSITIONS_FILE = "nba_positions.json"
-PERFORMANCE_FILE = "nba_performance.json"
+
 
 def load_positions():
     try:
@@ -47,13 +47,7 @@ def save_positions(positions):
             json.dump(positions, f, indent=2)
     except: pass
 
-def load_performance():
-    try:
-        if os.path.exists(PERFORMANCE_FILE):
-            with open(PERFORMANCE_FILE, 'r') as f:
-                return json.load(f)
-    except: pass
-    return {"strong": {"wins": 15, "losses": 4}, "buy": {"wins": 22, "losses": 11}, "lean": {"wins": 18, "losses": 15}, "total_profit": 156.50}
+
 
 if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
@@ -63,8 +57,7 @@ if "selected_ml_pick" not in st.session_state:
     st.session_state.selected_ml_pick = None
 if "editing_position" not in st.session_state:
     st.session_state.editing_position = None
-if "performance" not in st.session_state:
-    st.session_state.performance = load_performance()
+
 if "drought_tracker" not in st.session_state:
     st.session_state.drought_tracker = {}
 if "pace_history" not in st.session_state:
@@ -458,45 +451,13 @@ with st.sidebar:
     st.header("📊 MODEL INFO")
     st.markdown("Proprietary multi-factor model analyzing matchups, injuries, rest, travel, momentum, and historical edges.")
     st.divider()
-    st.caption("v17.0 NBA EDGE")
+    st.caption("v17.1 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
-st.caption("Proprietary ML Model + Live Tracker | v17.0")
+st.caption("Proprietary ML Model + Live Tracker | v17.1")
 
-# MODEL PERFORMANCE
-st.subheader("📊 MODEL PERFORMANCE")
-perf = st.session_state.performance
-col1, col2, col3, col4 = st.columns(4)
-sw, sl = perf["strong"]["wins"], perf["strong"]["losses"]
-bw, bl = perf["buy"]["wins"], perf["buy"]["losses"]
-lw, ll = perf["lean"]["wins"], perf["lean"]["losses"]
-with col1:
-    pct = sw / (sw + sl) * 100 if (sw + sl) > 0 else 0
-    st.markdown(f"""<div style="background:linear-gradient(135deg,#0a2e0a,#001a00);padding:15px;border-radius:10px;border:2px solid #00ff00;text-align:center">
-        <div style="color:#00ff00;font-size:2em;font-weight:bold">{pct:.0f}%</div>
-        <div style="color:#888">🟢 STRONG</div>
-        <div style="color:#aaa;font-size:0.9em">{sw}-{sl}</div></div>""", unsafe_allow_html=True)
-with col2:
-    pct = bw / (bw + bl) * 100 if (bw + bl) > 0 else 0
-    st.markdown(f"""<div style="background:linear-gradient(135deg,#0a1a2e,#001020);padding:15px;border-radius:10px;border:2px solid #00aaff;text-align:center">
-        <div style="color:#00aaff;font-size:2em;font-weight:bold">{pct:.0f}%</div>
-        <div style="color:#888">🔵 BUY</div>
-        <div style="color:#aaa;font-size:0.9em">{bw}-{bl}</div></div>""", unsafe_allow_html=True)
-with col3:
-    pct = lw / (lw + ll) * 100 if (lw + ll) > 0 else 0
-    st.markdown(f"""<div style="background:linear-gradient(135deg,#2e2e0a,#1a1a00);padding:15px;border-radius:10px;border:2px solid #ffff00;text-align:center">
-        <div style="color:#ffff00;font-size:2em;font-weight:bold">{pct:.0f}%</div>
-        <div style="color:#888">🟡 LEAN</div>
-        <div style="color:#aaa;font-size:0.9em">{lw}-{ll}</div></div>""", unsafe_allow_html=True)
-with col4:
-    profit = perf["total_profit"]
-    clr = "#00ff00" if profit >= 0 else "#ff4444"
-    st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#0a0a1e);padding:15px;border-radius:10px;border:2px solid {clr};text-align:center">
-        <div style="color:{clr};font-size:2em;font-weight:bold">${profit:+.2f}</div>
-        <div style="color:#888">💰 PROFIT</div>
-        <div style="color:#aaa;font-size:0.9em">{sw+bw+lw}-{sl+bl+ll}</div></div>""", unsafe_allow_html=True)
-st.divider()
+
 
 # LIVE GAMES
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
@@ -819,7 +780,7 @@ st.markdown("""
 
 ---
 
-*Built for Kalshi prediction markets. v17.0*
+*Built for Kalshi prediction markets. v17.1*
 """)
 
 st.divider()
