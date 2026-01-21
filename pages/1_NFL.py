@@ -191,6 +191,19 @@ _SP = {
     "Tennessee": ["Will Levis"], "Washington": ["Jayden Daniels"]
 }
 
+def buy_button(url, text="BUY"):
+    return f'''<a href="{url}" target="_blank" style="
+        display: block;
+        background: linear-gradient(135deg, #00c853, #00a844);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        text-align: center;
+        margin: 5px 0;
+    ">{text}</a>'''
+
 def build_kalshi_ml_url(away_team, home_team, game_date=None):
     away_code = KALSHI_CODES.get(away_team, "XXX")
     home_code = KALSHI_CODES.get(home_team, "XXX")
@@ -758,7 +771,8 @@ if live_games or final_games:
             for p in plays:
                 scoring_style = "background:#1a3d1a;border-left:3px solid #00ff00;" if p['scoring'] else ""
                 st.markdown(f"""<div style="padding:8px;margin:4px 0;background:#111;border-radius:6px;{scoring_style}"><span style="color:#888;font-size:0.8em">Q{p['period']} {p['clock']}</span><span style="margin-left:8px">{p['icon']}</span><span style="color:#fff;margin-left:8px">{p['text']}</span></div>""", unsafe_allow_html=True)
-        st.link_button(f"🔗 Trade {game_key.replace('@', ' @ ')}", build_kalshi_ml_url(parts[0], parts[1], g.get('game_date')), use_container_width=True)
+        kalshi_url = build_kalshi_ml_url(parts[0], parts[1], g.get('game_date'))
+        st.markdown(buy_button(kalshi_url, f"🔗 Trade {game_key.replace('@', ' @ ')}"), unsafe_allow_html=True)
     st.divider()
 
 # MODEL PERFORMANCE
@@ -955,6 +969,9 @@ if team_a and team_b and team_a != team_b:
                 </div>
             </div></div>""", unsafe_allow_html=True)
         
+        kalshi_url = build_kalshi_ml_url(team_a, team_b, datetime.now(eastern))
+        st.markdown(buy_button(kalshi_url, f"🎯 BUY {pick.upper()} TO WIN"), unsafe_allow_html=True)
+        
     except Exception as e:
         st.error(f"Error analyzing matchup: {e}")
 else:
@@ -1054,8 +1071,10 @@ if st.session_state.positions:
             <div style='display:flex;justify-content:space-between'><div><b style='color:#fff;font-size:1.2em'>{game_key.replace('@', ' @ ')}</b> <span style='color:#888'>{game_status}</span></div>
             <b style='color:{status_color};font-size:1.3em'>{status_label}</b></div>
             <div style='margin-top:10px;color:#aaa'>🎯 Pick: <b style='color:#fff'>{pick}</b> | 💵 {contracts}x @ {price}¢ (${cost:.2f}) | 📊 {pick_score}-{opp_score} | Lead: <b style='color:{status_color}'>{lead:+d}</b> | <span style='color:{pnl_color}'>{pnl}</span></div></div>""", unsafe_allow_html=True)
+            kalshi_url = build_kalshi_ml_url(parts[0], parts[1], g.get('game_date'))
             btn1, btn2, btn3 = st.columns([3, 1, 1])
-            btn1.link_button("🔗 Trade on Kalshi", build_kalshi_ml_url(parts[0], parts[1], g.get('game_date')), use_container_width=True)
+            with btn1:
+                st.markdown(buy_button(kalshi_url, "🔗 Trade on Kalshi"), unsafe_allow_html=True)
             if btn2.button("✏️", key=f"edit_{idx}"):
                 st.session_state.editing_position = idx if st.session_state.editing_position != idx else None
                 st.rerun()
@@ -1185,7 +1204,7 @@ if top_picks:
         </div>
         </div>""", unsafe_allow_html=True)
         
-        st.link_button(f"🎯 BUY {pick_team.upper()} TO WIN", kalshi_url, use_container_width=True)
+        st.markdown(buy_button(kalshi_url, f"🎯 BUY {pick_team.upper()} TO WIN"), unsafe_allow_html=True)
         st.markdown("<div style='height:5px'></div>", unsafe_allow_html=True)
     
     if st.button(f"➕ Add All {len(top_picks)} Picks to Tracker", use_container_width=True, type="secondary"):
@@ -1213,7 +1232,8 @@ if selected_game != "Select...":
     parts = selected_game.replace(" @ ", "@").split("@")
     g = games.get(f"{parts[0]}@{parts[1]}")
     game_date = g.get('game_date') if g else None
-    st.link_button("🔗 View on Kalshi", build_kalshi_ml_url(parts[0], parts[1], game_date), use_container_width=True)
+    kalshi_url = build_kalshi_ml_url(parts[0], parts[1], game_date)
+    st.markdown(buy_button(kalshi_url, "🔗 View on Kalshi"), unsafe_allow_html=True)
 
 p1, p2, p3 = st.columns(3)
 with p1:
