@@ -27,6 +27,9 @@ st.markdown("""
 <style>
 .stLinkButton > a {background-color: #00aa00 !important;border-color: #00aa00 !important;color: white !important;}
 .stLinkButton > a:hover {background-color: #00cc00 !important;border-color: #00cc00 !important;}
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
