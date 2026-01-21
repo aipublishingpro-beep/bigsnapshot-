@@ -32,7 +32,6 @@ st.markdown("""
 
 POSITIONS_FILE = "nba_positions.json"
 
-
 def load_positions():
     try:
         if os.path.exists(POSITIONS_FILE):
@@ -47,8 +46,6 @@ def save_positions(positions):
             json.dump(positions, f, indent=2)
     except: pass
 
-
-
 if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
 if "positions" not in st.session_state:
@@ -57,7 +54,6 @@ if "selected_ml_pick" not in st.session_state:
     st.session_state.selected_ml_pick = None
 if "editing_position" not in st.session_state:
     st.session_state.editing_position = None
-
 if "drought_tracker" not in st.session_state:
     st.session_state.drought_tracker = {}
 if "pace_history" not in st.session_state:
@@ -159,7 +155,6 @@ STAR_PLAYERS = {
     "Toronto": ["Scottie Barnes"], "Utah": ["Lauri Markkanen"], "Washington": ["Jordan Poole"]
 }
 
-# ========== H2H RIVALRY EDGES ==========
 H2H_EDGES = {
     ("Boston", "Philadelphia"): 0.5, ("Boston", "New York"): 0.5,
     ("Milwaukee", "Chicago"): 0.5, ("Cleveland", "Detroit"): 0.5,
@@ -256,7 +251,6 @@ def fetch_espn_injuries():
     except: pass
     return injuries
 
-# ========== FETCH REAL STREAK FROM ESPN ==========
 TEAM_IDS = {
     "Atlanta": "1", "Boston": "2", "Brooklyn": "17", "Charlotte": "30",
     "Chicago": "4", "Cleveland": "5", "Dallas": "6", "Denver": "7",
@@ -359,42 +353,33 @@ def calc_ml_score(home_team, away_team, yesterday_teams, injuries, last_5):
     sh, sa = 0, 0
     rh, ra = [], []
     
-    # Factor 1: B2B
     home_b2b, away_b2b = home_team in yesterday_teams, away_team in yesterday_teams
     if away_b2b and not home_b2b: sh += 1.0; rh.append("🛏️ Opp B2B")
     elif home_b2b and not away_b2b: sa += 1.0; ra.append("🛏️ Opp B2B")
     
-    # Factor 2: Net Rating
     home_net, away_net = home.get('net_rating', 0), away.get('net_rating', 0)
     if home_net - away_net > 5: sh += 1.0; rh.append(f"📊 Net +{home_net:.1f}")
     elif away_net - home_net > 5: sa += 1.0; ra.append(f"📊 Net +{away_net:.1f}")
     
-    # Factor 3: Elite Defense
     home_def, away_def = home.get('def_rank', 15), away.get('def_rank', 15)
     if home_def <= 5: sh += 1.0; rh.append(f"🛡️ #{home_def} DEF")
     if away_def <= 5: sa += 1.0; ra.append(f"🛡️ #{away_def} DEF")
     
-    # Factor 4: Home Court
     sh += 1.0; rh.append("🏠 Home")
     
-    # Factor 5: Injury Impact
     home_out, home_inj = get_injury_impact(home_team, injuries)
     away_out, away_inj = get_injury_impact(away_team, injuries)
     if away_inj - home_inj > 3: sh += 2.0; rh.append(f"🏥 {away_out[0][:10]} OUT" if away_out else "🏥 Opp Injured")
     elif home_inj - away_inj > 3: sa += 2.0; ra.append(f"🏥 {home_out[0][:10]} OUT" if home_out else "🏥 Opp Injured")
     
-    # Factor 6: Travel Distance
     travel = calc_distance(away_loc, home_loc)
     if travel > 2000: sh += 1.0; rh.append(f"✈️ {int(travel)}mi")
     
-    # Factor 7: Home Win %
     home_hw = home.get('home_win_pct', 0.5)
     if home_hw > 0.65: sh += 0.8; rh.append(f"🏟️ {int(home_hw*100)}% Home")
     
-    # Factor 8: Altitude
     if home_team == "Denver": sh += 1.0; rh.append("🏔️ Altitude")
     
-    # Factor 9: REAL STREAK (not last 5 record)
     home_streak = fetch_team_streak(home_team)
     away_streak = fetch_team_streak(away_team)
     
@@ -407,7 +392,6 @@ def calc_ml_score(home_team, away_team, yesterday_teams, injuries, last_5):
     elif away_streak >= 4:
         sa += 0.5; ra.append(f"🔥 W{away_streak}")
     
-    # Factor 10: H2H RIVALRY EDGE
     h2h_edge = H2H_EDGES.get((home_team, away_team), 0)
     if h2h_edge > 0:
         sh += h2h_edge; rh.append("🆚 H2H")
@@ -451,13 +435,11 @@ with st.sidebar:
     st.header("📊 MODEL INFO")
     st.markdown("Proprietary multi-factor model analyzing matchups, injuries, rest, travel, momentum, and historical edges.")
     st.divider()
-    st.caption("v17.4 NBA EDGE")
+    st.caption("v17.5 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
-st.caption("Proprietary ML Model + Live Tracker | v17.2")
-
-
+st.caption("Proprietary ML Model + Live Tracker | v17.5")
 
 # LIVE GAMES
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
@@ -521,7 +503,6 @@ if games:
         reasons_str = " • ".join(r["reasons"])
         injury_str = f" • 🏥 {r['opp_out'][0][:12]} OUT" if r["opp_out"] else ""
         
-        # Get game status
         g = games.get(f"{r['away']}@{r['home']}", {})
         if g.get('status_type') == "STATUS_FINAL":
             status_badge = "FINAL"
@@ -544,7 +525,6 @@ if games:
         with col_btn:
             st.link_button(f"BUY {r['pick']}", kalshi_url, use_container_width=True)
     
-    # Only allow adding picks for scheduled games
     scheduled_strong = [r for r in ml_results if r["score"] >= 6.5 and games.get(f"{r['away']}@{r['home']}", {}).get('status_type') == "STATUS_SCHEDULED"]
     if scheduled_strong:
         if st.button(f"➕ Add {len(scheduled_strong)} Picks to Tracker", use_container_width=True, key="add_ml_picks"):
@@ -557,26 +537,14 @@ if games:
             if added:
                 save_positions(st.session_state.positions)
                 st.rerun()
-    strong = [r for r in ml_results if r["score"] >= 6.5]
-    if strong:
-        if st.button(f"➕ Add {len(strong)} Picks to Tracker", use_container_width=True):
-            added = 0
-            for r in strong:
-                gk = f"{r['away']}@{r['home']}"
-                if not any(p.get('game') == gk and p.get('pick') == r['pick'] for p in st.session_state.positions):
-                    st.session_state.positions.append({"game": gk, "type": "ml", "pick": r['pick'], "price": 50, "contracts": 1})
-                    added += 1
-            if added:
-                save_positions(st.session_state.positions)
-                st.rerun()
 else:
-    st.info("No scheduled games — check back later!")
+    st.info("No games today — check back later!")
 
 st.divider()
 
 # TEAM FORM LEADERBOARD
 st.subheader("🔥 TEAM FORM LEADERBOARD")
-st.caption("All 30 teams ranked by last 5 games")
+st.caption("All 30 teams ranked by streak")
 
 form_list = []
 for team in KALSHI_CODES.keys():
@@ -631,7 +599,6 @@ if team_a and team_b and team_a != team_b:
         tier, color = get_signal_tier(score)
         form_a, form_b = last_5.get(team_a, {}).get('form', '-----'), last_5.get(team_b, {}).get('form', '-----')
         
-        # Highlight picked team in blue
         away_color = color if pick == team_a else "#fff"
         home_color = color if pick == team_b else "#fff"
         
@@ -747,66 +714,55 @@ else:
 
 st.divider()
 
-# ========== HOW TO USE THIS APP ==========
+# HOW TO USE
 st.subheader("📖 HOW TO USE THIS APP")
 
 st.markdown("""
 ### 🎯 **Getting Started**
 
-**NBA Edge Finder** is a proprietary prediction model for Kalshi NBA moneyline markets. The model analyzes multiple factors to identify high-value betting opportunities.
+**NBA Edge Finder** is a proprietary prediction model for Kalshi NBA moneyline markets.
 
 ---
 
-### 📊 **Understanding Signal Tiers**
+### 📊 **Signal Tiers**
 
 | Tier | Score | Meaning |
 |------|-------|---------|
-| 🟢 **STRONG** | 8.0+ | High-confidence pick with multiple edges |
-| 🔵 **BUY** | 6.5-7.9 | Good value pick worth considering |
-| 🟡 **LEAN** | 5.5-6.4 | Slight edge, proceed with caution |
-| ⚪ **TOSS-UP** | <5.5 | No clear edge — skip |
+| 🟢 **STRONG** | 8.0+ | High-confidence pick |
+| 🔵 **BUY** | 6.5-7.9 | Good value pick |
+| 🟡 **LEAN** | 5.5-6.4 | Slight edge |
+| ⚪ **TOSS-UP** | <5.5 | No clear edge |
 
 ---
 
-### 🏀 **Key Features**
+### 🏀 **Features**
 
-1. **Pre-Game ML Picks** — Model-generated picks sorted by confidence score
-2. **Live Game Tracker** — Real-time scores with pace projections
-3. **Team Form Leaderboard** — Current win/loss streaks for all 30 teams
-4. **B2B Tracker** — Teams on back-to-back (fatigue alert)
-5. **Matchup Analyzer** — Compare any two teams head-to-head
-6. **Position Tracker** — Track your active bets with live P&L
-
----
-
-### 💡 **Pro Tips**
-
-- **Focus on STRONG and BUY tiers** — These have the highest historical win rates
-- **Check B2B status** — Back-to-back teams are at a significant disadvantage
-- **Watch for injuries** — Star player absences can swing games dramatically
-- **Use the Matchup Analyzer** — Test hypothetical scenarios before betting
+1. **ML Picks** — Model picks sorted by confidence
+2. **Live Tracker** — Real-time scores with pace
+3. **Form Leaderboard** — All 30 teams by streak
+4. **B2B Tracker** — Fatigue alerts
+5. **Matchup Analyzer** — Compare any teams
+6. **Position Tracker** — Track bets with live P&L
 
 ---
 
-### ⚠️ **Important Notes**
+### 💡 **Tips**
 
-- All picks are for **educational and entertainment purposes only**
-- This is **not financial advice** — bet responsibly
-- Past performance does not guarantee future results
-- Model updates daily based on live ESPN data
-
----
-
-### 🔗 **Trading on Kalshi**
-
-1. Click any **BUY** button to go directly to that market on Kalshi
-2. The model uses Kalshi's official team codes (e.g., LAL, BOS, MIA)
-3. NBA markets typically close at game tipoff
+- Focus on **STRONG** and **BUY** tiers
+- Check **B2B status** — fatigued teams lose
+- Watch for **star injuries**
+- Use **Matchup Analyzer** for scenarios
 
 ---
 
-*Built for Kalshi prediction markets. v17.2*
+### 🔗 **Trading**
+
+Click **BUY** buttons to go directly to Kalshi markets.
+
+---
+
+*Built for Kalshi. v17.5*
 """)
 
 st.divider()
-st.caption("⚠️ Educational analysis only. Not financial advice. v17.2")
+st.caption("⚠️ Educational only. Not financial advice. v17.5")
