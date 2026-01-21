@@ -2,8 +2,11 @@ import streamlit as st
 import requests
 from datetime import datetime, timedelta
 import pytz
+from styles import apply_styles
 
 st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
+
+apply_styles()
 
 # --- GOOGLE ANALYTICS G4 ---
 st.markdown("""
@@ -327,37 +330,25 @@ if is_owner:
 
 # --- HOW TO USE DOCUMENTATION ---
 st.divider()
-st.subheader("📖 How to Use Temp Edge Finder")
+with st.expander("📖 How to Use Temp Edge Finder", expanded=False):
+    st.markdown("""
+**🌡️ Reading the Forecast:**
+- **NWS High/Low** = Official National Weather Service forecast
+- **Kalshi Markets** = Live prediction market prices
+- **Orange Highlight** = Where NWS predicts temp will land (your target)
 
-with st.expander("🌡️ Reading the Forecast", expanded=False):
-    st.markdown("**Data Sources:**")
-    st.markdown("- **NWS High/Low** = Official National Weather Service forecast")
-    st.markdown("- **Kalshi Markets** = Live prediction market prices")
-    st.markdown("**Orange Highlight:**")
-    st.markdown("- Orange bracket = Where NWS predicts temp will land")
-    st.markdown("- This is your target - buy YES on orange bracket for best edge")
-    st.markdown("**Best Practice:** NWS forecasts are updated multiple times daily. Check back before trading.")
+**📊 Understanding the Markets:**
+- **Bracket** = Temperature range (e.g., 45 to 46)
+- **Chance** = Market implied probability
+- **Yes** = Cost to buy YES contract (pays $1 if correct)
 
-with st.expander("📊 Understanding the Markets", expanded=False):
-    st.markdown("**Column Definitions:**")
-    st.markdown("- **Bracket** = Temperature range (e.g., 45 to 46)")
-    st.markdown("- **Chance** = Market implied probability (midpoint of bid/ask)")
-    st.markdown("- **Yes** = Cost to buy YES contract")
-    st.markdown("**Finding Edge:**")
-    st.markdown("- If NWS says 45F and market shows 45-46 bracket at 30c = potential edge")
-    st.markdown("- Lower price + correct bracket = bigger profit")
-    st.markdown("- YES contract pays $1 if correct, so 30c buy = 70c profit")
+**🏙️ 15 Cities Available:** Atlanta, Austin, Boston, Chicago, Dallas, Denver, Houston, Los Angeles, Miami, New York City, Philadelphia, Phoenix, San Francisco, Seattle, Washington DC
 
-with st.expander("🏙️ Selecting Cities", expanded=False):
-    st.markdown("**15 Cities Available:** Atlanta, Austin, Boston, Chicago, Dallas, Denver, Houston, Los Angeles, Miami, New York City, Philadelphia, Phoenix, San Francisco, Seattle, Washington DC")
-    st.markdown("**Set Default City:** Click the star button to remember your preferred city")
-    st.markdown("**Pro Tip:** Check multiple cities - some have more volatile weather = bigger edges")
-
-with st.expander("💡 Pro Tips", expanded=False):
-    st.markdown("**Timing:** NWS updates forecasts ~4x daily. Trade right after update, before market adjusts.")
-    st.markdown("**Volatility:** Stable weather (Phoenix) = less edge. Volatile weather (Denver, Chicago) = bigger edge.")
-    st.markdown("**Sizing:** High confidence = larger position. Uncertain = smaller position.")
-    st.markdown("**Scan:** Check all 15 cities for best opportunities. No edge some days - wait for better setups.")
+**💡 Pro Tips:**
+- NWS updates forecasts ~4x daily. Trade right after update.
+- Volatile weather (Denver, Chicago) = bigger edge
+- Check all 15 cities for best opportunities
+""")
 
 # --- FOOTER ---
 st.divider()
