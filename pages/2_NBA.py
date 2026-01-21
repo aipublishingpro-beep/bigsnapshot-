@@ -166,7 +166,7 @@ with st.sidebar:
     st.header("🔗 KALSHI")
     st.caption("⚠️ NBA not on trade API yet")
     st.divider()
-    st.caption("v15.57 🛡️+2 SAFE")
+    st.caption("v15.58 🛡️+2 SAFE")
 
 def build_kalshi_ml_url(away_team, home_team):
     away_code = KALSHI_CODES.get(away_team, "xxx").upper()
@@ -264,7 +264,7 @@ def fetch_espn_injuries():
         pass
     return injuries
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=600)
 def fetch_all_team_forms():
     eastern = pytz.timezone('US/Eastern')
     team_results = {team: [] for team in TEAM_STATS.keys()}
@@ -429,11 +429,12 @@ yesterday_teams = yesterday_teams_raw.intersection(today_teams)
 # HEADER
 st.title("🏀 NBA EDGE FINDER")
 hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
-hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.57")
+hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')} | v15.58")
 if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True):
     st.session_state.auto_refresh = not st.session_state.auto_refresh
     st.rerun()
 if hdr3.button("🔄 Refresh", use_container_width=True):
+    st.cache_data.clear()
     st.rerun()
 
 # ACTIVE POSITIONS
@@ -740,4 +741,4 @@ with st.expander("🔥 Pace Scanner — Game Flow", expanded=False):
 **🛡️+2 = Safety buffer.** We recommend 2 brackets above/below projection for extra margin.""")
 
 st.divider()
-st.caption("⚠️ Entertainment only. Not financial advice. v15.57")
+st.caption("⚠️ Entertainment only. Not financial advice. v15.58")
