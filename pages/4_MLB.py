@@ -38,27 +38,54 @@ st.markdown("""
         MLB Edge Finder
     </h1>
     <p style="color: #888; font-size: 22px; margin-bottom: 40px;">
-        Coming Soon — 2025 Season
+        Coming Soon — 2026 Season
     </p>
     <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); 
                 border-radius: 16px; padding: 40px; max-width: 600px; margin: 0 auto;
                 border: 1px solid #333;">
         <p style="color: #4dabf7; font-size: 18px; font-weight: 600; margin-bottom: 20px;">
-            ⚾ March 2025
+            ⚾ March 2026
         </p>
         <p style="color: #ccc; font-size: 16px; line-height: 1.7; margin-bottom: 25px;">
-            MLB Edge Finder will activate when the 2025 baseball season begins 
+            MLB Edge Finder will activate when the 2026 baseball season begins 
             and Kalshi has active MLB markets.
         </p>
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 20px; text-align: left;">
-            <p style="color: #888; font-size: 13px; margin-bottom: 10px;">EXPECTED TIMELINE</p>
-            <p style="color: #666; font-size: 14px; margin: 8px 0;">⬜ Feb 2025: Spring Training</p>
-            <p style="color: #00c853; font-size: 14px; margin: 8px 0;">🟢 Mar - Oct 2025: Regular Season</p>
-            <p style="color: #666; font-size: 14px; margin: 8px 0;">⬜ Oct 2025: Playoffs & World Series</p>
-        </div>
+        <p style="color: #888; font-size: 14px; line-height: 1.6;">
+            <strong>What's Coming:</strong><br>
+            • Starting pitcher analysis (ERA, WHIP, K/9)<br>
+            • Bullpen fatigue tracking<br>
+            • Team OPS splits (vs LHP/RHP)<br>
+            • Ballpark factors<br>
+            • 12-factor edge model
+        </p>
     </div>
-    <p style="color: #555; font-size: 14px; margin-top: 50px;">
-        BigSnapshot © 2026 | Check back in Spring 2025
-    </p>
 </div>
 """, unsafe_allow_html=True)
+
+# Timeline
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; padding: 20px;">
+    <h3 style="color: #fff; margin-bottom: 20px;">📅 2026 MLB Timeline</h3>
+    <div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;">
+        <div style="text-align: center;">
+            <p style="color: #4dabf7; font-size: 24px; margin: 0;">Feb 2026</p>
+            <p style="color: #888; font-size: 14px;">Spring Training</p>
+        </div>
+        <div style="text-align: center;">
+            <p style="color: #4dabf7; font-size: 24px; margin: 0;">Mar - Oct 2026</p>
+            <p style="color: #888; font-size: 14px;">Regular Season</p>
+        </div>
+        <div style="text-align: center;">
+            <p style="color: #4dabf7; font-size: 24px; margin: 0;">Oct 2026</p>
+            <p style="color: #888; font-size: 14px;">Playoffs</p>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Footer
+st.markdown("---")
+st.caption("⚾ MLB Edge Finder | BigSnapshot.com")
+st.caption("Check back in Spring 2026 for live markets!")
+st.caption("⚠️ Not financial advice.")
