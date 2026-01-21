@@ -265,10 +265,20 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
 st.title("🌡️ TEMP EDGE FINDER")
 st.caption(f"Live NWS Observations + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')}")
 
-c1, c2 = st.columns([4, 1])
+# Check for default city in URL
+query_params = st.query_params
+default_city = query_params.get("city", "New York City")
+if default_city not in CITY_LIST:
+    default_city = "New York City"
+
+c1, c2, c3 = st.columns([3, 1, 1])
 with c1:
-    city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index("New York City"))
+    city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
 with c2:
+    if st.button("⭐ Set Default", use_container_width=True):
+        st.query_params["city"] = city
+        st.success(f"✓ Bookmark this page!")
+with c3:
     cfg = CITY_CONFIG.get(city, {})
     nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
     st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
