@@ -310,6 +310,14 @@ if not st.session_state.authenticated:
             <div style="font-size: 45px; margin-bottom: 15px;">🎓</div>
             <h3 style="color: #fff; margin-bottom: 10px;">NCAA Edge Finder</h3>
         </div>
+        <div style="background: linear-gradient(135deg, #2a1a1a 0%, #3a2a2a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4a3a3a;">
+            <div style="font-size: 45px; margin-bottom: 15px;">⚾</div>
+            <h3 style="color: #fff; margin-bottom: 10px;">MLB Edge Finder</h3>
+        </div>
+        <div style="background: linear-gradient(135deg, #1a3a2a 0%, #2a4a3a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #3a5a4a;">
+            <div style="font-size: 45px; margin-bottom: 15px;">⚽</div>
+            <h3 style="color: #fff; margin-bottom: 10px;">Soccer Edge Finder</h3>
+        </div>
         <div style="background: linear-gradient(135deg, #3a2a1a 0%, #4a3a2a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #f59e0b;">
             <div style="font-size: 45px; margin-bottom: 15px;">🌡️</div>
             <h3 style="color: #f59e0b; margin-bottom: 5px;">Temp Edge Finder</h3>
@@ -322,14 +330,6 @@ if not st.session_state.authenticated:
     st.markdown("### 🚧 Coming Soon")
     st.markdown("""
     <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
-            <div style="font-size: 35px; margin-bottom: 8px;">⚾</div>
-            <h4 style="color: #888; margin: 0;">MLB</h4>
-        </div>
-        <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
-            <div style="font-size: 35px; margin-bottom: 8px;">⚽</div>
-            <h4 style="color: #888; margin: 0;">Soccer</h4>
-        </div>
         <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
             <div style="font-size: 35px; margin-bottom: 8px;">🏛️</div>
             <h4 style="color: #888; margin: 0;">Politics</h4>
@@ -427,7 +427,7 @@ st.markdown("---")
 # ============ LIVE TOOLS - PURE STREAMLIT ============
 st.header("🔥 LIVE TOOLS")
 
-col1, col2, col3, col4, col5 = st.columns(5)
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.subheader("🏀 NBA")
@@ -449,7 +449,19 @@ with col4:
     if st.button("OPEN NCAA", use_container_width=True, type="primary", key="nav_ncaa"):
         st.switch_page("pages/7_NCAA.py")
 
+col5, col6, col7 = st.columns(3)
+
 with col5:
+    st.subheader("⚾ MLB")
+    if st.button("OPEN MLB", use_container_width=True, type="primary", key="nav_mlb"):
+        st.switch_page("pages/4_MLB.py")
+
+with col6:
+    st.subheader("⚽ SOCCER")
+    if st.button("OPEN SOCCER", use_container_width=True, type="primary", key="nav_soccer"):
+        st.switch_page("pages/8_Soccer.py")
+
+with col7:
     st.subheader("🌡️ TEMP")
     if st.button("OPEN TEMP", use_container_width=True, type="primary", key="nav_temp"):
         st.switch_page("pages/5_Temp.py")
@@ -457,7 +469,7 @@ with col5:
 st.markdown("---")
 
 # ============ COMING SOON - MINIMAL ============
-st.caption("🚧 Coming Soon: MLB • Soccer • Politics • Economics • Entertainment")
+st.caption("🚧 Coming Soon: Politics • Economics • Entertainment")
 
 st.markdown("---")
 
