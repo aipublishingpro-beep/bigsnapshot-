@@ -451,11 +451,11 @@ with st.sidebar:
     st.header("📊 MODEL INFO")
     st.markdown("Proprietary multi-factor model analyzing matchups, injuries, rest, travel, momentum, and historical edges.")
     st.divider()
-    st.caption("v17.1 NBA EDGE")
+    st.caption("v17.2 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
-st.caption("Proprietary ML Model + Live Tracker | v17.1")
+st.caption("Proprietary ML Model + Live Tracker | v17.2")
 
 
 
@@ -521,21 +521,30 @@ if scheduled:
         if r["score"] < 5.0: continue
         kalshi_url = build_kalshi_ml_url(r["away"], r["home"])
         reasons_str = " • ".join(r["reasons"])
-        location = "🏠" if r["is_home"] else "✈️"
+        injury_str = f" • 🏥 {r['opp_out'][0][:12]} OUT" if r["opp_out"] else ""
         
-        net_line = f"📊 Net: {r['pick_code']} {r['pick_net']:+.1f} vs {r['opp_code']} {r['opp_net']:+.1f}"
-        injury_str = f" | 🏥 {r['opp_code']}: {r['opp_out'][0][:12]} OUT" if r["opp_out"] else ""
-        
-        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:4px solid {r['color']}">
-            <div>
-                <b style="color:#fff;font-size:1.15em">{r['pick']}</b> <span style="color:#666">vs {r['opp']}</span> {location}
-                <span style="color:#38bdf8;margin-left:10px;font-weight:bold">{r['score']}/10</span>
-                <div style="color:#777;font-size:0.8em;margin-top:3px">{reasons_str}</div>
-                <div style="color:#888;font-size:0.75em">{net_line}{injury_str}</div>
-            </div>
-            <a href="{kalshi_url}" target="_blank" style="background:#16a34a;color:#fff;padding:8px 16px;border-radius:6px;font-size:0.95em;text-decoration:none;font-weight:700;white-space:nowrap">BUY {r['pick_code']}</a>
-        </div>""", unsafe_allow_html=True)
+        col_info, col_btn = st.columns([5, 1])
+        with col_info:
+            st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:12px 14px;border-radius:8px;border-left:4px solid {r['color']}">
+                <b style="color:#fff;font-size:1.1em">{r['pick']}</b> <span style="color:#666">vs {r['opp']}</span>
+                <span style="color:#38bdf8;margin-left:8px;font-weight:bold">{r['score']}/10</span>
+                <span style="color:#777;font-size:0.85em;margin-left:10px">{reasons_str}{injury_str}</span>
+            </div>""", unsafe_allow_html=True)
+        with col_btn:
+            st.link_button(f"BUY {r['pick']}", kalshi_url, use_container_width=True)
     
+    strong = [r for r in ml_results if r["score"] >= 6.5]
+    if strong:
+        if st.button(f"➕ Add {len(strong)} Picks to Tracker", use_container_width=True):
+            added = 0
+            for r in strong:
+                gk = f"{r['away']}@{r['home']}"
+                if not any(p.get('game') == gk and p.get('pick') == r['pick'] for p in st.session_state.positions):
+                    st.session_state.positions.append({"game": gk, "type": "ml", "pick": r['pick'], "price": 50, "contracts": 1})
+                    added += 1
+            if added:
+                save_positions(st.session_state.positions)
+                st.rerun()
     strong = [r for r in ml_results if r["score"] >= 6.5]
     if strong:
         if st.button(f"➕ Add {len(strong)} Picks to Tracker", use_container_width=True):
@@ -780,8 +789,8 @@ st.markdown("""
 
 ---
 
-*Built for Kalshi prediction markets. v17.1*
+*Built for Kalshi prediction markets. v17.2*
 """)
 
 st.divider()
-st.caption("⚠️ Educational analysis only. Not financial advice. v17.0")
+st.caption("⚠️ Educational analysis only. Not financial advice. v17.2")
