@@ -6,6 +6,7 @@ import json
 import os
 import time
 import uuid
+from styles import apply_styles
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -15,6 +16,8 @@ except ImportError:
 
 st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide")
 
+apply_styles()
+
 if "sid" not in st.session_state:
     st.session_state["sid"] = str(uuid.uuid4())
 if "last_ball_positions" not in st.session_state:
@@ -22,13 +25,6 @@ if "last_ball_positions" not in st.session_state:
 
 eastern = pytz.timezone("US/Eastern")
 today_str = datetime.now(eastern).strftime("%Y-%m-%d")
-
-st.markdown("""
-<style>
-.stLinkButton > a {background-color: #00aa00 !important;border-color: #00aa00 !important;color: white !important;}
-.stLinkButton > a:hover {background-color: #00cc00 !important;border-color: #00cc00 !important;}
-</style>
-""", unsafe_allow_html=True)
 
 POSITIONS_FILE = "nfl_positions.json"
 PERFORMANCE_FILE = "nfl_performance.json"
@@ -1251,26 +1247,14 @@ else:
 st.divider()
 
 # HOW TO USE
-st.subheader("📖 How to Use NFL Edge Finder")
-
-with st.expander("🎯 ML Picks — Reading the Signals", expanded=False):
+with st.expander("📖 How to Use NFL Edge Finder", expanded=False):
     st.markdown("""**Signal Tiers:** 🟢 STRONG (8.0+), 🔵 BUY (6.5-7.9), 🟡 LEAN (5.5-6.4), ⚪ TOSS-UP (<5.5)
 
 **Form Display (LLWWW):** Last 5 games, **LEFT = OLDEST**, **RIGHT = NEWEST**. Green = Hot (4-5 wins), Red = Cold (0-1 wins)
 
-**Confidence:** High = many factors aligned, Medium = moderate edge, Low = slight edge""")
+**Confidence:** High = many factors aligned, Medium = moderate edge, Low = slight edge
 
-with st.expander("📅 Week Schedule — Preview Guide", expanded=False):
-    st.markdown("""Shows all games for the current week with ML scores. Weather badges show dome games vs outdoor conditions.""")
-
-with st.expander("🔬 Matchup Analyzer — Head-to-Head", expanded=False):
-    st.markdown("""Compare any two teams with form comparison and simulated pick score.""")
-
-with st.expander("😴 Rest Tracker — Fatigue Factor", expanded=False):
-    st.markdown("""**Rest Categories:** 🛏️ FRESH (10+ days), 🟢 RESTED (7-9 days), ⚠️ SHORT (4-6 days), 🔴 TIRED (0-3 days)""")
-
-with st.expander("📊 Model Performance — Track Record", expanded=False):
-    st.markdown("""Shows historical win rates by signal tier. STRONG picks should hit 75%+, BUY picks 65%+, LEAN picks 55%+.""")
+**Rest Categories:** 🛏️ FRESH (10+ days), 🟢 RESTED (7-9 days), ⚠️ SHORT (4-6 days), 🔴 TIRED (0-3 days)""")
 
 st.divider()
 st.caption("⚠️ Educational analysis only. Not financial advice. v2.3.0")
