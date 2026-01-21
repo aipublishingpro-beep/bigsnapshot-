@@ -218,7 +218,8 @@ st.markdown("---")
 st.subheader("⚙️ Your Forecast")
 m1, m2 = st.columns(2)
 with m1:
-    user_forecast = st.number_input("🎯 Your forecast (°F)", value=nws_temp or 45, min_value=-20, max_value=120, 
+    default_forecast = int(nws_temp) if nws_temp else 45
+    user_forecast = st.number_input("🎯 Your forecast (°F)", value=default_forecast, min_value=-20, max_value=120, 
                                      help="Your prediction for today's high/low")
 with m2:
     sigma = st.slider("σ (spread)", 1.0, 3.0, 1.8, 0.1,
