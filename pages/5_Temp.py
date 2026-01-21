@@ -165,27 +165,6 @@ with st.sidebar:
     st.header("🔗 KALSHI")
     st.caption("⚠️ NBA not on trade API yet")
     st.divider()
-    
-    st.header("📖 ML LEGEND")
-    st.markdown("🟢 **STRONG BUY** → 8.0+\n\n🔵 **BUY** → 6.5-7.9\n\n🟡 **LEAN** → 5.5-6.4\n\n⚪ **TOSS-UP** → 4.5-5.4")
-    st.divider()
-    
-    st.header("🎯 10 ML FACTORS")
-    st.markdown("""
-| # | Factor | Max |
-|---|--------|-----|
-| 1 | 🛏️ Opp B2B | +1.0 |
-| 2 | 📊 Net Rating | +1.0 |
-| 3 | 🛡️ Top 5 DEF | +1.0 |
-| 4 | 🏠 Home Court | +1.0 |
-| 5 | 🏥 Star OUT | +2.0 |
-| 6 | ✈️ Travel 2K+ | +1.0 |
-| 7 | 📈 Home Win% | +0.8 |
-| 8 | 🏔️ Altitude | +1.0 |
-| 9 | 🔥 Hot Streak | +1.0 |
-| 10 | 🆚 H2H Edge | +0.5 |
-""")
-    st.divider()
     st.caption("v15.50 FORM")
 
 TEAM_ABBREVS = {
@@ -582,22 +561,6 @@ def calc_ml_score(home_team, away_team, yesterday_teams, injuries):
         score_away += h2h_edge_rev
         reasons_away.append("🆚 H2H")
     
-    home_form = fetch_team_form(home_team)
-    away_form = fetch_team_form(away_team)
-    home_wins = home_form.count("W")
-    away_wins = away_form.count("W")
-    
-    if home_wins >= 4 and away_wins <= 1:
-        score_home += 1.0
-        reasons_home.append("🔥 Hot")
-    elif away_wins >= 4 and home_wins <= 1:
-        score_away += 1.0
-        reasons_away.append("🔥 Hot")
-    elif home_wins >= 4:
-        score_home += 0.5
-    elif away_wins >= 4:
-        score_away += 0.5
-    
     total = score_home + score_away
     if total > 0:
         home_final = round((score_home / total) * 10, 1)
@@ -606,9 +569,9 @@ def calc_ml_score(home_team, away_team, yesterday_teams, injuries):
         home_final, away_final = 5.0, 5.0
     
     if home_final >= away_final:
-        return home_team, home_final, round((home_final - 5) * 4, 0), reasons_home[:4], home_stars, away_stars, home_form, away_form
+        return home_team, home_final, round((home_final - 5) * 4, 0), reasons_home[:4], home_stars, away_stars
     else:
-        return away_team, away_final, round((away_final - 5) * 4, 0), reasons_away[:4], home_stars, away_stars, home_form, away_form
+        return away_team, away_final, round((away_final - 5) * 4, 0), reasons_away[:4], home_stars, away_stars
 
 def get_signal_tier(score):
     if score >= 8.0: return "🟢 STRONG BUY", "#00ff00"
@@ -789,11 +752,11 @@ for game_key, g in games.items():
     away = g["away_team"]
     home = g["home_team"]
     try:
-        pick, score, edge, reasons, home_stars, away_stars, home_form, away_form = calc_ml_score(home, away, yesterday_teams, injuries)
+        pick, score, edge, reasons, home_stars, away_stars = calc_ml_score(home, away, yesterday_teams, injuries)
         tier, color = get_signal_tier(score)
         ml_results.append({
             "pick": pick, "score": score, "color": color, "reasons": reasons, 
-            "away": away, "home": home, "home_form": home_form, "away_form": away_form
+            "away": away, "home": home
         })
     except:
         continue
@@ -810,21 +773,11 @@ for r in ml_results:
     opp_team = r["away"] if r["pick"] == r["home"] else r["home"]
     opp_form = fetch_team_form(opp_team)
     
-    pick_form_color = get_form_color(pick_form)
-    opp_form_color = get_form_color(opp_form)
-    streak = get_form_streak(pick_form)
-    streak_html = f'<span style="color:#ff6600;margin-left:5px">{streak}</span>' if streak else ''
-    
     st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:6px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {r['color']}">
-    <div>
-        <b style="color:#fff">{r['pick']}</b> <span style="color:#666">vs {opp_team}</span> 
-        <span style="color:#38bdf8">{r['score']}/10</span> 
-        <span style="background:#1e293b;padding:2px 6px;border-radius:4px;margin-left:8px"><span style="color:{pick_form_color};font-weight:bold;font-family:monospace">{pick_form}</span><span style="color:#666"> v </span><span style="color:{opp_form_color};font-family:monospace">{opp_form}</span></span>
-        {streak_html}
-        <span style="color:#777;font-size:0.8em;margin-left:8px">{reasons}</span>
-    </div>
+    <div><b style="color:#fff">{r['pick']}</b> <span style="color:#666">vs {opp_team}</span> <span style="color:#38bdf8">{r['score']}/10</span> <span style="color:#777;font-size:0.8em">{reasons}</span></div>
     <a href="{kalshi_url}" target="_blank" style="background:#16a34a;color:#fff;padding:4px 10px;border-radius:5px;font-size:0.8em;text-decoration:none;font-weight:600">BUY {r['pick'][:3].upper()}</a>
     </div>""", unsafe_allow_html=True)
+    st.caption(f"📊 {r['pick']}: {pick_form} vs {opp_team}: {opp_form}")
 
 strong_picks = [r for r in ml_results if r["score"] >= 6.5]
 if strong_picks:
