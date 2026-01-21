@@ -323,6 +323,11 @@ if not st.session_state.authenticated:
             <h3 style="color: #f59e0b; margin-bottom: 5px;">Temp Edge Finder</h3>
             <span style="background:#f59e0b;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
         </div>
+        <div style="background: linear-gradient(135deg, #1a2a2a 0%, #2a3a3a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4ade80;">
+            <div style="font-size: 45px; margin-bottom: 15px;">📈</div>
+            <h3 style="color: #4ade80; margin-bottom: 5px;">Economics Edge Finder</h3>
+            <span style="background:#4ade80;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">NEW</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -333,10 +338,6 @@ if not st.session_state.authenticated:
         <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
             <div style="font-size: 35px; margin-bottom: 8px;">🏛️</div>
             <h4 style="color: #888; margin: 0;">Politics</h4>
-        </div>
-        <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
-            <div style="font-size: 35px; margin-bottom: 8px;">📈</div>
-            <h4 style="color: #888; margin: 0;">Economics</h4>
         </div>
         <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
             <div style="font-size: 35px; margin-bottom: 8px;">🎬</div>
@@ -449,7 +450,7 @@ with col4:
     if st.button("OPEN NCAA", use_container_width=True, type="primary", key="nav_ncaa"):
         st.switch_page("pages/7_NCAA.py")
 
-col5, col6, col7 = st.columns(3)
+col5, col6, col7, col8 = st.columns(4)
 
 with col5:
     st.subheader("⚾ MLB")
@@ -466,10 +467,15 @@ with col7:
     if st.button("OPEN TEMP", use_container_width=True, type="primary", key="nav_temp"):
         st.switch_page("pages/5_Temp.py")
 
+with col8:
+    st.subheader("📈 ECON")
+    if st.button("OPEN ECONOMICS", use_container_width=True, type="primary", key="nav_econ"):
+        st.switch_page("pages/9_Economics.py")
+
 st.markdown("---")
 
 # ============ COMING SOON - MINIMAL ============
-st.caption("🚧 Coming Soon: Politics • Economics • Entertainment")
+st.caption("🚧 Coming Soon: Politics • Entertainment")
 
 st.markdown("---")
 
