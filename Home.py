@@ -528,3 +528,9 @@ Kalshi settles markets using official weather stations, which may differ slightl
 Always verify market details on Kalshi before trading.
 </div>
 """, unsafe_allow_html=True)
+
+st.markdown("""
+<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:10px;padding:0 20px">
+Questions or feedback? DM me on X: @AIPublishingPro
+</div>
+""", unsafe_allow_html=True)
