@@ -58,7 +58,9 @@ CITY_CONFIG = {
         "kalshi_slug_high": "highest-temperature-in-austin",
         "kalshi_slug_low": "lowest-temperature-in-austin",
         "tz": "US/Central",
-        "station": "Austin-Bergstrom Airport (KAUS)"
+        "station": "Austin-Bergstrom Airport (KAUS)",
+        "lat": 30.1945,
+        "lon": -97.6699
     },
     "Chicago": {
         "grid": "LOT/76,73",
@@ -67,7 +69,9 @@ CITY_CONFIG = {
         "kalshi_slug_high": "highest-temperature-in-chicago",
         "kalshi_slug_low": "lowest-temperature-in-chicago",
         "tz": "US/Central",
-        "station": "Midway Airport (KMDW)"
+        "station": "Midway Airport (KMDW)",
+        "lat": 41.7868,
+        "lon": -87.7522
     },
     "Denver": {
         "grid": "BOU/62,60",
@@ -76,7 +80,9 @@ CITY_CONFIG = {
         "kalshi_slug_high": "highest-temperature-in-denver",
         "kalshi_slug_low": "lowest-temperature-in-denver",
         "tz": "US/Mountain",
-        "station": "Denver Intl Airport (KDEN)"
+        "station": "Denver Intl Airport (KDEN)",
+        "lat": 39.8561,
+        "lon": -104.6737
     },
     "Los Angeles": {
         "grid": "LOX/154,44",
@@ -85,7 +91,9 @@ CITY_CONFIG = {
         "kalshi_slug_high": "highest-temperature-in-los-angeles",
         "kalshi_slug_low": "lowest-temperature-in-los-angeles",
         "tz": "US/Pacific",
-        "station": "LAX Airport (KLAX)"
+        "station": "LAX Airport (KLAX)",
+        "lat": 33.9425,
+        "lon": -118.4081
     },
     "Miami": {
         "grid": "MFL/109,50",
@@ -94,7 +102,9 @@ CITY_CONFIG = {
         "kalshi_slug_high": "highest-temperature-in-miami",
         "kalshi_slug_low": "lowest-temperature-in-miami",
         "tz": "US/Eastern",
-        "station": "Miami Intl Airport (KMIA)"
+        "station": "Miami Intl Airport (KMIA)",
+        "lat": 25.7959,
+        "lon": -80.2870
     },
     "New York City": {
         "grid": "OKX/33,37",
@@ -103,7 +113,9 @@ CITY_CONFIG = {
         "kalshi_slug_high": "highest-temperature-in-nyc",
         "kalshi_slug_low": "lowest-temperature-in-nyc",
         "tz": "US/Eastern",
-        "station": "Central Park (KNYC)"
+        "station": "Central Park (KNYC)",
+        "lat": 40.7829,
+        "lon": -73.9654
     },
     "Philadelphia": {
         "grid": "PHI/49,75",
@@ -112,7 +124,9 @@ CITY_CONFIG = {
         "kalshi_slug_high": "highest-temperature-in-philadelphia",
         "kalshi_slug_low": "lowest-temperature-in-philadelphia",
         "tz": "US/Eastern",
-        "station": "PHL Airport (KPHL)"
+        "station": "PHL Airport (KPHL)",
+        "lat": 39.8721,
+        "lon": -75.2311
     },
 }
 
