@@ -325,6 +325,86 @@ if is_owner:
     st.markdown(table_html, unsafe_allow_html=True)
     st.caption("🔥 Orange = Your target bracket | 🟢 = Market open | 🟡 = Days until market opens")
 
+# --- HOW TO USE DOCUMENTATION ---
+st.divider()
+st.subheader("📖 How to Use Temp Edge Finder")
+
+with st.expander("🌡️ Reading the Forecast", expanded=False):
+    st.markdown("""
+**Data Sources:**
+- **NWS High/Low** = Official National Weather Service forecast
+- **Kalshi Markets** = Live prediction market prices
+
+**Orange Highlight:**
+- Orange bracket = Where NWS predicts temp will land
+- This is your target — buy YES on orange bracket for best edge
+
+**Best Practice:** NWS forecasts are updated multiple times daily. Check back before trading for the latest prediction.
+""")
+
+with st.expander("📊 Understanding the Markets", expanded=False):
+    st.markdown("""
+**Column Definitions:**
+- **Bracket** = Temperature range (e.g., 45° to 46°)
+- **Chance** = Market's implied probability (midpoint of bid/ask)
+- **Yes** = Cost to buy YES contract
+
+**Finding Edge:**
+- If NWS says 45°F and market shows 45-46° bracket at 30¢ → potential edge
+- Lower price + correct bracket = bigger profit
+- YES contract pays $1 if correct, so 30¢ buy = 70¢ profit
+
+**Risk Note:** Weather can change. NWS updates forecasts throughout the day.
+""")
+
+with st.expander("🏙️ Selecting Cities", expanded=False):
+    st.markdown("""
+**15 Cities Available:**
+Atlanta, Austin, Boston, Chicago, Dallas, Denver, Houston, Los Angeles, Miami, New York City, Philadelphia, Phoenix, San Francisco, Seattle, Washington DC
+
+**Set Default City:**
+- Click ⭐ "Set as Default" to remember your preferred city
+- URL will update with `?city=YourCity`
+
+**Pro Tip:** Check multiple cities — some have more volatile weather = bigger edges.
+""")
+
+with st.expander("📅 7-Day Edge Overview (Owner Only)", expanded=False):
+    st.markdown("""
+**What It Shows:**
+- Full week of NWS forecasts at a glance
+- Target brackets for each day
+- Market open status
+
+**Market Timing:**
+- 🟢 **OPEN** = Trade now
+- 🟢 **2AM** = Market opens tomorrow at 2AM ET
+- 🟡 **Xd** = Days until market opens
+
+**The Edge:** You see the NWS forecast BEFORE markets open. Position early for best prices.
+""")
+
+with st.expander("💡 Pro Tips", expanded=False):
+    st.markdown("""
+**Timing Your Trades:**
+- NWS updates forecasts ~4x daily
+- Best edge: Trade right after NWS update, before market adjusts
+- Check "Last NWS update" timestamp
+
+**Weather Volatility:**
+- Stable weather (Phoenix summer) = tighter brackets, less edge
+- Volatile weather (Denver, Chicago) = wider swings, bigger edge
+
+**Position Sizing:**
+- High confidence (forecast unchanged for 24h+) = larger position
+- Uncertain (forecast keeps changing) = smaller position
+
+**Multiple Cities:**
+- Scan all 15 cities for best opportunities
+- Some days have no edge — that's okay, wait for better setups
+""")
+
 # --- FOOTER ---
 st.divider()
-st.caption("BigSnapshot.com | Temp Edge Finder v3.0")
+st.caption("⚠️ Entertainment only. Not financial advice. v3.1")
+st.caption("BigSnapshot.com | Temp Edge Finder
