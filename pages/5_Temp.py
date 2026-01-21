@@ -226,26 +226,30 @@ def get_bracket_bounds(range_str):
         return int(nums[0]) - 0.5, int(nums[0]) + 0.5
 
 def render_brackets(brackets, forecast, sigma, color_accent):
-    """Render bracket list with muted colors"""
+    """Render bracket list - highlight BEST EDGE row to match BUY YES"""
     if not brackets:
         st.error("❌ Could not load brackets")
         return
     
+    # Find best edge FIRST so we can highlight it in the list
+    best = max(brackets, key=lambda b: calc_model_prob(forecast, *get_bracket_bounds(b['range']), sigma) * 100 - b['yes'])
+    best_edge = calc_model_prob(forecast, *get_bracket_bounds(best['range']), sigma) * 100 - best['yes']
+    
     market_fav = max(brackets, key=lambda b: b['yes'])
-    st.caption(f"Market favorite: **{market_fav['range']}** @ {market_fav['yes']:.0f}¢")
+    st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
     
     for b in brackets:
-        is_fav = b['range'] == market_fav['range']
         low, high = get_bracket_bounds(b['range'])
         model_prob = calc_model_prob(forecast, low, high, sigma) * 100
         market_prob = b['yes']
         edge = model_prob - market_prob
+        is_best = b['range'] == best['range'] and best_edge >= 5
         
-        # Muted color scheme
-        if is_fav:
-            bg = "#1c1c1c"
+        # Highlight the BEST EDGE row (matches BUY YES button)
+        if is_best:
+            bg = "#0f1f0f"
             border = f"2px solid {color_accent}"
-            icon = " ⭐"
+            icon = " 🎯"
         elif edge >= 5:
             bg = "#0f1f0f"
             border = "1px solid #2d5a2d"
@@ -259,9 +263,9 @@ def render_brackets(brackets, forecast, sigma, color_accent):
             border = "1px solid #30363d"
             icon = ""
         
-        # Edge text - muted colors
+        # Edge text
         if edge >= 5:
-            edge_txt = f"<span style='color:#4ade80'>{edge:+.0f}¢</span>"
+            edge_txt = f"<span style='color:#4ade80;font-weight:{'bold' if is_best else 'normal'}'>{edge:+.0f}¢</span>"
         elif edge <= -5:
             edge_txt = f"<span style='color:#f87171'>{edge:+.0f}¢</span>"
         else:
@@ -269,7 +273,7 @@ def render_brackets(brackets, forecast, sigma, color_accent):
         
         st.markdown(f"""<div style="background:{bg};border:{border};border-radius:6px;padding:10px 12px;margin:5px 0">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-                <span style="color:#e5e7eb;font-weight:500">{b['range']}{icon}</span>
+                <span style="color:#e5e7eb;font-weight:{'600' if is_best else '500'}">{b['range']}{icon}</span>
                 <div style="display:flex;gap:12px;align-items:center">
                     <span style="color:{color_accent}">Kalshi {b['yes']:.0f}¢</span>
                     <span style="color:#9ca3af">Model {model_prob:.0f}%</span>
@@ -278,22 +282,19 @@ def render_brackets(brackets, forecast, sigma, color_accent):
             </div>
         </div>""", unsafe_allow_html=True)
     
-    # Best edge
-    best = max(brackets, key=lambda b: calc_model_prob(forecast, *get_bracket_bounds(b['range']), sigma) * 100 - b['yes'])
-    best_edge = calc_model_prob(forecast, *get_bracket_bounds(best['range']), sigma) * 100 - best['yes']
-    
+    # BUY YES card - matches the highlighted row above
     if best_edge >= 5:
         st.markdown(f"""
-        <div style="background:#0f1f0f;border:1px solid #22c55e;border-radius:10px;padding:15px;text-align:center;margin-top:12px">
+        <div style="background:#0f1f0f;border:2px solid {color_accent};border-radius:10px;padding:15px;text-align:center;margin-top:12px">
             <div style="color:#4ade80;font-size:0.85em">🎯 BEST EDGE: +{best_edge:.0f}¢</div>
             <div style="color:#e5e7eb;font-size:1.2em;font-weight:600;margin:8px 0">{best['range']}</div>
-            <a href="{best['url']}" target="_blank" style="background:#22c55e;color:#000;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">BUY YES</a>
+            <a href="{best['url']}" target="_blank" style="background:{color_accent};color:#000;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">BUY YES</a>
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px;text-align:center;margin-top:12px">
-            <div style="color:#6b7280">No strong edge</div>
+            <div style="color:#6b7280">No strong edge found</div>
             <div style="color:#9ca3af;margin:5px 0">{market_fav['range']} @ {market_fav['yes']:.0f}¢</div>
             <a href="{market_fav['url']}" target="_blank" style="background:#30363d;color:#c9d1d9;padding:8px 20px;border-radius:6px;text-decoration:none;display:inline-block">VIEW MARKET</a>
         </div>
@@ -330,7 +331,7 @@ with col_high:
         high_sigma = st.slider("σ uncertainty", 1.0, 3.0, 1.8, 0.1, key="high_sig")
     
     brackets_high = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY"))
-    render_brackets(brackets_high, high_forecast, high_sigma, "#f59e0b")
+    render_brackets(brackets_high, high_forecast, high_sigma)
 
 with col_low:
     st.subheader("🌙 LOW TEMP")
@@ -342,7 +343,7 @@ with col_low:
         low_sigma = st.slider("σ uncertainty", 1.0, 3.0, 1.8, 0.1, key="low_sig")
     
     brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
-    render_brackets(brackets_low, low_forecast, low_sigma, "#3b82f6")
+    render_brackets(brackets_low, low_forecast, low_sigma)
 
 st.markdown("---")
 st.caption("⚠️ Experimental. Not financial advice. v2.3")
