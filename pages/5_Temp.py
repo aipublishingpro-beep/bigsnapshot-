@@ -379,17 +379,21 @@ if current_temp:
     
     if readings:
         with st.expander("📊 Recent NWS Observations", expanded=True):
+            # Find LATEST reading at today's low
+            min_temp = min(r['temp'] for r in readings)
             low_reversal_idx = None
-            for i in range(1, len(readings) - 1):
-                if readings[i]['temp'] < readings[i-1]['temp'] and readings[i]['temp'] < readings[i+1]['temp']:
+            for i, r in enumerate(readings):
+                if r['temp'] == min_temp:
                     low_reversal_idx = i
                     break
             
+            # Find LATEST reading at today's high (only after noon)
+            max_temp = max(r['temp'] for r in readings)
             high_reversal_idx = None
             if now.hour >= 12:
-                for i in range(1, len(readings) - 1):
-                    reading_hour = int(readings[i]['time'].split(':')[0])
-                    if reading_hour >= 12 and readings[i]['temp'] > readings[i-1]['temp'] and readings[i]['temp'] > readings[i+1]['temp']:
+                for i, r in enumerate(readings):
+                    reading_hour = int(r['time'].split(':')[0])
+                    if r['temp'] == max_temp and reading_hour >= 12:
                         high_reversal_idx = i
                         break
             
