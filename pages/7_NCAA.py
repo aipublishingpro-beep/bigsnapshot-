@@ -682,17 +682,13 @@ def check_engine_agreement(market, analyzer):
 # ============================================================
 def passes_visibility_gate(market, analyzer):
     """
-    Only render games with meaningful signal.
-    At least one must be true:
-    - market_score >= 8.3
-    - abs(analyzer_edge) >= 1.5
-    - engines_agree == true
+    Tightened gate - need actual signal strength, not just agreement.
     """
     score = market["score"]
     edge = abs(analyzer["edge"])
-    agrees, _ = check_engine_agreement(market, analyzer)
     
-    return score >= 8.3 or edge >= 1.5 or agrees
+    # Need meaningful signal from at least one engine
+    return score >= 8.8 or edge >= 2.5
 
 def get_final_signal(market, analyzer):
     score = market["score"]
@@ -704,15 +700,14 @@ def get_final_signal(market, analyzer):
     # Check visibility gate first
     visible = passes_visibility_gate(market, analyzer)
     
-    # CONVICTION (two paths):
-    # Path 1: Elite score (≥9.7) + agreement → score carries it
-    # Path 2: High score (≥9.3) + agreement + analyzer backup
+    # CONVICTION: Need BOTH engines strong, not just agreement
+    # score >= 9.5 AND edge >= 2.0 AND agreement AND low fatigue
     conf = analyzer["confidence"]
     
-    elite_path = (score >= 9.7 and agrees and pick_fatigue < 4.0)
-    strong_path = (score >= 9.3 and agrees and pick_fatigue < 4.0 and conf != "NO EDGE")
-    
-    if elite_path or strong_path:
+    if (score >= 9.5 and 
+        abs(signed_edge) >= 2.0 and 
+        agrees and 
+        pick_fatigue < 4.0):
         return {
             "final_tier": "CONVICTION",
             "display_tier": "✓ CONVICTION",
@@ -726,8 +721,8 @@ def get_final_signal(market, analyzer):
             "visible": True
         }
     
-    # NEAR CONVICTION: score ≥9.0, agree
-    if score >= 9.0 and agrees:
+    # NEAR: High score + agreement (analyzer may be weak)
+    if score >= 9.3 and agrees:
         return {
             "final_tier": "NEAR",
             "display_tier": "◐ NEAR",
@@ -741,8 +736,8 @@ def get_final_signal(market, analyzer):
             "visible": True
         }
     
-    # MIXED SIGNAL: market >= 8.3 AND engines_agree == false
-    if score >= 8.3 and not agrees:
+    # MIXED SIGNAL: Good score but engines disagree
+    if score >= 8.8 and not agrees:
         return {
             "final_tier": "MIXED",
             "display_tier": "⚠ MIXED",
@@ -853,14 +848,14 @@ live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_ty
 with st.sidebar:
     st.header("📖 SIGNAL TIERS")
     st.markdown("""
-✓ **CONVICTION** → Strong alignment
-<span style="color:#666;font-size:0.8em">Score ≥9.7 OR (≥9.3 + confirmed)</span>
+✓ **CONVICTION** → Both engines strong
+<span style="color:#666;font-size:0.8em">Score ≥9.5 • Edge ≥2.0 • Agree</span>
 
-◐ **NEAR** → Close alignment
-<span style="color:#666;font-size:0.8em">Score ≥9.0 • Agreement</span>
+◐ **NEAR** → High score, agreement
+<span style="color:#666;font-size:0.8em">Score ≥9.3 • Agreement</span>
 
 ⚠ **MIXED** → Engines disagree
-<span style="color:#666;font-size:0.8em">Score ≥8.3 • Conflict noted</span>
+<span style="color:#666;font-size:0.8em">Score ≥8.8 • Conflict</span>
 """, unsafe_allow_html=True)
     st.divider()
     st.markdown("""
@@ -873,13 +868,13 @@ Context over recommendation.
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v2.6 BALANCED")
+    st.caption("v2.7 DUAL-GATE")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v2.6")
+st.caption("Signal Analysis | v2.7")
 
 st.markdown("""
 <div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
@@ -1107,4 +1102,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v2.6 BALANCED • Transparency with discipline")
+st.caption("v2.7 DUAL-GATE • Both engines must confirm")
