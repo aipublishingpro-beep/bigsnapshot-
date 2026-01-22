@@ -60,17 +60,14 @@ def get_bracket_bounds(range_str):
     """Parse temperature bracket from Kalshi subtitle - only match temp numbers with °"""
     tl = range_str.lower()
     
-    # Pattern: "<12°" or "be <12°"
     below_match = re.search(r'<\s*(\d+)°', range_str)
     if below_match:
         return -999, int(below_match.group(1)) - 0.5
     
-    # Pattern: ">19°" or "be >19°"  
     above_match = re.search(r'>\s*(\d+)°', range_str)
     if above_match:
         return int(above_match.group(1)) + 0.5, 999
     
-    # Pattern: "16-17°" or "16° to 17°" or "16 to 17°"
     range_match = re.search(r'(\d+)[-–]\s*(\d+)°|(\d+)°?\s*to\s*(\d+)°', range_str)
     if range_match:
         if range_match.group(1) and range_match.group(2):
@@ -79,7 +76,6 @@ def get_bracket_bounds(range_str):
             low, high = int(range_match.group(3)), int(range_match.group(4))
         return low - 0.5, high + 0.5
     
-    # Pattern: "32° or below" or "41° or above"
     if "or below" in tl or "below" in tl:
         nums = re.findall(r'(\d+)°', range_str)
         if nums:
@@ -89,7 +85,6 @@ def get_bracket_bounds(range_str):
         if nums:
             return int(nums[0]) - 0.5, 999
     
-    # Fallback: only numbers with degree symbol
     nums = re.findall(r'(\d+)°', range_str)
     if len(nums) >= 2:
         return int(nums[0]) - 0.5, int(nums[1]) + 0.5
@@ -198,7 +193,6 @@ def fetch_nws_observations(station):
         low = min(r["temp"] for r in readings)
         high = max(r["temp"] for r in readings)
         
-        # format time only for display
         display_readings = [
             {"time": r["time"].strftime("%H:%M"), "temp": r["temp"]}
             for r in readings[:12]
@@ -213,7 +207,6 @@ def fetch_nws_observations(station):
 def fetch_nws_forecast(lat, lon):
     """Fetch NWS forecast for display"""
     try:
-        # First get the forecast URL from points endpoint
         points_url = f"https://api.weather.gov/points/{lat},{lon}"
         resp = requests.get(points_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
         if resp.status_code != 200:
@@ -223,7 +216,6 @@ def fetch_nws_forecast(lat, lon):
         if not forecast_url:
             return None
         
-        # Fetch the actual forecast
         resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
         if resp.status_code != 200:
             return None
@@ -232,34 +224,58 @@ def fetch_nws_forecast(lat, lon):
         if not periods:
             return None
         
-        # Return first 4 periods (today/tonight/tomorrow/tomorrow night)
         return periods[:4]
     except:
         return None
 
 def render_brackets_with_actual(brackets, actual_temp, temp_type):
-    """Render brackets highlighting the actual winning bracket"""
+    """Render brackets with severity coloring based on edge"""
     if not brackets:
         st.error("Could not load brackets")
         return
     
     winning_bracket = None
+    winner_data = None
     for b in brackets:
         if temp_in_bracket(actual_temp, b['range']):
             winning_bracket = b['range']
+            winner_data = b
             break
     
     market_fav = max(brackets, key=lambda b: b['yes'])
     st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
+    
+    # Calculate edge once
+    edge_cents = 0
+    if winner_data:
+        edge_cents = market_fav['yes'] - winner_data['yes']
     
     for b in brackets:
         is_winner = b['range'] == winning_bracket
         is_market_fav = b['range'] == market_fav['range']
         
         if is_winner:
-            box_style = "background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;box-shadow:0 0 15px rgba(245,158,11,0.4);border-radius:6px;padding:12px 14px;margin:8px 0"
-            name_style = "color:#fbbf24;font-weight:700;font-size:1.05em"
-            icon = " 🎯"
+            # Apply severity-based styling to ACTUAL bracket
+            if edge_cents >= 50:
+                # EXTREME EDGE
+                box_style = "background:linear-gradient(135deg,#4a1010,#2d1f0a);border:2px solid #dc2626;box-shadow:0 0 20px rgba(220,38,38,0.5);border-radius:6px;padding:12px 14px;margin:8px 0"
+                name_style = "color:#f87171;font-weight:700;font-size:1.05em"
+                icon = " 🚨🚨"
+            elif edge_cents >= 30:
+                # BIG EDGE
+                box_style = "background:linear-gradient(135deg,#451a03,#2d1f0a);border:2px solid #f59e0b;box-shadow:0 0 18px rgba(245,158,11,0.5);border-radius:6px;padding:12px 14px;margin:8px 0"
+                name_style = "color:#fbbf24;font-weight:700;font-size:1.05em"
+                icon = " 🚨"
+            elif edge_cents >= 15:
+                # MODERATE EDGE
+                box_style = "background:linear-gradient(135deg,#3d3510,#1a1408);border:2px solid #ca8a04;box-shadow:0 0 12px rgba(202,138,4,0.4);border-radius:6px;padding:12px 14px;margin:8px 0"
+                name_style = "color:#eab308;font-weight:700;font-size:1.05em"
+                icon = " ⚠️"
+            else:
+                # NO EDGE - default actual styling
+                box_style = "background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;box-shadow:0 0 15px rgba(245,158,11,0.4);border-radius:6px;padding:12px 14px;margin:8px 0"
+                name_style = "color:#fbbf24;font-weight:700;font-size:1.05em"
+                icon = " 🎯"
             model_txt = "ACTUAL"
         else:
             if is_market_fav:
@@ -282,32 +298,59 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
         </div>'''
         st.markdown(html, unsafe_allow_html=True)
     
-    if winning_bracket:
-        winner_data = next((b for b in brackets if b['range'] == winning_bracket), None)
-        if winner_data:
-            if winner_data['yes'] >= 99:
-                # Market settled - no edge
-                card = f'''
-                <div style="background:#1a2e1a;border:2px solid #22c55e;border-radius:10px;padding:18px;text-align:center;margin-top:12px">
-                    <div style="color:#22c55e;font-size:1.1em;font-weight:700">✅ Market settled — outcome confirmed</div>
-                    <div style="color:#fff;font-size:1.2em;margin-top:8px">{winning_bracket}</div>
-                </div>'''
+    if winner_data:
+        if winner_data['yes'] >= 99:
+            # Market settled
+            card = f'''
+            <div style="background:#1a2e1a;border:2px solid #22c55e;border-radius:10px;padding:18px;text-align:center;margin-top:12px">
+                <div style="color:#22c55e;font-size:1.1em;font-weight:700">✅ Market settled — outcome confirmed</div>
+                <div style="color:#fff;font-size:1.2em;margin-top:8px">{winning_bracket}</div>
+            </div>'''
+        else:
+            potential_profit = 100 - winner_data['yes']
+            
+            # Build edge score line (only if edge >= 15)
+            edge_score_html = ""
+            if edge_cents >= 50:
+                edge_score_html = f'<div style="color:#f87171;font-size:1em;font-weight:700;margin-top:6px">EDGE SCORE: +{edge_cents:.0f} <span style="font-weight:400">(Market broken)</span></div>'
+            elif edge_cents >= 30:
+                edge_score_html = f'<div style="color:#fbbf24;font-size:1em;font-weight:700;margin-top:6px">EDGE SCORE: +{edge_cents:.0f} <span style="font-weight:400">(Major mispricing)</span></div>'
+            elif edge_cents >= 15:
+                edge_score_html = f'<div style="color:#eab308;font-size:1em;font-weight:700;margin-top:6px">EDGE SCORE: +{edge_cents:.0f} <span style="font-weight:400">(Edge present)</span></div>'
+            # else: no edge score displayed
+            
+            # Card styling based on edge severity
+            if edge_cents >= 50:
+                card_bg = "background:linear-gradient(135deg,#4a1010,#2d0a0a)"
+                card_border = "border:2px solid #dc2626"
+                card_shadow = "box-shadow:0 0 25px rgba(220,38,38,0.6)"
+            elif edge_cents >= 30:
+                card_bg = "background:linear-gradient(135deg,#451a03,#2d1f0a)"
+                card_border = "border:2px solid #f59e0b"
+                card_shadow = "box-shadow:0 0 22px rgba(245,158,11,0.5)"
+            elif edge_cents >= 15:
+                card_bg = "background:linear-gradient(135deg,#3d3510,#1a1408)"
+                card_border = "border:2px solid #ca8a04"
+                card_shadow = "box-shadow:0 0 18px rgba(202,138,4,0.4)"
             else:
-                potential_profit = 100 - winner_data['yes']
-                card = f'''
-                <div style="background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;border-radius:10px;padding:18px;text-align:center;margin-top:12px;box-shadow:0 0 20px rgba(245,158,11,0.5)">
-                    <div style="color:#fbbf24;font-size:0.9em;font-weight:600">🌡️ ACTUAL {temp_type}: {actual_temp}°F</div>
-                    <div style="color:#fff;font-size:1.3em;font-weight:700;margin:10px 0">{winning_bracket}</div>
-                    <div style="color:#4ade80;font-size:0.9em">Potential profit: +{potential_profit:.0f}¢ per contract</div>
-                    <a href="{winner_data['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:10px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY YES</a>
-                </div>'''
-            st.markdown(card, unsafe_allow_html=True)
+                card_bg = "background:linear-gradient(135deg,#2d1f0a,#1a1408)"
+                card_border = "border:2px solid #f59e0b"
+                card_shadow = "box-shadow:0 0 20px rgba(245,158,11,0.5)"
+            
+            card = f'''
+            <div style="{card_bg};{card_border};border-radius:10px;padding:18px;text-align:center;margin-top:12px;{card_shadow}">
+                <div style="color:#fbbf24;font-size:0.9em;font-weight:600">🌡️ ACTUAL {temp_type}: {actual_temp}°F</div>
+                {edge_score_html}
+                <div style="color:#fff;font-size:1.3em;font-weight:700;margin:10px 0">{winning_bracket}</div>
+                <div style="color:#4ade80;font-size:0.9em">Potential profit: +{potential_profit:.0f}¢ per contract</div>
+                <a href="{winner_data['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:10px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY YES</a>
+            </div>'''
+        st.markdown(card, unsafe_allow_html=True)
 
 # ========== HEADER ==========
 st.title("🌡️ TEMP EDGE FINDER")
 st.caption(f"Live NWS Observations + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')}")
 
-# Check for default city in URL
 query_params = st.query_params
 default_city = query_params.get("city", "New York City")
 if default_city not in CITY_LIST:
@@ -321,15 +364,12 @@ with c2:
     nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
     st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
 
-# Set default button - small and subtle
 if st.button("⭐ Set as Default City", use_container_width=False):
     st.query_params["city"] = city
     st.success(f"✓ Bookmark this page to save {city} as default!")
 
-# Fetch actual observations
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
 
-# Display current conditions
 if current_temp:
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
@@ -355,14 +395,12 @@ if current_temp:
     
     if readings:
         with st.expander("📊 Recent NWS Observations", expanded=True):
-            # Find LOW reversal (temp lower than both neighbors)
             low_reversal_idx = None
             for i in range(1, len(readings) - 1):
                 if readings[i]['temp'] < readings[i-1]['temp'] and readings[i]['temp'] < readings[i+1]['temp']:
                     low_reversal_idx = i
                     break
             
-            # Find HIGH reversal (temp higher than both neighbors) - only if reversal happened after noon
             high_reversal_idx = None
             if now.hour >= 12:
                 for i in range(1, len(readings) - 1):
@@ -372,13 +410,11 @@ if current_temp:
                         break
             
             for i, r in enumerate(readings[:8]):
-                # Highlight LOW reversal in orange
                 if i == low_reversal_idx:
                     row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
                     time_style = "color:#fbbf24;font-weight:600"
                     temp_style = "color:#fbbf24;font-weight:700"
                     label = " ↩️ LOW"
-                # Highlight HIGH reversal in red
                 elif i == high_reversal_idx:
                     row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d0a0a,#1a0808);border:1px solid #ef4444;margin:2px 0"
                     time_style = "color:#f87171;font-weight:600"
@@ -429,7 +465,6 @@ with col_high:
                     </div>'''
                     st.markdown(html, unsafe_allow_html=True)
                 
-                # Add BUY button for market favorite
                 st.markdown(f'''
                 <div style="text-align:center;margin-top:12px">
                     <a href="{market_fav['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a>
@@ -446,7 +481,7 @@ with col_low:
         st.metric("📉 Today's Low", f"{obs_low}°F")
         brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
         
-        if hour >= 6:  # LOW locks in by 6 AM
+        if hour >= 6:
             st.caption("✅ Low locked in (after 6 AM)")
             render_brackets_with_actual(brackets_low, obs_low, "LOW")
         else:
@@ -470,7 +505,6 @@ with col_low:
                     </div>'''
                     st.markdown(html, unsafe_allow_html=True)
                 
-                # Add BUY button for market favorite
                 st.markdown(f'''
                 <div style="text-align:center;margin-top:12px">
                     <a href="{market_fav['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a>
@@ -493,7 +527,6 @@ if forecast:
             unit = period.get("temperatureUnit", "F")
             short = period.get("shortForecast", "")
             
-            # Color based on day/night
             if "night" in name.lower() or "tonight" in name.lower():
                 bg = "#1a1a2e"
                 temp_color = "#3b82f6"
@@ -514,7 +547,7 @@ else:
 st.markdown("---")
 st.markdown("""
 <div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center">
-<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.1</span>
+<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.2</span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -538,6 +571,17 @@ with st.expander("❓ How to Use This App"):
     • No reversal yet? Don't bet — the low/high isn't confirmed.
     • See a reversal + market mispriced? Now you have information the market hasn't processed.
     • No edge visible? Skip it. Discipline is edge.
+    
+    **🚨 Severity Indicators**
+    
+    The app automatically highlights mispricing severity on the ACTUAL bracket:
+    
+    • 🚨🚨 **EXTREME** (50+ cents) — Red glow, "Market broken"
+    • 🚨 **BIG** (30-49 cents) — Amber glow, "Major mispricing"  
+    • ⚠️ **MODERATE** (15-29 cents) — Gold highlight, "Edge present"
+    • 🎯 **NONE** (<15 cents) — Standard display, no edge score shown
+    
+    If edge is <15 cents, the app stays quiet. Silence = no edge.
     
     **↩️ Reversal Point (Orange/Red Highlight)**
     
