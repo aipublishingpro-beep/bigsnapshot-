@@ -14,25 +14,35 @@ st.set_page_config(page_title="NCAA Edge Finder", page_icon="🎓", layout="wide
 apply_styles()
 
 # ============================================================
-# COOKIE MANAGER — UX PERSISTENCE ONLY, NOT SECURITY
+# COOKIE MANAGER — HYDRATION ONLY, NOT ENFORCEMENT
+# Session state is the single source of truth after hydration
 # ============================================================
 cookie_manager = stx.CookieManager()
 
+# Initialize session state
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 if 'user_type' not in st.session_state:
     st.session_state.user_type = None
+if 'auth_hydrated' not in st.session_state:
+    st.session_state.auth_hydrated = False
 
-# Cookies are UX convenience, not auth enforcement
-auth_cookie = cookie_manager.get("bigsnapshot_auth")
-if auth_cookie and not st.session_state.authenticated:
-    st.session_state.authenticated = True
-    st.session_state.user_type = auth_cookie
+# ONE-TIME AUTH HYDRATION (only runs once per browser session)
+if not st.session_state.auth_hydrated:
+    try:
+        auth_cookie = cookie_manager.get("bigsnapshot_auth")
+        if auth_cookie:
+            st.session_state.authenticated = True
+            st.session_state.user_type = auth_cookie
+    except:
+        pass
+    st.session_state.auth_hydrated = True
 
+# AUTH GATE — use switch_page, not st.stop()
 if not st.session_state.authenticated:
     st.warning("⚠️ Please log in from the Home page first.")
     st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
-    st.stop()
+    st.switch_page("Home.py")
 
 # ========== GOOGLE ANALYTICS ==========
 st.markdown("""
@@ -896,13 +906,13 @@ with st.sidebar:
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v3.4 NBA-STYLE")
+    st.caption("v3.5 AUTH-FIX")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v3.4")
+st.caption("Signal Analysis | v3.5")
 
 st.markdown("""
 <div style="background:#0f172a;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:4px solid #00ff00">
@@ -1127,4 +1137,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v3.4 NBA-STYLE • 🔒 STRONG + 🟡 LEAN picks")
+st.caption("v3.5 AUTH-FIX • Auto-refresh safe")
