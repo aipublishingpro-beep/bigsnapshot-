@@ -1293,39 +1293,48 @@ with ma2: team_b = st.selectbox("Home Team", teams, index=teams.index("Boston") 
 
 if team_a and team_b and team_a != team_b:
     try:
-        pick, score, reasons, _, _, pick_net, opp_net = calc_ml_score(team_b, team_a, yesterday_teams, injuries, last_5)
+        # Check if this is an actual game today - if so, use that data for consistency
+        game_key = f"{team_a}@{team_b}"
+        is_real_game = game_key in games
+        
+        # Use the same calculation as ML Picks section for consistency
+        pick, score, reasons, home_out, away_out, home_net, away_net = calc_ml_score(team_b, team_a, yesterday_teams, injuries, last_5)
         tier, color, is_tracked = get_signal_tier(score)
         form_a, form_b = last_5.get(team_a, {}).get('form', '-----'), last_5.get(team_b, {}).get('form', '-----')
         
         away_color = color if pick == team_a else "#fff"
         home_color = color if pick == team_b else "#fff"
         
-        # Get stability check for this hypothetical matchup
+        # Get stability check
         stability_label, stability_color, is_stable, stability_flags = get_match_stability(
             team_b, team_a, injuries, yesterday_teams, all_streaks
         )
         
-        tracked_html = '<div style="text-align:center;margin-top:8px"><span style="background:#00ff00;color:#000;padding:3px 8px;border-radius:4px;font-size:0.75em">TRACKED</span></div>' if is_tracked else ''
+        # Build reasons string
+        reasons_str = " · ".join([escape_html(r) for r in reasons[:4]]) if reasons else ""
+        
+        tracked_badge = ' <span style="background:#00ff00;color:#000;padding:2px 6px;border-radius:4px;font-size:0.5em;vertical-align:middle">TRACKED</span>' if is_tracked else ''
+        real_game_badge = ' <span style="background:#38bdf8;color:#000;padding:2px 6px;border-radius:4px;font-size:0.5em;vertical-align:middle">TODAY</span>' if is_real_game else ''
         
         st.markdown(f"""<div style="background:linear-gradient(135deg,#0f172a,#020617);padding:15px;border-radius:10px;border:2px solid {color};margin:10px 0">
-        <div style="text-align:center;margin-bottom:10px">
-            <span style="font-size:1.5em;color:{away_color};font-weight:bold">{escape_html(KALSHI_CODES.get(team_a, '???'))}</span>
-            <span style="color:#888;margin:0 15px;font-size:1.2em">@</span>
-            <span style="font-size:1.5em;color:{home_color};font-weight:bold">{escape_html(KALSHI_CODES.get(team_b, '???'))}</span>
-        </div>
-        <div style="text-align:center">
-            <span style="color:{color};font-size:1.3em;font-weight:bold">{escape_html(tier)}</span>
-            <span style="color:#888;margin-left:10px">{escape_html(KALSHI_CODES.get(pick, '???'))} {score}/10</span>
-        </div>
-        <div style="text-align:center;margin-top:8px">
-            <span style="color:{stability_color};font-size:0.85em">{stability_label}</span>
-        </div>
-        <div style="display:flex;justify-content:center;gap:30px;margin-top:10px">
-            <div style="text-align:center"><div style="color:#888;font-size:0.8em">Away</div><div style="color:#fff;font-family:monospace">{escape_html(form_a)}</div></div>
-            <div style="text-align:center"><div style="color:#888;font-size:0.8em">Home</div><div style="color:#fff;font-family:monospace">{escape_html(form_b)}</div></div>
-        </div>
-        {tracked_html}
-        </div>""", unsafe_allow_html=True)
+<div style="text-align:center;margin-bottom:10px">
+<span style="font-size:1.5em;color:{away_color};font-weight:bold">{escape_html(KALSHI_CODES.get(team_a, '???'))}</span>
+<span style="color:#888;margin:0 15px;font-size:1.2em">@</span>
+<span style="font-size:1.5em;color:{home_color};font-weight:bold">{escape_html(KALSHI_CODES.get(team_b, '???'))}</span>
+</div>
+<div style="text-align:center">
+<span style="color:{color};font-size:1.3em;font-weight:bold">{escape_html(tier)}</span>
+<span style="color:#888;margin-left:10px">{escape_html(KALSHI_CODES.get(pick, '???'))} {score}/10</span>{tracked_badge}{real_game_badge}
+</div>
+<div style="text-align:center;margin-top:6px;color:#888;font-size:0.85em">{reasons_str}</div>
+<div style="text-align:center;margin-top:8px">
+<span style="color:{stability_color};font-size:0.85em">{stability_label}</span>
+</div>
+<div style="display:flex;justify-content:center;gap:30px;margin-top:10px">
+<div style="text-align:center"><div style="color:#888;font-size:0.8em">Away</div><div style="color:#fff;font-family:monospace">{escape_html(form_a)}</div></div>
+<div style="text-align:center"><div style="color:#888;font-size:0.8em">Home</div><div style="color:#fff;font-family:monospace">{escape_html(form_b)}</div></div>
+</div>
+</div>""", unsafe_allow_html=True)
         
         kalshi_url = build_kalshi_ml_url(team_a, team_b)
         st.markdown(buy_button(kalshi_url, f"🎯 BUY {escape_html(pick.upper())} TO WIN"), unsafe_allow_html=True)
