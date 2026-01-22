@@ -1320,6 +1320,234 @@ else:
 st.divider()
 
 # ============================================================
+# CUSHION SCANNER (Pre-Game Edge Analysis)
+# ============================================================
+with st.expander("🛡️ CUSHION SCANNER", expanded=False):
+    st.caption("Gate 2: Pre-game edge cushion analysis")
+    
+    scheduled_games = {k: v for k, v in games.items() if v['status_type'] == "STATUS_SCHEDULED"}
+    
+    if scheduled_games:
+        for gk, g in sorted(scheduled_games.items()):
+            pc = precomputed.get(gk, {})
+            score = pc.get('market_score', 5.0)
+            edge = abs(pc.get('analyzer_edge_signed', 0))
+            pick = pc.get('market_pick', '')
+            reasons = pc.get('market_reasons', [])[:3]
+            
+            # Cushion tier assessment
+            if score >= 9.5 or edge >= 3.0:
+                cushion_tier = "WIDE"
+                cushion_clr = "#00ff00"
+                cushion_icon = "🟢"
+            elif score >= 9.0 or edge >= 2.0:
+                cushion_tier = "MODERATE"
+                cushion_clr = "#ffaa00"
+                cushion_icon = "🟡"
+            else:
+                cushion_tier = "THIN"
+                cushion_clr = "#ff4444"
+                cushion_icon = "🔴"
+            
+            # Expected margin (rough estimate based on score)
+            exp_margin = round((score - 5) * 2.5)  # 9.5 score ≈ +11 pts
+            
+            reasons_str = " · ".join([escape_html(r) for r in reasons]) if reasons else "—"
+            
+            st.markdown(f"""<div style="background:#0a0a14;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid {cushion_clr}">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+<div>
+<b style="color:#fff">{escape_html(g['away_abbrev'])} @ {escape_html(g['home_abbrev'])}</b>
+<span style="color:#888;margin-left:10px">→ {escape_html(pick)}</span>
+</div>
+<span style="color:{cushion_clr};font-weight:bold">{cushion_icon} {cushion_tier}</span>
+</div>
+<div style="display:flex;gap:20px;font-size:0.85em;color:#888">
+<span>Score: <b style="color:#38bdf8">{score}</b></span>
+<span>Edge: <b style="color:#38bdf8">{edge:.1f}</b></span>
+<span>Exp Margin: <b style="color:#38bdf8">{exp_margin:+d} pts</b></span>
+</div>
+<div style="color:#555;font-size:0.75em;margin-top:6px">{reasons_str}</div>
+</div>""", unsafe_allow_html=True)
+    else:
+        st.caption("No scheduled games")
+
+st.divider()
+
+# ============================================================
+# PACE SCANNER (Live Game Momentum)
+# ============================================================
+with st.expander("⚡ PACE SCANNER", expanded=False):
+    st.caption("Gate 3: Live pace direction & momentum")
+    
+    if live_games:
+        for gk, g in live_games.items():
+            period = g['period']
+            clock = g['clock']
+            home_score = g['home_score']
+            away_score = g['away_score']
+            total = g['total']
+            diff = abs(home_score - away_score)
+            
+            mins = get_minutes_played(period, clock, g['status_type'])
+            
+            # Pace calculation
+            if mins >= 5:
+                pace = round(total / mins, 2)
+                proj_total = round(pace * 40)
+            else:
+                pace = 0
+                proj_total = 0
+            
+            # Who's leading
+            if home_score > away_score:
+                leader = g['home_abbrev']
+                lead = home_score - away_score
+            elif away_score > home_score:
+                leader = g['away_abbrev']
+                lead = away_score - home_score
+            else:
+                leader = "TIE"
+                lead = 0
+            
+            # Pace direction assessment
+            half_label = "H1" if period == 1 else "H2" if period == 2 else f"OT{period-2}"
+            is_late = period >= 2
+            is_close = diff <= 7
+            
+            if is_late and is_close:
+                pace_status = "VOLATILE"
+                pace_clr = "#ff4444"
+                pace_icon = "🔴"
+            elif is_late and diff >= 10:
+                pace_status = "SAFE LEAD"
+                pace_clr = "#00ff00"
+                pace_icon = "🟢"
+            elif diff >= 15:
+                pace_status = "BLOWOUT"
+                pace_clr = "#00ff00"
+                pace_icon = "🟢"
+            elif is_close:
+                pace_status = "TIGHT"
+                pace_clr = "#ffaa00"
+                pace_icon = "🟡"
+            else:
+                pace_status = "COMFORTABLE"
+                pace_clr = "#88ff88"
+                pace_icon = "🟢"
+            
+            # Get pick from precomputed
+            pc = precomputed.get(gk, {})
+            pick = pc.get('market_pick', '')
+            pick_leading = (pick == leader) if leader != "TIE" else False
+            
+            lead_display = f"{escape_html(leader)} +{lead}" if leader != "TIE" else "TIE"
+            lead_clr = "#00ff00" if pick_leading else "#ff4444" if leader != "TIE" else "#888"
+            
+            st.markdown(f"""<div style="background:#0a0a14;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid {pace_clr}">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+<div>
+<b style="color:#fff">{escape_html(g['away_abbrev'])} {away_score} @ {escape_html(g['home_abbrev'])} {home_score}</b>
+<span style="color:#aa0000;margin-left:10px;font-size:0.85em">🔴 {half_label} {escape_html(clock)}</span>
+</div>
+<span style="color:{pace_clr};font-weight:bold">{pace_icon} {pace_status}</span>
+</div>
+<div style="display:flex;gap:20px;font-size:0.85em;color:#888">
+<span>Lead: <b style="color:{lead_clr}">{lead_display}</b></span>
+<span>Pace: <b style="color:#38bdf8">{pace:.2f}</b> pts/min</span>
+<span>Proj: <b style="color:#38bdf8">{proj_total}</b> total</span>
+<span>Mins: <b style="color:#38bdf8">{mins:.1f}</b></span>
+</div>
+<div style="color:#555;font-size:0.75em;margin-top:6px">Pick: {escape_html(pick)} {'✓ Leading' if pick_leading else '⚠ Trailing' if leader != "TIE" else '— Tied'}</div>
+</div>""", unsafe_allow_html=True)
+    else:
+        st.caption("No live games")
+
+st.divider()
+
+# ============================================================
+# MATCH ANALYZER
+# ============================================================
+with st.expander("🔬 MATCH ANALYZER", expanded=False):
+    st.caption("Engine 2: Team Strength Breakdown")
+    
+    for gk, g in sorted(games.items()):
+        if g['status_type'] == "STATUS_FINAL":
+            continue
+        
+        home_abbrev = g['home_abbrev']
+        away_abbrev = g['away_abbrev']
+        
+        # Get streaks
+        home_streak = streaks.get(home_abbrev, 0)
+        away_streak = streaks.get(away_abbrev, 0)
+        
+        # Get splits
+        home_split = splits.get(home_abbrev, {})
+        away_split = splits.get(away_abbrev, {})
+        home_hw = home_split.get("home_w", 0)
+        home_hl = home_split.get("home_l", 0)
+        away_aw = away_split.get("away_w", 0)
+        away_al = away_split.get("away_l", 0)
+        
+        # Get fatigue
+        home_fatigue = calculate_fatigue_score(home_abbrev, fatigue_data)
+        away_fatigue = calculate_fatigue_score(away_abbrev, fatigue_data)
+        
+        # Get rankings
+        home_ap = ap_rankings.get(home_abbrev, 0)
+        away_ap = ap_rankings.get(away_abbrev, 0)
+        
+        # Get precomputed data
+        pc = precomputed.get(gk, {})
+        edge = pc.get('analyzer_edge_signed', 0)
+        conf = pc.get('analyzer_conf', 'NO EDGE')
+        pick = pc.get('analyzer_pick', '')
+        
+        # Format streaks
+        home_streak_str = f"W{home_streak}" if home_streak > 0 else f"L{abs(home_streak)}" if home_streak < 0 else "—"
+        away_streak_str = f"W{away_streak}" if away_streak > 0 else f"L{abs(away_streak)}" if away_streak < 0 else "—"
+        home_streak_clr = "#00ff00" if home_streak > 0 else "#ff4444" if home_streak < 0 else "#666"
+        away_streak_clr = "#00ff00" if away_streak > 0 else "#ff4444" if away_streak < 0 else "#666"
+        
+        # Format rankings
+        home_rank_str = f"#{home_ap}" if home_ap > 0 else "—"
+        away_rank_str = f"#{away_ap}" if away_ap > 0 else "—"
+        
+        # Format fatigue
+        home_fatigue_clr = "#ff4444" if home_fatigue >= 4 else "#ffaa00" if home_fatigue >= 2 else "#00ff00"
+        away_fatigue_clr = "#ff4444" if away_fatigue >= 4 else "#ffaa00" if away_fatigue >= 2 else "#00ff00"
+        
+        # Edge color
+        edge_clr = "#00ff00" if conf == "CONFIDENT" else "#ffaa00" if conf == "SLIGHT" else "#666"
+        edge_display = f"+{edge:.1f}" if edge > 0 else f"{edge:.1f}"
+        
+        st.markdown(f"""<div style="background:#0a0a14;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid {edge_clr}">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+<b style="color:#fff">{escape_html(away_abbrev)} @ {escape_html(home_abbrev)}</b>
+<span style="color:{edge_clr};font-weight:bold">{conf} → {escape_html(pick)} ({edge_display})</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.8em">
+<div style="background:#111;padding:8px;border-radius:4px">
+<div style="color:#888;margin-bottom:4px">Away: {escape_html(away_abbrev)}</div>
+<div>Streak: <span style="color:{away_streak_clr}">{away_streak_str}</span></div>
+<div>Road: {away_aw}-{away_al}</div>
+<div>Rank: {away_rank_str}</div>
+<div>Fatigue: <span style="color:{away_fatigue_clr}">{away_fatigue:.1f}</span></div>
+</div>
+<div style="background:#111;padding:8px;border-radius:4px">
+<div style="color:#888;margin-bottom:4px">Home: {escape_html(home_abbrev)}</div>
+<div>Streak: <span style="color:{home_streak_clr}">{home_streak_str}</span></div>
+<div>Home: {home_hw}-{home_hl}</div>
+<div>Rank: {home_rank_str}</div>
+<div>Fatigue: <span style="color:{home_fatigue_clr}">{home_fatigue:.1f}</span></div>
+</div>
+</div>
+</div>""", unsafe_allow_html=True)
+
+st.divider()
+
+# ============================================================
 # ALL GAMES
 # ============================================================
 with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
