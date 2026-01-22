@@ -704,8 +704,13 @@ def get_final_signal(market, analyzer):
     # Check visibility gate first
     visible = passes_visibility_gate(market, analyzer)
     
-    # CONVICTION: market >= 9.2 AND engines_agree AND fatigue < 4
-    if score >= 9.2 and agrees and pick_fatigue < 4.0:
+    # CONVICTION: score ≥9.5, agree, fatigue <4, analyzer ≠ NO EDGE, edge ≥1.5
+    conf = analyzer["confidence"]
+    if (score >= 9.5 and 
+        agrees and 
+        pick_fatigue < 4.0 and 
+        conf != "NO EDGE" and 
+        abs(signed_edge) >= 1.5):
         return {
             "final_tier": "CONVICTION",
             "display_tier": "✓ CONVICTION",
@@ -719,8 +724,8 @@ def get_final_signal(market, analyzer):
             "visible": True
         }
     
-    # NEAR CONVICTION: market >= 8.6 AND engines_agree
-    if score >= 8.6 and agrees:
+    # NEAR CONVICTION: score ≥9.0, agree
+    if score >= 9.0 and agrees:
         return {
             "final_tier": "NEAR",
             "display_tier": "◐ NEAR",
@@ -846,11 +851,11 @@ live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_ty
 with st.sidebar:
     st.header("📖 SIGNAL TIERS")
     st.markdown("""
-✓ **CONVICTION** → Aligned engines
-<span style="color:#666;font-size:0.8em">Score ≥9.2 • Agreement • Low fatigue</span>
+✓ **CONVICTION** → Strong alignment
+<span style="color:#666;font-size:0.8em">Score ≥9.5 • Edge ≥1.5 • Low fatigue</span>
 
 ◐ **NEAR** → Close alignment
-<span style="color:#666;font-size:0.8em">Score ≥8.6 • Agreement</span>
+<span style="color:#666;font-size:0.8em">Score ≥9.0 • Agreement</span>
 
 ⚠ **MIXED** → Engines disagree
 <span style="color:#666;font-size:0.8em">Score ≥8.3 • Conflict noted</span>
@@ -866,13 +871,13 @@ Context over recommendation.
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v2.4 VISIBILITY")
+    st.caption("v2.5 TIGHTENED")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v2.4")
+st.caption("Signal Analysis | v2.5")
 
 st.markdown("""
 <div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
@@ -1100,4 +1105,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v2.4 VISIBILITY • Transparency with discipline")
+st.caption("v2.5 TIGHTENED • Transparency with discipline")
