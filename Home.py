@@ -98,13 +98,13 @@ st.markdown("---")
 st.subheader("🛠️ Your Tools")
 
 tools = [
-    {"name": "🏀 NBA Edge Finder", "desc": "ML picks, live tracking, streaks", "page": "pages/NBA.py", "status": "LIVE"},
-    {"name": "🏈 NFL Edge Finder", "desc": "Coming soon", "page": "pages/NFL.py", "status": "SOON"},
-    {"name": "🏀 NCAA Basketball", "desc": "Coming soon", "page": "pages/NCAA.py", "status": "SOON"},
-    {"name": "🏒 NHL Edge Finder", "desc": "Coming soon", "page": "pages/NHL.py", "status": "SOON"},
-    {"name": "⚾ MLB Edge Finder", "desc": "Coming soon", "page": "pages/MLB.py", "status": "SOON"},
-    {"name": "⚽ Soccer Edge Finder", "desc": "Coming soon", "page": "pages/Soccer.py", "status": "SOON"},
-    {"name": "📊 Economics", "desc": "Coming soon", "page": "pages/Economics.py", "status": "SOON"},
+    {"name": "🏀 NBA Edge Finder", "desc": "ML picks, live tracking, streaks", "page": "pages/2_NBA.py", "status": "LIVE"},
+    {"name": "🏈 NFL Edge Finder", "desc": "Coming soon", "page": "pages/1_NFL.py", "status": "SOON"},
+    {"name": "🏀 NCAA Basketball", "desc": "Coming soon", "page": "pages/7_NCAA.py", "status": "SOON"},
+    {"name": "🏒 NHL Edge Finder", "desc": "Coming soon", "page": "pages/3_NHL.py", "status": "SOON"},
+    {"name": "⚾ MLB Edge Finder", "desc": "Coming soon", "page": "pages/4_MLB.py", "status": "SOON"},
+    {"name": "⚽ Soccer Edge Finder", "desc": "Coming soon", "page": "pages/8_Soccer.py", "status": "SOON"},
+    {"name": "📊 Economics", "desc": "Coming soon", "page": "pages/9_Economics.py", "status": "SOON"},
 ]
 
 cols = st.columns(2)
