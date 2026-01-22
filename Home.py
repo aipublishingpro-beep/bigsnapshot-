@@ -1,19 +1,34 @@
 import streamlit as st
-from styles import apply_styles
-import extra_streamlit_components as stx
+from streamlit_js_eval import streamlit_js_eval
 
+# ============================================================
+# AUTH BOOTSTRAP - MUST BE FIRST (BEFORE ANY UI)
+# ============================================================
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+    st.session_state.user_type = None
+
+# Single-pass localStorage read - NO backup checks, NO flags
+stored_auth = streamlit_js_eval(
+    js_expressions="localStorage.getItem('bigsnapshot_auth')",
+    key="auth_bootstrap"
+)
+
+if stored_auth and stored_auth not in ["", "null", None]:
+    st.session_state.authenticated = True
+    st.session_state.user_type = stored_auth
+
+# ============================================================
+# NOW SAFE TO SET PAGE CONFIG AND STYLES
+# ============================================================
 st.set_page_config(
     page_title="BigSnapshot | Prediction Market Edge Finder",
     page_icon="📊",
     layout="wide"
 )
 
+from styles import apply_styles
 apply_styles()
-
-# ============================================================
-# COOKIE MANAGER FOR PERSISTENT LOGIN - FIXED WITH STABLE KEY
-# ============================================================
-cookie_manager = stx.CookieManager(key="bigsnapshot_cookies")
 
 # ============================================================
 # GA4 TRACKING
@@ -39,39 +54,6 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'user_type' not in st.session_state:
-    st.session_state.user_type = None
-if 'cookie_checked' not in st.session_state:
-    st.session_state.cookie_checked = False
-
-# ============================================================
-# CHECK COOKIE FOR PERSISTENT LOGIN - IMPROVED TIMING
-# ============================================================
-if not st.session_state.cookie_checked:
-    try:
-        auth_cookie = cookie_manager.get("bigsnapshot_auth")
-        if auth_cookie and auth_cookie != "":
-            st.session_state.authenticated = True
-            st.session_state.user_type = auth_cookie
-        st.session_state.cookie_checked = True
-    except Exception:
-        pass
-
-# Also check on every run if not authenticated (backup check)
-if not st.session_state.authenticated:
-    try:
-        auth_cookie = cookie_manager.get("bigsnapshot_auth")
-        if auth_cookie and auth_cookie != "":
-            st.session_state.authenticated = True
-            st.session_state.user_type = auth_cookie
-    except Exception:
-        pass
 
 # ============================================================
 # PASSWORD CONFIG - PAID ACCESS ONLY
@@ -107,20 +89,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# HELPER FUNCTION FOR SETTING COOKIE RELIABLY
-# ============================================================
-def set_auth_cookie(user_type):
-    try:
-        cookie_manager.set("bigsnapshot_auth", user_type, max_age=30*24*60*60, key="set_auth")
-    except Exception:
-        pass
 
-def delete_auth_cookie():
-    try:
-        cookie_manager.delete("bigsnapshot_auth", key="del_auth")
-    except Exception:
-        pass
 
 # ============================================================
 # LANDING PAGE (NOT LOGGED IN)
@@ -150,9 +119,13 @@ if not st.session_state.authenticated:
             password_input = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter password")
             if st.button("🔓 UNLOCK", use_container_width=True, type="primary"):
                 if password_input.upper() in VALID_PASSWORDS:
+                    user_type = VALID_PASSWORDS[password_input.upper()]
+                    streamlit_js_eval(
+                        js_expressions=f"localStorage.setItem('bigsnapshot_auth', '{user_type}')",
+                        key="set_auth_paid"
+                    )
                     st.session_state.authenticated = True
-                    st.session_state.user_type = VALID_PASSWORDS[password_input.upper()]
-                    set_auth_cookie(VALID_PASSWORDS[password_input.upper()])
+                    st.session_state.user_type = user_type
                     st.rerun()
                 else:
                     st.error("❌ Invalid password")
@@ -428,9 +401,13 @@ if not st.session_state.authenticated:
         password_input = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter password")
         if st.button("🔓 UNLOCK", use_container_width=True, type="primary"):
             if password_input.upper() in VALID_PASSWORDS:
+                user_type = VALID_PASSWORDS[password_input.upper()]
+                streamlit_js_eval(
+                    js_expressions=f"localStorage.setItem('bigsnapshot_auth', '{user_type}')",
+                    key="set_auth_main"
+                )
                 st.session_state.authenticated = True
-                st.session_state.user_type = VALID_PASSWORDS[password_input.upper()]
-                set_auth_cookie(VALID_PASSWORDS[password_input.upper()])
+                st.session_state.user_type = user_type
                 st.rerun()
             else:
                 st.error("❌ Invalid password")
@@ -515,10 +492,12 @@ st.markdown("---")
 col1, col2, col3 = st.columns([1, 1, 1])
 with col2:
     if st.button("🚪 Logout", use_container_width=True):
+        streamlit_js_eval(
+            js_expressions="localStorage.removeItem('bigsnapshot_auth')",
+            key="clear_auth"
+        )
         st.session_state.authenticated = False
         st.session_state.user_type = None
-        st.session_state.cookie_checked = False
-        delete_auth_cookie()
         st.rerun()
 
 # Footer
