@@ -112,10 +112,8 @@ if 'auto_refresh' not in st.session_state:
 if "ncaa_positions" not in st.session_state:
     st.session_state.ncaa_positions = load_positions()
 
-# Auto-refresh using streamlit-autorefresh (no login issues)
+# Auto-refresh status display
 if st.session_state.auto_refresh:
-    if HAS_AUTOREFRESH:
-        st_autorefresh(interval=30000, key="ncaa_autorefresh")  # 30 seconds
     auto_status = "🔄 Auto-refresh ON (30s)"
 else:
     auto_status = "⏸️ Auto-refresh OFF"
@@ -910,13 +908,13 @@ with st.sidebar:
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v3.6 CLEAR-UX")
+    st.caption("v3.7 FIXED-LIVE")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v3.6")
+st.caption("Signal Analysis | v3.7")
 
 st.markdown("""
 <div style="background:#0f172a;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:4px solid #00ff00">
@@ -955,21 +953,23 @@ st.subheader("🎯 ML PICKS")
 
 scheduled_conviction_list = [p for p in conviction_picks if p.get('status_type') == "STATUS_SCHEDULED"]
 scheduled_near_list = [p for p in near_picks if p.get('status_type') == "STATUS_SCHEDULED"]
-live_conviction_count = len(conviction_picks) - len(scheduled_conviction_list)
+
+# FIXED: Only count picks that are actually IN PROGRESS (not finished)
+live_conviction_count = len([p for p in conviction_picks if p.get('status_type') not in ["STATUS_SCHEDULED", "STATUS_FINAL"]])
 
 all_picks = scheduled_conviction_list + scheduled_near_list
 
-# Note if strong picks are live
+# Note if strong picks are live (only show if actually live, not finished)
 if live_conviction_count > 0:
     st.markdown(f"""<div style="background:#1a2a1a;padding:12px 16px;border-radius:8px;border:1px solid #00ff00;margin-bottom:14px">
 <div style="color:#00ff00;font-weight:bold;font-size:1em;margin-bottom:4px">🔒 {live_conviction_count} STRONG pick{'s are' if live_conviction_count > 1 else ' is'} now LIVE</div>
-<div style="color:#aaa;font-size:0.85em">Your top pick{'s have' if live_conviction_count > 1 else ' has'} started — scroll up to LIVE section to track {'them' if live_conviction_count > 1 else 'it'}.</div>
+<div style="color:#aaa;font-size:0.85em">Your top pick{'s have' if live_conviction_count > 1 else ' has'} started — scroll down to LIVE section to track {'them' if live_conviction_count > 1 else 'it'}.</div>
 </div>""", unsafe_allow_html=True)
 
 if all_picks:
     if len(scheduled_conviction_list) == 0 and len(scheduled_near_list) > 0:
         st.markdown("""<div style="color:#888;font-size:0.85em;margin-bottom:10px">
-All STRONG picks are live. Showing LEAN picks for upcoming games:
+All STRONG picks are finished or live. Showing LEAN picks for upcoming games:
 </div>""", unsafe_allow_html=True)
     for p in all_picks:
         kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
@@ -1154,4 +1154,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v3.6 CLEAR-UX • Auto-refresh safe")
+st.caption("v3.7 FIXED-LIVE • Auto-refresh safe")
