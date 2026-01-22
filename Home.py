@@ -11,9 +11,13 @@ st.set_page_config(
 apply_styles()
 
 # ============================================================
-# COOKIE MANAGER FOR PERSISTENT LOGIN
+# COOKIE MANAGER FOR PERSISTENT LOGIN - FIXED WITH STABLE KEY
 # ============================================================
-cookie_manager = stx.CookieManager()
+@st.cache_resource(show_spinner=False)
+def get_cookie_manager():
+    return stx.CookieManager(key="bigsnapshot_cookies")
+
+cookie_manager = get_cookie_manager()
 
 # ============================================================
 # GA4 TRACKING
@@ -47,14 +51,31 @@ if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 if 'user_type' not in st.session_state:
     st.session_state.user_type = None
+if 'cookie_checked' not in st.session_state:
+    st.session_state.cookie_checked = False
 
 # ============================================================
-# CHECK COOKIE FOR PERSISTENT LOGIN
+# CHECK COOKIE FOR PERSISTENT LOGIN - IMPROVED TIMING
 # ============================================================
-auth_cookie = cookie_manager.get("bigsnapshot_auth")
-if auth_cookie and not st.session_state.authenticated:
-    st.session_state.authenticated = True
-    st.session_state.user_type = auth_cookie
+if not st.session_state.cookie_checked:
+    try:
+        auth_cookie = cookie_manager.get("bigsnapshot_auth")
+        if auth_cookie and auth_cookie != "":
+            st.session_state.authenticated = True
+            st.session_state.user_type = auth_cookie
+        st.session_state.cookie_checked = True
+    except Exception:
+        pass
+
+# Also check on every run if not authenticated (backup check)
+if not st.session_state.authenticated:
+    try:
+        auth_cookie = cookie_manager.get("bigsnapshot_auth")
+        if auth_cookie and auth_cookie != "":
+            st.session_state.authenticated = True
+            st.session_state.user_type = auth_cookie
+    except Exception:
+        pass
 
 # ============================================================
 # PASSWORD CONFIG - PAID ACCESS ONLY
@@ -91,6 +112,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
+# HELPER FUNCTION FOR SETTING COOKIE RELIABLY
+# ============================================================
+def set_auth_cookie(user_type):
+    try:
+        cookie_manager.set("bigsnapshot_auth", user_type, max_age=30*24*60*60, key="set_auth")
+    except Exception:
+        pass
+
+def delete_auth_cookie():
+    try:
+        cookie_manager.delete("bigsnapshot_auth", key="del_auth")
+    except Exception:
+        pass
+
+# ============================================================
 # LANDING PAGE (NOT LOGGED IN)
 # ============================================================
 if not st.session_state.authenticated:
@@ -120,7 +156,7 @@ if not st.session_state.authenticated:
                 if password_input.upper() in VALID_PASSWORDS:
                     st.session_state.authenticated = True
                     st.session_state.user_type = VALID_PASSWORDS[password_input.upper()]
-                    cookie_manager.set("bigsnapshot_auth", VALID_PASSWORDS[password_input.upper()], max_age=30*24*60*60)
+                    set_auth_cookie(VALID_PASSWORDS[password_input.upper()])
                     st.rerun()
                 else:
                     st.error("❌ Invalid password")
@@ -398,7 +434,7 @@ if not st.session_state.authenticated:
             if password_input.upper() in VALID_PASSWORDS:
                 st.session_state.authenticated = True
                 st.session_state.user_type = VALID_PASSWORDS[password_input.upper()]
-                cookie_manager.set("bigsnapshot_auth", VALID_PASSWORDS[password_input.upper()], max_age=30*24*60*60)
+                set_auth_cookie(VALID_PASSWORDS[password_input.upper()])
                 st.rerun()
             else:
                 st.error("❌ Invalid password")
@@ -485,7 +521,8 @@ with col2:
     if st.button("🚪 Logout", use_container_width=True):
         st.session_state.authenticated = False
         st.session_state.user_type = None
-        cookie_manager.delete("bigsnapshot_auth")
+        st.session_state.cookie_checked = False
+        delete_auth_cookie()
         st.rerun()
 
 # Footer
