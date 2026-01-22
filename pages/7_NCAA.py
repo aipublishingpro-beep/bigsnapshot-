@@ -953,28 +953,80 @@ st.subheader("🎯 ML PICKS")
 
 scheduled_conviction_list = [p for p in conviction_picks if p.get('status_type') == "STATUS_SCHEDULED"]
 scheduled_near_list = [p for p in near_picks if p.get('status_type') == "STATUS_SCHEDULED"]
+finished_conviction_list = [p for p in conviction_picks if p.get('status_type') == "STATUS_FINAL"]
+live_conviction_list = [p for p in conviction_picks if p.get('status_type') not in ["STATUS_SCHEDULED", "STATUS_FINAL"]]
 
-# FIXED: Only count picks that are actually IN PROGRESS (not finished)
-live_conviction_count = len([p for p in conviction_picks if p.get('status_type') not in ["STATUS_SCHEDULED", "STATUS_FINAL"]])
+# Show all STRONG picks (scheduled + live + finished) + scheduled LEAN picks
+all_picks = scheduled_conviction_list + live_conviction_list + scheduled_near_list
 
-all_picks = scheduled_conviction_list + scheduled_near_list
+# Show finished STRONG picks with results
+if finished_conviction_list:
+    wins = 0
+    losses = 0
+    for p in finished_conviction_list:
+        g = games.get(p['game_key'])
+        if g:
+            pick = p['market_pick']
+            home_won = g['home_score'] > g['away_score']
+            pick_won = (pick == g['home_abbrev'] and home_won) or (pick == g['away_abbrev'] and not home_won)
+            if pick_won:
+                wins += 1
+            else:
+                losses += 1
+    
+    if wins > 0 or losses > 0:
+        record_color = "#00ff00" if wins > losses else "#ff4444" if losses > wins else "#888"
+        st.markdown(f"""<div style="background:#0f172a;padding:12px 16px;border-radius:8px;border:1px solid {record_color};margin-bottom:14px">
+<div style="color:{record_color};font-weight:bold;font-size:1.1em;margin-bottom:8px">📊 TODAY'S STRONG PICKS: {wins}-{losses}</div>
+</div>""", unsafe_allow_html=True)
+    
+    for p in finished_conviction_list:
+        g = games.get(p['game_key'])
+        if g:
+            pick = p['market_pick']
+            home_won = g['home_score'] > g['away_score']
+            pick_won = (pick == g['home_abbrev'] and home_won) or (pick == g['away_abbrev'] and not home_won)
+            
+            if pick_won:
+                result_badge = '<span style="background:#00aa00;color:#fff;padding:4px 12px;border-radius:4px;font-weight:bold">✅ WON</span>'
+                border_color = "#00aa00"
+            else:
+                result_badge = '<span style="background:#aa0000;color:#fff;padding:4px 12px;border-radius:4px;font-weight:bold">❌ LOST</span>'
+                border_color = "#aa0000"
+            
+            pick_score = g['home_score'] if pick == g['home_abbrev'] else g['away_score']
+            opp_score = g['away_score'] if pick == g['home_abbrev'] else g['home_score']
+            
+            st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px;opacity:0.85">
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+<span style="color:#00ff00;font-weight:bold">🔒 STRONG</span>
+<b style="color:#fff;font-size:1.2em">{escape_html(p['market_pick'])}</b>
+<span style="color:#666">v {escape_html(p['market_opp'])}</span>
+<span style="color:#38bdf8;font-weight:bold">{p['market_score']}</span>
+<span style="color:#888">{pick_score}-{opp_score}</span>
+</div>
+{result_badge}
+</div>
+</div>""", unsafe_allow_html=True)
+    
+    st.markdown("---")
 
-# Note if strong picks are live (only show if actually live, not finished)
-if live_conviction_count > 0:
+# Note if strong picks are live
+if len(live_conviction_list) > 0:
     st.markdown(f"""<div style="background:#1a2a1a;padding:12px 16px;border-radius:8px;border:1px solid #00ff00;margin-bottom:14px">
-<div style="color:#00ff00;font-weight:bold;font-size:1em;margin-bottom:4px">🔒 {live_conviction_count} STRONG pick{'s are' if live_conviction_count > 1 else ' is'} now LIVE</div>
-<div style="color:#aaa;font-size:0.85em">Your top pick{'s have' if live_conviction_count > 1 else ' has'} started — scroll down to LIVE section to track {'them' if live_conviction_count > 1 else 'it'}.</div>
+<div style="color:#00ff00;font-weight:bold;font-size:1em;margin-bottom:4px">🔒 {len(live_conviction_list)} STRONG pick{'s are' if len(live_conviction_list) > 1 else ' is'} now LIVE</div>
+<div style="color:#aaa;font-size:0.85em">Scroll down to LIVE section to track.</div>
 </div>""", unsafe_allow_html=True)
 
 if all_picks:
-    if len(scheduled_conviction_list) == 0 and len(scheduled_near_list) > 0:
-        st.markdown("""<div style="color:#888;font-size:0.85em;margin-bottom:10px">
-All STRONG picks are finished or live. Showing LEAN picks for upcoming games:
-</div>""", unsafe_allow_html=True)
     for p in all_picks:
         kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
         reasons = p.get('market_reasons', [])[:3]
         reasons_str = " · ".join([escape_html(r) for r in reasons]) if reasons else "🏠 Home"
+        
+        # Check if live
+        is_live = p.get('status_type') not in ["STATUS_SCHEDULED", "STATUS_FINAL"]
         
         if p["is_conviction"]:
             border_color = "#00ff00"
@@ -983,6 +1035,18 @@ All STRONG picks are finished or live. Showing LEAN picks for upcoming games:
             border_color = "#ffaa00"
             tier_badge = '<span style="color:#ffaa00;font-weight:bold">🟡 LEAN</span>'
         
+        if is_live:
+            g = games.get(p['game_key'])
+            if g:
+                status_badge = f'<span style="background:#aa0000;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75em">🔴 LIVE</span>'
+                score_display = f'<span style="color:#fff;margin-left:8px">{g["away_score"]}-{g["home_score"]}</span>'
+            else:
+                status_badge = '<span style="background:#aa0000;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75em">🔴 LIVE</span>'
+                score_display = ''
+        else:
+            status_badge = '<span style="background:#1e3a5f;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em">PRE</span>'
+            score_display = ''
+        
         st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px">
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
 <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -990,7 +1054,7 @@ All STRONG picks are finished or live. Showing LEAN picks for upcoming games:
 <b style="color:#fff;font-size:1.2em">{escape_html(p['market_pick'])}</b>
 <span style="color:#666">v {escape_html(p['market_opp'])}</span>
 <span style="color:#38bdf8;font-weight:bold">{p['market_score']}</span>
-<span style="background:#1e3a5f;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em">PRE</span>
+{status_badge}{score_display}
 </div>
 <a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY {escape_html(p['market_pick'])}</a>
 </div>
