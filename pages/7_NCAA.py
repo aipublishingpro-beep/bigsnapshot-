@@ -98,8 +98,11 @@ if 'auto_refresh' not in st.session_state:
 if "ncaa_positions" not in st.session_state:
     st.session_state.ncaa_positions = load_positions()
 
+# Auto-refresh using streamlit-autorefresh (no login issues)
+if st.session_state.auto_refresh and HAS_AUTOREFRESH:
+    st_autorefresh(interval=30000, key="ncaa_autorefresh")  # 30 seconds
+
 if st.session_state.auto_refresh:
-    st.markdown(f'<meta http-equiv="refresh" content="30;url=?r={int(time.time()) + 30}">', unsafe_allow_html=True)
     auto_status = "🔄 Auto-refresh ON (30s)"
 else:
     auto_status = "⏸️ Auto-refresh OFF"
