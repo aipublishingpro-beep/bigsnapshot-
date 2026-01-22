@@ -249,26 +249,16 @@ def get_team_rating(team_name):
 
 def get_team_abbrev(team_name):
     """Get team abbreviation for Kalshi URLs"""
-    # Check exact and partial matches
     for name, abbrev in TEAM_ABBREVS.items():
         if name.lower() == team_name.lower():
             return abbrev
         if name.lower() in team_name.lower() or team_name.lower() in name.lower():
             return abbrev
-    # Fallback: first 3 letters lowercase
     first_word = team_name.split()[0] if team_name else "xxx"
     return first_word[:3].lower()
 
 def build_kalshi_url(league_key, home_team, away_team, game_date):
-    """
-    Build Kalshi market URL for soccer match
-    
-    Returns tuple: (primary_url, fallback_url)
-    - Primary: Direct link to specific game market
-    - Fallback: League page if team abbrevs don't match
-    """
-    
-    # League to Kalshi market mapping
+    """Build Kalshi market URL for soccer match"""
     LEAGUE_MARKETS = {
         "EPL": ("english-premier-league-game", "kxeplgame", "EPL"),
         "LALIGA": ("la-liga-game", "kxlaligagame", "LALIGA"),
@@ -279,28 +269,17 @@ def build_kalshi_url(league_key, home_team, away_team, game_date):
         "UCL": ("uefa-champions-league-game", "kxuclgame", "UCL"),
     }
     
-    # Fallback URL (always works)
     fallback_url = "https://kalshi.com/sports/soccer"
     
     if league_key not in LEAGUE_MARKETS:
         return fallback_url
     
     market_slug, ticker_prefix, kalshi_league = LEAGUE_MARKETS[league_key]
-    
-    # League-specific fallback
     fallback_url = f"https://kalshi.com/sports/soccer/{kalshi_league}"
-    
-    # Format date: YYmmmDD (e.g., 26jan21 for Jan 21, 2026)
     date_str = game_date.strftime("%y%b%d").lower()
-    
-    # Get team abbreviations
     home_abbrev = get_team_abbrev(home_team)
     away_abbrev = get_team_abbrev(away_team)
-    
-    # Build ticker: kxuclgame-26jan21slabar
     ticker = f"{ticker_prefix}-{date_str}{home_abbrev}{away_abbrev}"
-    
-    # Full URL: https://kalshi.com/markets/uefa-champions-league-game/kxuclgame-26jan21slabar
     primary_url = f"https://kalshi.com/markets/{market_slug}/{ticker}"
     
     return primary_url
@@ -309,13 +288,7 @@ def build_kalshi_url(league_key, home_team, away_team, game_date):
 # SCORING MODEL
 # ============================================================
 def calculate_edge_score(home_team, away_team, league, is_home_pick=True):
-    """
-    Calculate edge score for soccer picks (0-100 scale)
-    
-    This is a RELATIVE VALUE INDICATOR, not a win probability.
-    Higher score = more factors align, not guaranteed outcome.
-    """
-    
+    """Calculate edge score for soccer picks (0-100 scale)"""
     home_rating = get_team_rating(home_team)
     away_rating = get_team_rating(away_team)
     
@@ -345,33 +318,22 @@ def calculate_edge_score(home_team, away_team, league, is_home_pick=True):
         if get_team_rating(picked_team) >= 90:
             score += 5
     
-    # ============================================================
-    # CONFIDENCE DAMPENER - Close matchups are less predictable
-    # ============================================================
+    # Confidence Dampener - Close matchups are less predictable
     rating_diff = abs(home_rating - away_rating)
-    
-    # Close matchup penalty (rating diff < 6 = toss-up territory)
     if rating_diff < 3:
-        score -= 8  # Very close - high uncertainty
+        score -= 8
     elif rating_diff < 6:
-        score -= 5  # Close - moderate uncertainty
+        score -= 5
     
-    # UCL knockout stage dampener (higher variance games)
-    # Top teams in UCL often rotate or have already qualified
+    # UCL knockout stage dampener
     if league == "UCL":
-        # Both teams are strong = unpredictable
         if home_rating >= 85 and away_rating >= 85:
             score -= 4
     
     return max(0, min(100, round(score)))
 
 def get_signal_tier(score):
-    """
-    Convert score to signal tier
-    
-    STRONG should be RARE - scarcity = credibility
-    Users forgive missed LEANs, not frequent STRONG misses
-    """
+    """Convert score to signal tier"""
     if score >= 80:
         return "🔥 STRONG", "signal-strong"
     elif score >= 65:
@@ -393,7 +355,7 @@ def fetch_soccer_games(league_code):
         if response.status_code == 200:
             return response.json()
         return None
-    except Exception as e:
+    except:
         return None
 
 @st.cache_data(ttl=600)
@@ -405,7 +367,7 @@ def fetch_news(league_code):
         if response.status_code == 200:
             return response.json()
         return None
-    except Exception as e:
+    except:
         return None
 
 def parse_games(data, league_key):
@@ -463,7 +425,6 @@ def parse_games(data, league_key):
             
             signal, signal_class = get_signal_tier(edge_score)
             
-            # Build URLs with fallback
             kalshi_url = build_kalshi_url(league_key, home_team, away_team, game_time_et)
             fallback_url = LEAGUES[league_key].get('kalshi_page', 'https://kalshi.com/sports/soccer')
             
@@ -488,7 +449,7 @@ def parse_games(data, league_key):
                 'fallback_url': fallback_url,
             })
             
-        except Exception as e:
+        except:
             continue
     
     return games
@@ -543,8 +504,21 @@ with st.spinner("Fetching soccer data..."):
         data = fetch_soccer_games(league_info['code'])
         games = parse_games(data, league_key)
         all_games.extend(games)
-        live_games.extend([g for g in games if g['state'] == 'in'])
 
+# ============================================================
+# FILTER OUT COMPLETED AND PAST GAMES
+# ============================================================
+# Remove games with state 'post' (completed)
+all_games = [g for g in all_games if g['state'] != 'post']
+
+# Remove games where kickoff was more than 3 hours ago (even if API says 'pre')
+# 3-hour buffer allows for live games + extra time
+cutoff_time = now - timedelta(hours=3)
+all_games = [g for g in all_games if g['game_time'] > cutoff_time]
+
+live_games = [g for g in all_games if g['state'] == 'in']
+
+# Sort by edge score (highest first)
 all_games.sort(key=lambda x: x['edge_score'], reverse=True)
 
 # Stats row
@@ -599,63 +573,72 @@ if live_games:
 
 # Top Pick
 if all_games:
-    top_pick = all_games[0]
-    st.markdown("### 🏆 Top Pick")
-    st.markdown(f"""
-    <div class="top-pick-card">
-        <span class="league-badge league-{top_pick['league'].lower()}">{LEAGUES[top_pick['league']]['name']}</span>
-        <h2 style="margin: 12px 0; color: white;">{top_pick['home_team']} vs {top_pick['away_team']}</h2>
-        <p style="font-size: 1.2rem; color: #a0d2ff;">
-            <strong>🎯 Pick: {top_pick['pick']}</strong>
-        </p>
-        <p style="font-size: 1.5rem; margin: 8px 0;">
-            <span class="{top_pick['signal_class']}">{top_pick['signal']}</span> | 
-            Edge Score: <strong>{top_pick['edge_score']}</strong>
-        </p>
-        <p style="color: #8899aa;">
-            📅 {top_pick['game_time'].strftime('%b %d, %I:%M %p ET')}
-        </p>
-        <a href="{top_pick['fallback_url']}" target="_blank" style="
-            display: inline-block;
-            background: linear-gradient(135deg, #00c853 0%, #00e676 100%);
-            color: white !important;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 600;
-            margin-top: 12px;
-            text-decoration: none;
-        ">📈 Trade on Kalshi</a>
-        <br><a href="{top_pick['kalshi_url']}" target="_blank" style="color: #888; font-size: 0.8rem;">Try direct game link (may 404)</a>
-    </div>
-    """, unsafe_allow_html=True)
-
-# All Picks
-st.markdown("### ⚽ All Soccer Picks")
-st.markdown("*Sorted by Edge Score (highest first)*")
-
-for game in all_games:
-    col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+    # Get top pick from upcoming/live games only
+    upcoming_games = [g for g in all_games if g['state'] in ['pre', 'in']]
     
-    with col1:
-        state_icon = "🔴" if game['state'] == 'in' else "⏳" if game['state'] == 'pre' else "✅"
+    if upcoming_games:
+        top_pick = upcoming_games[0]
+        st.markdown("### 🏆 Top Pick")
         st.markdown(f"""
-        <div class="pick-card">
-            {state_icon} <span class="league-badge league-{game['league'].lower()}">{LEAGUES[game['league']]['name']}</span>
-            <strong>{game['home_team']}</strong> vs <strong>{game['away_team']}</strong>
-            <br><small>📅 {game['game_time'].strftime('%b %d, %I:%M %p ET')}</small>
+        <div class="top-pick-card">
+            <span class="league-badge league-{top_pick['league'].lower()}">{LEAGUES[top_pick['league']]['name']}</span>
+            <h2 style="margin: 12px 0; color: white;">{top_pick['home_team']} vs {top_pick['away_team']}</h2>
+            <p style="font-size: 1.2rem; color: #a0d2ff;">
+                <strong>🎯 Pick: {top_pick['pick']}</strong>
+            </p>
+            <p style="font-size: 1.5rem; margin: 8px 0;">
+                <span class="{top_pick['signal_class']}">{top_pick['signal']}</span> | 
+                Edge Score: <strong>{top_pick['edge_score']}</strong>
+            </p>
+            <p style="color: #8899aa;">
+                📅 {top_pick['game_time'].strftime('%b %d, %I:%M %p ET')}
+            </p>
+            <a href="{top_pick['fallback_url']}" target="_blank" style="
+                display: inline-block;
+                background: linear-gradient(135deg, #00c853 0%, #00e676 100%);
+                color: white !important;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-weight: 600;
+                margin-top: 12px;
+                text-decoration: none;
+            ">📈 Trade on Kalshi</a>
+            <br><a href="{top_pick['kalshi_url']}" target="_blank" style="color: #888; font-size: 0.8rem;">Try direct game link (may 404)</a>
         </div>
         """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"**Pick:** {game['pick']}")
-        st.markdown(f"<span class='{game['signal_class']}'>{game['signal']}</span>", unsafe_allow_html=True)
-    
-    with col3:
-        st.metric("Edge", game['edge_score'])
-    
-    with col4:
-        st.link_button("Trade", game['fallback_url'], use_container_width=True)
-        st.caption(f"[Direct link]({game['kalshi_url']})")
+    else:
+        st.info("📅 No upcoming games scheduled. Check back later!")
+
+# All Picks
+if all_games:
+    st.markdown("### ⚽ All Soccer Picks")
+    st.markdown("*Sorted by Edge Score (highest first) — Completed games excluded*")
+
+    for game in all_games:
+        col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+        
+        with col1:
+            state_icon = "🔴" if game['state'] == 'in' else "⏳"
+            st.markdown(f"""
+            <div class="pick-card">
+                {state_icon} <span class="league-badge league-{game['league'].lower()}">{LEAGUES[game['league']]['name']}</span>
+                <strong>{game['home_team']}</strong> vs <strong>{game['away_team']}</strong>
+                <br><small>📅 {game['game_time'].strftime('%b %d, %I:%M %p ET')}</small>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"**Pick:** {game['pick']}")
+            st.markdown(f"<span class='{game['signal_class']}'>{game['signal']}</span>", unsafe_allow_html=True)
+        
+        with col3:
+            st.metric("Edge", game['edge_score'])
+        
+        with col4:
+            st.link_button("Trade", game['fallback_url'], use_container_width=True)
+            st.caption(f"[Direct link]({game['kalshi_url']})")
+else:
+    st.info("📅 No upcoming games found for the selected leagues. Check back later!")
 
 # How to Use
 with st.expander("📖 How to Use Soccer Edge Finder"):
