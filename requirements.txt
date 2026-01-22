@@ -6,3 +6,4 @@ plotly
 pandas
 numpy
 extra-streamlit-components
+streamlit-js-eval
