@@ -902,13 +902,13 @@ Quality over quantity.
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v3.1 BUY-BUTTONS")
+    st.caption("v3.2 CLEAR-TIERS")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v3.1")
+st.caption("Signal Analysis | v3.2")
 
 st.markdown("""
 <div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
@@ -958,48 +958,61 @@ st.divider()
 # ============================================================
 st.subheader("📊 TOP SIGNALS")
 
-# Only show conviction + near picks (max 8 total)
-display_picks = conviction_picks + near_picks
-scheduled_display = [p for p in display_picks if p.get('status_type') == "STATUS_SCHEDULED"]
+# Show ALL conviction picks first, then near picks
+scheduled_conviction_list = [p for p in conviction_picks if p.get('status_type') == "STATUS_SCHEDULED"]
+scheduled_near_list = [p for p in near_picks if p.get('status_type') == "STATUS_SCHEDULED"]
 
-if scheduled_display:
-    # Skip top conviction (already displayed above)
-    remaining = scheduled_display[1:] if conviction_picks else scheduled_display
-    
-    for p in remaining:
+# Skip first conviction (shown in hero) if exists
+remaining_conviction = scheduled_conviction_list[1:] if scheduled_conviction_list else []
+
+if remaining_conviction or scheduled_near_list:
+    # Show remaining conviction picks with BUY buttons
+    for p in remaining_conviction:
         gk = p["game_key"]
         kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
         reasons_str = " · ".join([escape_html(r) for r in p["market_reasons"][:3]])
         ap_badge = f" <span style='color:#997700;font-size:0.8em'>AP{p['market_pick_ap']}</span>" if p['market_pick_ap'] > 0 else ""
+        buy_btn = get_buy_button_html(kalshi_url, p['market_pick'])
         
-        # Conviction gets BUY button, Near gets view link
-        if p["is_conviction"]:
-            action_btn = get_buy_button_html(kalshi_url, p['market_pick'])
-            border_style = f"border-left:3px solid {p['final_color']}"
-        else:
-            action_btn = f'<a href="{kalshi_url}" target="_blank" style="color:#555;font-size:0.7em;text-decoration:none">view →</a>' if kalshi_url else ''
-            border_style = f"border-left:2px solid {p['final_color']}"
-        
-        st.markdown(f"""<div style="background:#0a0a14;padding:12px 16px;border-radius:8px;{border_style};margin-bottom:8px">
+        st.markdown(f"""<div style="background:#0a1a0a;padding:14px 18px;border-radius:10px;border:2px solid #00cc66;margin-bottom:10px">
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-<span style="color:{p['final_color']};font-weight:bold;font-size:0.85em">{escape_html(p['display_tier'])}</span>
-<b style="color:#fff;font-size:1.1em">{escape_html(p['market_pick'])}</b>{ap_badge}
-<span style="color:#555">vs {escape_html(p['market_opp'])}</span>
+<span style="color:#00cc66;font-weight:bold;font-size:0.9em">✓ CONVICTION</span>
+<b style="color:#fff;font-size:1.2em">{escape_html(p['market_pick'])}</b>{ap_badge}
+<span style="color:#888">vs {escape_html(p['market_opp'])}</span>
 <span style="color:#38bdf8;font-weight:bold">{p['market_score']}/10</span>
 </div>
-{action_btn}
+{buy_btn}
 </div>
-<div style="color:#555;font-size:0.75em;margin-top:8px">{reasons_str} • Edge: {p['analyzer_edge_display']} • {p['analyzer_conf']}</div>
+<div style="color:#666;font-size:0.75em;margin-top:8px">{reasons_str}</div>
 </div>""", unsafe_allow_html=True)
     
-    st.caption(f"{len(scheduled_display)} signal{'s' if len(scheduled_display) != 1 else ''} today")
+    # Show near picks with view links (dimmer)
+    for p in scheduled_near_list:
+        gk = p["game_key"]
+        kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
+        reasons_str = " · ".join([escape_html(r) for r in p["market_reasons"][:3]])
+        
+        st.markdown(f"""<div style="background:#0a0a14;padding:10px 14px;border-radius:6px;border-left:2px solid #555;margin-bottom:6px;opacity:0.7">
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+<span style="color:#666;font-size:0.8em">◐ NEAR</span>
+<span style="color:#aaa;font-size:0.95em">{escape_html(p['market_pick'])}</span>
+<span style="color:#555;font-size:0.85em">vs {escape_html(p['market_opp'])}</span>
+<span style="color:#666;font-size:0.85em">{p['market_score']}/10</span>
+</div>
+<a href="{kalshi_url}" target="_blank" style="color:#444;font-size:0.7em;text-decoration:none">view →</a>
+</div>
+</div>""", unsafe_allow_html=True)
+    
+    total_signals = len(scheduled_conviction_list) + len(scheduled_near_list)
+    st.caption(f"{len(scheduled_conviction_list)} conviction + {len(scheduled_near_list)} near = {total_signals} signals")
     
     # Add to watchlist button for conviction games
-    if conviction_picks:
-        if st.button(f"📋 Watch {len(conviction_picks)} Conviction Game{'s' if len(conviction_picks) != 1 else ''}", use_container_width=True, key="add_watch"):
+    if scheduled_conviction_list:
+        if st.button(f"📋 Watch {len(scheduled_conviction_list)} Conviction Game{'s' if len(scheduled_conviction_list) != 1 else ''}", use_container_width=True, key="add_watch"):
             added = 0
-            for p in conviction_picks:
+            for p in scheduled_conviction_list:
                 if not any(pos.get('game') == p['game_key'] and pos.get('pick') == p['market_pick'] for pos in st.session_state.ncaa_positions):
                     st.session_state.ncaa_positions.append({
                         "game": p['game_key'], "type": "signal",
