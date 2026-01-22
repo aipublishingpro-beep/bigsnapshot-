@@ -3,39 +3,13 @@ import requests
 from datetime import datetime, timedelta
 import pytz
 from styles import apply_styles
-import extra_streamlit_components as stx
 
 st.set_page_config(page_title="NHL Edge Finder", page_icon="🏒", layout="wide")
+
+from auth import require_auth
+require_auth()
+
 apply_styles()
-
-# ============================================================
-# COOKIE MANAGER FOR PERSISTENT LOGIN
-# ============================================================
-cookie_manager = stx.CookieManager()
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'user_type' not in st.session_state:
-    st.session_state.user_type = None
-
-# ============================================================
-# CHECK COOKIE FOR PERSISTENT LOGIN
-# ============================================================
-auth_cookie = cookie_manager.get("bigsnapshot_auth")
-if auth_cookie and not st.session_state.authenticated:
-    st.session_state.authenticated = True
-    st.session_state.user_type = auth_cookie
-
-# ============================================================
-# AUTH CHECK
-# ============================================================
-if not st.session_state.authenticated:
-    st.warning("⚠️ Please log in from the Home page first.")
-    st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
-    st.stop()
 
 VERSION = "3.0"
 
