@@ -1028,13 +1028,23 @@ if live_games:
         # Build Kalshi URL for live game
         kalshi_url = build_kalshi_ncaa_url(g['away_abbrev'], g['home_abbrev'])
         
-        # Determine which team to show BUY for (home team leading or pick from precomputed)
+        # Get pick data and tier from precomputed
         pick_data = precomputed.get(gk, {})
         buy_team = pick_data.get('market_pick', g['home_abbrev'])
         
-        st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {clr};margin-bottom:10px">
+        # Check if this was a STRONG or LEAN pick
+        is_strong = pick_data.get('is_conviction', False)
+        if is_strong:
+            tier_badge = '<span style="color:#00ff00;font-weight:bold">🔒 STRONG</span>'
+            border_clr = "#00ff00"
+        else:
+            tier_badge = '<span style="color:#ffaa00;font-weight:bold">🟡 LEAN</span>'
+            border_clr = "#ffaa00"
+        
+        st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_clr};margin-bottom:10px">
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
 <div style="display:flex;align-items:center;gap:12px">
+{tier_badge}
 <b style="color:#fff;font-size:1.1em">{escape_html(g['away_abbrev'])} {g['away_score']} @ {escape_html(g['home_abbrev'])} {g['home_score']}</b>
 </div>
 <div style="display:flex;align-items:center;gap:12px">
