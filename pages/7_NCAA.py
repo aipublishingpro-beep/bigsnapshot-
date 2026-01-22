@@ -963,7 +963,7 @@ if all_picks:
 <span style="color:#38bdf8;font-weight:bold">{p['market_score']}</span>
 <span style="background:#1e3a5f;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em">PRE</span>
 </div>
-<a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY</a>
+<a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY {escape_html(p['market_pick'])}</a>
 </div>
 <div style="color:#666;font-size:0.8em;margin-top:8px">{reasons_str}</div>
 </div>""", unsafe_allow_html=True)
@@ -1050,7 +1050,7 @@ if live_games:
 <div style="display:flex;align-items:center;gap:12px">
 <span style="color:{clr};font-weight:bold">{half_label} {escape_html(clock)}</span>
 <span style="color:#666">{pace_display}</span>
-<a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY</a>
+<a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY {escape_html(buy_team)}</a>
 </div>
 </div>
 </div>""", unsafe_allow_html=True)
