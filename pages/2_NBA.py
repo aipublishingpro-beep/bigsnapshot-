@@ -174,6 +174,9 @@ H2H_EDGES = {
     ("Dallas", "San Antonio"): 0.5, ("Memphis", "New Orleans"): 0.3,
 }
 
+# TOTALS THRESHOLDS FOR CUSHION/PACE SCANNERS
+THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5, 250.5, 255.5]
+
 def escape_html(text):
     if not text: return ""
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -499,11 +502,11 @@ with st.sidebar:
     st.header("📊 MODEL INFO")
     st.markdown("Proprietary multi-factor model analyzing matchups, injuries, rest, travel, momentum, and historical edges.")
     st.divider()
-    st.caption("v18.0 NBA EDGE")
+    st.caption("v18.1 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
-st.caption("Proprietary ML Model + Live Tracker | v18.0")
+st.caption("Proprietary ML Model + Live Tracker | v18.1")
 st.markdown("<p style='color:#888;font-size:0.85em;margin-top:-10px'>Only 🔒 STRONG picks are tracked. All others are informational.</p>", unsafe_allow_html=True)
 
 # ============================================================
@@ -643,6 +646,179 @@ if live_games:
             </div></div>""", unsafe_allow_html=True)
     st.divider()
 
+# ============================================================
+# 🎯 CUSHION SCANNER — LIVE TOTALS ENGINE
+# ============================================================
+st.subheader("🎯 CUSHION SCANNER")
+st.caption("Find safe NO/YES totals opportunities in live games")
+
+cs1, cs2 = st.columns([1, 1])
+cush_min = cs1.selectbox("Min minutes", [6, 9, 12, 15, 18], index=0, key="cush_min_select")
+cush_side = cs2.selectbox("Side", ["NO", "YES"], key="cush_side_select")
+
+live_count = sum(1 for g in games.values() if g['status_type'] not in ["STATUS_FINAL", "STATUS_SCHEDULED"])
+st.caption(f"📊 {len(games)} games | {live_count} live")
+
+cush_results = []
+
+for gk, g in games.items():
+    mins = get_minutes_played(g['period'], g['clock'], g['status_type'])
+    total = g['total']
+    
+    if g['status_type'] == "STATUS_FINAL":
+        continue
+    if mins < cush_min:
+        continue
+    if mins <= 0:
+        continue
+    
+    pace = total / mins
+    remaining_min = max(48 - mins, 1)
+    projected_final = round(total + pace * remaining_min)
+    
+    # Find recommended threshold based on projection (2-bracket safety buffer)
+    if cush_side == "NO":
+        # NO bet = betting UNDER
+        # Find first threshold ABOVE projection, then go TWO LEVELS HIGHER (safer)
+        base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected_final), len(THRESHOLDS)-1)
+        safe_idx = min(base_idx + 2, len(THRESHOLDS) - 1)
+        safe_line = THRESHOLDS[safe_idx]
+        cushion = safe_line - projected_final
+    else:
+        # YES bet = betting OVER
+        # Find first threshold BELOW projection, then go TWO LEVELS LOWER (safer)
+        base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected_final), 0)
+        safe_idx = max(base_idx - 2, 0)
+        safe_line = THRESHOLDS[safe_idx]
+        cushion = projected_final - safe_line
+    
+    # Only show if cushion >= 6
+    if cushion < 6:
+        continue
+    
+    # Pace alignment check
+    if cush_side == "NO":
+        if pace < 4.5:
+            pace_status = "✅ SLOW"
+            pace_color = "#00ff00"
+        elif pace < 4.8:
+            pace_status = "⚠️ AVG"
+            pace_color = "#ffff00"
+        else:
+            pace_status = "❌ FAST"
+            pace_color = "#ff0000"
+    else:
+        if pace > 5.1:
+            pace_status = "✅ FAST"
+            pace_color = "#00ff00"
+        elif pace > 4.8:
+            pace_status = "⚠️ AVG"
+            pace_color = "#ffff00"
+        else:
+            pace_status = "❌ SLOW"
+            pace_color = "#ff0000"
+    
+    cush_results.append({
+        'game': gk, 'total': total, 'mins': mins, 'pace': pace,
+        'pace_status': pace_status, 'pace_color': pace_color,
+        'projected': projected_final, 'cushion': cushion,
+        'safe_line': safe_line, 'period': g['period'], 'clock': g['clock']
+    })
+
+# Sort by cushion (biggest = safest)
+cush_results.sort(key=lambda x: x['cushion'], reverse=True)
+
+if cush_results:
+    for r in cush_results:
+        game_parts = r['game'].split('@')
+        away_t, home_t = game_parts[0], game_parts[1]
+        kalshi_url = build_kalshi_totals_url(away_t, home_t)
+        btn_label = f"BUY {cush_side} {r['safe_line']}"
+        btn_color = "#00aa00" if cush_side == "NO" else "#cc6600"
+        
+        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:3px solid {r['pace_color']};flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <b style="color:#fff">{escape_html(r['game'].replace('@', ' @ '))}</b>
+            <span style="color:#888">Q{r['period']} {escape_html(r['clock'])}</span>
+            <span style="color:#888">{r['total']}pts/{r['mins']:.0f}min</span>
+            <span style="color:#888">Proj: <b style="color:#fff">{r['projected']}</b></span>
+            <span style="background:#ff8800;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold">🎯 {r['safe_line']}</span>
+            <span style="color:#00ff00;font-weight:bold">+{r['cushion']:.0f}</span>
+            <span style="color:{r['pace_color']}">{r['pace_status']}</span>
+        </div>
+        <a href="{kalshi_url}" target="_blank" style="background:{btn_color};color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">🛡️+2 {btn_label}</a>
+        </div>""", unsafe_allow_html=True)
+else:
+    st.info(f"No {cush_side} opportunities with 6+ cushion. Check back when games are live with {cush_min}+ minutes played.")
+
+st.divider()
+
+# ============================================================
+# 🔥 PACE SCANNER — GAME FLOW TRACKER
+# ============================================================
+st.subheader("🔥 PACE SCANNER")
+st.caption("Track scoring pace for all live games — Find NO/YES opportunities")
+
+pace_data = []
+for gk, g in games.items():
+    mins = get_minutes_played(g['period'], g['clock'], g['status_type'])
+    if mins >= 6:
+        pace = round(g['total'] / mins, 2)
+        pace_data.append({
+            "game": gk, "pace": pace, "proj": round(pace * 48), 
+            "total": g['total'], "mins": mins, 
+            "period": g['period'], "clock": g['clock'], 
+            "final": g['status_type'] == "STATUS_FINAL"
+        })
+
+pace_data.sort(key=lambda x: x['pace'])
+
+if pace_data:
+    for p in pace_data:
+        game_parts = p['game'].split('@')
+        away_t, home_t = game_parts[0], game_parts[1]
+        kalshi_url = build_kalshi_totals_url(away_t, home_t)
+        
+        # Determine pace label, color, and button (2-bracket safety buffer)
+        if p['pace'] < 4.5:
+            lbl, clr = "🟢 SLOW", "#00ff00"
+            base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > p['proj']), len(THRESHOLDS)-1)
+            safe_idx = min(base_idx + 2, len(THRESHOLDS) - 1)
+            rec_line = THRESHOLDS[safe_idx]
+            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#00aa00;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY NO {rec_line}</a>' if not p['final'] else ""
+        elif p['pace'] < 4.8:
+            lbl, clr = "🟡 AVG", "#ffff00"
+            btn_html = ""
+        elif p['pace'] < 5.2:
+            lbl, clr = "🟠 FAST", "#ff8800"
+            base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), 0)
+            safe_idx = max(base_idx - 2, 0)
+            rec_line = THRESHOLDS[safe_idx]
+            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#cc6600;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
+        else:
+            lbl, clr = "🔴 SHOOTOUT", "#ff0000"
+            base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), 0)
+            safe_idx = max(base_idx - 2, 0)
+            rec_line = THRESHOLDS[safe_idx]
+            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#cc0000;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
+        
+        status = "FINAL" if p['final'] else f"Q{p['period']} {p['clock']}"
+        
+        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:8px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {clr};flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <b style="color:#fff">{escape_html(p['game'].replace('@', ' @ '))}</b>
+            <span style="color:#666">{status}</span>
+            <span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span>
+            <span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span>
+            <span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span>
+        </div>
+        <div>{btn_html}</div>
+        </div>""", unsafe_allow_html=True)
+else:
+    st.info("No games with 6+ minutes played yet")
+
+st.divider()
+
 # ML PICKS - COMPACT DESIGN
 st.subheader("🎯 ML PICKS")
 
@@ -708,7 +884,7 @@ if games:
     
     scheduled_strong = [r for r in ml_results if r["is_tracked"] and games.get(r["game_key"], {}).get('status_type') == "STATUS_SCHEDULED"]
     if scheduled_strong:
-        if st.button(f"➕ Add {len(scheduled_strong)} STRONG Picks to Tracker", use_container_width=True, key="add_ml_picks"):
+        if st.button(f"➕ Add {len(scheduled_strong)} STRONG Picks to Tracker", use_container_width=True, key="add_strong_picks"):
             added = 0
             for r in scheduled_strong:
                 gk = r["game_key"]
@@ -939,7 +1115,7 @@ with st.expander("📖 HOW TO USE THIS APP", expanded=False):
     st.markdown("""
 ### 🎯 **Getting Started**
 
-**NBA Edge Finder** is a proprietary prediction model for Kalshi NBA moneyline markets.
+**NBA Edge Finder** is a proprietary prediction model for Kalshi NBA moneyline and totals markets.
 
 ---
 
@@ -958,21 +1134,24 @@ with st.expander("📖 HOW TO USE THIS APP", expanded=False):
 
 ### 🏀 **Features**
 
-1. **ML Picks** — Model picks sorted by confidence
-2. **Live Tracker** — Real-time scores with pace
-3. **Form Leaderboard** — All 30 teams by streak
-4. **B2B Tracker** — Fatigue alerts
-5. **Matchup Analyzer** — Compare any teams
-6. **Position Tracker** — Track bets with live P&L
+1. **🎯 Cushion Scanner** — Find safe NO/YES totals in live games
+2. **🔥 Pace Scanner** — Track scoring pace with BUY buttons
+3. **ML Picks** — Model picks sorted by confidence
+4. **Live Tracker** — Real-time scores with pace
+5. **Form Leaderboard** — All 30 teams by streak
+6. **B2B Tracker** — Fatigue alerts
+7. **Matchup Analyzer** — Compare any teams
+8. **Position Tracker** — Track bets with live P&L
 
 ---
 
-### 💡 **Tips**
+### 💡 **Totals Strategy**
 
-- **STRONG** = headline bets we stand behind
-- **BUY** = informational, trade at your discretion
-- Check **B2B status** — fatigued teams lose
-- Watch for **star injuries**
+- **Cushion Scanner**: Look for 6+ cushion with pace alignment
+- **Pace Scanner**: 
+  - 🟢 SLOW → BUY NO (game staying low)
+  - 🔴 FAST/SHOOTOUT → BUY YES (game going high)
+- **🛡️+2**: All recommendations are 2 brackets safer than projection
 
 ---
 
@@ -982,8 +1161,8 @@ Click **BUY** buttons to go directly to Kalshi markets (opens in new tab).
 
 ---
 
-*Built for Kalshi. v18.0*
+*Built for Kalshi. v18.1*
 """)
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v18.0")
+st.caption("⚠️ Educational only. Not financial advice. v18.1")
