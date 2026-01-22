@@ -20,9 +20,9 @@ if stored_auth and stored_auth not in ["", "null", None]:
     st.session_state.user_type = stored_auth
 
 # ============================================================
-# 🔐 PASSWORD CONFIG — UPDATE YOUR PASSWORD HERE
+# 🔐 PASSWORD CONFIG
 # ============================================================
-VALID_PASSWORD = "your_password_here"  # <-- CHANGE THIS
+VALID_PASSWORD = "snapcrackle2026"
 
 # ============================================================
 # STYLES
