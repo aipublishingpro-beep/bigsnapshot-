@@ -9,13 +9,64 @@ from auth import require_auth
 require_auth()
 
 import requests
+import json
+import os
 from datetime import datetime, timedelta
 import pytz
 from styles import apply_styles
 
 apply_styles()
 
-VERSION = "3.0"
+VERSION = "18.2"
+
+# ============================================================
+# STRONG PICKS SYSTEM
+# ============================================================
+STRONG_PICKS_FILE = "strong_picks.json"
+
+def load_strong_picks():
+    try:
+        if os.path.exists(STRONG_PICKS_FILE):
+            with open(STRONG_PICKS_FILE, 'r') as f:
+                return json.load(f)
+    except: pass
+    return {"next_ml": 1, "picks": []}
+
+def save_strong_picks(data):
+    try:
+        with open(STRONG_PICKS_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+    except: pass
+
+if "strong_picks" not in st.session_state:
+    st.session_state.strong_picks = load_strong_picks()
+
+def get_next_ml_number():
+    return st.session_state.strong_picks.get("next_ml", 1)
+
+def add_strong_pick(game_key, pick_team, sport, price=50):
+    ml_num = st.session_state.strong_picks.get("next_ml", 1)
+    pick_data = {
+        "ml_number": ml_num,
+        "game": game_key,
+        "pick": pick_team,
+        "price": price,
+        "timestamp": datetime.now(pytz.timezone('US/Eastern')).isoformat(),
+        "sport": sport
+    }
+    st.session_state.strong_picks["picks"].append(pick_data)
+    st.session_state.strong_picks["next_ml"] = ml_num + 1
+    save_strong_picks(st.session_state.strong_picks)
+    return ml_num
+
+def get_strong_pick_for_game(game_key):
+    for pick in st.session_state.strong_picks.get("picks", []):
+        if pick.get("game") == game_key:
+            return pick
+    return None
+
+def is_game_already_tagged(game_key):
+    return get_strong_pick_for_game(game_key) is not None
 
 # ============================================================
 # GA4 TRACKING
@@ -184,6 +235,159 @@ def get_weather_impact(home_abbr):
         return f"💨 {int(wind)}mph", "moderate"
     return "", "none"
 
+def get_injury_impact(team_abbr, injuries):
+    """Returns (out_count, impact_score) for key positions"""
+    team_inj = injuries.get(team_abbr, [])
+    key_pos = ["QB", "RB"]
+    out_count = 0
+    impact = 0
+    for inj in team_inj:
+        if 'out' in inj.get('status', '').lower():
+            out_count += 1
+            if inj.get('pos') in key_pos:
+                impact += 4
+            else:
+                impact += 1
+    return out_count, impact
+
+# ============================================================
+# STRONG PICK GATE FUNCTIONS (NFL-specific thresholds)
+# ============================================================
+def get_match_stability(home_abbr, away_abbr, injuries):
+    """
+    NFL Match Stability Check
+    Returns: (stability_label, stability_color, is_stable, flags)
+    """
+    instability_score = 0
+    flags = []
+    
+    # Check key injuries (QB/RB)
+    home_out, home_impact = get_injury_impact(home_abbr, injuries)
+    away_out, away_impact = get_injury_impact(away_abbr, injuries)
+    if home_impact >= 4 or away_impact >= 4:
+        instability_score += 2
+        flags.append("⚠️ Key OUT")
+    
+    # Check extreme streaks (5+ game streaks in NFL are significant)
+    home_form = TEAM_STATS.get(home_abbr, {}).get('form', '')
+    away_form = TEAM_STATS.get(away_abbr, {}).get('form', '')
+    home_streak = len(home_form) - len(home_form.lstrip(home_form[0])) if home_form else 0
+    away_streak = len(away_form) - len(away_form.lstrip(away_form[0])) if away_form else 0
+    if home_streak >= 5 or away_streak >= 5:
+        instability_score += 1
+        flags.append("⚠️ Streak Risk")
+    
+    # Check coin flip matchups (power rating within 3 pts)
+    home_pwr = TEAM_STATS.get(home_abbr, {}).get('pwr', 0)
+    away_pwr = TEAM_STATS.get(away_abbr, {}).get('pwr', 0)
+    if abs(home_pwr - away_pwr) < 3:
+        instability_score += 2
+        flags.append("⚠️ Coin Flip")
+    
+    if instability_score >= 3:
+        return "❌ UNSTABLE", "#ff4444", False, flags
+    elif instability_score >= 1:
+        return "⚠️ VOLATILE", "#ffaa00", True, flags
+    else:
+        return "✅ STABLE", "#00ff00", True, flags
+
+def get_cushion_tier(game_data, pick_team):
+    """
+    NFL Cushion Tier Check
+    Returns: (tier_label, tier_color, is_wide)
+    NFL thresholds: home_advantage=2.5, wide_lead=7
+    """
+    home_abbr = game_data.get('home_abbr')
+    away_abbr = game_data.get('away_abbr')
+    
+    if game_data.get('status_type') == "STATUS_SCHEDULED":
+        home_pwr = TEAM_STATS.get(home_abbr, {}).get('pwr', 0)
+        away_pwr = TEAM_STATS.get(away_abbr, {}).get('pwr', 0)
+        home_advantage = 2.5
+        
+        if pick_team == home_abbr:
+            diff = home_pwr - away_pwr + home_advantage
+        else:
+            diff = away_pwr - home_pwr - home_advantage
+        
+        if diff >= 10:
+            return "🟢 WIDE", "#00ff00", True
+        elif diff >= 3:
+            return "🟡 NARROW", "#ffaa00", False
+        else:
+            return "🔴 NEGATIVE", "#ff4444", False
+    else:
+        home_score = game_data.get('home_score', 0)
+        away_score = game_data.get('away_score', 0)
+        
+        if pick_team == home_abbr:
+            lead = home_score - away_score
+        else:
+            lead = away_score - home_score
+        
+        wide_threshold = 7
+        
+        if lead >= wide_threshold:
+            return "🟢 WIDE", "#00ff00", True
+        elif lead >= 0:
+            return "🟡 NARROW", "#ffaa00", False
+        else:
+            return "🔴 NEGATIVE", "#ff4444", False
+
+def get_pace_direction(game_data):
+    """
+    NFL Pace Direction Check
+    Returns: (pace_label, pace_color, is_positive)
+    NFL: Q4 with 7pt or less = NEGATIVE
+    """
+    if game_data.get('status_type') == "STATUS_SCHEDULED":
+        return "🟢 CONTROLLED", "#00ff00", True
+    
+    quarter = game_data.get('quarter', 0)
+    home_score = game_data.get('home_score', 0)
+    away_score = game_data.get('away_score', 0)
+    diff = abs(home_score - away_score)
+    
+    is_late = quarter >= 4
+    close_threshold = 7
+    
+    if is_late and diff <= close_threshold:
+        return "🔴 NEGATIVE", "#ff4444", False
+    elif quarter >= 3:
+        return "🟡 NEUTRAL", "#ffaa00", True
+    else:
+        return "🟢 CONTROLLED", "#00ff00", True
+
+def check_strong_pick_eligible(game_key, pick_team, game_data, injuries):
+    """Check if pick passes all 3 gates for Strong Pick status"""
+    home_abbr = game_data.get('home_abbr')
+    away_abbr = game_data.get('away_abbr')
+    
+    stability_label, stability_color, is_stable, stability_flags = get_match_stability(
+        home_abbr, away_abbr, injuries
+    )
+    cushion_label, cushion_color, is_wide = get_cushion_tier(game_data, pick_team)
+    pace_label, pace_color, is_positive = get_pace_direction(game_data)
+    
+    reasons = []
+    eligible = True
+    
+    if not is_wide:
+        eligible = False
+        reasons.append(f"Cushion: {cushion_label}")
+    if not is_positive:
+        eligible = False
+        reasons.append(f"Pace: {pace_label}")
+    if not is_stable:
+        eligible = False
+        reasons.append(f"Match: {stability_label}")
+    
+    return eligible, reasons, {
+        "stability": (stability_label, stability_color, is_stable, stability_flags),
+        "cushion": (cushion_label, cushion_color, is_wide),
+        "pace": (pace_label, pace_color, is_positive)
+    }
+
 # ============================================================
 # ESPN API FUNCTIONS
 # ============================================================
@@ -306,16 +510,16 @@ def calc_ml_score(home_abbr, away_abbr, injuries):
     pwr_diff = home_pwr - away_pwr
     if pwr_diff > 10:
         score_home += 2.5
-        reasons_home.append(f"📊 Net +{pwr_diff:.1f}")
+        reasons_home.append(f"📊 PWR +{pwr_diff:.0f}")
     elif pwr_diff > 5:
         score_home += 1.5
-        reasons_home.append(f"📊 Net +{pwr_diff:.1f}")
+        reasons_home.append(f"📊 PWR +{pwr_diff:.0f}")
     elif pwr_diff < -10:
         score_away += 2.5
-        reasons_away.append(f"📊 Net +{-pwr_diff:.1f}")
+        reasons_away.append(f"📊 PWR +{-pwr_diff:.0f}")
     elif pwr_diff < -5:
         score_away += 1.5
-        reasons_away.append(f"📊 Net +{-pwr_diff:.1f}")
+        reasons_away.append(f"📊 PWR +{-pwr_diff:.0f}")
     
     home_hw = home.get('home_win', 0.5)
     if home_hw >= 0.65:
@@ -329,10 +533,10 @@ def calc_ml_score(home_abbr, away_abbr, injuries):
     away_rank = away.get('rank', 16)
     if home_rank <= 8 and away_rank > 20:
         score_home += 1.5
-        reasons_home.append(f"🏆 #{home_rank} DEF")
+        reasons_home.append(f"🏆 #{home_rank} PWR")
     elif away_rank <= 8 and home_rank > 20:
         score_away += 1.5
-        reasons_away.append(f"🏆 #{away_rank} DEF")
+        reasons_away.append(f"🏆 #{away_rank} PWR")
     
     home_form = home.get('form', '')
     away_form = away.get('form', '')
@@ -390,24 +594,32 @@ def get_signal_tier(score):
 # ============================================================
 # SIDEBAR
 # ============================================================
+now = datetime.now(eastern)
+today_str = now.strftime("%Y-%m-%d")
+
 with st.sidebar:
     st.page_link("Home.py", label="🏠 Home", use_container_width=True)
     st.divider()
     
+    st.header("🏷️ STRONG PICKS")
+    today_tags = len([p for p in st.session_state.strong_picks.get('picks', []) 
+                      if p.get('sport') == 'NFL' and today_str in p.get('timestamp', '')])
+    st.markdown(f"""
+**Next ML#:** ML-{get_next_ml_number():03d}  
+**Today's Tags:** {today_tags}
+""")
+    st.divider()
+    
     st.header("📖 SIGNAL TIERS")
     st.markdown("""
-🔒 **STRONG** → 10.0 <span style="color:#888;font-size:0.8em;">Tracked in stats</span>
+🔒 **STRONG** → 10.0 <span style="color:#888;font-size:0.8em;">Tracked</span>
 
-🔵 **BUY** → 8.0-9.9 <span style="color:#888;font-size:0.8em;">Informational only</span>
+🔵 **BUY** → 8.0-9.9 <span style="color:#888;font-size:0.8em;">Info only</span>
 
 🟡 **LEAN** → 5.5-7.9 <span style="color:#888;font-size:0.8em;">Slight edge</span>
 
 ⚪ **PASS** → Below 5.5 <span style="color:#888;font-size:0.8em;">No edge</span>
 """, unsafe_allow_html=True)
-    st.divider()
-    
-    st.header("📊 MODEL INFO")
-    st.caption("Proprietary multi-factor model analyzing power ratings, home field, form, injuries, and weather.")
     st.divider()
     
     st.header("🔗 KALSHI")
@@ -418,8 +630,6 @@ with st.sidebar:
 # ============================================================
 # MAIN CONTENT
 # ============================================================
-now = datetime.now(eastern)
-
 st.title("🏈 NFL EDGE FINDER")
 st.caption(f"v{VERSION} | {now.strftime('%I:%M:%S %p ET')} | Real ESPN Data")
 
@@ -509,6 +719,51 @@ else:
 st.divider()
 
 # ============================================================
+# 🏷️ TODAY'S STRONG PICKS
+# ============================================================
+today_strong = [p for p in st.session_state.strong_picks.get('picks', []) 
+                if p.get('sport') == 'NFL' and today_str in p.get('timestamp', '')]
+
+if today_strong:
+    st.subheader("🏷️ TODAY'S STRONG PICKS")
+    for pick in today_strong:
+        ml_num = pick.get('ml_number', 0)
+        game_key = pick.get('game', '')
+        pick_team = pick.get('pick', '')
+        
+        # Find current game status
+        result_text = "⏳ Pending"
+        result_color = "#888"
+        for g in games:
+            gk = f"{g['away'].get('abbr')}@{g['home'].get('abbr')}"
+            if gk == game_key:
+                if g['status_type'] == "STATUS_FINAL":
+                    home_score = g['home'].get('score', 0)
+                    away_score = g['away'].get('score', 0)
+                    home_abbr = g['home'].get('abbr')
+                    winner = home_abbr if home_score > away_score else g['away'].get('abbr')
+                    if winner == pick_team:
+                        result_text = f"✅ WIN ({away_score}-{home_score})"
+                        result_color = "#22c55e"
+                    else:
+                        result_text = f"❌ LOSS ({away_score}-{home_score})"
+                        result_color = "#ef4444"
+                elif g['status_type'] == "STATUS_IN_PROGRESS":
+                    result_text = f"🔴 LIVE Q{g.get('quarter', 0)}"
+                    result_color = "#f59e0b"
+                break
+        
+        st.markdown(f"""
+        <div style="background: #0f172a; padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid {result_color};">
+            <span style="color: #ffd700; font-weight: bold;">ML-{ml_num:03d}</span>
+            <span style="color: #fff; margin-left: 12px; font-weight: 600;">{pick_team}</span>
+            <span style="color: #666; margin-left: 8px;">({game_key})</span>
+            <span style="color: {result_color}; float: right;">{result_text}</span>
+        </div>
+        """, unsafe_allow_html=True)
+    st.divider()
+
+# ============================================================
 # 🎯 ML PICKS
 # ============================================================
 if week_info:
@@ -535,6 +790,24 @@ if games:
         except:
             pass
         
+        game_key = f"{away_abbr}@{home_abbr}"
+        
+        # Build game_data for Strong Pick check
+        game_data = {
+            "home_abbr": home_abbr,
+            "away_abbr": away_abbr,
+            "home_score": g["home"].get("score", 0),
+            "away_score": g["away"].get("score", 0),
+            "status_type": g["status_type"],
+            "quarter": g.get("quarter", 0)
+        }
+        
+        # Check Strong Pick eligibility
+        is_tracked = score >= 10.0
+        strong_eligible, block_reasons, gate_results = check_strong_pick_eligible(
+            game_key, pick, game_data, injuries
+        )
+        
         ml_results.append({
             "pick": pick, "opponent": opponent, "score": score,
             "tier_label": tier_label, "tier_color": tier_color,
@@ -542,7 +815,10 @@ if games:
             "status_type": g["status_type"], "status_detail": g["status_detail"],
             "game_dt": game_dt, "home_abbr": home_abbr, "away_abbr": away_abbr,
             "home_score": g["home"].get("score", 0), "away_score": g["away"].get("score", 0),
-            "quarter": g.get("quarter", 0), "clock": g.get("clock", "")
+            "quarter": g.get("quarter", 0), "clock": g.get("clock", ""),
+            "game_key": game_key, "is_tracked": is_tracked,
+            "strong_eligible": strong_eligible, "block_reasons": block_reasons,
+            "gate_results": gate_results
         })
     
     ml_results.sort(key=lambda x: x["score"], reverse=True)
@@ -567,6 +843,12 @@ if games:
         
         kalshi_url = build_kalshi_url(r["away_abbr"], r["home_abbr"], r["game_dt"])
         
+        # Check for existing tag
+        existing_tag = get_strong_pick_for_game(r["game_key"])
+        tag_html = ""
+        if existing_tag:
+            tag_html = f'<span style="background:#ffd700;color:#000;padding:2px 8px;border-radius:4px;font-size:0.75em;margin-left:10px;">ML-{existing_tag["ml_number"]:03d}</span>'
+        
         st.markdown(f"""
         <div style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #0f172a, #020617); padding: 14px 18px; margin-bottom: 10px; border-radius: 10px; border-left: 4px solid {r['tier_color']};">
             <div style="flex: 1;">
@@ -574,7 +856,7 @@ if games:
                 <span style="font-weight: bold; color: #fff; font-size: 1.15em; margin-left: 12px;">{r['pick']}</span>
                 <span style="color: #666;"> v {r['opponent']}</span>
                 <span style="color: {r['tier_color']}; font-weight: bold; margin-left: 12px;">{r['score']}</span>
-                {status_html}
+                {status_html}{tag_html}
                 <br>
                 <span style="margin-top: 6px; display: inline-block;">{reasons_html}</span>
                 <span style="color: #555; margin-left: 10px;">{form_html}</span>
@@ -586,6 +868,15 @@ if games:
             </a>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Strong Pick Button
+        if r["is_tracked"] and r["strong_eligible"] and not existing_tag and r["status_type"] != "STATUS_FINAL":
+            if st.button(f"➕ Add Strong Pick", key=f"strong_{r['game_key']}", use_container_width=True):
+                ml_num = add_strong_pick(r["game_key"], r["pick"], "NFL")
+                st.success(f"✅ Tagged ML-{ml_num:03d}: {r['pick']} ({r['game_key']})")
+                st.rerun()
+        elif r["is_tracked"] and not r["strong_eligible"] and not existing_tag:
+            st.markdown(f"<div style='color:#ff6666;font-size:0.75em;margin-bottom:8px;margin-left:14px'>⚠️ Strong Pick blocked: {', '.join(r['block_reasons'])}</div>", unsafe_allow_html=True)
     
     tossups = [r for r in ml_results if r["score"] < 5.5]
     if tossups:
@@ -722,19 +1013,28 @@ st.divider()
 with st.expander("📖 How to Use This App", expanded=False):
     st.markdown("""
 **Signal Tiers:**
-- 🔒 **STRONG (10.0)** — Highest confidence, tracked in performance stats
+- 🔒 **STRONG (10.0)** — Highest confidence, eligible for Strong Pick tagging
 - 🔵 **BUY (8.0-9.9)** — Good edge detected
 - 🟡 **LEAN (5.5-7.9)** — Slight edge
 - ⚪ **PASS (Below 5.5)** — No clear edge, avoid
 
+**Strong Pick System (3 Gates):**
+Only 🔒 STRONG picks can become Strong Picks, and they must pass ALL 3 gates:
+1. **🛡️ Cushion Gate** — Must be WIDE (10+ pt power advantage pre-game, or 7+ pt lead live)
+2. **⏱️ Pace Gate** — Must be CONTROLLED/NEUTRAL (not Q4 within 7 pts)
+3. **🔬 Match Gate** — Must be STABLE/VOLATILE (no coin flips, key injuries OK)
+
 **Key Indicators:**
-- 📊 **Net** — Power rating differential
-- 🏟️ **Home** — Home field advantage
-- 🏆 **DEF** — Defensive ranking
-- 🔥 **Hot** — Team on winning streak
-- 🏥 **OUT** — Key players injured
+- 📊 **PWR** — Power rating differential
+- 🏟️ **Home** — Home field advantage percentage
+- 🏆 **PWR** — Power ranking position
+- 🔥 **Hot** — Team on winning streak (4+ wins in last 5)
+- 🏥 **OUT** — Key players (QB/RB) injured
 - 🌧️ **Weather** — Severe conditions favor home team
+
+**Trading:**
+Click BUY to open the Kalshi market for that game.
 """)
 
 st.divider()
-st.caption(f"⚠️ Entertainment only. Not financial advice. v{VERSION}")
+st.caption(f"⚠️ Educational only. Not financial advice. v{VERSION}")
