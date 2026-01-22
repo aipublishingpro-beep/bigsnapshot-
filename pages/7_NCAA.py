@@ -162,6 +162,12 @@ def get_kalshi_link_html(kalshi_url, label="view →"):
         return f'<a href="{kalshi_url}" target="_blank" style="color:#555;font-size:0.7em;text-decoration:none">{label}</a>'
     return ''
 
+def get_buy_button_html(kalshi_url, team_abbrev):
+    """Generate green BUY button for conviction picks"""
+    if kalshi_url:
+        return f'<a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:6px 14px;border-radius:4px;font-size:0.85em;font-weight:bold;text-decoration:none">BUY {team_abbrev}</a>'
+    return ''
+
 # ============================================================
 # CACHED HISTORICAL SCOREBOARD FETCH
 # Single cached call derives streaks, splits, and B2B
@@ -896,13 +902,13 @@ Quality over quantity.
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v3.0 FOCUSED")
+    st.caption("v3.1 BUY-BUTTONS")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v3.0")
+st.caption("Signal Analysis | v3.1")
 
 st.markdown("""
 <div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
@@ -919,6 +925,7 @@ if scheduled_conviction:
     top_pick = scheduled_conviction[0]
     kalshi_url = build_kalshi_ncaa_url(top_pick["away_abbrev"], top_pick["home_abbrev"])
     ap_display = f"#{top_pick['market_pick_ap']} " if top_pick['market_pick_ap'] > 0 else ""
+    buy_btn = get_buy_button_html(kalshi_url, top_pick['market_pick'])
     
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,#0a1a0a,#0f1f0f);padding:20px;border-radius:12px;border:2px solid #00cc66;margin:15px 0;text-align:center">
@@ -927,7 +934,7 @@ if scheduled_conviction:
         <div style="color:#00cc66;font-size:1.2em;font-weight:bold;margin-bottom:10px">CONVICTION • {top_pick['market_score']}/10</div>
         <div style="color:#888;font-size:0.85em;margin-bottom:8px">vs {escape_html(top_pick['market_opp'])} • {' · '.join(top_pick['market_reasons'][:3])}</div>
         <div style="color:#555;font-size:0.8em;margin-bottom:12px">Analyzer: {top_pick['analyzer_conf']} • Edge: {top_pick['analyzer_edge_display']}</div>
-        <div><a href="{kalshi_url}" target="_blank" style="color:#00cc66;font-size:0.8em;text-decoration:none">View on Kalshi →</a></div>
+        <div>{buy_btn}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -965,19 +972,13 @@ if scheduled_display:
         reasons_str = " · ".join([escape_html(r) for r in p["market_reasons"][:3]])
         ap_badge = f" <span style='color:#997700;font-size:0.8em'>AP{p['market_pick_ap']}</span>" if p['market_pick_ap'] > 0 else ""
         
-        # Tier-specific styling
+        # Conviction gets BUY button, Near gets view link
         if p["is_conviction"]:
+            action_btn = get_buy_button_html(kalshi_url, p['market_pick'])
             border_style = f"border-left:3px solid {p['final_color']}"
-            tier_class = "conviction"
-        elif p["is_near"]:
-            border_style = f"border-left:2px solid {p['final_color']}"
-            tier_class = "near"
-        elif p["is_mixed"]:
-            border_style = f"border-left:2px dashed {p['final_color']}"
-            tier_class = "mixed"
         else:
-            border_style = f"border-left:1px solid #333"
-            tier_class = "weak"
+            action_btn = f'<a href="{kalshi_url}" target="_blank" style="color:#555;font-size:0.7em;text-decoration:none">view →</a>' if kalshi_url else ''
+            border_style = f"border-left:2px solid {p['final_color']}"
         
         st.markdown(f"""<div style="background:#0a0a14;padding:12px 16px;border-radius:8px;{border_style};margin-bottom:8px">
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -987,7 +988,7 @@ if scheduled_display:
 <span style="color:#555">vs {escape_html(p['market_opp'])}</span>
 <span style="color:#38bdf8;font-weight:bold">{p['market_score']}/10</span>
 </div>
-<a href="{kalshi_url}" target="_blank" style="color:#555;font-size:0.7em;text-decoration:none">view →</a>
+{action_btn}
 </div>
 <div style="color:#555;font-size:0.75em;margin-top:8px">{reasons_str} • Edge: {p['analyzer_edge_display']} • {p['analyzer_conf']}</div>
 </div>""", unsafe_allow_html=True)
@@ -1132,4 +1133,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v3.0 FOCUSED • Top 3 conviction + top 5 near only")
+st.caption("v3.1 BUY-BUTTONS • Top 3 conviction with BUY buttons")
