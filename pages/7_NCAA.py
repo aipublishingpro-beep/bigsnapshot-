@@ -700,14 +700,15 @@ def get_final_signal(market, analyzer):
     # Check visibility gate first
     visible = passes_visibility_gate(market, analyzer)
     
-    # CONVICTION: Need BOTH engines strong, not just agreement
-    # score >= 9.5 AND edge >= 2.0 AND agreement AND low fatigue
+    # CONVICTION: Two paths
+    # Path 1: Elite score (≥9.7) + agreement → market carries it
+    # Path 2: High score (≥9.3) + agreement + analyzer confirms (edge ≥1.5)
     conf = analyzer["confidence"]
     
-    if (score >= 9.5 and 
-        abs(signed_edge) >= 2.0 and 
-        agrees and 
-        pick_fatigue < 4.0):
+    elite_path = (score >= 9.7 and agrees and pick_fatigue < 4.0)
+    confirmed_path = (score >= 9.3 and agrees and pick_fatigue < 4.0 and abs(signed_edge) >= 1.5)
+    
+    if elite_path or confirmed_path:
         return {
             "final_tier": "CONVICTION",
             "display_tier": "✓ CONVICTION",
@@ -848,8 +849,8 @@ live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_ty
 with st.sidebar:
     st.header("📖 SIGNAL TIERS")
     st.markdown("""
-✓ **CONVICTION** → Both engines strong
-<span style="color:#666;font-size:0.8em">Score ≥9.5 • Edge ≥2.0 • Agree</span>
+✓ **CONVICTION** → Elite alignment
+<span style="color:#666;font-size:0.8em">Score ≥9.7 OR (≥9.3 + edge)</span>
 
 ◐ **NEAR** → High score, agreement
 <span style="color:#666;font-size:0.8em">Score ≥9.3 • Agreement</span>
@@ -868,13 +869,13 @@ Context over recommendation.
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v2.7 DUAL-GATE")
+    st.caption("v2.8 ELITE-PATH")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v2.7")
+st.caption("Signal Analysis | v2.8")
 
 st.markdown("""
 <div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
@@ -1102,4 +1103,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v2.7 DUAL-GATE • Both engines must confirm")
+st.caption("v2.8 ELITE-PATH • Elite score carries conviction")
