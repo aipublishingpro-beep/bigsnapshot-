@@ -704,13 +704,15 @@ def get_final_signal(market, analyzer):
     # Check visibility gate first
     visible = passes_visibility_gate(market, analyzer)
     
-    # CONVICTION: score ≥9.5, agree, fatigue <4, analyzer ≠ NO EDGE, edge ≥1.5
+    # CONVICTION (two paths):
+    # Path 1: Elite score (≥9.7) + agreement → score carries it
+    # Path 2: High score (≥9.3) + agreement + analyzer backup
     conf = analyzer["confidence"]
-    if (score >= 9.5 and 
-        agrees and 
-        pick_fatigue < 4.0 and 
-        conf != "NO EDGE" and 
-        abs(signed_edge) >= 1.5):
+    
+    elite_path = (score >= 9.7 and agrees and pick_fatigue < 4.0)
+    strong_path = (score >= 9.3 and agrees and pick_fatigue < 4.0 and conf != "NO EDGE")
+    
+    if elite_path or strong_path:
         return {
             "final_tier": "CONVICTION",
             "display_tier": "✓ CONVICTION",
@@ -852,7 +854,7 @@ with st.sidebar:
     st.header("📖 SIGNAL TIERS")
     st.markdown("""
 ✓ **CONVICTION** → Strong alignment
-<span style="color:#666;font-size:0.8em">Score ≥9.5 • Edge ≥1.5 • Low fatigue</span>
+<span style="color:#666;font-size:0.8em">Score ≥9.7 OR (≥9.3 + confirmed)</span>
 
 ◐ **NEAR** → Close alignment
 <span style="color:#666;font-size:0.8em">Score ≥9.0 • Agreement</span>
@@ -871,13 +873,13 @@ Context over recommendation.
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v2.5 TIGHTENED")
+    st.caption("v2.6 BALANCED")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v2.5")
+st.caption("Signal Analysis | v2.6")
 
 st.markdown("""
 <div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
@@ -1105,4 +1107,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v2.5 TIGHTENED • Transparency with discipline")
+st.caption("v2.6 BALANCED • Transparency with discipline")
