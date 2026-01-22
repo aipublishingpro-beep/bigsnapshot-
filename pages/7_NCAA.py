@@ -963,7 +963,6 @@ if scheduled_visible:
     st.caption(f"{len(scheduled_visible)} game{'s' if len(scheduled_visible) != 1 else ''} with signal")
     
     # Add to watchlist button for conviction games
-    conviction_scheduled = [p for p in scheduled_conviction if p not in [scheduled_conviction[0]] if scheduled_conviction else []]
     if scheduled_conviction:
         if st.button(f"📋 Watch {len(scheduled_conviction)} Conviction Game{'s' if len(scheduled_conviction) != 1 else ''}", use_container_width=True, key="add_watch"):
             added = 0
