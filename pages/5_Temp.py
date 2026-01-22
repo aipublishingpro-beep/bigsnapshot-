@@ -310,41 +310,25 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
             potential_profit = 100 - winner_data['yes']
             
             # Build edge score line (only if edge >= 15)
-            edge_score_html = ""
+            edge_score_line = ""
             if edge_cents >= 50:
-                edge_score_html = f'<div style="color:#f87171;font-size:1em;font-weight:700;margin-top:6px">EDGE SCORE: +{edge_cents:.0f} <span style="font-weight:400">(Market broken)</span></div>'
+                edge_score_line = f'<div style="color:#f87171;font-size:1em;font-weight:700;margin-top:6px">EDGE SCORE: +{edge_cents:.0f} (Market broken)</div>'
             elif edge_cents >= 30:
-                edge_score_html = f'<div style="color:#fbbf24;font-size:1em;font-weight:700;margin-top:6px">EDGE SCORE: +{edge_cents:.0f} <span style="font-weight:400">(Major mispricing)</span></div>'
+                edge_score_line = f'<div style="color:#fbbf24;font-size:1em;font-weight:700;margin-top:6px">EDGE SCORE: +{edge_cents:.0f} (Major mispricing)</div>'
             elif edge_cents >= 15:
-                edge_score_html = f'<div style="color:#eab308;font-size:1em;font-weight:700;margin-top:6px">EDGE SCORE: +{edge_cents:.0f} <span style="font-weight:400">(Edge present)</span></div>'
-            # else: no edge score displayed
+                edge_score_line = f'<div style="color:#eab308;font-size:1em;font-weight:700;margin-top:6px">EDGE SCORE: +{edge_cents:.0f} (Edge present)</div>'
             
             # Card styling based on edge severity
             if edge_cents >= 50:
-                card_bg = "background:linear-gradient(135deg,#4a1010,#2d0a0a)"
-                card_border = "border:2px solid #dc2626"
-                card_shadow = "box-shadow:0 0 25px rgba(220,38,38,0.6)"
+                card_style = "background:linear-gradient(135deg,#4a1010,#2d0a0a);border:2px solid #dc2626;box-shadow:0 0 25px rgba(220,38,38,0.6)"
             elif edge_cents >= 30:
-                card_bg = "background:linear-gradient(135deg,#451a03,#2d1f0a)"
-                card_border = "border:2px solid #f59e0b"
-                card_shadow = "box-shadow:0 0 22px rgba(245,158,11,0.5)"
+                card_style = "background:linear-gradient(135deg,#451a03,#2d1f0a);border:2px solid #f59e0b;box-shadow:0 0 22px rgba(245,158,11,0.5)"
             elif edge_cents >= 15:
-                card_bg = "background:linear-gradient(135deg,#3d3510,#1a1408)"
-                card_border = "border:2px solid #ca8a04"
-                card_shadow = "box-shadow:0 0 18px rgba(202,138,4,0.4)"
+                card_style = "background:linear-gradient(135deg,#3d3510,#1a1408);border:2px solid #ca8a04;box-shadow:0 0 18px rgba(202,138,4,0.4)"
             else:
-                card_bg = "background:linear-gradient(135deg,#2d1f0a,#1a1408)"
-                card_border = "border:2px solid #f59e0b"
-                card_shadow = "box-shadow:0 0 20px rgba(245,158,11,0.5)"
+                card_style = "background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;box-shadow:0 0 20px rgba(245,158,11,0.5)"
             
-            card = f'''
-            <div style="{card_bg};{card_border};border-radius:10px;padding:18px;text-align:center;margin-top:12px;{card_shadow}">
-                <div style="color:#fbbf24;font-size:0.9em;font-weight:600">🌡️ ACTUAL {temp_type}: {actual_temp}°F</div>
-                {edge_score_html}
-                <div style="color:#fff;font-size:1.3em;font-weight:700;margin:10px 0">{winning_bracket}</div>
-                <div style="color:#4ade80;font-size:0.9em">Potential profit: +{potential_profit:.0f}¢ per contract</div>
-                <a href="{winner_data['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:10px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY YES</a>
-            </div>'''
+            card = f'<div style="{card_style};border-radius:10px;padding:18px;text-align:center;margin-top:12px"><div style="color:#fbbf24;font-size:0.9em;font-weight:600">🌡️ ACTUAL {temp_type}: {actual_temp}°F</div>{edge_score_line}<div style="color:#fff;font-size:1.3em;font-weight:700;margin:10px 0">{winning_bracket}</div><div style="color:#4ade80;font-size:0.9em">Potential profit: +{potential_profit:.0f}¢ per contract</div><a href="{winner_data["url"]}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:10px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY YES</a></div>'
         st.markdown(card, unsafe_allow_html=True)
 
 # ========== HEADER ==========
