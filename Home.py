@@ -13,11 +13,7 @@ apply_styles()
 # ============================================================
 # COOKIE MANAGER FOR PERSISTENT LOGIN - FIXED WITH STABLE KEY
 # ============================================================
-@st.cache_resource(show_spinner=False)
-def get_cookie_manager():
-    return stx.CookieManager(key="bigsnapshot_cookies")
-
-cookie_manager = get_cookie_manager()
+cookie_manager = stx.CookieManager(key="bigsnapshot_cookies")
 
 # ============================================================
 # GA4 TRACKING
