@@ -1,17 +1,69 @@
 import streamlit as st
-import requests
-from datetime import datetime, timedelta
-import pytz
-from styles import apply_styles
 
 st.set_page_config(page_title="NHL Edge Finder", page_icon="🏒", layout="wide")
 
 from auth import require_auth
 require_auth()
 
+import requests
+import json
+import os
+from datetime import datetime, timedelta
+import pytz
+from styles import apply_styles
+
 apply_styles()
 
-VERSION = "3.0"
+VERSION = "18.2"
+
+# ============================================================
+# STRONG PICKS SYSTEM
+# ============================================================
+STRONG_PICKS_FILE = "strong_picks.json"
+
+def load_strong_picks():
+    try:
+        if os.path.exists(STRONG_PICKS_FILE):
+            with open(STRONG_PICKS_FILE, 'r') as f:
+                return json.load(f)
+    except: pass
+    return {"next_ml": 1, "picks": []}
+
+def save_strong_picks(data):
+    try:
+        with open(STRONG_PICKS_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+    except: pass
+
+if "strong_picks" not in st.session_state:
+    st.session_state.strong_picks = load_strong_picks()
+
+def get_next_ml_number():
+    return st.session_state.strong_picks.get("next_ml", 1)
+
+def add_strong_pick(game_key, pick_team, sport, price=50):
+    ml_num = st.session_state.strong_picks.get("next_ml", 1)
+    pick_data = {
+        "ml_number": ml_num,
+        "game": game_key,
+        "pick": pick_team,
+        "price": price,
+        "timestamp": datetime.now(pytz.timezone('US/Eastern')).isoformat(),
+        "sport": sport
+    }
+    st.session_state.strong_picks["picks"].append(pick_data)
+    st.session_state.strong_picks["next_ml"] = ml_num + 1
+    save_strong_picks(st.session_state.strong_picks)
+    return ml_num
+
+def get_strong_pick_for_game(game_key):
+    for pick in st.session_state.strong_picks.get("picks", []):
+        if pick.get("game") == game_key:
+            return pick
+    return None
+
+def is_game_already_tagged(game_key):
+    return get_strong_pick_for_game(game_key) is not None
 
 # ============================================================
 # GA4 TRACKING
@@ -47,6 +99,8 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
+eastern = pytz.timezone('US/Eastern')
 
 # ============================================================
 # TEAM MAPPINGS
@@ -116,22 +170,170 @@ TEAM_STATS = {
 }
 
 # ============================================================
-# KALSHI URL BUILDER
+# HELPER FUNCTIONS
 # ============================================================
 def build_kalshi_url(away_abbr, home_abbr):
-    today = datetime.now(pytz.timezone('US/Eastern'))
+    today = datetime.now(eastern)
     date_str = today.strftime("%y%b%d").upper()
     away_code = KALSHI_CODES.get(away_abbr, away_abbr.lower())
     home_code = KALSHI_CODES.get(home_abbr, home_abbr.lower())
     ticker = f"KXNHLGAME-{date_str}{away_code.upper()}{home_code.upper()}"
     return f"https://kalshi.com/markets/kxnhlgame/{ticker.lower()}"
 
+def get_injury_impact(team_abbr, injuries):
+    """Returns (out_count, impact_score)"""
+    team_inj = injuries.get(team_abbr, [])
+    out_count = len([i for i in team_inj if 'out' in i.get('status', '').lower()])
+    return out_count, out_count * 2
+
+# ============================================================
+# STRONG PICK GATE FUNCTIONS (NHL-specific thresholds)
+# ============================================================
+def get_match_stability(home_abbr, away_abbr, injuries, yesterday_teams):
+    """
+    NHL Match Stability Check
+    Returns: (stability_label, stability_color, is_stable, flags)
+    """
+    instability_score = 0
+    flags = []
+    
+    # Check injuries (3+ out = unstable)
+    home_out, home_impact = get_injury_impact(home_abbr, injuries)
+    away_out, away_impact = get_injury_impact(away_abbr, injuries)
+    if home_out >= 3 or away_out >= 3:
+        instability_score += 2
+        flags.append("⚠️ Key OUT")
+    
+    # Check B2B (both teams B2B = chaos)
+    home_b2b = home_abbr in yesterday_teams
+    away_b2b = away_abbr in yesterday_teams
+    if home_b2b and away_b2b:
+        instability_score += 2
+        flags.append("⚠️ Both B2B")
+    
+    # Check coin flip matchups (win% within 5%)
+    home_win = TEAM_STATS.get(home_abbr, {}).get('win_pct', 0.5)
+    away_win = TEAM_STATS.get(away_abbr, {}).get('win_pct', 0.5)
+    if abs(home_win - away_win) < 0.05:
+        instability_score += 2
+        flags.append("⚠️ Coin Flip")
+    
+    if instability_score >= 3:
+        return "❌ UNSTABLE", "#ff4444", False, flags
+    elif instability_score >= 1:
+        return "⚠️ VOLATILE", "#ffaa00", True, flags
+    else:
+        return "✅ STABLE", "#00ff00", True, flags
+
+def get_cushion_tier(game_data, pick_team):
+    """
+    NHL Cushion Tier Check
+    Returns: (tier_label, tier_color, is_wide)
+    NHL thresholds: home_advantage=0.2 goals (via win%), wide_lead=2 goals
+    """
+    home_abbr = game_data.get('home_abbr')
+    away_abbr = game_data.get('away_abbr')
+    
+    if game_data.get('status_type') == "STATUS_SCHEDULED":
+        # Pre-game: Use goal differential proxy
+        home_gf = TEAM_STATS.get(home_abbr, {}).get('goals_for', 2.8)
+        home_ga = TEAM_STATS.get(home_abbr, {}).get('goals_against', 2.9)
+        away_gf = TEAM_STATS.get(away_abbr, {}).get('goals_for', 2.8)
+        away_ga = TEAM_STATS.get(away_abbr, {}).get('goals_against', 2.9)
+        
+        home_diff = home_gf - home_ga
+        away_diff = away_gf - away_ga
+        home_advantage = 0.2
+        
+        if pick_team == home_abbr:
+            diff = home_diff - away_diff + home_advantage
+        else:
+            diff = away_diff - home_diff - home_advantage
+        
+        if diff >= 0.5:
+            return "🟢 WIDE", "#00ff00", True
+        elif diff >= 0.1:
+            return "🟡 NARROW", "#ffaa00", False
+        else:
+            return "🔴 NEGATIVE", "#ff4444", False
+    else:
+        # Live: Use actual score
+        home_score = game_data.get('home_score', 0)
+        away_score = game_data.get('away_score', 0)
+        
+        if pick_team == home_abbr:
+            lead = home_score - away_score
+        else:
+            lead = away_score - home_score
+        
+        wide_threshold = 2  # NHL: 2 goals = safe
+        
+        if lead >= wide_threshold:
+            return "🟢 WIDE", "#00ff00", True
+        elif lead >= 0:
+            return "🟡 NARROW", "#ffaa00", False
+        else:
+            return "🔴 NEGATIVE", "#ff4444", False
+
+def get_pace_direction(game_data):
+    """
+    NHL Pace Direction Check
+    Returns: (pace_label, pace_color, is_positive)
+    NHL: P3 with 1 goal or less = NEGATIVE
+    """
+    if game_data.get('status_type') == "STATUS_SCHEDULED":
+        return "🟢 CONTROLLED", "#00ff00", True
+    
+    period = game_data.get('period', 0)
+    home_score = game_data.get('home_score', 0)
+    away_score = game_data.get('away_score', 0)
+    diff = abs(home_score - away_score)
+    
+    is_late = period >= 3
+    close_threshold = 1  # NHL: 1 goal = danger zone
+    
+    if is_late and diff <= close_threshold:
+        return "🔴 NEGATIVE", "#ff4444", False
+    elif period >= 2:
+        return "🟡 NEUTRAL", "#ffaa00", True
+    else:
+        return "🟢 CONTROLLED", "#00ff00", True
+
+def check_strong_pick_eligible(game_key, pick_team, game_data, injuries, yesterday_teams):
+    """Check if pick passes all 3 gates for Strong Pick status"""
+    home_abbr = game_data.get('home_abbr')
+    away_abbr = game_data.get('away_abbr')
+    
+    stability_label, stability_color, is_stable, stability_flags = get_match_stability(
+        home_abbr, away_abbr, injuries, yesterday_teams
+    )
+    cushion_label, cushion_color, is_wide = get_cushion_tier(game_data, pick_team)
+    pace_label, pace_color, is_positive = get_pace_direction(game_data)
+    
+    reasons = []
+    eligible = True
+    
+    if not is_wide:
+        eligible = False
+        reasons.append(f"Cushion: {cushion_label}")
+    if not is_positive:
+        eligible = False
+        reasons.append(f"Pace: {pace_label}")
+    if not is_stable:
+        eligible = False
+        reasons.append(f"Match: {stability_label}")
+    
+    return eligible, reasons, {
+        "stability": (stability_label, stability_color, is_stable, stability_flags),
+        "cushion": (cushion_label, cushion_color, is_wide),
+        "pace": (pace_label, pace_color, is_positive)
+    }
+
 # ============================================================
 # ESPN API - REAL DATA
 # ============================================================
 @st.cache_data(ttl=60)
 def fetch_nhl_games():
-    eastern = pytz.timezone('US/Eastern')
     today_date = datetime.now(eastern).strftime('%Y%m%d')
     url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates={today_date}"
     try:
@@ -173,7 +375,6 @@ def fetch_nhl_games():
 
 @st.cache_data(ttl=300)
 def fetch_yesterday_teams():
-    eastern = pytz.timezone('US/Eastern')
     yesterday = (datetime.now(eastern) - timedelta(days=1)).strftime('%Y%m%d')
     url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates={yesterday}"
     try:
@@ -258,7 +459,7 @@ def fetch_team_records():
     return records
 
 # ============================================================
-# ML SCORING MODEL - 10 FACTORS
+# ML SCORING MODEL
 # ============================================================
 def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
     home = TEAM_STATS.get(home_abbr, {})
@@ -359,12 +560,32 @@ def get_signal_tier(score):
 # ============================================================
 # SIDEBAR
 # ============================================================
+now = datetime.now(eastern)
+today_str = now.strftime("%Y-%m-%d")
+
 with st.sidebar:
     st.page_link("Home.py", label="🏠 Home", use_container_width=True)
     st.divider()
     
-    st.header("📖 ML LEGEND")
-    st.markdown("🔒 **STRONG** → 8.0+\n\n🔵 **BUY** → 6.5-7.9\n\n🟡 **LEAN** → 5.5-6.4\n\n⚪ **PASS** → Below 5.5")
+    st.header("🏷️ STRONG PICKS")
+    today_tags = len([p for p in st.session_state.strong_picks.get('picks', []) 
+                      if p.get('sport') == 'NHL' and today_str in p.get('timestamp', '')])
+    st.markdown(f"""
+**Next ML#:** ML-{get_next_ml_number():03d}  
+**Today's Tags:** {today_tags}
+""")
+    st.divider()
+    
+    st.header("📖 SIGNAL TIERS")
+    st.markdown("""
+🔒 **STRONG** → 8.0+ <span style="color:#888;font-size:0.8em;">Tracked</span>
+
+🔵 **BUY** → 6.5-7.9 <span style="color:#888;font-size:0.8em;">Info only</span>
+
+🟡 **LEAN** → 5.5-6.4 <span style="color:#888;font-size:0.8em;">Slight edge</span>
+
+⚪ **PASS** → Below 5.5 <span style="color:#888;font-size:0.8em;">No edge</span>
+""", unsafe_allow_html=True)
     st.divider()
     
     st.header("🔗 KALSHI")
@@ -375,12 +596,8 @@ with st.sidebar:
 # ============================================================
 # MAIN
 # ============================================================
-eastern = pytz.timezone('US/Eastern')
-now = datetime.now(eastern)
-
 st.title("🏒 NHL EDGE FINDER")
 st.caption(f"v{VERSION} | {now.strftime('%I:%M:%S %p ET')} | Real ESPN Data")
-st.markdown("🔒 *Only STRONG picks are tracked for performance*")
 
 games = fetch_nhl_games()
 yesterday_teams = fetch_yesterday_teams()
@@ -400,7 +617,6 @@ for gk in games.keys():
     today_teams.add(parts[1])
 yesterday_teams = yesterday_teams.intersection(today_teams)
 
-# Define live_games early
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
 final_games = {k: v for k, v in games.items() if v['status_type'] == "STATUS_FINAL"}
 scheduled_games = {k: v for k, v in games.items() if v['status_type'] == "STATUS_SCHEDULED"}
@@ -442,6 +658,48 @@ st.markdown("""
 st.divider()
 
 # ============================================================
+# 🏷️ TODAY'S STRONG PICKS
+# ============================================================
+today_strong = [p for p in st.session_state.strong_picks.get('picks', []) 
+                if p.get('sport') == 'NHL' and today_str in p.get('timestamp', '')]
+
+if today_strong:
+    st.subheader("🏷️ TODAY'S STRONG PICKS")
+    for pick in today_strong:
+        ml_num = pick.get('ml_number', 0)
+        game_key = pick.get('game', '')
+        pick_team = pick.get('pick', '')
+        
+        result_text = "⏳ Pending"
+        result_color = "#888"
+        for gk, g in games.items():
+            if gk == game_key:
+                if g['status_type'] == "STATUS_FINAL":
+                    home_score = g['home_score']
+                    away_score = g['away_score']
+                    winner = g['home_abbr'] if home_score > away_score else g['away_abbr']
+                    if winner == pick_team:
+                        result_text = f"✅ WIN ({away_score}-{home_score})"
+                        result_color = "#22c55e"
+                    else:
+                        result_text = f"❌ LOSS ({away_score}-{home_score})"
+                        result_color = "#ef4444"
+                elif g['status_type'] != "STATUS_SCHEDULED":
+                    result_text = f"🔴 LIVE P{g.get('period', 0)}"
+                    result_color = "#f59e0b"
+                break
+        
+        st.markdown(f"""
+        <div style="background: #0f172a; padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid {result_color};">
+            <span style="color: #ffd700; font-weight: bold;">ML-{ml_num:03d}</span>
+            <span style="color: #fff; margin-left: 12px; font-weight: 600;">{pick_team}</span>
+            <span style="color: #666; margin-left: 8px;">({game_key})</span>
+            <span style="color: {result_color}; float: right;">{result_text}</span>
+        </div>
+        """, unsafe_allow_html=True)
+    st.divider()
+
+# ============================================================
 # 🎯 BUILD ML RESULTS
 # ============================================================
 ml_results = []
@@ -455,6 +713,22 @@ for game_key, g in games.items():
     opponent = away_abbr if pick == home_abbr else home_abbr
     kalshi_url = build_kalshi_url(away_abbr, home_abbr)
     
+    # Build game_data for Strong Pick check
+    game_data = {
+        "home_abbr": home_abbr,
+        "away_abbr": away_abbr,
+        "home_score": g["home_score"],
+        "away_score": g["away_score"],
+        "status_type": g["status_type"],
+        "period": g.get("period", 0)
+    }
+    
+    # Check Strong Pick eligibility
+    is_tracked = score >= 8.0
+    strong_eligible, block_reasons, gate_results = check_strong_pick_eligible(
+        game_key, pick, game_data, injuries, yesterday_teams
+    )
+    
     ml_results.append({
         "pick": pick,
         "opponent": opponent,
@@ -466,7 +740,11 @@ for game_key, g in games.items():
         "game_key": game_key,
         "status": g["status_type"],
         "away_abbr": away_abbr,
-        "home_abbr": home_abbr
+        "home_abbr": home_abbr,
+        "is_tracked": is_tracked,
+        "strong_eligible": strong_eligible,
+        "block_reasons": block_reasons,
+        "gate_results": gate_results
     })
 
 ml_results.sort(key=lambda x: x["score"], reverse=True)
@@ -532,12 +810,18 @@ for r in ml_results:
     shown += 1
     reasons_str = " • ".join(r["reasons"]) if r["reasons"] else ""
     
+    existing_tag = get_strong_pick_for_game(r["game_key"])
+    tag_html = ""
+    if existing_tag:
+        tag_html = f'<span style="background:#ffd700;color:#000;padding:2px 8px;border-radius:4px;font-size:0.75em;margin-left:10px;">ML-{existing_tag["ml_number"]:03d}</span>'
+    
     st.markdown(f"""
     <div style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #0f172a, #020617); padding: 12px 15px; margin-bottom: 8px; border-radius: 8px; border-left: 4px solid {r['color']};">
         <div>
             <span style="font-weight: bold; color: #fff; font-size: 1.1em;">{r['pick']}</span>
             <span style="color: #666;"> vs {r['opponent']}</span>
             <span style="color: {r['color']}; font-weight: bold; margin-left: 12px;">{r['score']}/10</span>
+            {tag_html}
             <span style="color: #888; font-size: 0.85em; margin-left: 12px;">{reasons_str}</span>
         </div>
         <a href="{r['kalshi_url']}" target="_blank" style="text-decoration: none;">
@@ -547,6 +831,15 @@ for r in ml_results:
         </a>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Strong Pick Button
+    if r["is_tracked"] and r["strong_eligible"] and not existing_tag and r["status"] != "STATUS_FINAL":
+        if st.button(f"➕ Add Strong Pick", key=f"strong_{r['game_key']}", use_container_width=True):
+            ml_num = add_strong_pick(r["game_key"], r["pick"], "NHL")
+            st.success(f"✅ Tagged ML-{ml_num:03d}: {r['pick']} ({r['game_key']})")
+            st.rerun()
+    elif r["is_tracked"] and not r["strong_eligible"] and not existing_tag:
+        st.markdown(f"<div style='color:#ff6666;font-size:0.75em;margin-bottom:8px;margin-left:14px'>⚠️ Strong Pick blocked: {', '.join(r['block_reasons'])}</div>", unsafe_allow_html=True)
 
 if shown == 0:
     st.info("No strong picks today. All games are close to toss-ups.")
@@ -625,13 +918,21 @@ This tool analyzes NHL games and identifies moneyline betting opportunities on K
 
 **Understanding the Signals:**
 
-🔒 **STRONG (8.0+):** High confidence pick — these are tracked for performance
+🔒 **STRONG (8.0+):** High confidence pick — eligible for Strong Pick tagging
 
 🔵 **BUY (6.5-7.9):** Good edge detected
 
 🟡 **LEAN (5.5-6.4):** Slight edge
 
 ⚪ **PASS (Below 5.5):** No clear edge
+
+**Strong Pick System (3 Gates):**
+
+Only 🔒 STRONG picks can become Strong Picks, and they must pass ALL 3 gates:
+
+1. **🛡️ Cushion Gate** — Must be WIDE (+0.5 goal diff pre-game, or 2+ goal lead live)
+2. **⏱️ Pace Gate** — Must be CONTROLLED/NEUTRAL (not P3 within 1 goal)
+3. **🔬 Match Gate** — Must be STABLE/VOLATILE (no coin flips, not both teams B2B)
 
 **Key Indicators:**
 
@@ -644,7 +945,11 @@ This tool analyzes NHL games and identifies moneyline betting opportunities on K
 🔥 **Hot Streak:** Team on 4+ game win streak
 
 ❄️ **Fade Alert:** Team on 4+ game losing streak
+
+**Trading:**
+
+Click BUY to open the Kalshi market for that game.
 """)
 
 st.divider()
-st.caption(f"⚠️ Entertainment only. Not financial advice. v{VERSION}")
+st.caption(f"⚠️ Educational only. Not financial advice. v{VERSION}")
