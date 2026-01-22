@@ -844,35 +844,26 @@ for gk, g in games.items():
 visible_picks = [p for p in precomputed.values() if p.get("visible", False)]
 sorted_picks = sorted(visible_picks, key=lambda x: x["market_score"], reverse=True)
 
-# RANK-BASED TIERS (forced scarcity)
-# Top 3 = CONVICTION (if score ≥9.0)
-# Next 5 = NEAR (if score ≥8.5)
-# Rest = just visible
+# RANK-BASED TIERS — PURE RANKING BY SCORE (no agreement check)
+# Top 3 = CONVICTION, Next 5 = NEAR
 conviction_picks = []
 near_picks = []
-other_picks = []
 
 for i, p in enumerate(sorted_picks):
-    if i < 3 and p["market_score"] >= 9.0 and p["engines_agree"]:
+    if i < 3 and p["market_score"] >= 9.0:
         p["final_tier"] = "CONVICTION"
         p["display_tier"] = "✓ CONVICTION"
-        p["final_color"] = "#00cc66"
+        p["final_color"] = "#00ff00"
         p["is_conviction"] = True
         p["is_near"] = False
         conviction_picks.append(p)
-    elif i < 8 and p["market_score"] >= 8.5 and p["engines_agree"]:
+    elif i < 8 and p["market_score"] >= 8.5:
         p["final_tier"] = "NEAR"
         p["display_tier"] = "◐ NEAR"
         p["final_color"] = "#888888"
         p["is_conviction"] = False
         p["is_near"] = True
         near_picks.append(p)
-    else:
-        p["is_conviction"] = False
-        p["is_near"] = False
-        other_picks.append(p)
-
-mixed_picks = [p for p in sorted_picks if p.get("is_mixed", False)]
 
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
 
@@ -880,39 +871,41 @@ live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_ty
 # SIDEBAR
 # ============================================================
 with st.sidebar:
-    st.header("📖 SIGNAL TIERS")
+    st.header("📖 PICK TIERS")
     st.markdown("""
-✓ **CONVICTION** → Top 3 signals
-<span style="color:#666;font-size:0.8em">Rank #1-3 • Score ≥9.0 • Agree</span>
+<div style="background:#0f172a;padding:10px;border-radius:6px;border-left:4px solid #00ff00;margin-bottom:10px">
+<span style="color:#00ff00;font-weight:bold">🔒 STRONG</span><br>
+<span style="color:#888;font-size:0.85em">Top 3 by score</span>
+</div>
 
-◐ **NEAR** → Next best
-<span style="color:#666;font-size:0.8em">Rank #4-8 • Score ≥8.5 • Agree</span>
-
-○ **OTHER** → Visible signals
-<span style="color:#666;font-size:0.8em">Pass gate but lower rank</span>
+<div style="background:#0f172a;padding:10px;border-radius:6px;border-left:4px solid #ffaa00">
+<span style="color:#ffaa00;font-weight:bold">🟡 LEAN</span><br>
+<span style="color:#888;font-size:0.85em">Next 5 picks</span>
+</div>
 """, unsafe_allow_html=True)
     st.divider()
     st.markdown("""
-<div style="background:#111;padding:10px;border-radius:6px;border:1px solid #222">
-<span style="color:#666;font-size:0.8em">
-Max 3 conviction picks.<br>
-Max 5 near picks.<br>
-Quality over quantity.
+<div style="background:#0f172a;padding:10px;border-radius:6px">
+<span style="color:#888;font-size:0.85em">
+🎯 Max 3 strong picks<br>
+🟡 Max 5 lean picks<br>
+🔗 All link to Kalshi
 </span>
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v3.2 CLEAR-TIERS")
+    st.caption("v3.4 NBA-STYLE")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v3.2")
+st.caption("Signal Analysis | v3.4")
 
 st.markdown("""
-<div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
-    <span style="color:#666;font-size:0.85em">Quality over quantity. Only the top 3 conviction + top 5 near signals shown.</span>
+<div style="background:#0f172a;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:4px solid #00ff00">
+    <span style="color:#00ff00;font-weight:bold">🔒 STRONG</span> = Top 3 picks &nbsp;|&nbsp; 
+    <span style="color:#ffaa00;font-weight:bold">🟡 LEAN</span> = Next 5 picks
 </div>
 """, unsafe_allow_html=True)
 
@@ -921,22 +914,7 @@ st.markdown("""
 # ============================================================
 scheduled_conviction = [p for p in conviction_picks if p.get('status_type') == "STATUS_SCHEDULED"]
 
-if scheduled_conviction:
-    top_pick = scheduled_conviction[0]
-    kalshi_url = build_kalshi_ncaa_url(top_pick["away_abbrev"], top_pick["home_abbrev"])
-    ap_display = f"#{top_pick['market_pick_ap']} " if top_pick['market_pick_ap'] > 0 else ""
-    buy_btn = get_buy_button_html(kalshi_url, top_pick['market_pick'])
-    
-    st.markdown(f"""
-    <div style="background:linear-gradient(135deg,#0a1a0a,#0f1f0f);padding:20px;border-radius:12px;border:2px solid #00cc66;margin:15px 0;text-align:center">
-        <div style="color:#00cc66;font-size:0.8em;margin-bottom:8px;letter-spacing:1px">✓ TOP SIGNAL</div>
-        <div style="font-size:2em;font-weight:bold;color:#fff;margin-bottom:5px">{escape_html(ap_display)}{escape_html(top_pick['market_pick'])} 🧠</div>
-        <div style="color:#00cc66;font-size:1.2em;font-weight:bold;margin-bottom:10px">CONVICTION • {top_pick['market_score']}/10</div>
-        <div style="color:#888;font-size:0.85em;margin-bottom:8px">vs {escape_html(top_pick['market_opp'])} • {' · '.join(top_pick['market_reasons'][:3])}</div>
-        <div style="color:#555;font-size:0.8em;margin-bottom:12px">Analyzer: {top_pick['analyzer_conf']} • Edge: {top_pick['analyzer_edge_display']}</div>
-        <div>{buy_btn}</div>
-    </div>
-    """, unsafe_allow_html=True)
+# No hero card - all picks in unified list below
 
 # ============================================================
 # STATS
@@ -945,72 +923,55 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric("Games", len(games))
 with col2:
-    st.metric("Visible", len(visible_picks))
+    st.metric("Analyzed", len(visible_picks))
 with col3:
-    st.metric("✓ Conviction", len(conviction_picks))
+    st.metric("🔒 Strong", len(conviction_picks))
 with col4:
-    st.metric("◐ Near", len(near_picks))
+    st.metric("🟡 Lean", len(near_picks))
 
 st.divider()
 
 # ============================================================
-# ALL VISIBLE SIGNALS
+# ML PICKS (NBA-STYLE LAYOUT)
 # ============================================================
-st.subheader("📊 TOP SIGNALS")
+st.subheader("🎯 ML PICKS")
 
-# Show ALL conviction picks first, then near picks
 scheduled_conviction_list = [p for p in conviction_picks if p.get('status_type') == "STATUS_SCHEDULED"]
 scheduled_near_list = [p for p in near_picks if p.get('status_type') == "STATUS_SCHEDULED"]
 
-# Skip first conviction (shown in hero) if exists
-remaining_conviction = scheduled_conviction_list[1:] if scheduled_conviction_list else []
+all_picks = scheduled_conviction_list + scheduled_near_list
 
-if remaining_conviction or scheduled_near_list:
-    # Show remaining conviction picks with BUY buttons
-    for p in remaining_conviction:
-        gk = p["game_key"]
+if all_picks:
+    for p in all_picks:
         kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
-        reasons_str = " · ".join([escape_html(r) for r in p["market_reasons"][:3]])
-        ap_badge = f" <span style='color:#997700;font-size:0.8em'>AP{p['market_pick_ap']}</span>" if p['market_pick_ap'] > 0 else ""
-        buy_btn = get_buy_button_html(kalshi_url, p['market_pick'])
+        reasons = p.get('market_reasons', [])[:3]
+        reasons_str = " · ".join([escape_html(r) for r in reasons]) if reasons else "🏠 Home"
         
-        st.markdown(f"""<div style="background:#0a1a0a;padding:14px 18px;border-radius:10px;border:2px solid #00cc66;margin-bottom:10px">
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-<span style="color:#00cc66;font-weight:bold;font-size:0.9em">✓ CONVICTION</span>
-<b style="color:#fff;font-size:1.2em">{escape_html(p['market_pick'])}</b>{ap_badge}
-<span style="color:#888">vs {escape_html(p['market_opp'])}</span>
-<span style="color:#38bdf8;font-weight:bold">{p['market_score']}/10</span>
+        if p["is_conviction"]:
+            border_color = "#00ff00"
+            tier_badge = '<span style="color:#00ff00;font-weight:bold">🔒 STRONG</span>'
+        else:
+            border_color = "#ffaa00"
+            tier_badge = '<span style="color:#ffaa00;font-weight:bold">🟡 LEAN</span>'
+        
+        st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px">
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+{tier_badge}
+<b style="color:#fff;font-size:1.2em">{escape_html(p['market_pick'])}</b>
+<span style="color:#666">v {escape_html(p['market_opp'])}</span>
+<span style="color:#38bdf8;font-weight:bold">{p['market_score']}</span>
+<span style="background:#1e3a5f;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em">PRE</span>
 </div>
-{buy_btn}
+<a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY</a>
 </div>
-<div style="color:#666;font-size:0.75em;margin-top:8px">{reasons_str}</div>
+<div style="color:#666;font-size:0.8em;margin-top:8px">{reasons_str}</div>
 </div>""", unsafe_allow_html=True)
     
-    # Show near picks with view links (dimmer)
-    for p in scheduled_near_list:
-        gk = p["game_key"]
-        kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
-        reasons_str = " · ".join([escape_html(r) for r in p["market_reasons"][:3]])
-        
-        st.markdown(f"""<div style="background:#0a0a14;padding:10px 14px;border-radius:6px;border-left:2px solid #555;margin-bottom:6px;opacity:0.7">
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-<span style="color:#666;font-size:0.8em">◐ NEAR</span>
-<span style="color:#aaa;font-size:0.95em">{escape_html(p['market_pick'])}</span>
-<span style="color:#555;font-size:0.85em">vs {escape_html(p['market_opp'])}</span>
-<span style="color:#666;font-size:0.85em">{p['market_score']}/10</span>
-</div>
-<a href="{kalshi_url}" target="_blank" style="color:#444;font-size:0.7em;text-decoration:none">view →</a>
-</div>
-</div>""", unsafe_allow_html=True)
+    st.caption(f"{len(scheduled_conviction_list)} strong + {len(scheduled_near_list)} lean")
     
-    total_signals = len(scheduled_conviction_list) + len(scheduled_near_list)
-    st.caption(f"{len(scheduled_conviction_list)} conviction + {len(scheduled_near_list)} near = {total_signals} signals")
-    
-    # Add to watchlist button for conviction games
     if scheduled_conviction_list:
-        if st.button(f"📋 Watch {len(scheduled_conviction_list)} Conviction Game{'s' if len(scheduled_conviction_list) != 1 else ''}", use_container_width=True, key="add_watch"):
+        if st.button(f"📋 Watch All {len(scheduled_conviction_list)} Strong Picks", use_container_width=True, key="add_watch"):
             added = 0
             for p in scheduled_conviction_list:
                 if not any(pos.get('game') == p['game_key'] and pos.get('pick') == p['market_pick'] for pos in st.session_state.ncaa_positions):
@@ -1025,10 +986,8 @@ if remaining_conviction or scheduled_near_list:
 
 else:
     st.markdown("""
-    <div style="background:#0a0a14;padding:30px;border-radius:12px;text-align:center;border:1px solid #1a1a1a">
-        <div style="color:#333;font-size:1.3em;margin-bottom:10px">📭</div>
-        <div style="color:#888;font-size:1em;margin-bottom:8px">No games passed the signal threshold today</div>
-        <div style="color:#444;font-size:0.8em">All games below minimum requirements.</div>
+    <div style="background:#0f172a;padding:30px;border-radius:12px;text-align:center">
+        <div style="color:#666;font-size:1em">No picks today</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1146,4 +1105,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v3.1 BUY-BUTTONS • Top 3 conviction with BUY buttons")
+st.caption("v3.4 NBA-STYLE • 🔒 STRONG + 🟡 LEAN picks")
