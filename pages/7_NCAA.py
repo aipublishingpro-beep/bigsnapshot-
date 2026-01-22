@@ -19,7 +19,7 @@ apply_styles()
 # ============================================================
 cookie_manager = stx.CookieManager()
 
-# Initialize session state
+# Initialize session state ONCE
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 if 'user_type' not in st.session_state:
@@ -28,6 +28,7 @@ if 'auth_hydrated' not in st.session_state:
     st.session_state.auth_hydrated = False
 
 # ONE-TIME AUTH HYDRATION (only runs once per browser session)
+# After this, session_state.authenticated is the ONLY source of truth
 if not st.session_state.auth_hydrated:
     try:
         auth_cookie = cookie_manager.get("bigsnapshot_auth")
@@ -38,11 +39,14 @@ if not st.session_state.auth_hydrated:
         pass
     st.session_state.auth_hydrated = True
 
-# AUTH GATE — use switch_page, not st.stop()
+# AUTH GATE — soft redirect, no st.stop()
 if not st.session_state.authenticated:
     st.warning("⚠️ Please log in from the Home page first.")
     st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
-    st.switch_page("Home.py")
+    try:
+        st.switch_page("Home.py")
+    except:
+        st.stop()
 
 # ========== GOOGLE ANALYTICS ==========
 st.markdown("""
@@ -906,13 +910,13 @@ with st.sidebar:
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v3.5 AUTH-FIX")
+    st.caption("v3.6 CLEAR-UX")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v3.5")
+st.caption("Signal Analysis | v3.6")
 
 st.markdown("""
 <div style="background:#0f172a;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:4px solid #00ff00">
@@ -935,7 +939,8 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric("Games", len(games))
 with col2:
-    st.metric("Analyzed", len(visible_picks))
+    live_count = len([g for g in games.values() if g['period'] > 0 and g['status_type'] != "STATUS_FINAL"])
+    st.metric("Live", live_count)
 with col3:
     st.metric("🔒 Strong", len(conviction_picks))
 with col4:
@@ -950,10 +955,22 @@ st.subheader("🎯 ML PICKS")
 
 scheduled_conviction_list = [p for p in conviction_picks if p.get('status_type') == "STATUS_SCHEDULED"]
 scheduled_near_list = [p for p in near_picks if p.get('status_type') == "STATUS_SCHEDULED"]
+live_conviction_count = len(conviction_picks) - len(scheduled_conviction_list)
 
 all_picks = scheduled_conviction_list + scheduled_near_list
 
+# Note if strong picks are live
+if live_conviction_count > 0:
+    st.markdown(f"""<div style="background:#1a2a1a;padding:12px 16px;border-radius:8px;border:1px solid #00ff00;margin-bottom:14px">
+<div style="color:#00ff00;font-weight:bold;font-size:1em;margin-bottom:4px">🔒 {live_conviction_count} STRONG pick{'s are' if live_conviction_count > 1 else ' is'} now LIVE</div>
+<div style="color:#aaa;font-size:0.85em">Your top pick{'s have' if live_conviction_count > 1 else ' has'} started — scroll up to LIVE section to track {'them' if live_conviction_count > 1 else 'it'}.</div>
+</div>""", unsafe_allow_html=True)
+
 if all_picks:
+    if len(scheduled_conviction_list) == 0 and len(scheduled_near_list) > 0:
+        st.markdown("""<div style="color:#888;font-size:0.85em;margin-bottom:10px">
+All STRONG picks are live. Showing LEAN picks for upcoming games:
+</div>""", unsafe_allow_html=True)
     for p in all_picks:
         kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
         reasons = p.get('market_reasons', [])[:3]
@@ -980,7 +997,7 @@ if all_picks:
 <div style="color:#666;font-size:0.8em;margin-top:8px">{reasons_str}</div>
 </div>""", unsafe_allow_html=True)
     
-    st.caption(f"{len(scheduled_conviction_list)} strong + {len(scheduled_near_list)} lean")
+    st.caption(f"{len(scheduled_conviction_list)} strong + {len(scheduled_near_list)} lean scheduled")
     
     if scheduled_conviction_list:
         if st.button(f"📋 Watch All {len(scheduled_conviction_list)} Strong Picks", use_container_width=True, key="add_watch"):
@@ -1137,4 +1154,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v3.5 AUTH-FIX • Auto-refresh safe")
+st.caption("v3.6 CLEAR-UX • Auto-refresh safe")
