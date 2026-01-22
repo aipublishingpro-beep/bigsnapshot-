@@ -1,10 +1,13 @@
 # FILE: pages/9_Economics.py
 # v2.0 - Added data-driven edge signals
 import streamlit as st
+from auth import require_auth
+
+require_auth()
+
 import requests
 from datetime import datetime, timedelta
 import pytz
-import extra_streamlit_components as stx
 from fred_data import (
     get_fed_rate, get_unemployment, get_gdp_growth, 
     get_cpi_yoy, get_treasury_spread, get_indicator_color,
@@ -185,26 +188,6 @@ def apply_styles():
     """, unsafe_allow_html=True)
 
 apply_styles()
-
-# ============================================================
-# COOKIE MANAGER AUTH
-# ============================================================
-cookie_manager = stx.CookieManager()
-
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'user_type' not in st.session_state:
-    st.session_state.user_type = None
-
-auth_cookie = cookie_manager.get("bigsnapshot_auth")
-if auth_cookie and not st.session_state.authenticated:
-    st.session_state.authenticated = True
-    st.session_state.user_type = auth_cookie
-
-if not st.session_state.authenticated:
-    st.warning("⚠️ Please log in from the Home page first.")
-    st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
-    st.stop()
 
 # ============================================================
 # GA4 TRACKING
