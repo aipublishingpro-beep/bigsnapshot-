@@ -97,8 +97,6 @@ if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
 if "ncaa_positions" not in st.session_state:
     st.session_state.ncaa_positions = load_positions()
-if "show_buy_signals" not in st.session_state:
-    st.session_state.show_buy_signals = False
 
 if st.session_state.auto_refresh:
     st.markdown(f'<meta http-equiv="refresh" content="30;url=?r={int(time.time()) + 30}">', unsafe_allow_html=True)
@@ -158,10 +156,11 @@ def build_kalshi_ncaa_url(team1_code, team2_code):
     except Exception:
         return None
 
-def get_buy_button_html(kalshi_url, label="BUY"):
+def get_kalshi_link_html(kalshi_url, label="view →"):
+    """Generate neutral link to Kalshi market"""
     if kalshi_url:
-        return f'<a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:4px 10px;border-radius:4px;font-size:0.75em;font-weight:bold;text-decoration:none">{label}</a>'
-    return f'<span style="background:#333;color:#555;padding:4px 10px;border-radius:4px;font-size:0.75em">—</span>'
+        return f'<a href="{kalshi_url}" target="_blank" style="color:#555;font-size:0.7em;text-decoration:none">{label}</a>'
+    return ''
 
 # ============================================================
 # CACHED HISTORICAL SCOREBOARD FETCH
@@ -679,77 +678,104 @@ def check_engine_agreement(market, analyzer):
     return True, "STRONG"
 
 # ============================================================
-# FINAL SIGNAL LOGIC (v2.3 TUNED)
+# VISIBILITY GATE + DISPLAY TIERS (v2.4)
 # ============================================================
+def passes_visibility_gate(market, analyzer):
+    """
+    Only render games with meaningful signal.
+    At least one must be true:
+    - market_score >= 8.3
+    - abs(analyzer_edge) >= 1.5
+    - engines_agree == true
+    """
+    score = market["score"]
+    edge = abs(analyzer["edge"])
+    agrees, _ = check_engine_agreement(market, analyzer)
+    
+    return score >= 8.3 or edge >= 1.5 or agrees
+
 def get_final_signal(market, analyzer):
     score = market["score"]
-    conf = analyzer["confidence"]
     signed_edge = analyzer["edge"]
     pick_fatigue = market.get("pick_fatigue", 0)
     
     agrees, agreement_strength = check_engine_agreement(market, analyzer)
     
-    # STRONG+ (ultra-rare) — UNCHANGED
-    if (score >= 9.9 and 
-        conf == "CONFIDENT" and 
-        abs(signed_edge) >= 3.0 and 
-        agrees and 
-        agreement_strength == "STRONG" and
-        pick_fatigue < 3.0):
+    # Check visibility gate first
+    visible = passes_visibility_gate(market, analyzer)
+    
+    # CONVICTION: market >= 9.2 AND engines_agree AND fatigue < 4
+    if score >= 9.2 and agrees and pick_fatigue < 4.0:
         return {
-            "final_tier": "STRONG+",
-            "display_tier": "🔒 STRONG+",
-            "final_color": "#00ff00",
-            "is_tracked": True,
+            "final_tier": "CONVICTION",
+            "display_tier": "✓ CONVICTION",
+            "final_color": "#00cc66",
             "is_conviction": True,
+            "is_near": False,
+            "is_mixed": False,
             "engines_agree": True,
             "agreement_icon": "🧠",
-            "agreement_strength": agreement_strength
+            "agreement_strength": agreement_strength,
+            "visible": True
         }
     
-    # STRONG (v2.3 TUNED — slightly relaxed for controlled frequency)
-    if (score >= 9.3 and 
-        conf in ["CONFIDENT", "SLIGHT"] and 
-        agrees and 
-        agreement_strength != "WEAK" and
-        pick_fatigue < 5.0):
+    # NEAR CONVICTION: market >= 8.6 AND engines_agree
+    if score >= 8.6 and agrees:
         return {
-            "final_tier": "STRONG",
-            "display_tier": "🔒 STRONG",
-            "final_color": "#00ff00",
-            "is_tracked": True,
-            "is_conviction": True,
-            "engines_agree": True,
-            "agreement_icon": "🧠",
-            "agreement_strength": agreement_strength
-        }
-    
-    # BUY (hidden by default)
-    if (score >= 8.5 and 
-        conf == "CONFIDENT" and 
-        agrees and
-        agreement_strength != "WEAK"):
-        return {
-            "final_tier": "BUY",
-            "display_tier": "BUY",
-            "final_color": "#444",
-            "is_tracked": False,
+            "final_tier": "NEAR",
+            "display_tier": "◐ NEAR",
+            "final_color": "#888888",
             "is_conviction": False,
+            "is_near": True,
+            "is_mixed": False,
             "engines_agree": True,
             "agreement_icon": "",
-            "agreement_strength": agreement_strength
+            "agreement_strength": agreement_strength,
+            "visible": True
         }
     
-    # PASS
+    # MIXED SIGNAL: market >= 8.3 AND engines_agree == false
+    if score >= 8.3 and not agrees:
+        return {
+            "final_tier": "MIXED",
+            "display_tier": "⚠ MIXED",
+            "final_color": "#aa6600",
+            "is_conviction": False,
+            "is_near": False,
+            "is_mixed": True,
+            "engines_agree": False,
+            "agreement_icon": "⚠️",
+            "agreement_strength": agreement_strength,
+            "visible": True
+        }
+    
+    # Below visibility but still passes gate (edge >= 1.5 or agrees)
+    if visible:
+        return {
+            "final_tier": "WEAK",
+            "display_tier": "○ WEAK",
+            "final_color": "#444444",
+            "is_conviction": False,
+            "is_near": False,
+            "is_mixed": False,
+            "engines_agree": agrees,
+            "agreement_icon": "",
+            "agreement_strength": agreement_strength,
+            "visible": True
+        }
+    
+    # Does not pass visibility gate
     return {
-        "final_tier": "PASS",
-        "display_tier": "PASS",
-        "final_color": "#333",
-        "is_tracked": False,
+        "final_tier": "HIDDEN",
+        "display_tier": "",
+        "final_color": "#222",
         "is_conviction": False,
+        "is_near": False,
+        "is_mixed": False,
         "engines_agree": agrees,
-        "agreement_icon": "⚠️" if not agrees else "",
-        "agreement_strength": agreement_strength
+        "agreement_icon": "",
+        "agreement_strength": agreement_strength,
+        "visible": False
     }
 
 # ============================================================
@@ -789,13 +815,15 @@ for gk, g in games.items():
             "pick_fatigue": market.get("pick_fatigue", 0),
             "analyzer_pick": analyzer["pick"],
             "analyzer_conf": analyzer["confidence"],
-            "analyzer_edge_signed": analyzer["edge"],  # Preserved signed
-            "analyzer_edge_display": round(abs(analyzer["edge"]), 1),  # abs() for display
+            "analyzer_edge_signed": analyzer["edge"],
+            "analyzer_edge_display": round(abs(analyzer["edge"]), 1),
             "final_tier": final["final_tier"],
             "display_tier": final["display_tier"],
             "final_color": final["final_color"],
-            "is_tracked": final["is_tracked"],
             "is_conviction": final["is_conviction"],
+            "is_near": final.get("is_near", False),
+            "is_mixed": final.get("is_mixed", False),
+            "visible": final.get("visible", False),
             "engines_agree": final["engines_agree"],
             "agreement_icon": final["agreement_icon"],
             "agreement_strength": final["agreement_strength"]
@@ -803,10 +831,12 @@ for gk, g in games.items():
     except:
         continue
 
-sorted_picks = sorted(precomputed.values(), key=lambda x: x["market_score"], reverse=True)
+# Filter by visibility gate, then sort
+visible_picks = [p for p in precomputed.values() if p.get("visible", False)]
+sorted_picks = sorted(visible_picks, key=lambda x: x["market_score"], reverse=True)
 conviction_picks = [p for p in sorted_picks if p["is_conviction"]]
-buy_picks = [p for p in sorted_picks if p["final_tier"] == "BUY"]
-strong_plus_picks = [p for p in conviction_picks if p["final_tier"] == "STRONG+"]
+near_picks = [p for p in sorted_picks if p.get("is_near", False)]
+mixed_picks = [p for p in sorted_picks if p.get("is_mixed", False)]
 
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
 
@@ -814,168 +844,148 @@ live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_ty
 # SIDEBAR
 # ============================================================
 with st.sidebar:
-    st.header("📖 CONVICTION TIERS")
+    st.header("📖 SIGNAL TIERS")
     st.markdown("""
-🔒 **STRONG+** → Dual confirmed
-<span style="color:#666;font-size:0.8em">Ultra-rare • All gates pass</span>
+✓ **CONVICTION** → Aligned engines
+<span style="color:#666;font-size:0.8em">Score ≥9.2 • Agreement • Low fatigue</span>
 
-🔒 **STRONG** → High conviction
-<span style="color:#666;font-size:0.8em">Tracked • Engines aligned</span>
+◐ **NEAR** → Close alignment
+<span style="color:#666;font-size:0.8em">Score ≥8.6 • Agreement</span>
+
+⚠ **MIXED** → Engines disagree
+<span style="color:#666;font-size:0.8em">Score ≥8.3 • Conflict noted</span>
 """, unsafe_allow_html=True)
     st.divider()
     st.markdown("""
 <div style="background:#111;padding:10px;border-radius:6px;border:1px solid #222">
 <span style="color:#666;font-size:0.8em">
-Accuracy over frequency.<br>
-Some days have no bets.<br>
-No play is a valid signal.
+Transparency with discipline.<br>
+Only meaningful signals shown.<br>
+Context over recommendation.
 </span>
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v2.3 TUNED")
+    st.caption("v2.4 VISIBILITY")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Conviction-Grade Only | v2.3")
+st.caption("Signal Analysis | v2.4")
 
 st.markdown("""
 <div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
-    <span style="color:#666;font-size:0.85em">Accuracy over frequency. Only dual-confirmed, conviction-grade plays are shown.</span>
+    <span style="color:#666;font-size:0.85em">Transparency with discipline. Only games with meaningful signal are displayed.</span>
 </div>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# TOP PICK (STRONG+ ONLY)
+# TOP CONVICTION (if any)
 # ============================================================
-scheduled_strong_plus = [p for p in strong_plus_picks if p.get('status_type') == "STATUS_SCHEDULED"]
+scheduled_conviction = [p for p in conviction_picks if p.get('status_type') == "STATUS_SCHEDULED"]
 
-if scheduled_strong_plus:
-    for idx, top_pick in enumerate(scheduled_strong_plus):
-        kalshi_url = build_kalshi_ncaa_url(top_pick["away_abbrev"], top_pick["home_abbrev"])
-        buy_btn = get_buy_button_html(kalshi_url, "🎯 EXECUTE")
-        ap_display = f"#{top_pick['market_pick_ap']} " if top_pick['market_pick_ap'] > 0 else ""
-        pick_label = f"#{idx+1} " if len(scheduled_strong_plus) > 1 else ""
-        
-        st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#0a1a0a,#0f1f0f);padding:20px;border-radius:12px;border:2px solid #00aa00;margin:15px 0;text-align:center">
-            <div style="color:#00aa00;font-size:0.8em;margin-bottom:8px;letter-spacing:1px">🔒 CONVICTION-GRADE {escape_html(pick_label)}</div>
-            <div style="font-size:2em;font-weight:bold;color:#fff;margin-bottom:5px">{escape_html(ap_display)}{escape_html(top_pick['market_pick'])} 🧠</div>
-            <div style="color:#00aa00;font-size:1.2em;font-weight:bold;margin-bottom:10px">STRONG+ • {top_pick['market_score']}/10</div>
-            <div style="color:#888;font-size:0.85em;margin-bottom:8px">vs {escape_html(top_pick['market_opp'])} • {' · '.join(top_pick['market_reasons'][:3])}</div>
-            <div style="color:#555;font-size:0.8em;margin-bottom:12px">Analyzer: {top_pick['analyzer_conf']} • Edge: {top_pick['analyzer_edge_display']}</div>
-            <div>{buy_btn if kalshi_url else ''}</div>
-        </div>
-        """, unsafe_allow_html=True)
+if scheduled_conviction:
+    top_pick = scheduled_conviction[0]
+    kalshi_url = build_kalshi_ncaa_url(top_pick["away_abbrev"], top_pick["home_abbrev"])
+    ap_display = f"#{top_pick['market_pick_ap']} " if top_pick['market_pick_ap'] > 0 else ""
+    
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg,#0a1a0a,#0f1f0f);padding:20px;border-radius:12px;border:2px solid #00cc66;margin:15px 0;text-align:center">
+        <div style="color:#00cc66;font-size:0.8em;margin-bottom:8px;letter-spacing:1px">✓ TOP SIGNAL</div>
+        <div style="font-size:2em;font-weight:bold;color:#fff;margin-bottom:5px">{escape_html(ap_display)}{escape_html(top_pick['market_pick'])} 🧠</div>
+        <div style="color:#00cc66;font-size:1.2em;font-weight:bold;margin-bottom:10px">CONVICTION • {top_pick['market_score']}/10</div>
+        <div style="color:#888;font-size:0.85em;margin-bottom:8px">vs {escape_html(top_pick['market_opp'])} • {' · '.join(top_pick['market_reasons'][:3])}</div>
+        <div style="color:#555;font-size:0.8em;margin-bottom:12px">Analyzer: {top_pick['analyzer_conf']} • Edge: {top_pick['analyzer_edge_display']}</div>
+        <div><a href="{kalshi_url}" target="_blank" style="color:#00cc66;font-size:0.8em;text-decoration:none">View on Kalshi →</a></div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ============================================================
 # STATS
 # ============================================================
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric("Games", len(games))
 with col2:
-    st.metric("🔒 Conviction", len(conviction_picks))
+    st.metric("Visible", len(visible_picks))
 with col3:
-    strong_wins = sum(1 for pos in st.session_state.ncaa_positions 
-                      if pos.get('tracked') and games.get(pos.get('game'), {}).get('status_type') == "STATUS_FINAL"
-                      and ((pos.get('pick') == pos.get('game', '').split('@')[1] and games.get(pos.get('game'), {}).get('home_score', 0) > games.get(pos.get('game'), {}).get('away_score', 0))
-                           or (pos.get('pick') == pos.get('game', '').split('@')[0] and games.get(pos.get('game'), {}).get('away_score', 0) > games.get(pos.get('game'), {}).get('home_score', 0))))
-    strong_total = sum(1 for pos in st.session_state.ncaa_positions 
-                       if pos.get('tracked') and games.get(pos.get('game'), {}).get('status_type') == "STATUS_FINAL")
-    st.metric("📊 Record", f"{strong_wins}-{strong_total - strong_wins}" if strong_total > 0 else "—")
+    st.metric("✓ Conviction", len(conviction_picks))
+with col4:
+    st.metric("⚠ Mixed", len(mixed_picks))
 
 st.divider()
 
 # ============================================================
-# CONVICTION PLAYS
+# ALL VISIBLE SIGNALS
 # ============================================================
-st.subheader("🔒 CONVICTION-GRADE PLAYS")
+st.subheader("📊 SIGNAL ANALYSIS")
 
-scheduled_conviction = [p for p in conviction_picks if p.get('status_type') == "STATUS_SCHEDULED"]
+scheduled_visible = [p for p in sorted_picks if p.get('status_type') == "STATUS_SCHEDULED"]
 
-if scheduled_conviction:
-    st.caption(f"{len(scheduled_conviction)} play{'s' if len(scheduled_conviction) != 1 else ''}")
+if scheduled_visible:
+    # Skip top conviction (already displayed above)
+    remaining = scheduled_visible[1:] if scheduled_conviction else scheduled_visible
     
-    for p in scheduled_conviction:
-        if p["final_tier"] == "STRONG+" and p in scheduled_strong_plus:
-            continue
-            
+    for p in remaining:
         gk = p["game_key"]
         kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
         reasons_str = " · ".join([escape_html(r) for r in p["market_reasons"][:3]])
         ap_badge = f" <span style='color:#997700;font-size:0.8em'>AP{p['market_pick_ap']}</span>" if p['market_pick_ap'] > 0 else ""
-        buy_btn = get_buy_button_html(kalshi_url)
         
-        st.markdown(f"""<div style="background:#0a0a14;padding:12px 16px;border-radius:8px;border-left:3px solid {p['final_color']};margin-bottom:8px">
+        # Tier-specific styling
+        if p["is_conviction"]:
+            border_style = f"border-left:3px solid {p['final_color']}"
+            tier_class = "conviction"
+        elif p["is_near"]:
+            border_style = f"border-left:2px solid {p['final_color']}"
+            tier_class = "near"
+        elif p["is_mixed"]:
+            border_style = f"border-left:2px dashed {p['final_color']}"
+            tier_class = "mixed"
+        else:
+            border_style = f"border-left:1px solid #333"
+            tier_class = "weak"
+        
+        st.markdown(f"""<div style="background:#0a0a14;padding:12px 16px;border-radius:8px;{border_style};margin-bottom:8px">
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-<span style="color:{p['final_color']};font-weight:bold">{escape_html(p['display_tier'])}</span>
+<span style="color:{p['final_color']};font-weight:bold;font-size:0.85em">{escape_html(p['display_tier'])}</span>
 <b style="color:#fff;font-size:1.1em">{escape_html(p['market_pick'])}</b>{ap_badge}
 <span style="color:#555">vs {escape_html(p['market_opp'])}</span>
 <span style="color:#38bdf8;font-weight:bold">{p['market_score']}/10</span>
-<span style="font-size:0.9em">{p['agreement_icon']}</span>
 </div>
-{buy_btn}
+<a href="{kalshi_url}" target="_blank" style="color:#555;font-size:0.7em;text-decoration:none">view →</a>
 </div>
-<div style="color:#555;font-size:0.75em;margin-top:8px">{reasons_str} • Analyzer: {p['analyzer_conf']}</div>
+<div style="color:#555;font-size:0.75em;margin-top:8px">{reasons_str} • Edge: {p['analyzer_edge_display']} • {p['analyzer_conf']}</div>
 </div>""", unsafe_allow_html=True)
     
-    if st.button(f"➕ Track {len(scheduled_conviction)} Play{'s' if len(scheduled_conviction) != 1 else ''}", use_container_width=True, key="add_conviction"):
-        added = 0
-        for p in scheduled_conviction:
-            if not any(pos.get('game') == p['game_key'] and pos.get('pick') == p['market_pick'] for pos in st.session_state.ncaa_positions):
-                st.session_state.ncaa_positions.append({
-                    "game": p['game_key'], "type": "ml",
-                    "pick": p['market_pick'], "pick_name": p['market_pick_name'],
-                    "price": 50, "contracts": 1, "tracked": True
-                })
-                added += 1
-        if added:
-            save_positions(st.session_state.ncaa_positions)
-            st.rerun()
+    st.caption(f"{len(scheduled_visible)} game{'s' if len(scheduled_visible) != 1 else ''} with signal")
+    
+    # Add to watchlist button for conviction games
+    conviction_scheduled = [p for p in scheduled_conviction if p not in [scheduled_conviction[0]] if scheduled_conviction else []]
+    if scheduled_conviction:
+        if st.button(f"📋 Watch {len(scheduled_conviction)} Conviction Game{'s' if len(scheduled_conviction) != 1 else ''}", use_container_width=True, key="add_watch"):
+            added = 0
+            for p in scheduled_conviction:
+                if not any(pos.get('game') == p['game_key'] and pos.get('pick') == p['market_pick'] for pos in st.session_state.ncaa_positions):
+                    st.session_state.ncaa_positions.append({
+                        "game": p['game_key'], "type": "signal",
+                        "pick": p['market_pick'], "pick_name": p['market_pick_name']
+                    })
+                    added += 1
+            if added:
+                save_positions(st.session_state.ncaa_positions)
+                st.rerun()
+
 else:
     st.markdown("""
     <div style="background:#0a0a14;padding:30px;border-radius:12px;text-align:center;border:1px solid #1a1a1a">
         <div style="color:#333;font-size:1.3em;margin-bottom:10px">📭</div>
-        <div style="color:#888;font-size:1em;margin-bottom:8px">No conviction-grade plays met today's threshold</div>
-        <div style="color:#444;font-size:0.8em">Market alignment is insufficient — standing down is correct behavior.</div>
+        <div style="color:#888;font-size:1em;margin-bottom:8px">No games passed the visibility gate today</div>
+        <div style="color:#444;font-size:0.8em">All games below signal threshold (score &lt;8.3, edge &lt;1.5, no agreement).</div>
     </div>
     """, unsafe_allow_html=True)
-
-st.divider()
-
-# ============================================================
-# BUY SIGNALS (MAXIMALLY DEMOTED)
-# ============================================================
-scheduled_buy = [p for p in buy_picks if p.get('status_type') == "STATUS_SCHEDULED"]
-
-if scheduled_buy:
-    st.session_state.show_buy_signals = st.checkbox(
-        f"Show {len(scheduled_buy)} lower-conviction opportunities (informational only)",
-        value=st.session_state.show_buy_signals,
-        key="buy_toggle"
-    )
-    
-    if st.session_state.show_buy_signals:
-        st.markdown("<p style='color:#333;font-size:0.75em;margin-bottom:10px'>⚠️ Not tracked. Not recommended. For reference only.</p>", unsafe_allow_html=True)
-        
-        for p in scheduled_buy:
-            gk = p["game_key"]
-            kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
-            
-            st.markdown(f"""<div style="background:#050508;padding:8px 12px;border-radius:4px;border-left:1px solid #222;margin-bottom:4px;opacity:0.6">
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px">
-<div style="display:flex;align-items:center;gap:6px">
-<span style="color:#333;font-size:0.75em">BUY</span>
-<span style="color:#555;font-size:0.85em">{escape_html(p['market_pick'])} v {escape_html(p['market_opp'])}</span>
-<span style="color:#333;font-size:0.75em">{p['market_score']}</span>
-</div>
-<a href="{kalshi_url}" target="_blank" style="color:#333;font-size:0.65em;text-decoration:none">view →</a>
-</div>
-</div>""", unsafe_allow_html=True)
 
 st.divider()
 
@@ -1023,17 +1033,14 @@ if live_games:
     st.divider()
 
 # ============================================================
-# TRACKED POSITIONS
+# WATCHLIST
 # ============================================================
-st.subheader("📈 TRACKED")
+st.subheader("📋 WATCHLIST")
 
 if st.session_state.ncaa_positions:
     for idx, pos in enumerate(st.session_state.ncaa_positions):
         gk = pos['game']
         g = games.get(gk)
-        price, contracts = pos.get('price', 50), pos.get('contracts', 1)
-        cost = round(price * contracts / 100, 2)
-        potential = round((100 - price) * contracts / 100, 2)
         
         if g:
             pick = pos.get('pick', '')
@@ -1046,20 +1053,17 @@ if st.session_state.ncaa_positions:
             if is_final:
                 won = pick_score > opp_score
                 label, clr = ("✅ WON", "#00aa00") if won else ("❌ LOST", "#aa0000")
-                pnl = f"+${potential:.2f}" if won else f"-${cost:.2f}"
             elif g['period'] > 0:
                 label, clr = ("🟢", "#00aa00") if lead >= 10 else ("🟡", "#aaaa00") if lead >= 0 else ("🔴", "#aa0000")
-                pnl = f"+${potential:.2f}"
             else:
                 label, clr = "⏳", "#444"
-                pnl = f"+${potential:.2f}"
             
             half_label = "H1" if g['period'] == 1 else "H2" if g['period'] == 2 else f"OT{g['period']-2}" if g['period'] > 2 else ""
             status = "FINAL" if is_final else f"{half_label} {escape_html(g['clock'])}" if g['period'] > 0 else ""
             
             st.markdown(f"""<div style='background:#0a0a14;padding:10px;border-radius:6px;border-left:2px solid {clr};margin-bottom:6px'>
                 <div style='display:flex;justify-content:space-between;font-size:0.85em'><b style='color:#888'>{escape_html(gk.replace('@', ' @ '))}</b> <span style='color:#444'>{status}</span> <b style='color:{clr}'>{label}</b></div>
-                <div style='color:#555;margin-top:4px;font-size:0.75em'>🎯 {escape_html(pick)} | {lead:+d} | {pnl}</div></div>""", unsafe_allow_html=True)
+                <div style='color:#555;margin-top:4px;font-size:0.75em'>Signal: {escape_html(pick)} | {lead:+d}</div></div>""", unsafe_allow_html=True)
             
             col1, col2 = st.columns([3, 1])
             with col2:
@@ -1068,7 +1072,7 @@ if st.session_state.ncaa_positions:
                     save_positions(st.session_state.ncaa_positions)
                     st.rerun()
 else:
-    st.caption("No tracked positions")
+    st.caption("No watched games")
 
 st.divider()
 
@@ -1097,4 +1101,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v2.3 TUNED • Accuracy over frequency")
+st.caption("v2.4 VISIBILITY • Transparency with discipline")
