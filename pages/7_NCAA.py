@@ -1324,21 +1324,6 @@ st.divider()
 # ============================================================
 NCAA_THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
-def build_kalshi_ncaa_totals_url(team1_code, team2_code):
-    """Build Kalshi NCAA totals URL"""
-    try:
-        if not team1_code or not team2_code:
-            return None
-        t1 = ''.join(c for c in str(team1_code).upper() if c.isalpha())[:4]
-        t2 = ''.join(c for c in str(team2_code).upper() if c.isalpha())[:4]
-        if len(t1) < 2 or len(t2) < 2:
-            return None
-        date_str = now.strftime("%y%b%d").upper()
-        ticker = f"KXNCAAMBTOTAL-{date_str}{t1}{t2}"
-        return f"https://kalshi.com/markets/kxncaambtotal/{ticker.lower()}"
-    except:
-        return None
-
 # ============================================================
 # 🎯 CUSHION SCANNER — LIVE TOTALS ENGINE
 # ============================================================
@@ -1408,18 +1393,15 @@ for gk, g in games.items():
         'game': gk, 'total': total, 'mins': mins, 'pace': pace,
         'pace_status': pace_status, 'pace_color': pace_color,
         'projected': projected_final, 'cushion': cushion,
-        'safe_line': safe_line, 'period': g['period'], 'clock': g['clock'],
-        'away': g['away_abbrev'], 'home': g['home_abbrev']
+        'safe_line': safe_line, 'period': g['period'], 'clock': g['clock']
     })
 
 cush_results.sort(key=lambda x: x['cushion'], reverse=True)
 
 if cush_results:
     for r in cush_results:
-        kalshi_url = build_kalshi_ncaa_totals_url(r['away'], r['home'])
-        btn_label = f"BUY {cush_side} {r['safe_line']}"
-        btn_color = "#00aa00" if cush_side == "NO" else "#cc6600"
         half_label = "H1" if r['period'] == 1 else "H2" if r['period'] == 2 else f"OT{r['period']-2}"
+        side_color = "#00aa00" if cush_side == "NO" else "#cc6600"
         
         st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:3px solid {r['pace_color']};flex-wrap:wrap;gap:8px">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -1427,11 +1409,10 @@ if cush_results:
             <span style="color:#888">{half_label} {escape_html(r['clock'])}</span>
             <span style="color:#888">{r['total']}pts/{r['mins']:.0f}min</span>
             <span style="color:#888">Proj: <b style="color:#fff">{r['projected']}</b></span>
-            <span style="background:#ff8800;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold">🎯 {r['safe_line']}</span>
-            <span style="color:#00ff00;font-weight:bold">+{r['cushion']:.0f}</span>
+            <span style="background:{side_color};color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold">🎯 {cush_side} {r['safe_line']}</span>
+            <span style="color:#00ff00;font-weight:bold">+{r['cushion']:.0f} cushion</span>
             <span style="color:{r['pace_color']}">{r['pace_status']}</span>
         </div>
-        <a href="{kalshi_url}" target="_blank" style="background:{btn_color};color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">🛡️+2 {btn_label}</a>
         </div>""", unsafe_allow_html=True)
 else:
     st.info(f"No {cush_side} opportunities with 6+ cushion. Check back when games are live with {cush_min}+ minutes played.")
@@ -1453,15 +1434,13 @@ for gk, g in games.items():
             "game": gk, "pace": pace, "proj": round(pace * 40),  # NCAA = 40 min
             "total": g['total'], "mins": mins, 
             "period": g['period'], "clock": g['clock'], 
-            "final": g['status_type'] == "STATUS_FINAL",
-            "away": g['away_abbrev'], "home": g['home_abbrev']
+            "final": g['status_type'] == "STATUS_FINAL"
         })
 
 pace_data.sort(key=lambda x: x['pace'])
 
 if pace_data:
     for p in pace_data:
-        kalshi_url = build_kalshi_ncaa_totals_url(p['away'], p['home'])
         half_label = "H1" if p['period'] == 1 else "H2" if p['period'] == 2 else f"OT{p['period']-2}" if p['period'] > 2 else ""
         
         # NCAA pace thresholds (adjusted for 40-min game)
@@ -1470,22 +1449,22 @@ if pace_data:
             base_idx = next((i for i, t in enumerate(NCAA_THRESHOLDS) if t > p['proj']), len(NCAA_THRESHOLDS)-1)
             safe_idx = min(base_idx + 2, len(NCAA_THRESHOLDS) - 1)
             rec_line = NCAA_THRESHOLDS[safe_idx]
-            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#00aa00;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY NO {rec_line}</a>' if not p['final'] else ""
+            rec_html = f'<span style="background:#00aa00;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em">NO {rec_line}</span>' if not p['final'] else ""
         elif p['pace'] < 3.5:
             lbl, clr = "🟡 AVG", "#ffff00"
-            btn_html = ""
+            rec_html = ""
         elif p['pace'] < 3.8:
             lbl, clr = "🟠 FAST", "#ff8800"
             base_idx = next((i for i in range(len(NCAA_THRESHOLDS)-1, -1, -1) if NCAA_THRESHOLDS[i] < p['proj']), 0)
             safe_idx = max(base_idx - 2, 0)
             rec_line = NCAA_THRESHOLDS[safe_idx]
-            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#cc6600;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
+            rec_html = f'<span style="background:#cc6600;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em">YES {rec_line}</span>' if not p['final'] else ""
         else:
             lbl, clr = "🔴 SHOOTOUT", "#ff0000"
             base_idx = next((i for i in range(len(NCAA_THRESHOLDS)-1, -1, -1) if NCAA_THRESHOLDS[i] < p['proj']), 0)
             safe_idx = max(base_idx - 2, 0)
             rec_line = NCAA_THRESHOLDS[safe_idx]
-            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#cc0000;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
+            rec_html = f'<span style="background:#cc0000;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em">YES {rec_line}</span>' if not p['final'] else ""
         
         status = "FINAL" if p['final'] else f"{half_label} {p['clock']}"
         
@@ -1496,93 +1475,11 @@ if pace_data:
             <span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span>
             <span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span>
             <span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span>
+            {rec_html}
         </div>
-        <div>{btn_html}</div>
         </div>""", unsafe_allow_html=True)
 else:
     st.info("No games with 5+ minutes played yet")
-
-st.divider()
-
-# ============================================================
-# MATCH ANALYZER
-# ============================================================
-with st.expander("🔬 MATCH ANALYZER", expanded=False):
-    st.caption("Engine 2: Team Strength Breakdown")
-    
-    for gk, g in sorted(games.items()):
-        if g['status_type'] == "STATUS_FINAL":
-            continue
-        
-        home_abbrev = g['home_abbrev']
-        away_abbrev = g['away_abbrev']
-        
-        # Get streaks
-        home_streak = streaks.get(home_abbrev, 0)
-        away_streak = streaks.get(away_abbrev, 0)
-        
-        # Get splits
-        home_split = splits.get(home_abbrev, {})
-        away_split = splits.get(away_abbrev, {})
-        home_hw = home_split.get("home_w", 0)
-        home_hl = home_split.get("home_l", 0)
-        away_aw = away_split.get("away_w", 0)
-        away_al = away_split.get("away_l", 0)
-        
-        # Get fatigue
-        home_fatigue = calculate_fatigue_score(home_abbrev, fatigue_data)
-        away_fatigue = calculate_fatigue_score(away_abbrev, fatigue_data)
-        
-        # Get rankings
-        home_ap = ap_rankings.get(home_abbrev, 0)
-        away_ap = ap_rankings.get(away_abbrev, 0)
-        
-        # Get precomputed data
-        pc = precomputed.get(gk, {})
-        edge = pc.get('analyzer_edge_signed', 0)
-        conf = pc.get('analyzer_conf', 'NO EDGE')
-        pick = pc.get('analyzer_pick', '')
-        
-        # Format streaks
-        home_streak_str = f"W{home_streak}" if home_streak > 0 else f"L{abs(home_streak)}" if home_streak < 0 else "—"
-        away_streak_str = f"W{away_streak}" if away_streak > 0 else f"L{abs(away_streak)}" if away_streak < 0 else "—"
-        home_streak_clr = "#00ff00" if home_streak > 0 else "#ff4444" if home_streak < 0 else "#666"
-        away_streak_clr = "#00ff00" if away_streak > 0 else "#ff4444" if away_streak < 0 else "#666"
-        
-        # Format rankings
-        home_rank_str = f"#{home_ap}" if home_ap > 0 else "—"
-        away_rank_str = f"#{away_ap}" if away_ap > 0 else "—"
-        
-        # Format fatigue
-        home_fatigue_clr = "#ff4444" if home_fatigue >= 4 else "#ffaa00" if home_fatigue >= 2 else "#00ff00"
-        away_fatigue_clr = "#ff4444" if away_fatigue >= 4 else "#ffaa00" if away_fatigue >= 2 else "#00ff00"
-        
-        # Edge color
-        edge_clr = "#00ff00" if conf == "CONFIDENT" else "#ffaa00" if conf == "SLIGHT" else "#666"
-        edge_display = f"+{edge:.1f}" if edge > 0 else f"{edge:.1f}"
-        
-        st.markdown(f"""<div style="background:#0a0a14;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid {edge_clr}">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-<b style="color:#fff">{escape_html(away_abbrev)} @ {escape_html(home_abbrev)}</b>
-<span style="color:{edge_clr};font-weight:bold">{conf} → {escape_html(pick)} ({edge_display})</span>
-</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.8em">
-<div style="background:#111;padding:8px;border-radius:4px">
-<div style="color:#888;margin-bottom:4px">Away: {escape_html(away_abbrev)}</div>
-<div>Streak: <span style="color:{away_streak_clr}">{away_streak_str}</span></div>
-<div>Road: {away_aw}-{away_al}</div>
-<div>Rank: {away_rank_str}</div>
-<div>Fatigue: <span style="color:{away_fatigue_clr}">{away_fatigue:.1f}</span></div>
-</div>
-<div style="background:#111;padding:8px;border-radius:4px">
-<div style="color:#888;margin-bottom:4px">Home: {escape_html(home_abbrev)}</div>
-<div>Streak: <span style="color:{home_streak_clr}">{home_streak_str}</span></div>
-<div>Home: {home_hw}-{home_hl}</div>
-<div>Rank: {home_rank_str}</div>
-<div>Fatigue: <span style="color:{home_fatigue_clr}">{home_fatigue:.1f}</span></div>
-</div>
-</div>
-</div>""", unsafe_allow_html=True)
 
 st.divider()
 
