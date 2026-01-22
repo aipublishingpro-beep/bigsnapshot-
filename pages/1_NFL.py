@@ -1,42 +1,19 @@
 import streamlit as st
+
+st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide")
+
+# ============================================================
+# 🔐 AUTH CHECK — MUST BE FIRST AFTER PAGE CONFIG
+# ============================================================
+from auth import require_auth
+require_auth()
+
 import requests
 from datetime import datetime, timedelta
 import pytz
 from styles import apply_styles
-import extra_streamlit_components as stx
-
-st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide")
 
 apply_styles()
-
-# ============================================================
-# COOKIE MANAGER FOR PERSISTENT LOGIN
-# ============================================================
-cookie_manager = stx.CookieManager()
-
-# ============================================================
-# SESSION STATE FOR AUTH
-# ============================================================
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'user_type' not in st.session_state:
-    st.session_state.user_type = None
-
-# ============================================================
-# CHECK COOKIE FOR PERSISTENT LOGIN
-# ============================================================
-auth_cookie = cookie_manager.get("bigsnapshot_auth")
-if auth_cookie and not st.session_state.authenticated:
-    st.session_state.authenticated = True
-    st.session_state.user_type = auth_cookie
-
-# ============================================================
-# AUTH CHECK
-# ============================================================
-if not st.session_state.authenticated:
-    st.warning("⚠️ Please log in from the Home page first.")
-    st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
-    st.stop()
 
 VERSION = "3.0"
 
@@ -172,7 +149,6 @@ def build_kalshi_url(away_abbr, home_abbr, game_date=None):
     return f"https://kalshi.com/markets/kxnflgame/{ticker.lower()}"
 
 def format_form(form_str):
-    """Format WWLWL into colored spans"""
     if not form_str:
         return ""
     html = ""
@@ -229,7 +205,6 @@ def fetch_nfl_news():
 
 @st.cache_data(ttl=60)
 def fetch_nfl_scoreboard():
-    # Try current week first, then fetch by date range for upcoming games
     url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
     try:
         resp = requests.get(url, timeout=10)
@@ -238,7 +213,6 @@ def fetch_nfl_scoreboard():
         week_info = data.get("week", {}).get("text", "Week")
         season_type = data.get("season", {}).get("type", {}).get("name", "")
         
-        # If no events, try fetching next 7 days
         if not data.get("events"):
             for days_ahead in range(1, 8):
                 future_date = (datetime.now(eastern) + timedelta(days=days_ahead)).strftime('%Y%m%d')
@@ -327,7 +301,6 @@ def calc_ml_score(home_abbr, away_abbr, injuries):
     score_home, score_away = 0, 0
     reasons_home, reasons_away = [], []
     
-    # Power Rating
     home_pwr = home.get('pwr', 0)
     away_pwr = away.get('pwr', 0)
     pwr_diff = home_pwr - away_pwr
@@ -344,7 +317,6 @@ def calc_ml_score(home_abbr, away_abbr, injuries):
         score_away += 1.5
         reasons_away.append(f"📊 Net +{-pwr_diff:.1f}")
     
-    # Home Field
     home_hw = home.get('home_win', 0.5)
     if home_hw >= 0.65:
         score_home += 1.5
@@ -353,7 +325,6 @@ def calc_ml_score(home_abbr, away_abbr, injuries):
         score_home += 0.5
         reasons_home.append("🏟️ Home")
     
-    # Rank differential
     home_rank = home.get('rank', 16)
     away_rank = away.get('rank', 16)
     if home_rank <= 8 and away_rank > 20:
@@ -363,7 +334,6 @@ def calc_ml_score(home_abbr, away_abbr, injuries):
         score_away += 1.5
         reasons_away.append(f"🏆 #{away_rank} DEF")
     
-    # Form (hot/cold streaks)
     home_form = home.get('form', '')
     away_form = away.get('form', '')
     home_wins = home_form.count('W') if home_form else 0
@@ -379,7 +349,6 @@ def calc_ml_score(home_abbr, away_abbr, injuries):
     if away_wins <= 1:
         score_home += 0.5
     
-    # Key Injuries (QB, RB)
     key_pos = ["QB", "RB"]
     home_key_out = len([i for i in injuries.get(home_abbr, []) if 'out' in i.get('status', '').lower() and i.get('pos') in key_pos])
     away_key_out = len([i for i in injuries.get(away_abbr, []) if 'out' in i.get('status', '').lower() and i.get('pos') in key_pos])
@@ -390,14 +359,12 @@ def calc_ml_score(home_abbr, away_abbr, injuries):
         score_away += 2.0
         reasons_away.append(f"🏥 {home_key_out} key OUT")
     
-    # Weather impact
     weather_str, impact = get_weather_impact(home_abbr)
     if impact == "severe":
         score_home += 1.0
         if weather_str:
             reasons_home.append(weather_str)
     
-    # Normalize to 10
     total = score_home + score_away
     if total > 0:
         home_final = round((score_home / total) * 10, 1)
@@ -456,7 +423,6 @@ now = datetime.now(eastern)
 st.title("🏈 NFL EDGE FINDER")
 st.caption(f"v{VERSION} | {now.strftime('%I:%M:%S %p ET')} | Real ESPN Data")
 
-# Fetch all data
 news = fetch_nfl_news()
 games, week_info, season_type = fetch_nfl_scoreboard()
 injuries = fetch_nfl_injuries()
@@ -483,7 +449,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Playoff Bracket
 st.markdown("""
 <div style="background: #0f172a; padding: 15px 20px; border-radius: 10px; margin-bottom: 15px;">
     <div style="font-weight: bold; color: #3b82f6; margin-bottom: 10px;">🔵 AFC PLAYOFF BRACKET</div>
@@ -514,7 +479,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Key Dates
 st.markdown("""
 <div style="background: #1e293b; padding: 12px 18px; border-radius: 8px; margin-bottom: 15px;">
     <span style="font-weight: bold; color: #fff;">📅 KEY DATES</span>
@@ -564,7 +528,6 @@ if games:
         tier_label, tier_color = get_signal_tier(score)
         opponent = away_abbr if is_home else home_abbr
         
-        # Parse game date
         game_dt = None
         try:
             game_dt = datetime.fromisoformat(g["game_date"].replace("Z", "+00:00"))
@@ -588,7 +551,6 @@ if games:
         if r["score"] < 5.5:
             continue
         
-        # Status badge
         if r["status_type"] == "STATUS_FINAL":
             status_html = '<span style="background:#374151;color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:0.75em;margin-left:10px;">FINAL</span>'
         elif r["status_type"] == "STATUS_IN_PROGRESS":
@@ -596,16 +558,13 @@ if games:
         else:
             status_html = '<span style="background:#1d4ed8;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75em;margin-left:10px;">📅 PRE</span>'
         
-        # Reasons
         reasons_html = ""
         for reason in r["reasons"]:
             reasons_html += f'<span style="color:#9ca3af;margin-right:8px;">{reason}</span>'
         
-        # Form
         pick_form = TEAM_STATS.get(r["pick"], {}).get("form", "")
         form_html = format_form(pick_form)
         
-        # Kalshi URL
         kalshi_url = build_kalshi_url(r["away_abbr"], r["home_abbr"], r["game_dt"])
         
         st.markdown(f"""
@@ -628,7 +587,6 @@ if games:
         </div>
         """, unsafe_allow_html=True)
     
-    # Show toss-ups
     tossups = [r for r in ml_results if r["score"] < 5.5]
     if tossups:
         with st.expander(f"⚪ TOSS-UPS ({len(tossups)} games)", expanded=False):
@@ -637,7 +595,6 @@ if games:
 else:
     st.info("No games scheduled for today. Showing upcoming week preview.")
     
-    # Show Power Rankings when no games
     st.markdown("### 🏆 POWER RANKINGS")
     sorted_teams = sorted(TEAM_STATS.items(), key=lambda x: x[1].get('rank', 99))
     
@@ -678,7 +635,6 @@ if games:
             home_form = format_form(TEAM_STATS.get(home.get("abbr", ""), {}).get("form", ""))
             away_form = format_form(TEAM_STATS.get(away.get("abbr", ""), {}).get("form", ""))
             
-            # Game time
             game_time = ""
             try:
                 gdt = datetime.fromisoformat(g["game_date"].replace("Z", "+00:00")).astimezone(eastern)
@@ -686,7 +642,6 @@ if games:
             except:
                 pass
             
-            # Status
             if g["status_type"] == "STATUS_FINAL":
                 score_line = f"{away.get('score', 0)} - {home.get('score', 0)}"
                 status_badge = "FINAL"
@@ -708,7 +663,6 @@ if games:
 else:
     st.info("No games today. NFL games typically on Sun/Mon/Thu.")
     
-    # Show division standings as fallback
     st.markdown("### 🏈 DIVISION STANDINGS")
     DIVISIONS = {
         "AFC East": ["BUF", "MIA", "NYJ", "NE"],
@@ -738,7 +692,6 @@ st.divider()
 # ============================================================
 st.subheader("🏥 INJURY REPORT")
 
-# Always show injuries for all 32 teams
 teams_playing = set(TEAM_STATS.keys())
 
 injury_shown = False
