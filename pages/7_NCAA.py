@@ -87,9 +87,11 @@ else:
 POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC", "Big East"}
 HIGH_MAJOR = {"American Athletic", "Mountain West", "Atlantic 10", "West Coast", "Missouri Valley"}
 
-# Team code mapping (common teams - ESPN abbreviation to Kalshi code)
-# Kalshi uses lowercase codes like: duke, unc, kansas, etc.
-TEAM_CODES = {}  # Will be populated dynamically from ESPN data
+def normalize_abbrev(abbrev):
+    """Normalize team abbreviation for consistent matching across data sources"""
+    if not abbrev:
+        return ""
+    return abbrev.upper().strip()
 
 def escape_html(text):
     if not text: return ""
@@ -98,11 +100,14 @@ def escape_html(text):
 def build_kalshi_ncaa_url(team1_code, team2_code):
     """Build Kalshi NCAA basketball URL - format: kxncaambgame-{YY}{MMM}{DD}{team1}{team2}"""
     try:
+        if not team1_code or not team2_code:
+            return None
         date_str = datetime.now(eastern).strftime("%y%b%d").upper()
-        t1 = team1_code.lower().replace(" ", "").replace(".", "").replace("'", "").replace("-", "")[:4].upper()
-        t2 = team2_code.lower().replace(" ", "").replace(".", "").replace("'", "").replace("-", "")[:4].upper()
+        # Clean and truncate to 4 chars max
+        t1 = ''.join(c for c in team1_code.upper() if c.isalpha())[:4]
+        t2 = ''.join(c for c in team2_code.upper() if c.isalpha())[:4]
         if len(t1) < 2 or len(t2) < 2:
-            return None  # Invalid codes
+            return None
         ticker = f"KXNCAAMBGAME-{date_str}{t1}{t2}"
         return f"https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game/{ticker.lower()}"
     except:
@@ -131,17 +136,14 @@ def fetch_espn_ncaa_scores():
             home_team, away_team = None, None
             home_score, away_score = 0, 0
             home_abbrev, away_abbrev = "", ""
-            home_rank, away_rank = 0, 0
             home_record, away_record = "", ""
             home_conf, away_conf = "", ""
             
             for c in competitors:
                 team_data = c.get("team", {})
                 name = team_data.get("displayName", team_data.get("name", ""))
-                abbrev = team_data.get("abbreviation", name[:4].upper())
+                abbrev = normalize_abbrev(team_data.get("abbreviation", name[:4]))
                 score = int(c.get("score", 0) or 0)
-                rank_obj = c.get("curatedRank", {})
-                rank = rank_obj.get("current", 0) if rank_obj else 0
                 records = c.get("records", [])
                 record = records[0].get("summary", "") if records else ""
                 
@@ -154,10 +156,10 @@ def fetch_espn_ncaa_scores():
                 
                 if c.get("homeAway") == "home":
                     home_team, home_score, home_abbrev = name, score, abbrev
-                    home_rank, home_record, home_conf = rank, record, conf
+                    home_record, home_conf = record, conf
                 else:
                     away_team, away_score, away_abbrev = name, score, abbrev
-                    away_rank, away_record, away_conf = rank, record, conf
+                    away_record, away_conf = record, conf
             
             status_obj = event.get("status", {})
             status_type = status_obj.get("type", {}).get("name", "STATUS_SCHEDULED")
@@ -169,7 +171,6 @@ def fetch_espn_ncaa_scores():
                 "away_team": away_team, "home_team": home_team,
                 "away_abbrev": away_abbrev, "home_abbrev": home_abbrev,
                 "away_score": away_score, "home_score": home_score,
-                "away_rank": away_rank, "home_rank": home_rank,
                 "away_record": away_record, "home_record": home_record,
                 "away_conf": away_conf, "home_conf": home_conf,
                 "total": away_score + home_score,
@@ -191,7 +192,7 @@ def fetch_yesterday_teams():
         for event in data.get("events", []):
             comp = event.get("competitions", [{}])[0]
             for c in comp.get("competitors", []):
-                abbrev = c.get("team", {}).get("abbreviation", "")
+                abbrev = normalize_abbrev(c.get("team", {}).get("abbreviation", ""))
                 if abbrev: teams.add(abbrev)
         return teams
     except:
@@ -199,7 +200,7 @@ def fetch_yesterday_teams():
 
 @st.cache_data(ttl=3600)
 def fetch_ap_rankings():
-    """Fetch current AP Top 25 rankings"""
+    """Fetch current AP Top 25 rankings - ONLY returns ranks 1-25"""
     url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/rankings"
     try:
         resp = requests.get(url, timeout=10)
@@ -208,9 +209,11 @@ def fetch_ap_rankings():
         for ranking_group in data.get("rankings", []):
             if ranking_group.get("name") == "AP Top 25":
                 for team in ranking_group.get("ranks", []):
-                    abbrev = team.get("team", {}).get("abbreviation", "")
+                    abbrev = normalize_abbrev(team.get("team", {}).get("abbreviation", ""))
                     rank = team.get("current", 0)
-                    if abbrev: rankings[abbrev] = rank
+                    # ONLY include actual Top 25 teams (rank 1-25)
+                    if abbrev and 1 <= rank <= 25:
+                        rankings[abbrev] = rank
                 break
         return rankings
     except:
@@ -221,7 +224,6 @@ def fetch_team_streaks():
     """Fetch team streaks from ESPN - returns dict of team: streak (positive=wins, negative=losses)"""
     streaks = {}
     try:
-        # Get recent games to calculate streaks for teams playing today
         dates = [(datetime.now(eastern) - timedelta(days=i)).strftime('%Y%m%d') for i in range(1, 14)]
         team_results = {}
         
@@ -240,14 +242,13 @@ def fetch_team_streaks():
                     continue
                 
                 for c in competitors:
-                    abbrev = c.get("team", {}).get("abbreviation", "")
+                    abbrev = normalize_abbrev(c.get("team", {}).get("abbreviation", ""))
                     won = c.get("winner", False)
                     if abbrev:
                         if abbrev not in team_results:
                             team_results[abbrev] = []
                         team_results[abbrev].append({"date": date, "won": won})
         
-        # Calculate current streak for each team
         for team, results in team_results.items():
             results.sort(key=lambda x: x['date'], reverse=True)
             if not results:
@@ -281,53 +282,64 @@ def get_minutes_played(period, clock, status_type):
         mins = int(parts[0])
         secs = int(float(parts[1])) if len(parts) > 1 else 0
         time_left = mins + secs/60
-        # College basketball: 2 x 20 minute halves
         if period == 1: return 20 - time_left
         elif period == 2: return 20 + (20 - time_left)
-        else: return 40 + (period - 2) * 5 + (5 - time_left)  # OT
+        else: return 40 + (period - 2) * 5 + (5 - time_left)
     except:
         return (period - 1) * 20 if period <= 2 else 40 + (period - 2) * 5
 
-def calc_ncaa_score(home_team, away_team, home_abbrev, away_abbrev, 
-                    home_rank, away_rank, home_conf, away_conf,
-                    home_record, away_record, yesterday_teams, rankings):
-    """Calculate edge score for NCAA matchup - proprietary multi-factor model"""
+def calc_ncaa_score(g, yesterday_teams, ap_rankings):
+    """
+    Calculate edge score for NCAA matchup - returns structured data.
+    AP rank is ONLY for informational display (Top 25 teams only).
+    Does NOT return any ordinal ranking - that's assigned after sorting.
+    """
+    home_abbrev = g["home_abbrev"]
+    away_abbrev = g["away_abbrev"]
+    home_team = g["home_team"]
+    away_team = g["away_team"]
+    home_conf = g.get("home_conf", "")
+    away_conf = g.get("away_conf", "")
+    home_record = g.get("home_record", "")
+    away_record = g.get("away_record", "")
+    
     sh, sa = 0, 0  # Score for home/away
     rh, ra = [], []  # Reasons for home/away
+    
+    # Get AP ranks (only 1-25, 0 means unranked)
+    home_ap = ap_rankings.get(home_abbrev, 0)
+    away_ap = ap_rankings.get(away_abbrev, 0)
     
     # 1. HOME COURT ADVANTAGE (1.5x weight - stronger in college)
     sh += 1.5
     rh.append("🏠 Home Court")
     
     # 2. AP RANKING DIFFERENTIAL (1.5x weight)
-    h_rank = home_rank if home_rank > 0 else rankings.get(home_abbrev, 0)
-    a_rank = away_rank if away_rank > 0 else rankings.get(away_abbrev, 0)
-    
-    if h_rank > 0 and a_rank == 0:
+    if home_ap > 0 and away_ap == 0:
         sh += 1.5
-        rh.append(f"📊 #{h_rank} Ranked")
-    elif a_rank > 0 and h_rank == 0:
+        rh.append(f"📊 #{home_ap} Ranked")
+    elif away_ap > 0 and home_ap == 0:
         sa += 1.5
-        ra.append(f"📊 #{a_rank} Ranked")
-    elif h_rank > 0 and a_rank > 0:
-        if a_rank - h_rank >= 10:
+        ra.append(f"📊 #{away_ap} Ranked")
+    elif home_ap > 0 and away_ap > 0:
+        if away_ap - home_ap >= 10:
             sh += 1.0
-            rh.append(f"📊 #{h_rank} vs #{a_rank}")
-        elif h_rank - a_rank >= 10:
+            rh.append(f"📊 #{home_ap} vs #{away_ap}")
+        elif home_ap - away_ap >= 10:
             sa += 1.0
-            ra.append(f"📊 #{a_rank} vs #{h_rank}")
+            ra.append(f"📊 #{away_ap} vs #{home_ap}")
     
     # 3. CONFERENCE STRENGTH (1.2x weight)
     h_tier = get_conference_tier(home_conf)
     a_tier = get_conference_tier(away_conf)
-    if h_tier < a_tier:  # Lower tier = stronger
+    if h_tier < a_tier:
         sh += 0.8
         rh.append("🏆 Power Conf")
     elif a_tier < h_tier:
         sa += 0.8
         ra.append("🏆 Power Conf")
     
-    # 4. BACK-TO-BACK FATIGUE (1.0x weight - rare in college)
+    # 4. BACK-TO-BACK FATIGUE (1.0x weight)
     home_b2b = home_abbrev in yesterday_teams
     away_b2b = away_abbrev in yesterday_teams
     if away_b2b and not home_b2b:
@@ -353,11 +365,11 @@ def calc_ncaa_score(home_team, away_team, home_abbrev, away_abbrev,
     except:
         pass
     
-    # 6. RANKED VS UNRANKED BONUS
-    if h_rank > 0 and h_rank <= 10 and a_rank == 0:
+    # 6. RANKED VS UNRANKED BONUS (Top 10)
+    if home_ap > 0 and home_ap <= 10 and away_ap == 0:
         sh += 1.0
         rh.append("🔝 Top 10")
-    elif a_rank > 0 and a_rank <= 10 and h_rank == 0:
+    elif away_ap > 0 and away_ap <= 10 and home_ap == 0:
         sa += 1.0
         ra.append("🔝 Top 10")
     
@@ -366,10 +378,29 @@ def calc_ncaa_score(home_team, away_team, home_abbrev, away_abbrev,
     hf = round((sh / total) * 10, 1) if total > 0 else 5.0
     af = round((sa / total) * 10, 1) if total > 0 else 5.0
     
+    # Determine pick
     if hf >= af:
-        return home_abbrev, home_team, hf, rh[:4], h_rank
+        return {
+            "pick_abbrev": home_abbrev,
+            "pick_name": home_team,
+            "pick_ap_rank": home_ap,  # AP rank (0 if unranked)
+            "opp_abbrev": away_abbrev,
+            "opp_ap_rank": away_ap,
+            "score": hf,
+            "reasons": rh[:4],
+            "is_home": True
+        }
     else:
-        return away_abbrev, away_team, af, ra[:4], a_rank
+        return {
+            "pick_abbrev": away_abbrev,
+            "pick_name": away_team,
+            "pick_ap_rank": away_ap,
+            "opp_abbrev": home_abbrev,
+            "opp_ap_rank": home_ap,
+            "score": af,
+            "reasons": ra[:4],
+            "is_home": False
+        }
 
 def get_signal_tier(score):
     """STRICT TIER SYSTEM - 9.8+ = STRONG BUY (tracked)"""
@@ -400,11 +431,13 @@ def fetch_cbb_news():
     except:
         return []
 
-# FETCH DATA
+# ============================================================
+# FETCH ALL DATA ONCE
+# ============================================================
 games = fetch_espn_ncaa_scores()
 game_list = sorted(list(games.keys()))
 yesterday_teams = fetch_yesterday_teams()
-rankings = fetch_ap_rankings()
+ap_rankings = fetch_ap_rankings()  # Renamed for clarity - AP only
 news = fetch_cbb_news()
 streaks = fetch_team_streaks()
 now = datetime.now(eastern)
@@ -417,7 +450,35 @@ for gk in games.keys():
     today_teams.add(parts[1])
 yesterday_teams = yesterday_teams.intersection(today_teams)
 
-# Define live_games early for use throughout
+# ============================================================
+# PRECOMPUTE ALL GAME SCORES ONCE
+# ============================================================
+precomputed_scores = {}
+for gk, g in games.items():
+    try:
+        result = calc_ncaa_score(g, yesterday_teams, ap_rankings)
+        result["game_key"] = gk
+        result["away_abbrev"] = g["away_abbrev"]
+        result["home_abbrev"] = g["home_abbrev"]
+        result["status_type"] = g.get("status_type", "STATUS_SCHEDULED")
+        precomputed_scores[gk] = result
+    except:
+        continue
+
+# Sort by score and assign pick_order (ordinal rank for UI)
+sorted_scores = sorted(precomputed_scores.values(), key=lambda x: x["score"], reverse=True)
+for idx, result in enumerate(sorted_scores, start=1):
+    result["pick_order"] = idx
+    precomputed_scores[result["game_key"]]["pick_order"] = idx
+
+# Add tier info
+for gk, result in precomputed_scores.items():
+    tier, color, is_tracked = get_signal_tier(result["score"])
+    result["tier"] = tier
+    result["color"] = color
+    result["is_tracked"] = is_tracked
+
+# Define live_games
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
 
 # SIDEBAR
@@ -441,7 +502,7 @@ with st.sidebar:
     st.markdown("""
 <span style="color:#888;font-size:0.85em">
 • Home Court (1.5x)<br>
-• AP Rankings<br>
+• AP Rankings (Top 25)<br>
 • Conference Tier<br>
 • Win % Differential<br>
 • Back-to-Back<br>
@@ -449,60 +510,36 @@ with st.sidebar:
 </span>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v1.2 NCAA EDGE")
+    st.caption("v1.3 NCAA EDGE")
 
 # TITLE
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("College Basketball Edge Detection | v1.2")
+st.caption("College Basketball Edge Detection | v1.3")
 st.markdown("<p style='color:#888;font-size:0.85em;margin-top:-10px'>Only 🔒 STRONG picks are tracked. All others are informational.</p>", unsafe_allow_html=True)
 
 # ============================================================
 # 💰 TOP PICK OF THE DAY (Hero Section)
 # ============================================================
 def get_top_pick():
-    """Calculate and return the top pick of the day"""
-    if not games:
-        return None
-    top_result = None
-    top_score = 0
-    for gk, g in games.items():
-        try:
-            pick_abbrev, pick_name, score, reasons, pick_rank = calc_ncaa_score(
-                g["home_team"], g["away_team"],
-                g["home_abbrev"], g["away_abbrev"],
-                g["home_rank"], g["away_rank"],
-                g["home_conf"], g["away_conf"],
-                g["home_record"], g["away_record"],
-                yesterday_teams, rankings
-            )
-            if score > top_score and g.get('status_type') == "STATUS_SCHEDULED":
-                top_score = score
-                is_home = pick_abbrev == g["home_abbrev"]
-                opp_abbrev = g["away_abbrev"] if is_home else g["home_abbrev"]
-                top_result = {
-                    "pick_abbrev": pick_abbrev, "pick_name": pick_name,
-                    "pick_rank": pick_rank, "opp_abbrev": opp_abbrev,
-                    "score": score, "reasons": reasons,
-                    "away_abbrev": g["away_abbrev"], "home_abbrev": g["home_abbrev"],
-                    "home_record": g["home_record"], "away_record": g["away_record"]
-                }
-        except:
-            continue
-    return top_result
+    """Get the #1 ranked pick (already sorted by score)"""
+    scheduled = [r for r in sorted_scores if r.get('status_type') == "STATUS_SCHEDULED"]
+    if scheduled and scheduled[0]["score"] >= 8.0:
+        return scheduled[0]
+    return None
 
 top_pick = get_top_pick()
-if top_pick and top_pick["score"] >= 8.0:
-    tier, color, is_tracked = get_signal_tier(top_pick["score"])
+if top_pick:
     kalshi_url = build_kalshi_ncaa_url(top_pick["away_abbrev"], top_pick["home_abbrev"])
     buy_btn = get_buy_button_html(kalshi_url, "🎯 BUY NOW")
-    rank_display = f"#{top_pick['pick_rank']} " if top_pick['pick_rank'] > 0 else ""
-    tracked_icon = "📊" if is_tracked else ""
+    # Show AP rank only if team is in Top 25
+    ap_display = f"#{top_pick['pick_ap_rank']} " if top_pick['pick_ap_rank'] > 0 else ""
+    tracked_icon = "📊" if top_pick["is_tracked"] else ""
     
     st.markdown(f"""
-    <div style="background:linear-gradient(135deg,#0a2a0a,#1a3a1a);padding:20px;border-radius:12px;border:3px solid {color};margin:15px 0;text-align:center">
+    <div style="background:linear-gradient(135deg,#0a2a0a,#1a3a1a);padding:20px;border-radius:12px;border:3px solid {top_pick['color']};margin:15px 0;text-align:center">
         <div style="color:#888;font-size:0.9em;margin-bottom:8px">💰 TOP PICK OF THE DAY</div>
-        <div style="font-size:2.2em;font-weight:bold;color:#fff;margin-bottom:5px">{rank_display}{escape_html(top_pick['pick_abbrev'])} {tracked_icon}</div>
-        <div style="color:{color};font-size:1.4em;font-weight:bold;margin-bottom:10px">{tier} {top_pick['score']}/10</div>
+        <div style="font-size:2.2em;font-weight:bold;color:#fff;margin-bottom:5px">{escape_html(ap_display)}{escape_html(top_pick['pick_abbrev'])} {tracked_icon}</div>
+        <div style="color:{top_pick['color']};font-size:1.4em;font-weight:bold;margin-bottom:10px">{top_pick['tier']} {top_pick['score']}/10</div>
         <div style="color:#aaa;font-size:0.9em;margin-bottom:12px">vs {escape_html(top_pick['opp_abbrev'])} • {' · '.join(top_pick['reasons'][:3])}</div>
         <div>{buy_btn if kalshi_url else '<span style="color:#666">Market loading...</span>'}</div>
     </div>
@@ -513,12 +550,12 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric("Today's Games", len(games))
 with col2:
-    ranked_games = sum(1 for g in games.values() if g['home_rank'] > 0 or g['away_rank'] > 0)
-    st.metric("Ranked Matchups", ranked_games)
+    # Count games with AP Top 25 teams
+    ranked_games = sum(1 for gk in games if ap_rankings.get(games[gk]['home_abbrev'], 0) > 0 or ap_rankings.get(games[gk]['away_abbrev'], 0) > 0)
+    st.metric("Top 25 Matchups", ranked_games)
 with col3:
     st.metric("B2B Teams", len(yesterday_teams))
 with col4:
-    # TODAY'S RECORD - Count STRONG picks that finished
     strong_wins = sum(1 for pos in st.session_state.ncaa_positions 
                       if pos.get('tracked') and games.get(pos.get('game'), {}).get('status_type') == "STATUS_FINAL"
                       and ((pos.get('pick') == pos.get('game', '').split('@')[1] and games.get(pos.get('game'), {}).get('home_score', 0) > games.get(pos.get('game'), {}).get('away_score', 0))
@@ -540,7 +577,7 @@ st.markdown("""
             <span style="color:#ffaa00">🟡 LEAN 5.5+</span>
             <span style="color:#666">⚪ PASS &lt;5.5</span>
         </div>
-        <span style="color:#888;font-size:0.8em">📊 = Tracked in stats</span>
+        <span style="color:#888;font-size:0.8em">📊 = Tracked in stats | # = Pick Order</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -548,7 +585,6 @@ st.markdown("""
 # ⏰ NEXT TIP-OFF COUNTDOWN
 scheduled_games = [g for g in games.values() if g.get('status_type') == "STATUS_SCHEDULED"]
 if scheduled_games and not live_games:
-    # Show countdown message
     st.markdown(f"""
     <div style="background:#1a1a2e;padding:10px 15px;border-radius:6px;text-align:center;margin-bottom:10px;border-left:3px solid #38bdf8">
         <span style="color:#38bdf8;font-weight:bold">⏰ {len(scheduled_games)} games scheduled</span>
@@ -577,39 +613,51 @@ if news:
             </div>""", unsafe_allow_html=True)
     st.divider()
 
-# 🔥 MARQUEE MATCHUPS (Ranked vs Ranked)
-marquee = [g for g in games.values() if g['home_rank'] > 0 and g['away_rank'] > 0]
+# 🔥 MARQUEE MATCHUPS (Top 25 vs Top 25)
+marquee = []
+for gk, g in games.items():
+    home_ap = ap_rankings.get(g['home_abbrev'], 0)
+    away_ap = ap_rankings.get(g['away_abbrev'], 0)
+    if home_ap > 0 and away_ap > 0:
+        marquee.append({**g, "home_ap": home_ap, "away_ap": away_ap, "game_key": gk})
+
 if marquee:
     st.subheader("🔥 MARQUEE MATCHUPS")
-    st.caption("Ranked vs Ranked — Must-watch games")
-    for g in sorted(marquee, key=lambda x: x['home_rank'] + x['away_rank']):
-        kalshi_url = build_kalshi_ncaa_url(g['away_abbrev'], g['home_abbrev'])
+    st.caption("Top 25 vs Top 25 — Must-watch games")
+    for m in sorted(marquee, key=lambda x: x['home_ap'] + x['away_ap']):
+        kalshi_url = build_kalshi_ncaa_url(m['away_abbrev'], m['home_abbrev'])
         st.markdown(f"""<div style="background:linear-gradient(135deg,#1a2a1a,#0a1a0a);padding:12px;border-radius:8px;border:2px solid #00ff00;margin-bottom:8px">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
                 <div>
-                    <span style="color:#ffaa00;font-weight:bold">#{g['away_rank']}</span> <b style="color:#fff">{escape_html(g['away_abbrev'])}</b>
+                    <span style="color:#ffaa00;font-weight:bold">#{m['away_ap']}</span> <b style="color:#fff">{escape_html(m['away_abbrev'])}</b>
                     <span style="color:#888"> @ </span>
-                    <span style="color:#ffaa00;font-weight:bold">#{g['home_rank']}</span> <b style="color:#fff">{escape_html(g['home_abbrev'])}</b>
+                    <span style="color:#ffaa00;font-weight:bold">#{m['home_ap']}</span> <b style="color:#fff">{escape_html(m['home_abbrev'])}</b>
                 </div>
                 <a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:4px 12px;border-radius:4px;font-size:0.8em;font-weight:bold;text-decoration:none">BUY</a>
             </div>
-            <div style="color:#888;font-size:0.8em;margin-top:6px">🏆 {escape_html(g.get('away_record', ''))} vs {escape_html(g.get('home_record', ''))}</div>
+            <div style="color:#888;font-size:0.8em;margin-top:6px">🏆 {escape_html(m.get('away_record', ''))} vs {escape_html(m.get('home_record', ''))}</div>
         </div>""", unsafe_allow_html=True)
     st.divider()
 
-# ⚠️ UPSET WATCH (Unranked home vs Ranked road)
-upset_watch = [g for g in games.values() if g['away_rank'] > 0 and g['home_rank'] == 0]
+# ⚠️ UPSET WATCH (Unranked home vs Top 25 road)
+upset_watch = []
+for gk, g in games.items():
+    away_ap = ap_rankings.get(g['away_abbrev'], 0)
+    home_ap = ap_rankings.get(g['home_abbrev'], 0)
+    if away_ap > 0 and home_ap == 0:
+        upset_watch.append({**g, "away_ap": away_ap, "game_key": gk})
+
 if upset_watch:
     st.subheader("⚠️ UPSET WATCH")
-    st.caption("Ranked teams on the road — Upset potential")
-    for g in sorted(upset_watch, key=lambda x: x['away_rank']):
-        kalshi_url = build_kalshi_ncaa_url(g['away_abbrev'], g['home_abbrev'])
+    st.caption("Top 25 teams on the road — Upset potential")
+    for u in sorted(upset_watch, key=lambda x: x['away_ap']):
+        kalshi_url = build_kalshi_ncaa_url(u['away_abbrev'], u['home_abbrev'])
         st.markdown(f"""<div style="background:linear-gradient(135deg,#2a1a1a,#1a0a0a);padding:10px 12px;border-radius:6px;border-left:3px solid #ff6666;margin-bottom:6px">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
                 <div>
-                    <span style="color:#ff6666;font-weight:bold">#{g['away_rank']}</span> <b style="color:#fff">{escape_html(g['away_abbrev'])}</b>
+                    <span style="color:#ff6666;font-weight:bold">#{u['away_ap']}</span> <b style="color:#fff">{escape_html(u['away_abbrev'])}</b>
                     <span style="color:#888"> @ </span>
-                    <b style="color:#fff">{escape_html(g['home_abbrev'])}</b> <span style="color:#ff6666;font-size:0.8em">🏠</span>
+                    <b style="color:#fff">{escape_html(u['home_abbrev'])}</b> <span style="color:#ff6666;font-size:0.8em">🏠</span>
                 </div>
                 <a href="{kalshi_url}" target="_blank" style="background:#ff6666;color:#000;padding:4px 10px;border-radius:4px;font-size:0.75em;font-weight:bold;text-decoration:none">WATCH</a>
             </div>
@@ -634,7 +682,6 @@ if live_games:
         pace = round(g['total'] / mins, 2) if mins > 0 else 0
         proj = round(pace * 40) if mins > 0 else 0
         
-        # OT check
         if half >= 3:
             state, clr = "OT", "#ff0000"
         elif half == 2 and diff <= 8:
@@ -642,9 +689,11 @@ if live_games:
         else:
             state, clr = "LIVE", "#44ff44"
         
-        # Format rankings
-        away_display = f"#{g['away_rank']} " if g['away_rank'] > 0 else ""
-        home_display = f"#{g['home_rank']} " if g['home_rank'] > 0 else ""
+        # AP rank display
+        away_ap = ap_rankings.get(g['away_abbrev'], 0)
+        home_ap = ap_rankings.get(g['home_abbrev'], 0)
+        away_display = f"#{away_ap} " if away_ap > 0 else ""
+        home_display = f"#{home_ap} " if home_ap > 0 else ""
         half_label = "H1" if half == 1 else "H2" if half == 2 else f"OT{half-2}"
         
         st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#0a0a1e);padding:12px;border-radius:10px;border:2px solid {clr};margin-bottom:8px">
@@ -654,47 +703,22 @@ if live_games:
             </div></div>""", unsafe_allow_html=True)
     st.divider()
 
-# ML PICKS - COMPACT DESIGN
+# ============================================================
+# ML PICKS - USING PRECOMPUTED & SORTED SCORES
+# ============================================================
 st.subheader("🎯 ML PICKS")
 
-if games:
-    ml_results = []
-    for gk, g in games.items():
-        try:
-            pick_abbrev, pick_name, score, reasons, pick_rank = calc_ncaa_score(
-                g["home_team"], g["away_team"],
-                g["home_abbrev"], g["away_abbrev"],
-                g["home_rank"], g["away_rank"],
-                g["home_conf"], g["away_conf"],
-                g["home_record"], g["away_record"],
-                yesterday_teams, rankings
-            )
-            tier, color, is_tracked = get_signal_tier(score)
-            is_home = pick_abbrev == g["home_abbrev"]
-            opp_abbrev = g["away_abbrev"] if is_home else g["home_abbrev"]
-            opp_rank = g["away_rank"] if is_home else g["home_rank"]
-            
-            ml_results.append({
-                "pick_abbrev": pick_abbrev, "pick_name": pick_name,
-                "opp_abbrev": opp_abbrev, "pick_rank": pick_rank, "opp_rank": opp_rank,
-                "score": score, "color": color, "tier": tier, "reasons": reasons,
-                "is_home": is_home, "away_abbrev": g["away_abbrev"], "home_abbrev": g["home_abbrev"],
-                "is_tracked": is_tracked, "game_key": gk
-            })
-        except Exception as e:
-            continue
-    
-    ml_results.sort(key=lambda x: x["score"], reverse=True)
-    
-    for r in ml_results:
+if sorted_scores:
+    for r in sorted_scores:
         if r["score"] < 5.5:
             continue
         
+        gk = r["game_key"]
         kalshi_url = build_kalshi_ncaa_url(r["away_abbrev"], r["home_abbrev"])
         reasons_safe = [escape_html(reason) for reason in r["reasons"][:3]]
         reasons_str = " · ".join(reasons_safe)
         
-        g = games.get(r["game_key"], {})
+        g = games.get(gk, {})
         if g.get('status_type') == "STATUS_FINAL":
             status_badge, status_color = "FINAL", "#888"
         elif g.get('period', 0) > 0:
@@ -707,16 +731,20 @@ if games:
         tracked_badge = ' <span style="background:#00ff00;color:#000;padding:1px 4px;border-radius:3px;font-size:0.65em">📊</span>' if r["is_tracked"] else ""
         border_width = "3px" if r["is_tracked"] else "2px"
         
-        pick_display = f"#{r['pick_rank']} " if r['pick_rank'] > 0 else ""
-        opp_display = f"#{r['opp_rank']} " if r['opp_rank'] > 0 else ""
+        # pick_order = ordinal rank (1,2,3...) based on score sorting
+        # pick_ap_rank = AP Top 25 rank (only shown if 1-25)
+        order_display = f"#{r['pick_order']}"  # Always show pick order
+        ap_badge = f" <span style='color:#ffaa00;font-size:0.75em'>AP{r['pick_ap_rank']}</span>" if r['pick_ap_rank'] > 0 else ""
+        opp_ap_badge = f" <span style='color:#888;font-size:0.7em'>(AP{r['opp_ap_rank']})</span>" if r['opp_ap_rank'] > 0 else ""
         
         buy_btn = get_buy_button_html(kalshi_url)
         
         st.markdown(f"""<div style="background:#0f172a;padding:8px 12px;border-radius:6px;border-left:{border_width} solid {r['color']};margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
 <span style="color:{r['color']};font-weight:bold;font-size:0.85em">{escape_html(r['tier'])}</span>
-<b style="color:#fff">{escape_html(pick_display)}{escape_html(r['pick_abbrev'])}</b>
-<span style="color:#555">v {escape_html(opp_display)}{escape_html(r['opp_abbrev'])}</span>
+<span style="color:#666;font-size:0.8em">{order_display}</span>
+<b style="color:#fff">{escape_html(r['pick_abbrev'])}</b>{ap_badge}
+<span style="color:#555">v {escape_html(r['opp_abbrev'])}{opp_ap_badge}</span>
 <span style="color:#38bdf8;font-weight:bold">{r['score']}</span>{tracked_badge}
 <span style="color:{status_color};font-size:0.75em">{status_badge}</span>
 </div>
@@ -725,7 +753,7 @@ if games:
 <div style="color:#666;font-size:0.75em;margin:-2px 0 6px 14px">{reasons_str}</div>""", unsafe_allow_html=True)
     
     # Add STRONG picks to tracker
-    scheduled_strong = [r for r in ml_results if r["is_tracked"] and games.get(r["game_key"], {}).get('status_type') == "STATUS_SCHEDULED"]
+    scheduled_strong = [r for r in sorted_scores if r["is_tracked"] and r.get('status_type') == "STATUS_SCHEDULED"]
     if scheduled_strong:
         if st.button(f"➕ Add {len(scheduled_strong)} STRONG Picks to Tracker", use_container_width=True, key="add_ncaa_picks"):
             added = 0
@@ -745,7 +773,7 @@ else:
 
 st.divider()
 
-# 🔥 HOT STREAKS (Teams on 5+ win streaks playing today)
+# 🔥 HOT STREAKS
 hot_teams = []
 cold_teams = []
 for gk in games.keys():
@@ -759,7 +787,7 @@ for gk in games.keys():
 
 if hot_teams:
     st.subheader("🔥 HOT STREAKS")
-    st.caption("Teams on 5+ win streaks playing today — Ride the momentum")
+    st.caption("Teams on 5+ win streaks playing today")
     hot_cols = st.columns(min(len(hot_teams), 4))
     for i, t in enumerate(sorted(hot_teams, key=lambda x: x['streak'], reverse=True)[:4]):
         with hot_cols[i]:
@@ -769,7 +797,7 @@ if hot_teams:
             </div>""", unsafe_allow_html=True)
     st.divider()
 
-# ❄️ FADE ALERT (Teams on 4+ loss streaks playing today)
+# ❄️ FADE ALERT
 if cold_teams:
     st.subheader("❄️ FADE ALERT")
     st.caption("Teams on 4+ loss streaks — Consider fading")
@@ -786,8 +814,8 @@ if cold_teams:
 st.subheader("📊 AP TOP 25")
 st.caption("Current rankings from AP Poll")
 
-if rankings:
-    sorted_rankings = sorted(rankings.items(), key=lambda x: x[1])
+if ap_rankings:
+    sorted_rankings = sorted(ap_rankings.items(), key=lambda x: x[1])
     
     rc1, rc2 = st.columns(2)
     for i, (abbrev, rank) in enumerate(sorted_rankings[:25]):
@@ -888,8 +916,10 @@ st.caption(f"{len(games)} games today")
 
 if games:
     for gk, g in sorted(games.items()):
-        away_display = f"#{g['away_rank']} " if g['away_rank'] > 0 else ""
-        home_display = f"#{g['home_rank']} " if g['home_rank'] > 0 else ""
+        away_ap = ap_rankings.get(g['away_abbrev'], 0)
+        home_ap = ap_rankings.get(g['home_abbrev'], 0)
+        away_display = f"#{away_ap} " if away_ap > 0 else ""
+        home_display = f"#{home_ap} " if home_ap > 0 else ""
         
         if g['status_type'] == "STATUS_FINAL":
             winner = g['home_abbrev'] if g['home_score'] > g['away_score'] else g['away_abbrev']
@@ -929,22 +959,20 @@ with st.expander("📖 HOW TO USE THIS APP", expanded=False):
 
 ---
 
-### 🏀 **Key NCAA Factors**
+### 🏀 **Understanding the Numbers**
 
-- **Home Court** — Bigger impact in college (student sections!)
-- **AP Rankings** — Ranked vs unranked matters
-- **Conference Strength** — Power 5 vs mid-major
-- **Win %** — Record differential
-- **Back-to-Back** — Rare but impactful
+- **#1, #2, #3...** = Pick order (ranked by edge score)
+- **AP5, AP12...** = AP Top 25 ranking (only shown for ranked teams)
 
 ---
 
-### ⚠️ **College Basketball Differences**
+### 🏀 **Key NCAA Factors**
 
-1. **More variance** — Upsets happen more often
-2. **Home court stronger** — 1.5x vs 1.0x in NBA
-3. **Less data** — No advanced stats
-4. **350+ teams** — Kalshi covers major matchups
+- **Home Court** — Bigger impact in college (student sections!)
+- **AP Rankings** — Top 25 teams only
+- **Conference Strength** — Power 5 vs mid-major
+- **Win %** — Record differential
+- **Back-to-Back** — Rare but impactful
 
 ---
 
@@ -954,8 +982,8 @@ Click **BUY** buttons to go directly to Kalshi markets.
 
 ---
 
-*Built for Kalshi. v1.2*
+*Built for Kalshi. v1.3*
 """)
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v1.2 NCAA EDGE")
+st.caption("⚠️ Educational only. Not financial advice. v1.3 NCAA EDGE")
