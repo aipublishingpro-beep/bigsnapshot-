@@ -837,8 +837,35 @@ for gk, g in games.items():
 # Filter by visibility gate, then sort
 visible_picks = [p for p in precomputed.values() if p.get("visible", False)]
 sorted_picks = sorted(visible_picks, key=lambda x: x["market_score"], reverse=True)
-conviction_picks = [p for p in sorted_picks if p["is_conviction"]]
-near_picks = [p for p in sorted_picks if p.get("is_near", False)]
+
+# RANK-BASED TIERS (forced scarcity)
+# Top 3 = CONVICTION (if score ≥9.0)
+# Next 5 = NEAR (if score ≥8.5)
+# Rest = just visible
+conviction_picks = []
+near_picks = []
+other_picks = []
+
+for i, p in enumerate(sorted_picks):
+    if i < 3 and p["market_score"] >= 9.0 and p["engines_agree"]:
+        p["final_tier"] = "CONVICTION"
+        p["display_tier"] = "✓ CONVICTION"
+        p["final_color"] = "#00cc66"
+        p["is_conviction"] = True
+        p["is_near"] = False
+        conviction_picks.append(p)
+    elif i < 8 and p["market_score"] >= 8.5 and p["engines_agree"]:
+        p["final_tier"] = "NEAR"
+        p["display_tier"] = "◐ NEAR"
+        p["final_color"] = "#888888"
+        p["is_conviction"] = False
+        p["is_near"] = True
+        near_picks.append(p)
+    else:
+        p["is_conviction"] = False
+        p["is_near"] = False
+        other_picks.append(p)
+
 mixed_picks = [p for p in sorted_picks if p.get("is_mixed", False)]
 
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
@@ -849,14 +876,14 @@ live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_ty
 with st.sidebar:
     st.header("📖 SIGNAL TIERS")
     st.markdown("""
-✓ **CONVICTION** → Elite alignment
-<span style="color:#666;font-size:0.8em">Score ≥9.7 OR (≥9.3 + edge)</span>
+✓ **CONVICTION** → Top 3 signals
+<span style="color:#666;font-size:0.8em">Rank #1-3 • Score ≥9.0 • Agree</span>
 
-◐ **NEAR** → High score, agreement
-<span style="color:#666;font-size:0.8em">Score ≥9.3 • Agreement</span>
+◐ **NEAR** → Next best
+<span style="color:#666;font-size:0.8em">Rank #4-8 • Score ≥8.5 • Agree</span>
 
-⚠ **MIXED** → Engines disagree
-<span style="color:#666;font-size:0.8em">Score ≥8.8 • Conflict</span>
+○ **OTHER** → Visible signals
+<span style="color:#666;font-size:0.8em">Pass gate but lower rank</span>
 """, unsafe_allow_html=True)
     st.divider()
     st.markdown("""
@@ -869,13 +896,13 @@ Context over recommendation.
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v2.8 ELITE-PATH")
+    st.caption("v2.9 RANK-CAPPED")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v2.8")
+st.caption("Signal Analysis | v2.9")
 
 st.markdown("""
 <div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
@@ -915,7 +942,7 @@ with col2:
 with col3:
     st.metric("✓ Conviction", len(conviction_picks))
 with col4:
-    st.metric("⚠ Mixed", len(mixed_picks))
+    st.metric("◐ Near", len(near_picks))
 
 st.divider()
 
@@ -1103,4 +1130,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v2.8 ELITE-PATH • Elite score carries conviction")
+st.caption("v2.9 RANK-CAPPED • Top 3 conviction max")
