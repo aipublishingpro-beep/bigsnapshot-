@@ -889,24 +889,24 @@ with st.sidebar:
     st.markdown("""
 <div style="background:#111;padding:10px;border-radius:6px;border:1px solid #222">
 <span style="color:#666;font-size:0.8em">
-Transparency with discipline.<br>
-Only meaningful signals shown.<br>
-Context over recommendation.
+Max 3 conviction picks.<br>
+Max 5 near picks.<br>
+Quality over quantity.
 </span>
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v2.9 RANK-CAPPED")
+    st.caption("v3.0 FOCUSED")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Signal Analysis | v2.9")
+st.caption("Signal Analysis | v3.0")
 
 st.markdown("""
 <div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
-    <span style="color:#666;font-size:0.85em">Transparency with discipline. Only games with meaningful signal are displayed.</span>
+    <span style="color:#666;font-size:0.85em">Quality over quantity. Only the top 3 conviction + top 5 near signals shown.</span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -949,13 +949,15 @@ st.divider()
 # ============================================================
 # ALL VISIBLE SIGNALS
 # ============================================================
-st.subheader("📊 SIGNAL ANALYSIS")
+st.subheader("📊 TOP SIGNALS")
 
-scheduled_visible = [p for p in sorted_picks if p.get('status_type') == "STATUS_SCHEDULED"]
+# Only show conviction + near picks (max 8 total)
+display_picks = conviction_picks + near_picks
+scheduled_display = [p for p in display_picks if p.get('status_type') == "STATUS_SCHEDULED"]
 
-if scheduled_visible:
+if scheduled_display:
     # Skip top conviction (already displayed above)
-    remaining = scheduled_visible[1:] if scheduled_conviction else scheduled_visible
+    remaining = scheduled_display[1:] if conviction_picks else scheduled_display
     
     for p in remaining:
         gk = p["game_key"]
@@ -990,13 +992,13 @@ if scheduled_visible:
 <div style="color:#555;font-size:0.75em;margin-top:8px">{reasons_str} • Edge: {p['analyzer_edge_display']} • {p['analyzer_conf']}</div>
 </div>""", unsafe_allow_html=True)
     
-    st.caption(f"{len(scheduled_visible)} game{'s' if len(scheduled_visible) != 1 else ''} with signal")
+    st.caption(f"{len(scheduled_display)} signal{'s' if len(scheduled_display) != 1 else ''} today")
     
     # Add to watchlist button for conviction games
-    if scheduled_conviction:
-        if st.button(f"📋 Watch {len(scheduled_conviction)} Conviction Game{'s' if len(scheduled_conviction) != 1 else ''}", use_container_width=True, key="add_watch"):
+    if conviction_picks:
+        if st.button(f"📋 Watch {len(conviction_picks)} Conviction Game{'s' if len(conviction_picks) != 1 else ''}", use_container_width=True, key="add_watch"):
             added = 0
-            for p in scheduled_conviction:
+            for p in conviction_picks:
                 if not any(pos.get('game') == p['game_key'] and pos.get('pick') == p['market_pick'] for pos in st.session_state.ncaa_positions):
                     st.session_state.ncaa_positions.append({
                         "game": p['game_key'], "type": "signal",
@@ -1011,8 +1013,8 @@ else:
     st.markdown("""
     <div style="background:#0a0a14;padding:30px;border-radius:12px;text-align:center;border:1px solid #1a1a1a">
         <div style="color:#333;font-size:1.3em;margin-bottom:10px">📭</div>
-        <div style="color:#888;font-size:1em;margin-bottom:8px">No games passed the visibility gate today</div>
-        <div style="color:#444;font-size:0.8em">All games below signal threshold (score &lt;8.3, edge &lt;1.5, no agreement).</div>
+        <div style="color:#888;font-size:1em;margin-bottom:8px">No games passed the signal threshold today</div>
+        <div style="color:#444;font-size:0.8em">All games below minimum requirements.</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1130,4 +1132,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v2.9 RANK-CAPPED • Top 3 conviction max")
+st.caption("v3.0 FOCUSED • Top 3 conviction + top 5 near only")
