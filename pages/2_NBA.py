@@ -1,4 +1,13 @@
 import streamlit as st
+
+st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
+
+# ============================================================
+# 🔐 AUTH CHECK — MUST BE FIRST AFTER PAGE CONFIG
+# ============================================================
+from auth import require_auth
+require_auth()
+
 import requests
 from datetime import datetime, timedelta
 import pytz
@@ -6,31 +15,8 @@ import json
 import os
 import time
 from styles import apply_styles, buy_button
-import extra_streamlit_components as stx
-
-st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
 
 apply_styles()
-
-# ============================================================
-# COOKIE MANAGER FOR PERSISTENT LOGIN
-# ============================================================
-cookie_manager = stx.CookieManager()
-
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'user_type' not in st.session_state:
-    st.session_state.user_type = None
-
-auth_cookie = cookie_manager.get("bigsnapshot_auth")
-if auth_cookie and not st.session_state.authenticated:
-    st.session_state.authenticated = True
-    st.session_state.user_type = auth_cookie
-
-if not st.session_state.authenticated:
-    st.warning("⚠️ Please log in from the Home page first.")
-    st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
-    st.stop()
 
 # ========== GOOGLE ANALYTICS G4 ==========
 st.markdown("""
@@ -287,7 +273,6 @@ def fetch_espn_injuries():
 
 @st.cache_data(ttl=1800)
 def fetch_nba_news():
-    """Fetch NBA news from ESPN"""
     url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news?limit=5"
     try:
         resp = requests.get(url, timeout=10)
@@ -336,7 +321,6 @@ def fetch_team_streak(team_name):
 
 @st.cache_data(ttl=3600)
 def fetch_all_team_streaks():
-    """Fetch streaks for all teams at once"""
     streaks = {}
     for team in KALSHI_CODES.keys():
         streaks[team] = fetch_team_streak(team)
@@ -467,7 +451,6 @@ def calc_ml_score(home_team, away_team, yesterday_teams, injuries, last_5):
     else: return away_team, af, ra[:4], home_out, away_out, home_net, away_net
 
 def get_signal_tier(score):
-    """STRICT TIER SYSTEM - Only 10.0 = STRONG BUY (tracked)"""
     if score >= 10.0:
         return "🔒 STRONG", "#00ff00", True
     elif score >= 8.0:
@@ -494,7 +477,6 @@ for gk in games.keys():
     today_teams.add(parts[1])
 yesterday_teams = yesterday_teams.intersection(today_teams)
 
-# Define live_games early for use throughout
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
 
 # SIDEBAR
@@ -528,7 +510,6 @@ st.markdown("<p style='color:#888;font-size:0.85em;margin-top:-10px'>Only 🔒 S
 # 💰 TOP PICK OF THE DAY (Hero Section)
 # ============================================================
 def get_top_pick():
-    """Calculate and return the top pick of the day"""
     if not games:
         return None
     top_result = None
@@ -577,7 +558,6 @@ with col2:
 with col3:
     st.metric("Live Now", len(live_games))
 with col4:
-    # TODAY'S RECORD - Count STRONG picks that finished
     strong_wins = sum(1 for pos in st.session_state.positions 
                       if pos.get('tracked') and games.get(pos.get('game'), {}).get('status_type') == "STATUS_FINAL"
                       and ((pos.get('pick') == pos.get('game', '').split('@')[1] and games.get(pos.get('game'), {}).get('home_score', 0) > games.get(pos.get('game'), {}).get('away_score', 0))
@@ -726,7 +706,6 @@ if games:
 </div>
 <div style="color:#666;font-size:0.75em;margin:-2px 0 6px 14px">{reasons_str}</div>""", unsafe_allow_html=True)
     
-    # Only add STRONG BUY (tracked) picks to tracker
     scheduled_strong = [r for r in ml_results if r["is_tracked"] and games.get(r["game_key"], {}).get('status_type') == "STATUS_SCHEDULED"]
     if scheduled_strong:
         if st.button(f"➕ Add {len(scheduled_strong)} STRONG Picks to Tracker", use_container_width=True, key="add_ml_picks"):
@@ -744,7 +723,7 @@ else:
 
 st.divider()
 
-# 🔥 HOT STREAKS (Teams on 4+ win streaks playing today)
+# 🔥 HOT STREAKS
 hot_teams = []
 cold_teams = []
 for team in today_teams:
@@ -767,7 +746,7 @@ if hot_teams:
             </div>""", unsafe_allow_html=True)
     st.divider()
 
-# ❄️ FADE ALERT (Teams on 4+ loss streaks playing today)
+# ❄️ FADE ALERT
 if cold_teams:
     st.subheader("❄️ FADE ALERT")
     st.caption("Teams on 4+ loss streaks — Consider fading")
