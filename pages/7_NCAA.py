@@ -1017,23 +1017,33 @@ if live_games:
             proj = round(pace * 40)
             pace_display = f"→ {proj}"
         else:
-            pace_display = "—"
+            pace_display = ""
         
-        if half >= 3: state, clr = "OT", "#ff0000"
-        elif half == 2 and diff <= 8: state, clr = "CLOSE", "#ffaa00"
-        else: state, clr = "LIVE", "#44ff44"
+        if half >= 3: clr = "#ff0000"
+        elif half == 2 and diff <= 8: clr = "#ffaa00"
+        else: clr = "#00ff00"
         
-        away_ap = ap_rankings.get(g['away_abbrev'], 0)
-        home_ap = ap_rankings.get(g['home_abbrev'], 0)
-        away_display = f"#{away_ap} " if away_ap > 0 else ""
-        home_display = f"#{home_ap} " if home_ap > 0 else ""
         half_label = "H1" if half == 1 else "H2" if half == 2 else f"OT{half-2}"
         
-        st.markdown(f"""<div style="background:#0a0a14;padding:12px;border-radius:8px;border:1px solid {clr};margin-bottom:8px">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-                <b style="color:#fff">{escape_html(away_display)}{escape_html(g['away_abbrev'])} {g['away_score']} @ {escape_html(home_display)}{escape_html(g['home_abbrev'])} {g['home_score']}</b>
-                <div><span style="color:{clr};font-weight:bold">{half_label} {escape_html(clock)}</span> <span style="color:#444">{pace_display}</span></div>
-            </div></div>""", unsafe_allow_html=True)
+        # Build Kalshi URL for live game
+        kalshi_url = build_kalshi_ncaa_url(g['away_abbrev'], g['home_abbrev'])
+        
+        # Determine which team to show BUY for (home team leading or pick from precomputed)
+        pick_data = precomputed.get(gk, {})
+        buy_team = pick_data.get('market_pick', g['home_abbrev'])
+        
+        st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {clr};margin-bottom:10px">
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+<div style="display:flex;align-items:center;gap:12px">
+<b style="color:#fff;font-size:1.1em">{escape_html(g['away_abbrev'])} {g['away_score']} @ {escape_html(g['home_abbrev'])} {g['home_score']}</b>
+</div>
+<div style="display:flex;align-items:center;gap:12px">
+<span style="color:{clr};font-weight:bold">{half_label} {escape_html(clock)}</span>
+<span style="color:#666">{pace_display}</span>
+<a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY</a>
+</div>
+</div>
+</div>""", unsafe_allow_html=True)
     st.divider()
 
 # ============================================================
