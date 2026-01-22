@@ -679,7 +679,7 @@ def check_engine_agreement(market, analyzer):
     return True, "STRONG"
 
 # ============================================================
-# FINAL SIGNAL LOGIC
+# FINAL SIGNAL LOGIC (v2.3 TUNED)
 # ============================================================
 def get_final_signal(market, analyzer):
     score = market["score"]
@@ -689,7 +689,7 @@ def get_final_signal(market, analyzer):
     
     agrees, agreement_strength = check_engine_agreement(market, analyzer)
     
-    # STRONG+ (ultra-rare)
+    # STRONG+ (ultra-rare) — UNCHANGED
     if (score >= 9.9 and 
         conf == "CONFIDENT" and 
         abs(signed_edge) >= 3.0 and 
@@ -707,12 +707,12 @@ def get_final_signal(market, analyzer):
             "agreement_strength": agreement_strength
         }
     
-    # STRONG
-    if (score >= 9.5 and 
-        conf != "NO EDGE" and 
+    # STRONG (v2.3 TUNED — slightly relaxed for controlled frequency)
+    if (score >= 9.3 and 
+        conf in ["CONFIDENT", "SLIGHT"] and 
         agrees and 
-        agreement_strength in ["STRONG", "SOFT"] and
-        pick_fatigue < 4.0):
+        agreement_strength != "WEAK" and
+        pick_fatigue < 5.0):
         return {
             "final_tier": "STRONG",
             "display_tier": "🔒 STRONG",
@@ -833,13 +833,13 @@ No play is a valid signal.
 </div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v2.2 HARDENED")
+    st.caption("v2.3 TUNED")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Conviction-Grade Only | v2.2")
+st.caption("Conviction-Grade Only | v2.3")
 
 st.markdown("""
 <div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
@@ -940,8 +940,8 @@ else:
     st.markdown("""
     <div style="background:#0a0a14;padding:30px;border-radius:12px;text-align:center;border:1px solid #1a1a1a">
         <div style="color:#333;font-size:1.3em;margin-bottom:10px">📭</div>
-        <div style="color:#888;font-size:1em;margin-bottom:8px">No conviction-grade plays today</div>
-        <div style="color:#444;font-size:0.8em">Both engines must align with high confidence.</div>
+        <div style="color:#888;font-size:1em;margin-bottom:8px">No conviction-grade plays met today's threshold</div>
+        <div style="color:#444;font-size:0.8em">Market alignment is insufficient — standing down is correct behavior.</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1097,4 +1097,4 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-st.caption("v2.2 HARDENED • Accuracy over frequency")
+st.caption("v2.3 TUNED • Accuracy over frequency")
