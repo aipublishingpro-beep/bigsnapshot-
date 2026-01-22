@@ -1,17 +1,18 @@
 import streamlit as st
 from streamlit_js_eval import streamlit_js_eval
 
+st.set_page_config(page_title="BigSnapshot", page_icon="🎯", layout="wide")
+
 # ============================================================
-# AUTH BOOTSTRAP - MUST BE FIRST (BEFORE ANY UI)
+# 🔐 AUTH BOOTSTRAP — READ FROM LOCALSTORAGE ON EVERY LOAD
 # ============================================================
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.user_type = None
 
-# Single-pass localStorage read - NO backup checks, NO flags
 stored_auth = streamlit_js_eval(
     js_expressions="localStorage.getItem('bigsnapshot_auth')",
-    key="auth_bootstrap"
+    key="auth_bootstrap_home"
 )
 
 if stored_auth and stored_auth not in ["", "null", None]:
@@ -19,479 +20,68 @@ if stored_auth and stored_auth not in ["", "null", None]:
     st.session_state.user_type = stored_auth
 
 # ============================================================
-# NOW SAFE TO SET PAGE CONFIG AND STYLES
+# 🔐 PASSWORD CONFIG — UPDATE YOUR PASSWORD HERE
 # ============================================================
-st.set_page_config(
-    page_title="BigSnapshot | Prediction Market Edge Finder",
-    page_icon="📊",
-    layout="wide"
-)
-
-from styles import apply_styles
-apply_styles()
+VALID_PASSWORD = "your_password_here"  # <-- CHANGE THIS
 
 # ============================================================
-# GA4 TRACKING
-# ============================================================
-st.markdown("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
-<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# MOBILE CSS
+# STYLES
 # ============================================================
 st.markdown("""
 <style>
-@media (max-width: 768px) {
-    .stColumns > div { flex: 1 1 100% !important; min-width: 100% !important; }
-    [data-testid="stMetricValue"] { font-size: 1.2rem !important; }
-    [data-testid="stMetricLabel"] { font-size: 0.8rem !important; }
-    h1 { font-size: 1.5rem !important; }
-    h2 { font-size: 1.2rem !important; }
-    h3 { font-size: 1rem !important; }
-    button { padding: 8px 12px !important; font-size: 0.85em !important; }
-}
+    .main-header { font-size: 2.5em; font-weight: bold; color: #fff; text-align: center; margin-bottom: 10px; }
+    .sub-header { color: #888; text-align: center; margin-bottom: 30px; }
+    .tool-card { background: linear-gradient(135deg, #0f172a, #1e293b); padding: 20px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 15px; }
+    .tool-title { font-size: 1.3em; font-weight: bold; color: #fff; margin-bottom: 8px; }
+    .tool-desc { color: #94a3b8; font-size: 0.9em; }
+    .status-badge { background: #22c55e; color: #000; padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# PASSWORD CONFIG - PAID ACCESS ONLY
+# MAIN UI
 # ============================================================
-VALID_PASSWORDS = {
-    "WILLIE1228": "Owner",
-    "SNAPCRACKLE2026": "Paid Subscriber",
-}
+st.markdown('<div class="main-header">🎯 BigSnapshot</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Prediction Market Edge Tools</div>', unsafe_allow_html=True)
 
 # ============================================================
-# STRIPE PAYMENT LINK + AUTO-REVEAL TOKEN
-# ============================================================
-STRIPE_LINK = "https://buy.stripe.com/14A00lcgHe9oaIodx65Rm00"
-ACCESS_PASSWORD = "SNAPCRACKLE2026"
-PAID_TOKEN = "thankyou"
-
-# ============================================================
-# DETECT STRIPE REDIRECT (query params)
-# ============================================================
-query_params = st.query_params
-from_payment = query_params.get("paid") in ["true", PAID_TOKEN]
-is_production_token = query_params.get("paid") == PAID_TOKEN
-
-# ============================================================
-# PAGE-SPECIFIC CSS
-# ============================================================
-st.markdown("""
-<style>
-    .stApp {
-        background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%);
-    }
-    [data-testid="stSidebar"] {display: none;}
-</style>
-""", unsafe_allow_html=True)
-
-
-
-# ============================================================
-# LANDING PAGE (NOT LOGGED IN)
+# NOT LOGGED IN → SHOW LOGIN FORM
 # ============================================================
 if not st.session_state.authenticated:
-    
-    # ============ PAID USER FLOW - SKIP TO PASSWORD ============
-    if from_payment:
-        st.markdown("""
-        <div style="text-align: center; padding: 50px 20px 20px 20px;">
-            <div style="font-size: 60px; margin-bottom: 15px;">📊</div>
-            <h1 style="font-size: 2.5em; color: #fff;">BigSnapshot</h1>
-            <p style="color: #888; font-size: 1.1em;">Prediction Market Edge Finder</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.success("✅ Payment received. Enter your access password below.")
-        
-        if is_production_token:
-            st.markdown("### 🔑 Your access password:")
-            st.code(ACCESS_PASSWORD)
-        
-        st.markdown("---")
-        
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            password_input = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter password")
-            if st.button("🔓 UNLOCK", use_container_width=True, type="primary"):
-                if password_input.upper() in VALID_PASSWORDS:
-                    user_type = VALID_PASSWORDS[password_input.upper()]
-                    streamlit_js_eval(
-                        js_expressions=f"localStorage.setItem('bigsnapshot_auth', '{user_type}')",
-                        key="set_auth_paid"
-                    )
-                    st.session_state.authenticated = True
-                    st.session_state.user_type = user_type
-                    st.rerun()
-                else:
-                    st.error("❌ Invalid password")
-        
-        st.stop()
-    
-    # ============ REGULAR MARKETING FLOW ============
-    
-    # ============ HERO ============
-    st.markdown("""
-    <div style="text-align: center; padding: 50px 20px 20px 20px;">
-        <div style="font-size: 60px; margin-bottom: 15px;">📊</div>
-        <h1 style="font-size: 2.8em; margin-bottom: 0; color: #fff;">Stop Switching Tabs.</h1>
-        <h1 style="font-size: 2.8em; margin-top: 5px; color: #00d4ff;">Start Making Cleaner Decisions.</h1>
-        <p style="font-size: 1.2em; color: #888; max-width: 700px; margin: 25px auto;">
-            BigSnapshot is a decision-compression tool for serious Kalshi bettors. It pulls the signals that matter into one screen—so you spend less time hunting and more time deciding.
-        </p>
-        <p style="color: #666; font-size: 1.1em;">No hype. No picks shoved in your face. Just clarity.</p>
-        <p style="color: #555; font-size: 1em; margin-top: 20px;">Because edge disappears once everyone sees it.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # ============ FREE TEMP BUTTON ============
-    st.markdown(
-        """
-        <div style="text-align: center; margin: 30px 0 15px 0;">
-            <a href="/Temp" target="_self">
-                <button style="
-                    background-color:#f59e0b;
-                    color:black;
-                    padding:14px 36px;
-                    border:none;
-                    border-radius:10px;
-                    font-size:16px;
-                    font-weight:700;
-                    cursor:pointer;
-                ">
-                    🌡️ Try Temp Edge Finder FREE
-                </button>
-            </a>
-            <p style="color: #888; font-size: 12px; margin-top: 10px;">No signup required. See it in action.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    
-    # ============ STRIPE BUY BUTTON (TOP) ============
-    if not from_payment:
-        st.markdown(
-            f"""
-            <div style="text-align: center; margin: 15px 0 30px 0;">
-                <a href="{STRIPE_LINK}" target="_blank">
-                    <button style="
-                        background-color:#22c55e;
-                        color:black;
-                        padding:16px 40px;
-                        border:none;
-                        border-radius:10px;
-                        font-size:18px;
-                        font-weight:700;
-                        cursor:pointer;
-                    ">
-                        🔓 Unlock All Tools – $49.99
-                    </button>
-                </a>
-                <p style="color: #888; font-size: 13px; margin-top: 12px;">One-time payment. Refund available if not a fit.</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    
-    # ============ ONE SCREEN SECTION ============
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 16px; padding: 40px; margin: 40px auto; max-width: 900px;">
-        <h2 style="color: #fff; text-align: center; margin-bottom: 20px;">One Screen. One Flow. Zero Noise.</h2>
-        <p style="color: #aaa; text-align: center; font-size: 1.1em; margin-bottom: 25px;">
-            Most bettors lose edge before they even place a bet—switching between odds, stats, line movement, news, and gut instinct. BigSnapshot fixes that.
-        </p>
-        <div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;">
-            <div style="text-align: center;">
-                <span style="color: #00ff88; font-size: 1.1em;">✓ Where the edge is</span>
-            </div>
-            <div style="text-align: center;">
-                <span style="color: #00ff88; font-size: 1.1em;">✓ Whether the market agrees or resists</span>
-            </div>
-            <div style="text-align: center;">
-                <span style="color: #00ff88; font-size: 1.1em;">✓ What deserves attention—and what doesn't</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # ============ BENEFITS GRID ============
-    st.markdown("### Why BigSnapshot Is Different")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #00d4ff;">
-            <h3 style="color: #00d4ff; margin: 0 0 10px 0;">⏱️ Save Time on Every Slate</h3>
-            <p style="color: #aaa; margin: 0;">No bouncing between sportsbooks, stats sites, and Twitter. No manual cross-checking. Scan an entire slate in seconds.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #ff6b6b;">
-            <h3 style="color: #ff6b6b; margin: 0 0 10px 0;">🎯 Decision Compression</h3>
-            <p style="color: #aaa; margin: 0;">Raw data is distilled into clear signals. You see what matters, not everything. Analysis paralysis disappears.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #ffd93d;">
-            <h3 style="color: #ffd93d; margin: 0 0 10px 0;">📊 Market Awareness</h3>
-            <p style="color: #aaa; margin: 0;">Instantly know if the market supports your view. Instantly know when it's pushing back. You're aware before you commit.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #a855f7;">
-            <h3 style="color: #a855f7; margin: 0 0 10px 0;">🛑 Stops You From Chasing Steam</h3>
-            <p style="color: #aaa; margin: 0;">Late moves are obvious. Resistance is clearly flagged. The app naturally slows you down when chasing would hurt you most.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #4ade80;">
-            <h3 style="color: #4ade80; margin: 0 0 10px 0;">🧘 Discipline Built In</h3>
-            <p style="color: #aaa; margin: 0;">No BUY / SELL hype. No flashing alerts. No forced picks. BigSnapshot encourages restraint instead of impulsive action.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #38bdf8;">
-            <h3 style="color: #38bdf8; margin: 0 0 10px 0;">👀 Early Signal Visibility</h3>
-            <p style="color: #aaa; margin: 0;">Spot early pressure before public noise takes over. Especially powerful in thinner markets. Timing improves without forcing volume.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #f472b6;">
-            <h3 style="color: #f472b6; margin: 0 0 10px 0;">✂️ Fewer Bad Bets, Same Good Bets</h3>
-            <p style="color: #aaa; margin: 0;">The app doesn't create more bets. It filters out the bad versions of good ideas. Your edge quality improves without trading more.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border-left: 4px solid #88ff88;">
-            <h3 style="color: #88ff88; margin: 0 0 10px 0;">⏳ Time Is the Real Edge</h3>
-            <p style="color: #aaa; margin: 0;">Most edges don't fail — they get crowded. BigSnapshot helps you see pressure early, before the market fully reacts.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # ============ RESULT SECTION ============
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #0f3460, #1a1a2e); border-radius: 16px; padding: 40px; margin: 40px auto; text-align: center; max-width: 900px;">
-        <h2 style="color: #fff; margin-bottom: 20px;">The Result</h2>
-        <div style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; margin-bottom: 30px;">
-            <span style="color: #00ff88; font-size: 1.1em;">✓ Less second-guessing</span>
-            <span style="color: #00ff88; font-size: 1.1em;">✓ Less tilt</span>
-            <span style="color: #00ff88; font-size: 1.1em;">✓ Fewer mistakes</span>
-            <span style="color: #00ff88; font-size: 1.1em;">✓ More trust in your process</span>
-        </div>
-        <p style="color: #fff; font-size: 1.4em; font-weight: bold; margin: 0;">You don't bet more. You bet cleaner.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # ============ LIVE TOOLS (MARKETING) ============
-    st.markdown("### 🎯 Live Tools")
-    st.markdown("""
-    <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #3a4a6a;">
-            <div style="font-size: 45px; margin-bottom: 15px;">🏀</div>
-            <h3 style="color: #fff; margin-bottom: 10px;">NBA Edge Finder</h3>
-        </div>
-        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4a5a4a;">
-            <div style="font-size: 45px; margin-bottom: 15px;">🏈</div>
-            <h3 style="color: #fff; margin-bottom: 10px;">NFL Edge Finder</h3>
-        </div>
-        <div style="background: linear-gradient(135deg, #2a2a3a 0%, #3a3a4a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4a4a5a;">
-            <div style="font-size: 45px; margin-bottom: 15px;">🏒</div>
-            <h3 style="color: #fff; margin-bottom: 10px;">NHL Edge Finder</h3>
-        </div>
-        <div style="background: linear-gradient(135deg, #1a2a3a 0%, #2a3a4a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #3a4a5a;">
-            <div style="font-size: 45px; margin-bottom: 15px;">🎓</div>
-            <h3 style="color: #fff; margin-bottom: 10px;">NCAA Edge Finder</h3>
-        </div>
-        <div style="background: linear-gradient(135deg, #2a1a1a 0%, #3a2a2a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4a3a3a;">
-            <div style="font-size: 45px; margin-bottom: 15px;">⚾</div>
-            <h3 style="color: #fff; margin-bottom: 10px;">MLB Edge Finder</h3>
-        </div>
-        <div style="background: linear-gradient(135deg, #1a3a2a 0%, #2a4a3a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #3a5a4a;">
-            <div style="font-size: 45px; margin-bottom: 15px;">⚽</div>
-            <h3 style="color: #fff; margin-bottom: 10px;">Soccer Edge Finder</h3>
-        </div>
-        <div style="background: linear-gradient(135deg, #3a2a1a 0%, #4a3a2a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #f59e0b;">
-            <div style="font-size: 45px; margin-bottom: 15px;">🌡️</div>
-            <h3 style="color: #f59e0b; margin-bottom: 5px;">Temp Edge Finder</h3>
-            <span style="background:#f59e0b;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
-        </div>
-        <div style="background: linear-gradient(135deg, #1a2a2a 0%, #2a3a3a 100%); border-radius: 16px; padding: 30px; width: 220px; text-align: center; border: 1px solid #4ade80;">
-            <div style="font-size: 45px; margin-bottom: 15px;">📈</div>
-            <h3 style="color: #4ade80; margin-bottom: 5px;">Economics Edge Finder</h3>
-            <span style="background:#4ade80;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">NEW</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # ============ COMING SOON (MARKETING) ============
-    st.markdown("### 🚧 Coming Soon")
-    st.markdown("""
-    <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
-            <div style="font-size: 35px; margin-bottom: 8px;">🏛️</div>
-            <h4 style="color: #888; margin: 0;">Politics</h4>
-        </div>
-        <div style="background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%); border-radius: 12px; padding: 20px; width: 140px; text-align: center; border: 1px solid #4a4a4a; opacity: 0.7;">
-            <div style="font-size: 35px; margin-bottom: 8px;">🎬</div>
-            <h4 style="color: #888; margin: 0;">Entertainment</h4>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # ============ BOTTOM LINE + SECOND CTA ============
-    st.markdown("""
-    <div style="text-align: center; padding: 40px 20px; max-width: 700px; margin: 0 auto;">
-        <p style="color: #888; font-size: 1.2em; margin-bottom: 20px;">
-            BigSnapshot doesn't help you chase wins. It helps you make fewer bad decisions.
-        </p>
-        <p style="color: #fff; font-weight: bold; font-size: 1.3em;">That's where real edge comes from.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    if not from_payment:
-        st.markdown(
-            f"""
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="{STRIPE_LINK}" target="_blank">
-                    <button style="
-                        background-color:#22c55e;
-                        color:black;
-                        padding:16px 40px;
-                        border:none;
-                        border-radius:10px;
-                        font-size:18px;
-                        font-weight:700;
-                        cursor:pointer;
-                    ">
-                        🔓 Unlock All Tools – $49.99
-                    </button>
-                </a>
-                <p style="color: #888; font-size: 13px; margin-top: 12px;">One-time payment. Refund available if not a fit.</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    
     st.markdown("---")
+    st.subheader("🔐 Subscriber Login")
     
-    # ============ PASSWORD ENTRY ============
-    st.markdown("""
-    <div style="max-width: 400px; margin: 30px auto; text-align: center;">
-        <p style="color: #888; font-size: 14px; margin-bottom: 15px;">
-            Already paid? Enter your password below:
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 1, 1])
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        password_input = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter password")
-        if st.button("🔓 UNLOCK", use_container_width=True, type="primary"):
-            if password_input.upper() in VALID_PASSWORDS:
-                user_type = VALID_PASSWORDS[password_input.upper()]
+        password = st.text_input("Enter access code:", type="password", key="login_password")
+        
+        if st.button("🔓 Unlock Access", use_container_width=True, type="primary"):
+            if password == VALID_PASSWORD:
+                # ✅ WRITE TO LOCALSTORAGE
                 streamlit_js_eval(
-                    js_expressions=f"localStorage.setItem('bigsnapshot_auth', '{user_type}')",
-                    key="set_auth_main"
+                    js_expressions="localStorage.setItem('bigsnapshot_auth', 'Paid Subscriber')",
+                    key="set_auth"
                 )
                 st.session_state.authenticated = True
-                st.session_state.user_type = user_type
+                st.session_state.user_type = "Paid Subscriber"
                 st.rerun()
             else:
-                st.error("❌ Invalid password")
+                st.error("❌ Invalid access code")
     
-    # Footer
-    st.markdown("""
-    <div style="text-align: center; padding: 40px 20px; margin-top: 20px;">
-        <p style="color: #888; font-size: 13px; margin-bottom: 15px;">
-            <strong>💳 Refund Policy:</strong> Not satisfied? Request a refund within 7 days. No questions asked.
-        </p>
-        <p style="color: #555; font-size: 12px;">
-            ⚠️ For entertainment only. Not financial advice.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    st.markdown("---")
+    st.caption("Need access? Contact support.")
     st.stop()
 
 # ============================================================
-# AUTHENTICATED - SHOW APP HUB (LIVE TOOLS FIRST)
+# LOGGED IN → SHOW DASHBOARD
 # ============================================================
-st.title("📊 BigSnapshot")
-st.caption("Prediction Market Edge Finder")
+st.success(f"✅ Logged in as: {st.session_state.user_type}")
 
-st.markdown("---")
-
-# ============ LIVE TOOLS - PURE STREAMLIT ============
-st.header("🔥 LIVE TOOLS")
-
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    st.subheader("🏀 NBA")
-    if st.button("OPEN NBA", use_container_width=True, type="primary", key="nav_nba"):
-        st.switch_page("pages/2_NBA.py")
-
-with col2:
-    st.subheader("🏈 NFL")
-    if st.button("OPEN NFL", use_container_width=True, type="primary", key="nav_nfl"):
-        st.switch_page("pages/1_NFL.py")
-
-with col3:
-    st.subheader("🏒 NHL")
-    if st.button("OPEN NHL", use_container_width=True, type="primary", key="nav_nhl"):
-        st.switch_page("pages/3_NHL.py")
-
-with col4:
-    st.subheader("🎓 NCAA")
-    if st.button("OPEN NCAA", use_container_width=True, type="primary", key="nav_ncaa"):
-        st.switch_page("pages/7_NCAA.py")
-
-col5, col6, col7, col8 = st.columns(4)
-
-with col5:
-    st.subheader("⚾ MLB")
-    if st.button("OPEN MLB", use_container_width=True, type="primary", key="nav_mlb"):
-        st.switch_page("pages/4_MLB.py")
-
-with col6:
-    st.subheader("⚽ SOCCER")
-    if st.button("OPEN SOCCER", use_container_width=True, type="primary", key="nav_soccer"):
-        st.switch_page("pages/8_Soccer.py")
-
-with col7:
-    st.subheader("🌡️ TEMP")
-    if st.button("OPEN TEMP", use_container_width=True, type="primary", key="nav_temp"):
-        st.switch_page("pages/5_Temp.py")
-
-with col8:
-    st.subheader("📈 ECON")
-    if st.button("OPEN ECONOMICS", use_container_width=True, type="primary", key="nav_econ"):
-        st.switch_page("pages/9_Economics.py")
-
-st.markdown("---")
-
-# ============ COMING SOON - MINIMAL ============
-st.caption("🚧 Coming Soon: Politics • Entertainment")
-
-st.markdown("---")
-
-# Logout
-col1, col2, col3 = st.columns([1, 1, 1])
+# Logout button
+col1, col2, col3 = st.columns([2, 1, 2])
 with col2:
     if st.button("🚪 Logout", use_container_width=True):
+        # ✅ CLEAR LOCALSTORAGE
         streamlit_js_eval(
             js_expressions="localStorage.removeItem('bigsnapshot_auth')",
             key="clear_auth"
@@ -500,11 +90,40 @@ with col2:
         st.session_state.user_type = None
         st.rerun()
 
-# Footer
-st.markdown("""
-<div style="text-align: center; padding: 20px;">
-    <p style="color: #555; font-size: 12px;">
-        ⚠️ For entertainment only. Not financial advice.
-    </p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("---")
+
+# ============================================================
+# TOOL CARDS
+# ============================================================
+st.subheader("🛠️ Your Tools")
+
+tools = [
+    {"name": "🏀 NBA Edge Finder", "desc": "ML picks, live tracking, streaks", "page": "pages/1_NBA.py", "status": "LIVE"},
+    {"name": "🏈 NFL Edge Finder", "desc": "Coming soon", "page": "pages/2_NFL.py", "status": "SOON"},
+    {"name": "🏀 NCAA Basketball", "desc": "Coming soon", "page": "pages/3_NCAA.py", "status": "SOON"},
+    {"name": "🏒 NHL Edge Finder", "desc": "Coming soon", "page": "pages/4_NHL.py", "status": "SOON"},
+    {"name": "⚾ MLB Edge Finder", "desc": "Coming soon", "page": "pages/5_MLB.py", "status": "SOON"},
+    {"name": "⚽ Soccer Edge Finder", "desc": "Coming soon", "page": "pages/6_Soccer.py", "status": "SOON"},
+    {"name": "📊 Economics", "desc": "Coming soon", "page": "pages/7_Econ.py", "status": "SOON"},
+]
+
+cols = st.columns(2)
+for i, tool in enumerate(tools):
+    with cols[i % 2]:
+        status_color = "#22c55e" if tool["status"] == "LIVE" else "#64748b"
+        st.markdown(f"""
+        <div class="tool-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="tool-title">{tool['name']}</div>
+                <span style="background: {status_color}; color: #000; padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold;">{tool['status']}</span>
+            </div>
+            <div class="tool-desc">{tool['desc']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if tool["status"] == "LIVE":
+            if st.button(f"Open {tool['name'].split()[1]}", key=f"open_{i}", use_container_width=True):
+                st.switch_page(tool["page"])
+
+st.markdown("---")
+st.caption("© 2025 BigSnapshot. All rights reserved.")
