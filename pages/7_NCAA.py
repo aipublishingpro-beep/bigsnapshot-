@@ -1,4 +1,8 @@
 import streamlit as st
+from auth import require_auth
+
+require_auth()
+
 import requests
 from datetime import datetime, timedelta
 import pytz
@@ -7,46 +11,10 @@ import os
 import time
 import hashlib
 from styles import apply_styles, buy_button
-import extra_streamlit_components as stx
 
 st.set_page_config(page_title="NCAA Edge Finder", page_icon="🎓", layout="wide")
 
 apply_styles()
-
-# ============================================================
-# COOKIE MANAGER — HYDRATION ONLY, NOT ENFORCEMENT
-# Session state is the single source of truth after hydration
-# ============================================================
-cookie_manager = stx.CookieManager()
-
-# Initialize session state ONCE
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'user_type' not in st.session_state:
-    st.session_state.user_type = None
-if 'auth_hydrated' not in st.session_state:
-    st.session_state.auth_hydrated = False
-
-# ONE-TIME AUTH HYDRATION (only runs once per browser session)
-# After this, session_state.authenticated is the ONLY source of truth
-if not st.session_state.auth_hydrated:
-    try:
-        auth_cookie = cookie_manager.get("bigsnapshot_auth")
-        if auth_cookie:
-            st.session_state.authenticated = True
-            st.session_state.user_type = auth_cookie
-    except:
-        pass
-    st.session_state.auth_hydrated = True
-
-# AUTH GATE — soft redirect, no st.stop()
-if not st.session_state.authenticated:
-    st.warning("⚠️ Please log in from the Home page first.")
-    st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
-    try:
-        st.switch_page("Home.py")
-    except:
-        st.stop()
 
 # ========== GOOGLE ANALYTICS ==========
 st.markdown("""
