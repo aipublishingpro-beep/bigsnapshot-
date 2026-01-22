@@ -5,6 +5,7 @@ import pytz
 import json
 import os
 import time
+import hashlib
 from styles import apply_styles, buy_button
 import extra_streamlit_components as stx
 
@@ -13,7 +14,7 @@ st.set_page_config(page_title="NCAA Edge Finder", page_icon="🎓", layout="wide
 apply_styles()
 
 # ============================================================
-# COOKIE MANAGER FOR PERSISTENT LOGIN
+# COOKIE MANAGER — UX PERSISTENCE ONLY, NOT SECURITY
 # ============================================================
 cookie_manager = stx.CookieManager()
 
@@ -22,6 +23,7 @@ if 'authenticated' not in st.session_state:
 if 'user_type' not in st.session_state:
     st.session_state.user_type = None
 
+# Cookies are UX convenience, not auth enforcement
 auth_cookie = cookie_manager.get("bigsnapshot_auth")
 if auth_cookie and not st.session_state.authenticated:
     st.session_state.authenticated = True
@@ -32,13 +34,13 @@ if not st.session_state.authenticated:
     st.page_link("Home.py", label="🏠 Go to Home", use_container_width=True)
     st.stop()
 
-# ========== GOOGLE ANALYTICS G4 ==========
+# ========== GOOGLE ANALYTICS ==========
 st.markdown("""
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
 <script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
 """, unsafe_allow_html=True)
 
-# ========== MOBILE CSS FIX ==========
+# ========== MOBILE CSS ==========
 st.markdown("""
 <style>
     @media (max-width: 768px) {
@@ -52,21 +54,42 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 eastern = pytz.timezone("US/Eastern")
-today_str = datetime.now(eastern).strftime("%Y-%m-%d")
+now = datetime.now(eastern)
+today_str = now.strftime("%Y-%m-%d")
 
-POSITIONS_FILE = "ncaa_positions.json"
+# ============================================================
+# MULTI-USER SAFE POSITIONS STORAGE
+# Uses session-specific file to prevent conflicts
+# ============================================================
+def get_session_id():
+    """Generate session-specific ID for position storage"""
+    if 'session_id' not in st.session_state:
+        st.session_state.session_id = hashlib.md5(
+            f"{time.time()}_{os.getpid()}".encode()
+        ).hexdigest()[:12]
+    return st.session_state.session_id
+
+def get_positions_file():
+    """Get session-specific positions file path"""
+    session_id = get_session_id()
+    return f"ncaa_positions_{session_id}.json"
 
 def load_positions():
     try:
-        if os.path.exists(POSITIONS_FILE):
-            with open(POSITIONS_FILE, 'r') as f:
-                return json.load(f)
+        filepath = get_positions_file()
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+                # Validate data structure
+                if isinstance(data, list):
+                    return data
     except: pass
     return []
 
 def save_positions(positions):
     try:
-        with open(POSITIONS_FILE, 'w') as f:
+        filepath = get_positions_file()
+        with open(filepath, 'w') as f:
             json.dump(positions, f, indent=2)
     except: pass
 
@@ -74,6 +97,8 @@ if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
 if "ncaa_positions" not in st.session_state:
     st.session_state.ncaa_positions = load_positions()
+if "show_buy_signals" not in st.session_state:
+    st.session_state.show_buy_signals = False
 
 if st.session_state.auto_refresh:
     st.markdown(f'<meta http-equiv="refresh" content="30;url=?r={int(time.time()) + 30}">', unsafe_allow_html=True)
@@ -81,9 +106,11 @@ if st.session_state.auto_refresh:
 else:
     auto_status = "⏸️ Auto-refresh OFF"
 
-# Conference tiers
 POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC", "Big East"}
 HIGH_MAJOR = {"American Athletic", "Mountain West", "Atlantic 10", "West Coast", "Missouri Valley"}
+
+# Travel-neutral venues (tournament sites, neutral courts)
+NEUTRAL_VENUES = {"Las Vegas", "Atlanta", "Indianapolis", "Phoenix", "Houston", "New Orleans"}
 
 def normalize_abbrev(abbrev):
     if not abbrev: return ""
@@ -93,24 +120,161 @@ def escape_html(text):
     if not text: return ""
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
+# ============================================================
+# HARDENED KALSHI TICKER CONSTRUCTION
+# ============================================================
 def build_kalshi_ncaa_url(team1_code, team2_code):
+    """
+    Build Kalshi NCAA basketball URL with validation and fallback.
+    Format: kxncaambgame-{YY}{MMM}{DD}{team1}{team2}
+    """
     try:
-        if not team1_code or not team2_code: return None
-        date_str = datetime.now(eastern).strftime("%y%b%d").upper()
-        t1 = ''.join(c for c in team1_code.upper() if c.isalpha())[:4]
-        t2 = ''.join(c for c in team2_code.upper() if c.isalpha())[:4]
-        if len(t1) < 2 or len(t2) < 2: return None
+        if not team1_code or not team2_code:
+            return None
+        
+        # Clean codes - letters only, uppercase
+        t1 = ''.join(c for c in str(team1_code).upper() if c.isalpha())
+        t2 = ''.join(c for c in str(team2_code).upper() if c.isalpha())
+        
+        # Validate minimum length
+        if len(t1) < 2 or len(t2) < 2:
+            return None
+        
+        # Truncate to 4 chars max
+        t1 = t1[:4]
+        t2 = t2[:4]
+        
+        # Build date string
+        date_str = now.strftime("%y%b%d").upper()
+        
+        # Construct ticker
         ticker = f"KXNCAAMBGAME-{date_str}{t1}{t2}"
+        
+        # Validate ticker format before returning
+        if len(ticker) < 20 or len(ticker) > 30:
+            return None
+            
         return f"https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game/{ticker.lower()}"
-    except: return None
+    except Exception:
+        return None
 
 def get_buy_button_html(kalshi_url, label="BUY"):
     if kalshi_url:
         return f'<a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:4px 10px;border-radius:4px;font-size:0.75em;font-weight:bold;text-decoration:none">{label}</a>'
-    return f'<span style="background:#444;color:#888;padding:4px 10px;border-radius:4px;font-size:0.75em">Market N/A</span>'
+    return f'<span style="background:#333;color:#555;padding:4px 10px;border-radius:4px;font-size:0.75em">—</span>'
+
+# ============================================================
+# CACHED HISTORICAL SCOREBOARD FETCH
+# Single cached call derives streaks, splits, and B2B
+# ============================================================
+@st.cache_data(ttl=3600)
+def fetch_historical_scoreboards(days_back=14):
+    """
+    Fetch and cache historical scoreboards once.
+    All derived stats (streaks, splits, fatigue) computed from this cache.
+    """
+    historical = {}
+    dates = [(now - timedelta(days=i)).strftime('%Y%m%d') for i in range(1, days_back + 1)]
+    
+    for date in dates:
+        try:
+            url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates={date}&limit=100"
+            resp = requests.get(url, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                historical[date] = data.get("events", [])
+        except:
+            continue
+    
+    return historical
+
+def derive_team_stats_from_cache(historical):
+    """
+    Derive all team stats from cached historical data.
+    Returns: streaks, splits, fatigue_data
+    """
+    team_results = {}  # For streaks
+    splits = {}  # Home/away splits
+    fatigue_data = {}  # Minutes, OT, recent games
+    
+    yesterday = (now - timedelta(days=1)).strftime('%Y%m%d')
+    two_days_ago = (now - timedelta(days=2)).strftime('%Y%m%d')
+    
+    for date, events in sorted(historical.items(), reverse=True):
+        for event in events:
+            status = event.get("status", {}).get("type", {}).get("name", "")
+            if status != "STATUS_FINAL":
+                continue
+            
+            comp = event.get("competitions", [{}])[0]
+            competitors = comp.get("competitors", [])
+            if len(competitors) < 2:
+                continue
+            
+            # Check for OT
+            period = event.get("status", {}).get("period", 2)
+            was_ot = period > 2
+            
+            for c in competitors:
+                abbrev = normalize_abbrev(c.get("team", {}).get("abbreviation", ""))
+                if not abbrev:
+                    continue
+                
+                won = c.get("winner", False)
+                is_home = c.get("homeAway") == "home"
+                
+                # Initialize if needed
+                if abbrev not in team_results:
+                    team_results[abbrev] = []
+                if abbrev not in splits:
+                    splits[abbrev] = {"home_w": 0, "home_l": 0, "away_w": 0, "away_l": 0}
+                if abbrev not in fatigue_data:
+                    fatigue_data[abbrev] = {"played_yesterday": False, "played_2d_ago": False, "ot_recent": False, "games_last_5d": 0}
+                
+                # Streaks
+                team_results[abbrev].append({"date": date, "won": won})
+                
+                # Splits
+                if is_home:
+                    if won: splits[abbrev]["home_w"] += 1
+                    else: splits[abbrev]["home_l"] += 1
+                else:
+                    if won: splits[abbrev]["away_w"] += 1
+                    else: splits[abbrev]["away_l"] += 1
+                
+                # Fatigue data
+                if date == yesterday:
+                    fatigue_data[abbrev]["played_yesterday"] = True
+                    if was_ot:
+                        fatigue_data[abbrev]["ot_recent"] = True
+                if date == two_days_ago:
+                    fatigue_data[abbrev]["played_2d_ago"] = True
+                
+                # Games in last 5 days
+                date_obj = datetime.strptime(date, '%Y%m%d')
+                if (now.date() - date_obj.date()).days <= 5:
+                    fatigue_data[abbrev]["games_last_5d"] += 1
+    
+    # Calculate streaks
+    streaks = {}
+    for team, results in team_results.items():
+        results.sort(key=lambda x: x['date'], reverse=True)
+        if not results:
+            continue
+        streak = 0
+        streak_type = results[0]['won']
+        for r in results:
+            if r['won'] == streak_type:
+                streak += 1
+            else:
+                break
+        streaks[team] = streak if streak_type else -streak
+    
+    return streaks, splits, fatigue_data
 
 def fetch_espn_ncaa_scores():
-    today_date = datetime.now(eastern).strftime('%Y%m%d')
+    """Fetch today's NCAA basketball scores"""
+    today_date = now.strftime('%Y%m%d')
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates={today_date}&limit=100"
     try:
         resp = requests.get(url, timeout=15)
@@ -119,13 +283,18 @@ def fetch_espn_ncaa_scores():
         for event in data.get("events", []):
             comp = event.get("competitions", [{}])[0]
             competitors = comp.get("competitors", [])
-            if len(competitors) < 2: continue
+            if len(competitors) < 2:
+                continue
             
             home_team, away_team = None, None
             home_score, away_score = 0, 0
             home_abbrev, away_abbrev = "", ""
             home_record, away_record = "", ""
             home_conf, away_conf = "", ""
+            
+            # Check if neutral site
+            venue = comp.get("venue", {}).get("city", "")
+            is_neutral = any(nv in venue for nv in NEUTRAL_VENUES) if venue else False
             
             for c in competitors:
                 team_data = c.get("team", {})
@@ -160,27 +329,13 @@ def fetch_espn_ncaa_scores():
                 "away_record": away_record, "home_record": home_record,
                 "away_conf": away_conf, "home_conf": home_conf,
                 "total": away_score + home_score,
-                "period": period, "clock": clock, "status_type": status_type
+                "period": period, "clock": clock, "status_type": status_type,
+                "is_neutral": is_neutral
             }
         return games
     except Exception as e:
         st.error(f"Error fetching ESPN data: {e}")
         return {}
-
-def fetch_yesterday_teams():
-    yesterday = (datetime.now(eastern) - timedelta(days=1)).strftime('%Y%m%d')
-    url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates={yesterday}&limit=100"
-    try:
-        resp = requests.get(url, timeout=10)
-        data = resp.json()
-        teams = set()
-        for event in data.get("events", []):
-            comp = event.get("competitions", [{}])[0]
-            for c in comp.get("competitors", []):
-                abbrev = normalize_abbrev(c.get("team", {}).get("abbreviation", ""))
-                if abbrev: teams.add(abbrev)
-        return teams
-    except: return set()
 
 @st.cache_data(ttl=3600)
 def fetch_ap_rankings():
@@ -198,73 +353,8 @@ def fetch_ap_rankings():
                         rankings[abbrev] = rank
                 break
         return rankings
-    except: return {}
-
-@st.cache_data(ttl=3600)
-def fetch_team_streaks():
-    streaks = {}
-    try:
-        dates = [(datetime.now(eastern) - timedelta(days=i)).strftime('%Y%m%d') for i in range(1, 14)]
-        team_results = {}
-        for date in dates:
-            url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates={date}&limit=100"
-            resp = requests.get(url, timeout=8)
-            data = resp.json()
-            for event in data.get("events", []):
-                status = event.get("status", {}).get("type", {}).get("name", "")
-                if status != "STATUS_FINAL": continue
-                comp = event.get("competitions", [{}])[0]
-                competitors = comp.get("competitors", [])
-                if len(competitors) < 2: continue
-                for c in competitors:
-                    abbrev = normalize_abbrev(c.get("team", {}).get("abbreviation", ""))
-                    won = c.get("winner", False)
-                    if abbrev:
-                        if abbrev not in team_results: team_results[abbrev] = []
-                        team_results[abbrev].append({"date": date, "won": won})
-        for team, results in team_results.items():
-            results.sort(key=lambda x: x['date'], reverse=True)
-            if not results: continue
-            streak = 0
-            streak_type = results[0]['won']
-            for r in results:
-                if r['won'] == streak_type: streak += 1
-                else: break
-            streaks[team] = streak if streak_type else -streak
-    except: pass
-    return streaks
-
-@st.cache_data(ttl=3600)
-def fetch_team_home_away_splits():
-    """Fetch home/away win rates for teams (last 14 days of data)"""
-    splits = {}
-    try:
-        dates = [(datetime.now(eastern) - timedelta(days=i)).strftime('%Y%m%d') for i in range(1, 30)]
-        for date in dates[:14]:
-            url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates={date}&limit=100"
-            resp = requests.get(url, timeout=8)
-            data = resp.json()
-            for event in data.get("events", []):
-                status = event.get("status", {}).get("type", {}).get("name", "")
-                if status != "STATUS_FINAL": continue
-                comp = event.get("competitions", [{}])[0]
-                competitors = comp.get("competitors", [])
-                if len(competitors) < 2: continue
-                for c in competitors:
-                    abbrev = normalize_abbrev(c.get("team", {}).get("abbreviation", ""))
-                    won = c.get("winner", False)
-                    is_home = c.get("homeAway") == "home"
-                    if abbrev:
-                        if abbrev not in splits:
-                            splits[abbrev] = {"home_w": 0, "home_l": 0, "away_w": 0, "away_l": 0}
-                        if is_home:
-                            if won: splits[abbrev]["home_w"] += 1
-                            else: splits[abbrev]["home_l"] += 1
-                        else:
-                            if won: splits[abbrev]["away_w"] += 1
-                            else: splits[abbrev]["away_l"] += 1
-    except: pass
-    return splits
+    except:
+        return {}
 
 @st.cache_data(ttl=1800)
 def fetch_cbb_news():
@@ -272,47 +362,115 @@ def fetch_cbb_news():
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
-        articles = []
-        for article in data.get("articles", [])[:5]:
-            articles.append({
-                "headline": article.get("headline", ""),
-                "description": article.get("description", "")[:100] + "..." if article.get("description") else "",
-                "link": article.get("links", {}).get("web", {}).get("href", "")
-            })
-        return articles
-    except: return []
+        return [{"headline": a.get("headline", ""), "link": a.get("links", {}).get("web", {}).get("href", "")} 
+                for a in data.get("articles", [])[:5]]
+    except:
+        return []
 
 def get_conference_tier(conf_name):
-    if not conf_name: return 3
-    if any(p in conf_name for p in POWER_CONFERENCES): return 1
-    if any(h in conf_name for h in HIGH_MAJOR): return 2
+    if not conf_name:
+        return 3
+    if any(p in conf_name for p in POWER_CONFERENCES):
+        return 1
+    if any(h in conf_name for h in HIGH_MAJOR):
+        return 2
     return 3
 
 def get_minutes_played(period, clock, status_type):
-    if status_type == "STATUS_FINAL": return 40
-    if status_type == "STATUS_HALFTIME": return 20
-    if period == 0: return 0
+    """Calculate minutes played with guard against low-minute distortion"""
+    if status_type == "STATUS_FINAL":
+        return 40
+    if status_type == "STATUS_HALFTIME":
+        return 20
+    if period == 0:
+        return 0
     try:
         parts = str(clock).split(':')
         mins = int(parts[0])
         secs = int(float(parts[1])) if len(parts) > 1 else 0
-        time_left = mins + secs/60
-        if period == 1: return 20 - time_left
-        elif period == 2: return 20 + (20 - time_left)
-        else: return 40 + (period - 2) * 5 + (5 - time_left)
+        time_left = mins + secs / 60
+        if period == 1:
+            return max(0, 20 - time_left)
+        elif period == 2:
+            return max(20, 20 + (20 - time_left))
+        else:
+            return max(40, 40 + (period - 2) * 5 + (5 - time_left))
     except:
         return (period - 1) * 20 if period <= 2 else 40 + (period - 2) * 5
 
 # ============================================================
-# ENGINE 1: MARKET EDGE ENGINE (EXISTING)
-# Factors: Home court, AP rank, Conference tier, Record, B2B
-# Output: Edge Score (0-10) + Tier
+# WEIGHTED FATIGUE SCORE (replaces boolean B2B)
 # ============================================================
-def market_edge_engine(g, yesterday_teams, ap_rankings):
+def calculate_fatigue_score(abbrev, fatigue_data):
     """
-    MARKET EDGE ENGINE - Evaluates market-based factors
-    INDEPENDENT from Team Strength Analyzer
+    Calculate weighted fatigue score (0-10).
+    Higher = more fatigued = worse for team.
     """
+    data = fatigue_data.get(abbrev, {})
+    score = 0.0
+    
+    # Back-to-back (played yesterday)
+    if data.get("played_yesterday", False):
+        score += 4.0
+    
+    # Played 2 days ago (cumulative fatigue)
+    if data.get("played_2d_ago", False):
+        score += 1.5
+    
+    # Recent OT game (extra minutes)
+    if data.get("ot_recent", False):
+        score += 2.0
+    
+    # High game density (3+ games in 5 days)
+    games_5d = data.get("games_last_5d", 0)
+    if games_5d >= 4:
+        score += 2.5
+    elif games_5d >= 3:
+        score += 1.5
+    
+    return min(score, 10.0)
+
+# ============================================================
+# CONDITIONAL HOME COURT ADVANTAGE
+# ============================================================
+def calculate_home_court_bonus(g, home_abbrev, splits):
+    """
+    Conditionalize home-court advantage instead of unconditional +1.5.
+    Factors: neutral site, home record, conference matchup.
+    """
+    # Neutral site = no home advantage
+    if g.get("is_neutral", False):
+        return 0.0, None
+    
+    # Base home advantage
+    base = 1.0
+    
+    # Check home team's actual home record
+    home_split = splits.get(home_abbrev, {})
+    home_w = home_split.get("home_w", 0)
+    home_l = home_split.get("home_l", 0)
+    home_games = home_w + home_l
+    
+    if home_games >= 3:
+        home_pct = home_w / home_games
+        if home_pct >= 0.80:
+            base = 1.8  # Elite home team
+        elif home_pct >= 0.65:
+            base = 1.4  # Good home team
+        elif home_pct <= 0.40:
+            base = 0.5  # Poor home team
+    
+    # Power conference home game bonus
+    home_conf = g.get("home_conf", "")
+    if get_conference_tier(home_conf) == 1:
+        base += 0.3
+    
+    return base, "🏠 Home" if base >= 1.0 else "🏠 Weak Home"
+
+# ============================================================
+# ENGINE 1: MARKET EDGE ENGINE
+# ============================================================
+def market_edge_engine(g, fatigue_data, ap_rankings, splits):
     home_abbrev = g["home_abbrev"]
     away_abbrev = g["away_abbrev"]
     home_team = g["home_team"]
@@ -328,11 +486,18 @@ def market_edge_engine(g, yesterday_teams, ap_rankings):
     home_ap = ap_rankings.get(home_abbrev, 0)
     away_ap = ap_rankings.get(away_abbrev, 0)
     
-    # 1. HOME COURT (1.5x)
-    sh += 1.5
-    rh.append("🏠 Home")
+    # Calculate fatigue scores
+    home_fatigue = calculate_fatigue_score(home_abbrev, fatigue_data)
+    away_fatigue = calculate_fatigue_score(away_abbrev, fatigue_data)
     
-    # 2. AP RANKING (1.5x)
+    # 1. CONDITIONAL HOME COURT
+    hc_bonus, hc_reason = calculate_home_court_bonus(g, home_abbrev, splits)
+    if hc_bonus > 0:
+        sh += hc_bonus
+        if hc_reason:
+            rh.append(hc_reason)
+    
+    # 2. AP RANKING
     if home_ap > 0 and away_ap == 0:
         sh += 1.5
         rh.append(f"📊 #{home_ap}")
@@ -347,7 +512,7 @@ def market_edge_engine(g, yesterday_teams, ap_rankings):
             sa += 1.0
             ra.append(f"📊 #{away_ap}v#{home_ap}")
     
-    # 3. CONFERENCE TIER (0.8x)
+    # 3. CONFERENCE TIER
     h_tier = get_conference_tier(home_conf)
     a_tier = get_conference_tier(away_conf)
     if h_tier < a_tier:
@@ -357,17 +522,16 @@ def market_edge_engine(g, yesterday_teams, ap_rankings):
         sa += 0.8
         ra.append("🏆 Power")
     
-    # 4. B2B (1.0x)
-    home_b2b = home_abbrev in yesterday_teams
-    away_b2b = away_abbrev in yesterday_teams
-    if away_b2b and not home_b2b:
-        sh += 1.0
-        rh.append("🛏️ OppB2B")
-    elif home_b2b and not away_b2b:
-        sa += 1.0
-        ra.append("🛏️ OppB2B")
+    # 4. WEIGHTED FATIGUE (replaces boolean B2B)
+    fatigue_diff = away_fatigue - home_fatigue
+    if fatigue_diff >= 3.0:
+        sh += min(fatigue_diff / 2, 2.0)
+        rh.append("😴 OppFatigue")
+    elif fatigue_diff <= -3.0:
+        sa += min(abs(fatigue_diff) / 2, 2.0)
+        ra.append("😴 OppFatigue")
     
-    # 5. RECORD (1.0x)
+    # 5. RECORD
     try:
         h_wins, h_losses = map(int, home_record.split("-")[:2]) if home_record else (0, 0)
         a_wins, a_losses = map(int, away_record.split("-")[:2]) if away_record else (0, 0)
@@ -379,9 +543,10 @@ def market_edge_engine(g, yesterday_teams, ap_rankings):
         elif a_pct - h_pct > 0.20:
             sa += 1.0
             ra.append(f"📈 {away_record}")
-    except: pass
+    except:
+        pass
     
-    # 6. TOP 10 BONUS (1.0x)
+    # 6. TOP 10 BONUS
     if home_ap > 0 and home_ap <= 10 and away_ap == 0:
         sh += 1.0
         rh.append("🔝 Top10")
@@ -397,38 +562,28 @@ def market_edge_engine(g, yesterday_teams, ap_rankings):
         return {
             "pick": home_abbrev, "pick_name": home_team,
             "pick_ap": home_ap, "opp": away_abbrev, "opp_ap": away_ap,
-            "score": hf, "reasons": rh[:4], "is_home": True
+            "score": hf, "reasons": rh[:4], "is_home": True,
+            "pick_fatigue": home_fatigue, "opp_fatigue": away_fatigue
         }
     else:
         return {
             "pick": away_abbrev, "pick_name": away_team,
             "pick_ap": away_ap, "opp": home_abbrev, "opp_ap": home_ap,
-            "score": af, "reasons": ra[:4], "is_home": False
+            "score": af, "reasons": ra[:4], "is_home": False,
+            "pick_fatigue": away_fatigue, "opp_fatigue": home_fatigue
         }
 
-def get_market_tier(score):
-    """Market Engine tier assignment"""
-    if score >= 9.8: return "🔒 STRONG", "#00ff00", True
-    elif score >= 8.0: return "🔵 BUY", "#00aaff", False
-    elif score >= 5.5: return "🟡 LEAN", "#ffaa00", False
-    else: return "⚪ PASS", "#666666", False
-
 # ============================================================
-# ENGINE 2: TEAM STRENGTH ANALYZER (NEW)
-# Factors: Recent form, Home/Away splits, Strength rating, Fatigue
-# Output: Pick + Confidence (CONFIDENT / SLIGHT / NO EDGE)
+# ENGINE 2: TEAM STRENGTH ANALYZER
+# Preserves signed edge internally; abs() only for display
 # ============================================================
-def team_strength_analyzer(g, streaks, splits, yesterday_teams, ap_rankings):
-    """
-    TEAM STRENGTH ANALYZER - Evaluates team performance factors
-    INDEPENDENT from Market Edge Engine
-    """
+def team_strength_analyzer(g, streaks, splits, fatigue_data, ap_rankings):
     home_abbrev = g["home_abbrev"]
     away_abbrev = g["away_abbrev"]
     
-    sh, sa = 0, 0  # Strength scores
+    sh, sa = 0, 0
     
-    # 1. RECENT FORM (streak-based)
+    # 1. RECENT FORM
     home_streak = streaks.get(home_abbrev, 0)
     away_streak = streaks.get(away_abbrev, 0)
     
@@ -446,12 +601,10 @@ def team_strength_analyzer(g, streaks, splits, yesterday_teams, ap_rankings):
     home_split = splits.get(home_abbrev, {})
     away_split = splits.get(away_abbrev, {})
     
-    # Home team's home record
     home_hw = home_split.get("home_w", 0)
     home_hl = home_split.get("home_l", 0)
     home_home_pct = home_hw / (home_hw + home_hl) if (home_hw + home_hl) >= 3 else 0.5
     
-    # Away team's away record
     away_aw = away_split.get("away_w", 0)
     away_al = away_split.get("away_l", 0)
     away_away_pct = away_aw / (away_aw + away_al) if (away_aw + away_al) >= 3 else 0.5
@@ -463,7 +616,7 @@ def team_strength_analyzer(g, streaks, splits, yesterday_teams, ap_rankings):
     elif away_away_pct >= 0.60: sa += 0.75
     elif away_away_pct <= 0.33: sh += 1.0
     
-    # 3. STRENGTH RATING (AP rank as proxy)
+    # 3. STRENGTH RATING
     home_ap = ap_rankings.get(home_abbrev, 0)
     away_ap = ap_rankings.get(away_abbrev, 0)
     
@@ -475,123 +628,149 @@ def team_strength_analyzer(g, streaks, splits, yesterday_teams, ap_rankings):
     elif away_ap > 0 and away_ap <= 15: sa += 1.0
     elif away_ap > 0: sa += 0.5
     
-    # 4. FATIGUE DENSITY (B2B + recent games)
-    home_b2b = home_abbrev in yesterday_teams
-    away_b2b = away_abbrev in yesterday_teams
+    # 4. WEIGHTED FATIGUE
+    home_fatigue = calculate_fatigue_score(home_abbrev, fatigue_data)
+    away_fatigue = calculate_fatigue_score(away_abbrev, fatigue_data)
     
-    if home_b2b: sa += 1.5
-    if away_b2b: sh += 1.5
+    if home_fatigue >= 4.0: sa += home_fatigue / 3
+    if away_fatigue >= 4.0: sh += away_fatigue / 3
     
-    # Calculate edge and confidence
-    edge = sh - sa
+    # SIGNED EDGE (preserved internally)
+    signed_edge = sh - sa
     
-    if edge >= 3.0:
-        return {"pick": home_abbrev, "confidence": "CONFIDENT", "edge": round(edge, 1), "is_home": True}
-    elif edge >= 1.5:
-        return {"pick": home_abbrev, "confidence": "SLIGHT", "edge": round(edge, 1), "is_home": True}
-    elif edge <= -3.0:
-        return {"pick": away_abbrev, "confidence": "CONFIDENT", "edge": round(abs(edge), 1), "is_home": False}
-    elif edge <= -1.5:
-        return {"pick": away_abbrev, "confidence": "SLIGHT", "edge": round(abs(edge), 1), "is_home": False}
+    if signed_edge >= 3.0:
+        return {"pick": home_abbrev, "confidence": "CONFIDENT", "edge": signed_edge, "is_home": True}
+    elif signed_edge >= 1.5:
+        return {"pick": home_abbrev, "confidence": "SLIGHT", "edge": signed_edge, "is_home": True}
+    elif signed_edge <= -3.0:
+        return {"pick": away_abbrev, "confidence": "CONFIDENT", "edge": signed_edge, "is_home": False}
+    elif signed_edge <= -1.5:
+        return {"pick": away_abbrev, "confidence": "SLIGHT", "edge": signed_edge, "is_home": False}
     else:
-        # No clear edge - pick higher rated team but NO EDGE confidence
         if sh >= sa:
-            return {"pick": home_abbrev, "confidence": "NO EDGE", "edge": round(edge, 1), "is_home": True}
+            return {"pick": home_abbrev, "confidence": "NO EDGE", "edge": signed_edge, "is_home": True}
         else:
-            return {"pick": away_abbrev, "confidence": "NO EDGE", "edge": round(abs(edge), 1), "is_home": False}
+            return {"pick": away_abbrev, "confidence": "NO EDGE", "edge": signed_edge, "is_home": False}
 
 # ============================================================
-# UNIFIED ENGINE: COMBINE AT DECISION LAYER ONLY
+# STRENGTHENED ENGINE AGREEMENT LOGIC
 # ============================================================
-def get_final_signal(market_result, analyzer_result):
+def check_engine_agreement(market, analyzer):
     """
-    FINAL SIGNAL LOGIC - Combines both engines at decision layer
-    NEVER blends scores mathematically
+    Strengthened agreement check to prevent false alignment.
+    Requires: same pick AND directionally consistent reasoning.
     """
-    market_tier, market_color, market_tracked = get_market_tier(market_result["score"])
-    analyzer_conf = analyzer_result["confidence"]
+    # Basic pick agreement
+    if market["pick"] != analyzer["pick"]:
+        return False, "DISAGREE"
     
-    # Check agreement
-    engines_agree = market_result["pick"] == analyzer_result["pick"]
+    # Check directional consistency
+    # Market picked home = analyzer edge should be positive (favors home)
+    # Market picked away = analyzer edge should be negative (favors away)
+    if market["is_home"] and analyzer["edge"] < 0:
+        return False, "WEAK"  # Market likes home but analyzer math favors away
+    if not market["is_home"] and analyzer["edge"] > 0:
+        return False, "WEAK"  # Market likes away but analyzer math favors home
     
-    # STRONG+ = STRONG + CONFIDENT + agreement
-    if "STRONG" in market_tier and analyzer_conf == "CONFIDENT" and engines_agree:
-        return {
-            "final_tier": "🔒 STRONG+",
-            "final_color": "#00ff00",
-            "is_tracked": True,
-            "engines_agree": True,
-            "agreement_icon": "🧠"
-        }
+    # Check confidence alignment
+    if analyzer["confidence"] == "NO EDGE":
+        return True, "SOFT"  # Agree on pick but no conviction
     
-    # STRONG = STRONG only (no dual confirmation)
-    elif "STRONG" in market_tier:
-        return {
-            "final_tier": "🔒 STRONG",
-            "final_color": "#00ff00",
-            "is_tracked": True,
-            "engines_agree": engines_agree,
-            "agreement_icon": "🧠" if engines_agree else "⚠️"
-        }
-    
-    # BUY = BUY + CONFIDENT
-    elif "BUY" in market_tier and analyzer_conf == "CONFIDENT" and engines_agree:
-        return {
-            "final_tier": "🔵 BUY",
-            "final_color": "#00aaff",
-            "is_tracked": False,
-            "engines_agree": True,
-            "agreement_icon": "🧠"
-        }
-    
-    # LEAN = Everything else above threshold
-    elif market_result["score"] >= 5.5:
-        return {
-            "final_tier": "🟡 LEAN",
-            "final_color": "#ffaa00",
-            "is_tracked": False,
-            "engines_agree": engines_agree,
-            "agreement_icon": "🧠" if engines_agree else "⚠️"
-        }
-    
-    # PASS = Low score or disagreement
-    else:
-        return {
-            "final_tier": "⚪ PASS",
-            "final_color": "#666666",
-            "is_tracked": False,
-            "engines_agree": engines_agree,
-            "agreement_icon": "⚠️" if not engines_agree else ""
-        }
+    return True, "STRONG"
 
 # ============================================================
-# FETCH ALL DATA ONCE
+# FINAL SIGNAL LOGIC
+# ============================================================
+def get_final_signal(market, analyzer):
+    score = market["score"]
+    conf = analyzer["confidence"]
+    signed_edge = analyzer["edge"]
+    pick_fatigue = market.get("pick_fatigue", 0)
+    
+    agrees, agreement_strength = check_engine_agreement(market, analyzer)
+    
+    # STRONG+ (ultra-rare)
+    if (score >= 9.9 and 
+        conf == "CONFIDENT" and 
+        abs(signed_edge) >= 3.0 and 
+        agrees and 
+        agreement_strength == "STRONG" and
+        pick_fatigue < 3.0):
+        return {
+            "final_tier": "STRONG+",
+            "display_tier": "🔒 STRONG+",
+            "final_color": "#00ff00",
+            "is_tracked": True,
+            "is_conviction": True,
+            "engines_agree": True,
+            "agreement_icon": "🧠",
+            "agreement_strength": agreement_strength
+        }
+    
+    # STRONG
+    if (score >= 9.5 and 
+        conf != "NO EDGE" and 
+        agrees and 
+        agreement_strength in ["STRONG", "SOFT"] and
+        pick_fatigue < 4.0):
+        return {
+            "final_tier": "STRONG",
+            "display_tier": "🔒 STRONG",
+            "final_color": "#00ff00",
+            "is_tracked": True,
+            "is_conviction": True,
+            "engines_agree": True,
+            "agreement_icon": "🧠",
+            "agreement_strength": agreement_strength
+        }
+    
+    # BUY (hidden by default)
+    if (score >= 8.5 and 
+        conf == "CONFIDENT" and 
+        agrees and
+        agreement_strength != "WEAK"):
+        return {
+            "final_tier": "BUY",
+            "display_tier": "BUY",
+            "final_color": "#444",
+            "is_tracked": False,
+            "is_conviction": False,
+            "engines_agree": True,
+            "agreement_icon": "",
+            "agreement_strength": agreement_strength
+        }
+    
+    # PASS
+    return {
+        "final_tier": "PASS",
+        "display_tier": "PASS",
+        "final_color": "#333",
+        "is_tracked": False,
+        "is_conviction": False,
+        "engines_agree": agrees,
+        "agreement_icon": "⚠️" if not agrees else "",
+        "agreement_strength": agreement_strength
+    }
+
+# ============================================================
+# FETCH ALL DATA (OPTIMIZED API CALLS)
 # ============================================================
 games = fetch_espn_ncaa_scores()
-yesterday_teams = fetch_yesterday_teams()
 ap_rankings = fetch_ap_rankings()
 news = fetch_cbb_news()
-streaks = fetch_team_streaks()
-splits = fetch_team_home_away_splits()
-now = datetime.now(eastern)
 
-# Filter yesterday teams to today's teams only
-today_teams = set()
-for gk in games.keys():
-    parts = gk.split("@")
-    today_teams.add(parts[0])
-    today_teams.add(parts[1])
-yesterday_teams = yesterday_teams.intersection(today_teams)
+# Single cached historical fetch - derive all stats from it
+historical = fetch_historical_scoreboards(14)
+streaks, splits, fatigue_data = derive_team_stats_from_cache(historical)
 
 # ============================================================
-# PRECOMPUTE ALL SCORES WITH DUAL ENGINE
+# PRECOMPUTE ALL SCORES
 # ============================================================
 precomputed = {}
 for gk, g in games.items():
     try:
-        # Run both engines independently
-        market = market_edge_engine(g, yesterday_teams, ap_rankings)
-        analyzer = team_strength_analyzer(g, streaks, splits, yesterday_teams, ap_rankings)
+        market = market_edge_engine(g, fatigue_data, ap_rankings, splits)
+        analyzer = team_strength_analyzer(g, streaks, splits, fatigue_data, ap_rankings)
         final = get_final_signal(market, analyzer)
         
         precomputed[gk] = {
@@ -599,7 +778,6 @@ for gk, g in games.items():
             "away_abbrev": g["away_abbrev"],
             "home_abbrev": g["home_abbrev"],
             "status_type": g.get("status_type", "STATUS_SCHEDULED"),
-            # Market Engine results
             "market_pick": market["pick"],
             "market_pick_name": market["pick_name"],
             "market_pick_ap": market["pick_ap"],
@@ -608,24 +786,27 @@ for gk, g in games.items():
             "market_score": market["score"],
             "market_reasons": market["reasons"],
             "market_is_home": market["is_home"],
-            # Analyzer results
+            "pick_fatigue": market.get("pick_fatigue", 0),
             "analyzer_pick": analyzer["pick"],
             "analyzer_conf": analyzer["confidence"],
-            "analyzer_edge": analyzer["edge"],
-            # Final combined signal
+            "analyzer_edge_signed": analyzer["edge"],  # Preserved signed
+            "analyzer_edge_display": round(abs(analyzer["edge"]), 1),  # abs() for display
             "final_tier": final["final_tier"],
+            "display_tier": final["display_tier"],
             "final_color": final["final_color"],
             "is_tracked": final["is_tracked"],
+            "is_conviction": final["is_conviction"],
             "engines_agree": final["engines_agree"],
-            "agreement_icon": final["agreement_icon"]
+            "agreement_icon": final["agreement_icon"],
+            "agreement_strength": final["agreement_strength"]
         }
-    except: continue
+    except:
+        continue
 
-# Sort by market score and assign pick_order
 sorted_picks = sorted(precomputed.values(), key=lambda x: x["market_score"], reverse=True)
-for idx, p in enumerate(sorted_picks, start=1):
-    p["pick_order"] = idx
-    precomputed[p["game_key"]]["pick_order"] = idx
+conviction_picks = [p for p in sorted_picks if p["is_conviction"]]
+buy_picks = [p for p in sorted_picks if p["final_tier"] == "BUY"]
+strong_plus_picks = [p for p in conviction_picks if p["final_tier"] == "STRONG+"]
 
 live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_type'] != "STATUS_FINAL"}
 
@@ -633,139 +814,176 @@ live_games = {k: v for k, v in games.items() if v['period'] > 0 and v['status_ty
 # SIDEBAR
 # ============================================================
 with st.sidebar:
-    st.header("📖 SIGNAL TIERS")
+    st.header("📖 CONVICTION TIERS")
     st.markdown("""
-🔒 **STRONG+** → Dual Confirmed
-<span style="color:#888;font-size:0.85em">Market + Analyzer agree</span>
+🔒 **STRONG+** → Dual confirmed
+<span style="color:#666;font-size:0.8em">Ultra-rare • All gates pass</span>
 
-🔒 **STRONG** → 9.8+
-<span style="color:#888;font-size:0.85em">Market signal only</span>
-
-🔵 **BUY** → 8.0+ + Confident
-<span style="color:#888;font-size:0.85em">Dual confirmation</span>
-
-🟡 **LEAN** → 5.5+
-<span style="color:#888;font-size:0.85em">Single engine</span>
-
-⚪ **PASS** → No edge
+🔒 **STRONG** → High conviction
+<span style="color:#666;font-size:0.8em">Tracked • Engines aligned</span>
 """, unsafe_allow_html=True)
     st.divider()
-    st.header("🧠 DUAL ENGINE")
     st.markdown("""
-<span style="color:#888;font-size:0.85em">
-**Engine 1: Market**<br>
-• Home court • AP rank<br>
-• Conference • Record • B2B<br><br>
-**Engine 2: Analyzer**<br>
-• Recent form • Splits<br>
-• Strength • Fatigue
+<div style="background:#111;padding:10px;border-radius:6px;border:1px solid #222">
+<span style="color:#666;font-size:0.8em">
+Accuracy over frequency.<br>
+Some days have no bets.<br>
+No play is a valid signal.
 </span>
+</div>
 """, unsafe_allow_html=True)
     st.divider()
-    st.caption("v2.0 DUAL ENGINE")
+    st.caption("v2.2 HARDENED")
 
 # ============================================================
 # TITLE
 # ============================================================
 st.title("🎓 NCAA EDGE FINDER")
-st.caption("Dual Confirmation Model | v2.0")
-st.markdown("<p style='color:#888;font-size:0.85em;margin-top:-10px'>🧠 = Engines agree | ⚠️ = Engines disagree</p>", unsafe_allow_html=True)
+st.caption("Conviction-Grade Only | v2.2")
+
+st.markdown("""
+<div style="background:#0a0a14;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:3px solid #333">
+    <span style="color:#666;font-size:0.85em">Accuracy over frequency. Only dual-confirmed, conviction-grade plays are shown.</span>
+</div>
+""", unsafe_allow_html=True)
 
 # ============================================================
-# 💰 TOP PICK OF THE DAY (ONLY IF STRONG+)
+# TOP PICK (STRONG+ ONLY)
 # ============================================================
-def get_top_pick():
-    scheduled = [p for p in sorted_picks if p.get('status_type') == "STATUS_SCHEDULED"]
-    for p in scheduled:
-        if "STRONG+" in p["final_tier"]:
-            return p
-    return None
+scheduled_strong_plus = [p for p in strong_plus_picks if p.get('status_type') == "STATUS_SCHEDULED"]
 
-top_pick = get_top_pick()
-if top_pick:
-    kalshi_url = build_kalshi_ncaa_url(top_pick["away_abbrev"], top_pick["home_abbrev"])
-    buy_btn = get_buy_button_html(kalshi_url, "🎯 BUY NOW")
-    ap_display = f"#{top_pick['market_pick_ap']} " if top_pick['market_pick_ap'] > 0 else ""
-    
-    st.markdown(f"""
-    <div style="background:linear-gradient(135deg,#0a2a0a,#1a3a1a);padding:20px;border-radius:12px;border:3px solid #00ff00;margin:15px 0;text-align:center">
-        <div style="color:#888;font-size:0.9em;margin-bottom:8px">💰 TOP PICK OF THE DAY — DUAL CONFIRMED</div>
-        <div style="font-size:2.2em;font-weight:bold;color:#fff;margin-bottom:5px">{escape_html(ap_display)}{escape_html(top_pick['market_pick'])} 🧠</div>
-        <div style="color:#00ff00;font-size:1.4em;font-weight:bold;margin-bottom:10px">{top_pick['final_tier']} {top_pick['market_score']}/10</div>
-        <div style="color:#aaa;font-size:0.9em;margin-bottom:8px">vs {escape_html(top_pick['market_opp'])} • {' · '.join(top_pick['market_reasons'][:3])}</div>
-        <div style="color:#38bdf8;font-size:0.85em;margin-bottom:12px">Analyzer: {top_pick['analyzer_conf']} ({top_pick['analyzer_edge']} edge)</div>
-        <div>{buy_btn if kalshi_url else '<span style="color:#666">Market loading...</span>'}</div>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.markdown("""
-    <div style="background:#1a1a2e;padding:15px;border-radius:8px;text-align:center;margin:15px 0;border:1px solid #333">
-        <span style="color:#888">No STRONG+ picks today — engines not aligned on any game</span>
-    </div>
-    """, unsafe_allow_html=True)
+if scheduled_strong_plus:
+    for idx, top_pick in enumerate(scheduled_strong_plus):
+        kalshi_url = build_kalshi_ncaa_url(top_pick["away_abbrev"], top_pick["home_abbrev"])
+        buy_btn = get_buy_button_html(kalshi_url, "🎯 EXECUTE")
+        ap_display = f"#{top_pick['market_pick_ap']} " if top_pick['market_pick_ap'] > 0 else ""
+        pick_label = f"#{idx+1} " if len(scheduled_strong_plus) > 1 else ""
+        
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#0a1a0a,#0f1f0f);padding:20px;border-radius:12px;border:2px solid #00aa00;margin:15px 0;text-align:center">
+            <div style="color:#00aa00;font-size:0.8em;margin-bottom:8px;letter-spacing:1px">🔒 CONVICTION-GRADE {escape_html(pick_label)}</div>
+            <div style="font-size:2em;font-weight:bold;color:#fff;margin-bottom:5px">{escape_html(ap_display)}{escape_html(top_pick['market_pick'])} 🧠</div>
+            <div style="color:#00aa00;font-size:1.2em;font-weight:bold;margin-bottom:10px">STRONG+ • {top_pick['market_score']}/10</div>
+            <div style="color:#888;font-size:0.85em;margin-bottom:8px">vs {escape_html(top_pick['market_opp'])} • {' · '.join(top_pick['market_reasons'][:3])}</div>
+            <div style="color:#555;font-size:0.8em;margin-bottom:12px">Analyzer: {top_pick['analyzer_conf']} • Edge: {top_pick['analyzer_edge_display']}</div>
+            <div>{buy_btn if kalshi_url else ''}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-# STATS SUMMARY
-col1, col2, col3, col4 = st.columns(4)
+# ============================================================
+# STATS
+# ============================================================
+col1, col2, col3 = st.columns(3)
 with col1:
     st.metric("Games", len(games))
 with col2:
-    strong_plus = sum(1 for p in sorted_picks if "STRONG+" in p["final_tier"])
-    st.metric("🔒 STRONG+", strong_plus)
+    st.metric("🔒 Conviction", len(conviction_picks))
 with col3:
-    agreed = sum(1 for p in sorted_picks if p["engines_agree"])
-    st.metric("🧠 Aligned", f"{agreed}/{len(sorted_picks)}")
-with col4:
     strong_wins = sum(1 for pos in st.session_state.ncaa_positions 
                       if pos.get('tracked') and games.get(pos.get('game'), {}).get('status_type') == "STATUS_FINAL"
                       and ((pos.get('pick') == pos.get('game', '').split('@')[1] and games.get(pos.get('game'), {}).get('home_score', 0) > games.get(pos.get('game'), {}).get('away_score', 0))
                            or (pos.get('pick') == pos.get('game', '').split('@')[0] and games.get(pos.get('game'), {}).get('away_score', 0) > games.get(pos.get('game'), {}).get('home_score', 0))))
     strong_total = sum(1 for pos in st.session_state.ncaa_positions 
                        if pos.get('tracked') and games.get(pos.get('game'), {}).get('status_type') == "STATUS_FINAL")
-    st.metric("📊 Today", f"{strong_wins}-{strong_total - strong_wins}" if strong_total > 0 else "0-0")
-
-# LEGEND
-st.markdown("""
-<div style="background:linear-gradient(135deg,#0f172a,#1a1a2e);padding:12px 16px;border-radius:8px;margin:10px 0;border:1px solid #333">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap">
-            <span style="color:#00ff00;font-weight:bold">🔒 STRONG+ (dual)</span>
-            <span style="color:#00ff00">🔒 STRONG</span>
-            <span style="color:#00aaff">🔵 BUY</span>
-            <span style="color:#ffaa00">🟡 LEAN</span>
-            <span style="color:#666">⚪ PASS</span>
-        </div>
-        <span style="color:#888;font-size:0.8em">🧠 agree | ⚠️ disagree</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# Status indicator
-scheduled_games = [g for g in games.values() if g.get('status_type') == "STATUS_SCHEDULED"]
-if scheduled_games and not live_games:
-    st.markdown(f"""<div style="background:#1a1a2e;padding:10px 15px;border-radius:6px;text-align:center;margin-bottom:10px;border-left:3px solid #38bdf8">
-        <span style="color:#38bdf8;font-weight:bold">⏰ {len(scheduled_games)} games scheduled</span>
-    </div>""", unsafe_allow_html=True)
-elif live_games:
-    st.markdown(f"""<div style="background:#1a2a1a;padding:10px 15px;border-radius:6px;text-align:center;margin-bottom:10px;border-left:3px solid #00ff00">
-        <span style="color:#00ff00;font-weight:bold">🔴 {len(live_games)} LIVE NOW</span>
-    </div>""", unsafe_allow_html=True)
+    st.metric("📊 Record", f"{strong_wins}-{strong_total - strong_wins}" if strong_total > 0 else "—")
 
 st.divider()
 
-# 📰 NEWS
-if news:
-    st.subheader("📰 BREAKING NEWS")
-    for article in news[:3]:
-        if article.get("headline"):
-            link = article.get("link", "#")
-            st.markdown(f"""<div style="background:#0f172a;padding:10px 12px;border-radius:6px;margin-bottom:6px;border-left:3px solid #38bdf8">
-                <a href="{link}" target="_blank" style="color:#fff;text-decoration:none;font-weight:bold;font-size:0.95em">{escape_html(article['headline'])}</a>
-            </div>""", unsafe_allow_html=True)
-    st.divider()
+# ============================================================
+# CONVICTION PLAYS
+# ============================================================
+st.subheader("🔒 CONVICTION-GRADE PLAYS")
 
-# LIVE GAMES
+scheduled_conviction = [p for p in conviction_picks if p.get('status_type') == "STATUS_SCHEDULED"]
+
+if scheduled_conviction:
+    st.caption(f"{len(scheduled_conviction)} play{'s' if len(scheduled_conviction) != 1 else ''}")
+    
+    for p in scheduled_conviction:
+        if p["final_tier"] == "STRONG+" and p in scheduled_strong_plus:
+            continue
+            
+        gk = p["game_key"]
+        kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
+        reasons_str = " · ".join([escape_html(r) for r in p["market_reasons"][:3]])
+        ap_badge = f" <span style='color:#997700;font-size:0.8em'>AP{p['market_pick_ap']}</span>" if p['market_pick_ap'] > 0 else ""
+        buy_btn = get_buy_button_html(kalshi_url)
+        
+        st.markdown(f"""<div style="background:#0a0a14;padding:12px 16px;border-radius:8px;border-left:3px solid {p['final_color']};margin-bottom:8px">
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+<span style="color:{p['final_color']};font-weight:bold">{escape_html(p['display_tier'])}</span>
+<b style="color:#fff;font-size:1.1em">{escape_html(p['market_pick'])}</b>{ap_badge}
+<span style="color:#555">vs {escape_html(p['market_opp'])}</span>
+<span style="color:#38bdf8;font-weight:bold">{p['market_score']}/10</span>
+<span style="font-size:0.9em">{p['agreement_icon']}</span>
+</div>
+{buy_btn}
+</div>
+<div style="color:#555;font-size:0.75em;margin-top:8px">{reasons_str} • Analyzer: {p['analyzer_conf']}</div>
+</div>""", unsafe_allow_html=True)
+    
+    if st.button(f"➕ Track {len(scheduled_conviction)} Play{'s' if len(scheduled_conviction) != 1 else ''}", use_container_width=True, key="add_conviction"):
+        added = 0
+        for p in scheduled_conviction:
+            if not any(pos.get('game') == p['game_key'] and pos.get('pick') == p['market_pick'] for pos in st.session_state.ncaa_positions):
+                st.session_state.ncaa_positions.append({
+                    "game": p['game_key'], "type": "ml",
+                    "pick": p['market_pick'], "pick_name": p['market_pick_name'],
+                    "price": 50, "contracts": 1, "tracked": True
+                })
+                added += 1
+        if added:
+            save_positions(st.session_state.ncaa_positions)
+            st.rerun()
+else:
+    st.markdown("""
+    <div style="background:#0a0a14;padding:30px;border-radius:12px;text-align:center;border:1px solid #1a1a1a">
+        <div style="color:#333;font-size:1.3em;margin-bottom:10px">📭</div>
+        <div style="color:#888;font-size:1em;margin-bottom:8px">No conviction-grade plays today</div>
+        <div style="color:#444;font-size:0.8em">Both engines must align with high confidence.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.divider()
+
+# ============================================================
+# BUY SIGNALS (MAXIMALLY DEMOTED)
+# ============================================================
+scheduled_buy = [p for p in buy_picks if p.get('status_type') == "STATUS_SCHEDULED"]
+
+if scheduled_buy:
+    st.session_state.show_buy_signals = st.checkbox(
+        f"Show {len(scheduled_buy)} lower-conviction opportunities (informational only)",
+        value=st.session_state.show_buy_signals,
+        key="buy_toggle"
+    )
+    
+    if st.session_state.show_buy_signals:
+        st.markdown("<p style='color:#333;font-size:0.75em;margin-bottom:10px'>⚠️ Not tracked. Not recommended. For reference only.</p>", unsafe_allow_html=True)
+        
+        for p in scheduled_buy:
+            gk = p["game_key"]
+            kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
+            
+            st.markdown(f"""<div style="background:#050508;padding:8px 12px;border-radius:4px;border-left:1px solid #222;margin-bottom:4px;opacity:0.6">
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px">
+<div style="display:flex;align-items:center;gap:6px">
+<span style="color:#333;font-size:0.75em">BUY</span>
+<span style="color:#555;font-size:0.85em">{escape_html(p['market_pick'])} v {escape_html(p['market_opp'])}</span>
+<span style="color:#333;font-size:0.75em">{p['market_score']}</span>
+</div>
+<a href="{kalshi_url}" target="_blank" style="color:#333;font-size:0.65em;text-decoration:none">view →</a>
+</div>
+</div>""", unsafe_allow_html=True)
+
+st.divider()
+
+# ============================================================
+# LIVE GAMES (GUARDED PACE PROJECTION)
+# ============================================================
 if live_games:
-    st.subheader("⚡ LIVE GAMES")
+    st.subheader("⚡ LIVE")
     hdr1, hdr2, hdr3 = st.columns([3, 1, 1])
     hdr1.caption(f"{auto_status} | {now.strftime('%I:%M:%S %p ET')}")
     if hdr2.button("🔄 Auto" if not st.session_state.auto_refresh else "⏹️ Stop", use_container_width=True, key="auto_live"):
@@ -778,8 +996,14 @@ if live_games:
         half, clock = g['period'], g['clock']
         diff = abs(g['home_score'] - g['away_score'])
         mins = get_minutes_played(half, clock, g['status_type'])
-        pace = round(g['total'] / mins, 2) if mins > 0 else 0
-        proj = round(pace * 40) if mins > 0 else 0
+        
+        # GUARDED PACE PROJECTION - require minimum 5 minutes to avoid distortion
+        if mins >= 5:
+            pace = round(g['total'] / mins, 2)
+            proj = round(pace * 40)
+            pace_display = f"→ {proj}"
+        else:
+            pace_display = "—"
         
         if half >= 3: state, clr = "OT", "#ff0000"
         elif half == 2 and diff <= 8: state, clr = "CLOSE", "#ffaa00"
@@ -791,176 +1015,17 @@ if live_games:
         home_display = f"#{home_ap} " if home_ap > 0 else ""
         half_label = "H1" if half == 1 else "H2" if half == 2 else f"OT{half-2}"
         
-        st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#0a0a1e);padding:12px;border-radius:10px;border:2px solid {clr};margin-bottom:8px">
+        st.markdown(f"""<div style="background:#0a0a14;padding:12px;border-radius:8px;border:1px solid {clr};margin-bottom:8px">
             <div style="display:flex;justify-content:space-between;align-items:center">
-                <b style="color:#fff;font-size:1.1em">{escape_html(away_display)}{escape_html(g['away_abbrev'])} {g['away_score']} @ {escape_html(home_display)}{escape_html(g['home_abbrev'])} {g['home_score']}</b>
-                <div><span style="color:{clr};font-weight:bold">{half_label} {escape_html(clock)}</span> | <span style="color:#888">Pace: {pace}/min → {proj}</span></div>
+                <b style="color:#fff">{escape_html(away_display)}{escape_html(g['away_abbrev'])} {g['away_score']} @ {escape_html(home_display)}{escape_html(g['home_abbrev'])} {g['home_score']}</b>
+                <div><span style="color:{clr};font-weight:bold">{half_label} {escape_html(clock)}</span> <span style="color:#444">{pace_display}</span></div>
             </div></div>""", unsafe_allow_html=True)
     st.divider()
 
 # ============================================================
-# ML PICKS - DUAL ENGINE VIEW
+# TRACKED POSITIONS
 # ============================================================
-st.subheader("🎯 ML PICKS")
-
-if sorted_picks:
-    for p in sorted_picks:
-        if p["market_score"] < 5.5:
-            continue
-        
-        gk = p["game_key"]
-        kalshi_url = build_kalshi_ncaa_url(p["away_abbrev"], p["home_abbrev"])
-        reasons_str = " · ".join([escape_html(r) for r in p["market_reasons"][:3]])
-        
-        g = games.get(gk, {})
-        if g.get('status_type') == "STATUS_FINAL":
-            status_badge, status_color = "FINAL", "#888"
-        elif g.get('period', 0) > 0:
-            half_label = "H1" if g['period'] == 1 else "H2" if g['period'] == 2 else f"OT{g['period']-2}"
-            status_badge = f"{half_label} {escape_html(g.get('clock', ''))}"
-            status_color = "#ff4444"
-        else:
-            status_badge, status_color = "PRE", "#00ff00"
-        
-        tracked_badge = ' <span style="background:#00ff00;color:#000;padding:1px 4px;border-radius:3px;font-size:0.65em">📊</span>' if p["is_tracked"] else ""
-        border_width = "3px" if p["is_tracked"] else "2px"
-        
-        order_display = f"#{p['pick_order']}"
-        ap_badge = f" <span style='color:#ffaa00;font-size:0.75em'>AP{p['market_pick_ap']}</span>" if p['market_pick_ap'] > 0 else ""
-        
-        # Analyzer confidence badge
-        conf_colors = {"CONFIDENT": "#00ff00", "SLIGHT": "#ffaa00", "NO EDGE": "#666"}
-        conf_color = conf_colors.get(p["analyzer_conf"], "#666")
-        
-        buy_btn = get_buy_button_html(kalshi_url)
-        
-        st.markdown(f"""<div style="background:#0f172a;padding:8px 12px;border-radius:6px;border-left:{border_width} solid {p['final_color']};margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-<span style="color:{p['final_color']};font-weight:bold;font-size:0.85em">{escape_html(p['final_tier'])}</span>
-<span style="color:#666;font-size:0.8em">{order_display}</span>
-<b style="color:#fff">{escape_html(p['market_pick'])}</b>{ap_badge}
-<span style="color:#555">v {escape_html(p['market_opp'])}</span>
-<span style="color:#38bdf8;font-weight:bold">{p['market_score']}</span>
-<span style="font-size:0.9em">{p['agreement_icon']}</span>{tracked_badge}
-<span style="color:{status_color};font-size:0.75em">{status_badge}</span>
-</div>
-{buy_btn}
-</div>
-<div style="color:#666;font-size:0.75em;margin:-2px 0 6px 14px">{reasons_str} | <span style="color:{conf_color}">Analyzer: {p['analyzer_conf']}</span></div>""", unsafe_allow_html=True)
-    
-    # Add tracked picks
-    scheduled_tracked = [p for p in sorted_picks if p["is_tracked"] and p.get('status_type') == "STATUS_SCHEDULED"]
-    if scheduled_tracked:
-        if st.button(f"➕ Add {len(scheduled_tracked)} Tracked Picks", use_container_width=True, key="add_ncaa_picks"):
-            added = 0
-            for p in scheduled_tracked:
-                if not any(pos.get('game') == p['game_key'] and pos.get('pick') == p['market_pick'] for pos in st.session_state.ncaa_positions):
-                    st.session_state.ncaa_positions.append({
-                        "game": p['game_key'], "type": "ml",
-                        "pick": p['market_pick'], "pick_name": p['market_pick_name'],
-                        "price": 50, "contracts": 1, "tracked": True
-                    })
-                    added += 1
-            if added:
-                save_positions(st.session_state.ncaa_positions)
-                st.rerun()
-else:
-    st.info("No games today — check back later!")
-
-st.divider()
-
-# ============================================================
-# 🔍 ON-DEMAND ANALYZER (User Control)
-# ============================================================
-st.subheader("🔍 GAME ANALYZER")
-st.caption("Select a matchup to see both engines' analysis")
-
-if games:
-    game_options = ["-- Select a game --"] + sorted(games.keys())
-    selected_game = st.selectbox("Choose matchup:", game_options, key="analyzer_select")
-    
-    if selected_game != "-- Select a game --" and selected_game in precomputed:
-        p = precomputed[selected_game]
-        g = games[selected_game]
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown(f"""<div style="background:#0f172a;padding:15px;border-radius:8px;border:2px solid #38bdf8">
-                <div style="color:#38bdf8;font-weight:bold;margin-bottom:10px">📊 MARKET ENGINE</div>
-                <div style="color:#fff;font-size:1.2em;margin-bottom:8px"><b>{escape_html(p['market_pick'])}</b> → {p['market_score']}/10</div>
-                <div style="color:#888;font-size:0.9em">{' · '.join(p['market_reasons'])}</div>
-                <div style="margin-top:10px;color:{p['final_color']};font-weight:bold">{p['final_tier']}</div>
-            </div>""", unsafe_allow_html=True)
-        
-        with col2:
-            conf_colors = {"CONFIDENT": "#00ff00", "SLIGHT": "#ffaa00", "NO EDGE": "#666"}
-            st.markdown(f"""<div style="background:#0f172a;padding:15px;border-radius:8px;border:2px solid {conf_colors.get(p['analyzer_conf'], '#666')}">
-                <div style="color:{conf_colors.get(p['analyzer_conf'], '#666')};font-weight:bold;margin-bottom:10px">🧠 TEAM ANALYZER</div>
-                <div style="color:#fff;font-size:1.2em;margin-bottom:8px"><b>{escape_html(p['analyzer_pick'])}</b> → {p['analyzer_conf']}</div>
-                <div style="color:#888;font-size:0.9em">Edge magnitude: {p['analyzer_edge']}</div>
-                <div style="margin-top:10px;color:{'#00ff00' if p['engines_agree'] else '#ff6666'};font-weight:bold">{'✅ ALIGNED' if p['engines_agree'] else '⚠️ DISAGREE'}</div>
-            </div>""", unsafe_allow_html=True)
-        
-        # Why explanation
-        if p['engines_agree']:
-            st.success(f"Both engines pick **{p['market_pick']}** — this is a stronger signal.")
-        else:
-            st.warning(f"Market picks **{p['market_pick']}** but Analyzer picks **{p['analyzer_pick']}** — proceed with caution.")
-
-st.divider()
-
-# HOT/COLD STREAKS
-hot_teams = []
-cold_teams = []
-for gk in games.keys():
-    parts = gk.split("@")
-    for team in parts:
-        streak = streaks.get(team, 0)
-        if streak >= 5: hot_teams.append({"team": team, "streak": streak})
-        elif streak <= -4: cold_teams.append({"team": team, "streak": streak})
-
-if hot_teams:
-    st.subheader("🔥 HOT STREAKS")
-    hot_cols = st.columns(min(len(hot_teams), 4))
-    for i, t in enumerate(sorted(hot_teams, key=lambda x: x['streak'], reverse=True)[:4]):
-        with hot_cols[i]:
-            st.markdown(f"""<div style="background:linear-gradient(135deg,#1a2a1a,#0a1a0a);padding:12px;border-radius:8px;text-align:center;border:2px solid #00ff00">
-                <div style="color:#fff;font-weight:bold;font-size:1.2em">{escape_html(t['team'])}</div>
-                <div style="color:#00ff00;font-size:1.1em;font-weight:bold">🔥 W{t['streak']}</div>
-            </div>""", unsafe_allow_html=True)
-    st.divider()
-
-if cold_teams:
-    st.subheader("❄️ FADE ALERT")
-    cold_cols = st.columns(min(len(cold_teams), 4))
-    for i, t in enumerate(sorted(cold_teams, key=lambda x: x['streak'])[:4]):
-        with cold_cols[i]:
-            st.markdown(f"""<div style="background:linear-gradient(135deg,#2a1a1a,#1a0a0a);padding:12px;border-radius:8px;text-align:center;border:2px solid #ff4444">
-                <div style="color:#fff;font-weight:bold;font-size:1.2em">{escape_html(t['team'])}</div>
-                <div style="color:#ff4444;font-size:1.1em;font-weight:bold">❄️ L{abs(t['streak'])}</div>
-            </div>""", unsafe_allow_html=True)
-    st.divider()
-
-# AP TOP 25
-st.subheader("📊 AP TOP 25")
-if ap_rankings:
-    sorted_rankings = sorted(ap_rankings.items(), key=lambda x: x[1])
-    rc1, rc2 = st.columns(2)
-    for i, (abbrev, rank) in enumerate(sorted_rankings[:25]):
-        with rc1 if i < 13 else rc2:
-            clr = "#00ff00" if rank <= 5 else "#88ff00" if rank <= 10 else "#ffff00" if rank <= 15 else "#ffaa00"
-            st.markdown(f"""<div style="display:flex;align-items:center;background:#0f172a;padding:5px 8px;margin-bottom:2px;border-radius:4px;border-left:2px solid {clr}">
-                <span style="color:{clr};font-weight:bold;width:24px">#{rank}</span>
-                <span style="color:#fff;font-weight:bold">{escape_html(abbrev)}</span>
-            </div>""", unsafe_allow_html=True)
-else:
-    st.info("Rankings unavailable")
-
-st.divider()
-
-# ACTIVE POSITIONS
-st.subheader("📈 ACTIVE POSITIONS")
+st.subheader("📈 TRACKED")
 
 if st.session_state.ncaa_positions:
     for idx, pos in enumerate(st.session_state.ncaa_positions):
@@ -969,7 +1034,6 @@ if st.session_state.ncaa_positions:
         price, contracts = pos.get('price', 50), pos.get('contracts', 1)
         cost = round(price * contracts / 100, 2)
         potential = round((100 - price) * contracts / 100, 2)
-        is_tracked_pos = pos.get('tracked', False)
         
         if g:
             pick = pos.get('pick', '')
@@ -981,22 +1045,21 @@ if st.session_state.ncaa_positions:
             
             if is_final:
                 won = pick_score > opp_score
-                label, clr = ("✅ WON", "#00ff00") if won else ("❌ LOST", "#ff0000")
+                label, clr = ("✅ WON", "#00aa00") if won else ("❌ LOST", "#aa0000")
                 pnl = f"+${potential:.2f}" if won else f"-${cost:.2f}"
             elif g['period'] > 0:
-                label, clr = ("🟢 CRUISING", "#00ff00") if lead >= 10 else ("🟡 CLOSE", "#ffff00") if lead >= 0 else ("🔴 BEHIND", "#ff0000")
-                pnl = f"Win: +${potential:.2f}"
+                label, clr = ("🟢", "#00aa00") if lead >= 10 else ("🟡", "#aaaa00") if lead >= 0 else ("🔴", "#aa0000")
+                pnl = f"+${potential:.2f}"
             else:
-                label, clr = "⏳ PENDING", "#888"
-                pnl = f"Win: +${potential:.2f}"
+                label, clr = "⏳", "#444"
+                pnl = f"+${potential:.2f}"
             
             half_label = "H1" if g['period'] == 1 else "H2" if g['period'] == 2 else f"OT{g['period']-2}" if g['period'] > 2 else ""
-            status = "FINAL" if is_final else f"{half_label} {escape_html(g['clock'])}" if g['period'] > 0 else "Scheduled"
-            tracked_badge = '<span style="background:#00ff00;color:#000;padding:1px 4px;border-radius:3px;font-size:0.7em;margin-left:6px;">📊</span>' if is_tracked_pos else ''
+            status = "FINAL" if is_final else f"{half_label} {escape_html(g['clock'])}" if g['period'] > 0 else ""
             
-            st.markdown(f"""<div style='background:#1a1a2e;padding:10px;border-radius:6px;border-left:3px solid {clr};margin-bottom:6px'>
-                <div style='display:flex;justify-content:space-between;font-size:0.9em'><b style='color:#fff'>{escape_html(gk.replace('@', ' @ '))}</b>{tracked_badge} <span style='color:#888'>{status}</span> <b style='color:{clr}'>{label}</b></div>
-                <div style='color:#aaa;margin-top:4px;font-size:0.8em'>🎯 {escape_html(pick)} | {contracts}x @ {price}¢ | Lead: {lead:+d} | {pnl}</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='background:#0a0a14;padding:10px;border-radius:6px;border-left:2px solid {clr};margin-bottom:6px'>
+                <div style='display:flex;justify-content:space-between;font-size:0.85em'><b style='color:#888'>{escape_html(gk.replace('@', ' @ '))}</b> <span style='color:#444'>{status}</span> <b style='color:{clr}'>{label}</b></div>
+                <div style='color:#555;margin-top:4px;font-size:0.75em'>🎯 {escape_html(pick)} | {lead:+d} | {pnl}</div></div>""", unsafe_allow_html=True)
             
             col1, col2 = st.columns([3, 1])
             with col2:
@@ -1005,15 +1068,14 @@ if st.session_state.ncaa_positions:
                     save_positions(st.session_state.ncaa_positions)
                     st.rerun()
 else:
-    st.info("No active positions")
+    st.caption("No tracked positions")
 
 st.divider()
 
-# ALL GAMES
-st.subheader("📺 ALL GAMES")
-st.caption(f"{len(games)} games today")
-
-if games:
+# ============================================================
+# ALL GAMES (Collapsed)
+# ============================================================
+with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
     for gk, g in sorted(games.items()):
         away_ap = ap_rankings.get(g['away_abbrev'], 0)
         home_ap = ap_rankings.get(g['home_abbrev'], 0)
@@ -1025,70 +1087,14 @@ if games:
             status, clr = f"✅ {escape_html(winner)}", "#44ff44"
         elif g['period'] > 0:
             half_label = "H1" if g['period'] == 1 else "H2" if g['period'] == 2 else f"OT{g['period']-2}"
-            status, clr = f"🔴 {half_label} {escape_html(g['clock'])}", "#ff4444"
+            status, clr = f"🔴 {half_label}", "#ff4444"
         else:
-            status, clr = "📅", "#888"
+            status, clr = "—", "#333"
         
-        st.markdown(f"""<div style="display:flex;justify-content:space-between;background:#0f172a;padding:6px 10px;margin-bottom:3px;border-radius:5px;border-left:2px solid {clr};font-size:0.9em">
-            <div><b style="color:#fff">{escape_html(away_display)}{escape_html(g['away_abbrev'])}</b> {g['away_score']} @ <b style="color:#fff">{escape_html(home_display)}{escape_html(g['home_abbrev'])}</b> {g['home_score']}</div>
-            <span style="color:{clr}">{status}</span>
+        st.markdown(f"""<div style="display:flex;justify-content:space-between;background:#050508;padding:5px 10px;margin-bottom:2px;border-radius:4px;font-size:0.85em">
+            <div><span style="color:#666">{escape_html(away_display)}{escape_html(g['away_abbrev'])}</span> {g['away_score']} @ <span style="color:#666">{escape_html(home_display)}{escape_html(g['home_abbrev'])}</span> {g['home_score']}</div>
+            <span style="color:{clr};font-size:0.8em">{status}</span>
         </div>""", unsafe_allow_html=True)
 
 st.divider()
-
-# HOW TO USE
-with st.expander("📖 HOW THE DUAL ENGINE WORKS", expanded=False):
-    st.markdown("""
-### 🧠 **Dual Confirmation Model**
-
-This app uses **two independent scoring engines** that must agree for top-tier signals.
-
----
-
-### **Engine 1: Market Edge**
-Evaluates market-based factors:
-- 🏠 Home court advantage
-- 📊 AP Top 25 rankings
-- 🏆 Conference tier
-- 📈 Win/loss record
-- 🛏️ Back-to-back fatigue
-
-**Output:** Score (0-10) + Tier
-
----
-
-### **Engine 2: Team Strength Analyzer**
-Evaluates performance factors:
-- 🔥 Recent form (streaks)
-- 🏠 Home/away splits
-- 💪 Strength ratings
-- 😴 Fatigue density
-
-**Output:** Pick + Confidence
-
----
-
-### **Final Signal Tiers**
-
-| Tier | Requirement |
-|------|-------------|
-| 🔒 **STRONG+** | STRONG + CONFIDENT + Both agree |
-| 🔒 **STRONG** | STRONG market signal only |
-| 🔵 **BUY** | BUY + CONFIDENT + Both agree |
-| 🟡 **LEAN** | Everything else |
-| ⚪ **PASS** | Disagreement or low confidence |
-
----
-
-### **Icons**
-- 🧠 = Engines agree
-- ⚠️ = Engines disagree
-
----
-
-*When someone asks "Why didn't you pick this game?"*
-**Answer: "Market and reality didn't agree."**
-""")
-
-st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v2.0 DUAL ENGINE")
+st.caption("v2.2 HARDENED • Accuracy over frequency")
