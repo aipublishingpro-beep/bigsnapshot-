@@ -7,6 +7,8 @@ require_auth()
 import requests
 from datetime import datetime, timedelta
 import pytz
+import json
+import os
 
 # ============================================================
 # PAGE CONFIG
@@ -161,6 +163,8 @@ st.markdown("""
 # CONSTANTS
 # ============================================================
 eastern = pytz.timezone('US/Eastern')
+now = datetime.now(eastern)
+today_str = now.strftime("%Y-%m-%d")
 
 LEAGUES = {
     "EPL": {"name": "Premier League", "code": "eng.1", "color": "#3d195b", "kalshi_page": "https://kalshi.com/sports/soccer/EPL"},
@@ -221,8 +225,169 @@ TEAM_ABBREVS = {
 }
 
 # ============================================================
+# STRONG PICKS SYSTEM (SHARED ACROSS ALL SPORTS)
+# ============================================================
+STRONG_PICKS_FILE = "strong_picks.json"
+
+def load_strong_picks():
+    try:
+        if os.path.exists(STRONG_PICKS_FILE):
+            with open(STRONG_PICKS_FILE, 'r') as f:
+                return json.load(f)
+    except: pass
+    return {"next_ml": 1, "picks": []}
+
+def save_strong_picks(data):
+    try:
+        with open(STRONG_PICKS_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+    except: pass
+
+if "strong_picks" not in st.session_state:
+    st.session_state.strong_picks = load_strong_picks()
+
+def get_next_ml_number():
+    return st.session_state.strong_picks.get("next_ml", 1)
+
+def add_strong_pick(game_key, pick_team, sport, price=50):
+    ml_num = st.session_state.strong_picks.get("next_ml", 1)
+    pick_data = {
+        "ml_number": ml_num,
+        "game": game_key,
+        "pick": pick_team,
+        "price": price,
+        "timestamp": datetime.now(eastern).isoformat(),
+        "sport": sport
+    }
+    st.session_state.strong_picks["picks"].append(pick_data)
+    st.session_state.strong_picks["next_ml"] = ml_num + 1
+    save_strong_picks(st.session_state.strong_picks)
+    return ml_num
+
+def get_strong_pick_for_game(game_key):
+    for pick in st.session_state.strong_picks.get("picks", []):
+        if pick.get("game") == game_key:
+            return pick
+    return None
+
+def is_game_already_tagged(game_key):
+    return get_strong_pick_for_game(game_key) is not None
+
+# ============================================================
+# 3-GATE SYSTEM FOR STRONG PICKS (SOCCER THRESHOLDS)
+# ============================================================
+def get_match_stability_soccer(home_team, away_team):
+    """
+    GATE 1: Match Stability
+    Checks: Rating difference (coin-flip detection)
+    Returns: (passes, reason)
+    """
+    home_rating = get_team_rating(home_team)
+    away_rating = get_team_rating(away_team)
+    
+    # Coin-flip matchup = volatile
+    if abs(home_rating - away_rating) < 5:
+        return False, "Coin-flip matchup"
+    
+    return True, None
+
+def get_cushion_tier_soccer(game, pick_team, is_live=False):
+    """
+    GATE 2: Cushion Tier
+    Soccer thresholds: Pre=rating diff 10+, Live=2+ goal lead
+    Returns: (passes, reason)
+    """
+    if is_live:
+        home_score = int(game.get('home_score', 0) or 0)
+        away_score = int(game.get('away_score', 0) or 0)
+        
+        if pick_team == game.get('home_team'):
+            lead = home_score - away_score
+        else:
+            lead = away_score - home_score
+        
+        # Soccer live: need 2+ goal lead for Strong Pick
+        if lead < 2:
+            return False, f"Lead only {lead:+d} goals (need 2+)"
+        return True, None
+    else:
+        # Pre-game: check edge score (already factors in rating diff)
+        edge_score = game.get('edge_score', 0)
+        
+        # Soccer pre-game: need strong edge (80+)
+        if edge_score < 80:
+            return False, f"Edge only {edge_score} (need 80+)"
+        return True, None
+
+def get_pace_direction_soccer(game):
+    """
+    GATE 3: Pace Direction
+    Blocks if: Late game (75+ min) + close game (within 1 goal)
+    Returns: (passes, reason)
+    """
+    state = game.get('state', 'pre')
+    
+    # Only applies to live games
+    if state != 'in':
+        return True, None
+    
+    # Parse clock/minute
+    clock = game.get('clock', '')
+    try:
+        # Clock format varies: "75'" or "75:00" or "75"
+        minute = int(''.join(filter(str.isdigit, str(clock).split(':')[0])))
+    except:
+        minute = 0
+    
+    # Late game = 75+ minutes
+    is_late = minute >= 75
+    
+    if is_late:
+        home_score = int(game.get('home_score', 0) or 0)
+        away_score = int(game.get('away_score', 0) or 0)
+        diff = abs(home_score - away_score)
+        
+        # Close game in late stage = too volatile
+        if diff <= 1:
+            return False, f"{minute}' + only {diff} goal diff"
+    
+    return True, None
+
+def check_strong_pick_eligible_soccer(game, pick_team):
+    """
+    Combine all 3 gates for soccer.
+    Returns: (eligible, block_reasons[])
+    """
+    block_reasons = []
+    is_live = game.get('state') == 'in'
+    
+    home_team = game.get('home_team', '')
+    away_team = game.get('away_team', '')
+    
+    # Gate 1: Match Stability
+    stable, reason1 = get_match_stability_soccer(home_team, away_team)
+    if not stable:
+        block_reasons.append(reason1)
+    
+    # Gate 2: Cushion Tier
+    cushion, reason2 = get_cushion_tier_soccer(game, pick_team, is_live)
+    if not cushion:
+        block_reasons.append(reason2)
+    
+    # Gate 3: Pace Direction
+    pace, reason3 = get_pace_direction_soccer(game)
+    if not pace:
+        block_reasons.append(reason3)
+    
+    return len(block_reasons) == 0, block_reasons
+
+# ============================================================
 # HELPER FUNCTIONS
 # ============================================================
+def escape_html(text):
+    if not text: return ""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
 def get_team_rating(team_name):
     """Get team rating with fuzzy matching"""
     for key, rating in TEAM_RATINGS.items():
@@ -318,13 +483,13 @@ def calculate_edge_score(home_team, away_team, league, is_home_pick=True):
 def get_signal_tier(score):
     """Convert score to signal tier"""
     if score >= 80:
-        return "🔥 STRONG", "signal-strong"
+        return "🔥 STRONG", "signal-strong", True
     elif score >= 65:
-        return "✅ MODERATE", "signal-moderate"
+        return "✅ MODERATE", "signal-moderate", False
     elif score >= 50:
-        return "⚡ LEAN", "signal-weak"
+        return "⚡ LEAN", "signal-weak", False
     else:
-        return "⏸️ HOLD", "signal-hold"
+        return "⏸️ HOLD", "signal-hold", False
 
 # ============================================================
 # API FUNCTIONS
@@ -406,13 +571,28 @@ def parse_games(data, league_key):
                 pick = away_team
                 edge_score = away_edge
             
-            signal, signal_class = get_signal_tier(edge_score)
+            signal, signal_class, is_strong = get_signal_tier(edge_score)
             
             kalshi_url = build_kalshi_url(league_key, home_team, away_team, game_time_et)
             fallback_url = LEAGUES[league_key].get('kalshi_page', 'https://kalshi.com/sports/soccer')
             
+            game_key = f"{away_team}@{home_team}"
+            
+            # Check Strong Pick eligibility
+            game_data = {
+                'home_team': home_team,
+                'away_team': away_team,
+                'home_score': home_score,
+                'away_score': away_score,
+                'state': state,
+                'clock': clock,
+                'edge_score': edge_score
+            }
+            strong_eligible, block_reasons = check_strong_pick_eligible_soccer(game_data, pick)
+            
             games.append({
                 'id': event.get('id'),
+                'game_key': game_key,
                 'home_team': home_team,
                 'away_team': away_team,
                 'home_score': home_score,
@@ -428,8 +608,11 @@ def parse_games(data, league_key):
                 'away_edge': away_edge,
                 'signal': signal,
                 'signal_class': signal_class,
+                'is_strong': is_strong,
                 'kalshi_url': kalshi_url,
                 'fallback_url': fallback_url,
+                'strong_eligible': strong_eligible,
+                'block_reasons': block_reasons,
             })
             
         except:
@@ -444,6 +627,17 @@ with st.sidebar:
     st.markdown("### ⚽ Soccer Edge Finder")
     st.markdown("---")
     
+    st.markdown("#### 🏷️ STRONG PICKS")
+    today_tags = len([p for p in st.session_state.strong_picks.get('picks', []) 
+                      if p.get('sport') == 'Soccer' and today_str in p.get('timestamp', '')])
+    st.markdown(f"""
+<div style="background:#0f172a;padding:12px;border-radius:8px;border-left:4px solid #00ff00;margin-bottom:12px">
+<div style="color:#00ff00;font-weight:bold">Next ML#: ML-{get_next_ml_number():03d}</div>
+<div style="color:#888;font-size:0.85em;margin-top:4px">Today's Tags: {today_tags}</div>
+</div>
+""", unsafe_allow_html=True)
+    
+    st.markdown("---")
     st.markdown("#### 📊 Signal Legend")
     st.markdown("""
     🔥 **STRONG** (80+) - High conviction  
@@ -456,14 +650,16 @@ with st.sidebar:
     st.markdown("#### 🏆 Leagues")
     for key, league in LEAGUES.items():
         st.markdown(f"• {league['name']}")
+    
+    st.markdown("---")
+    st.caption("v18.2")
 
 # ============================================================
 # MAIN CONTENT
 # ============================================================
 st.markdown("# ⚽ Soccer Edge Finder")
-st.markdown("*Multi-league analysis for Kalshi soccer markets*")
+st.markdown("*Multi-league analysis for Kalshi soccer markets | v18.2*")
 
-now = datetime.now(eastern)
 st.markdown(f"**Last Updated:** {now.strftime('%B %d, %Y at %I:%M %p ET')}")
 
 st.markdown("---")
@@ -491,17 +687,11 @@ with st.spinner("Fetching soccer data..."):
 # ============================================================
 # FILTER OUT COMPLETED AND PAST GAMES
 # ============================================================
-# Remove games with state 'post' (completed)
 all_games = [g for g in all_games if g['state'] != 'post']
-
-# Remove games where kickoff was more than 3 hours ago (even if API says 'pre')
-# 3-hour buffer allows for live games + extra time
 cutoff_time = now - timedelta(hours=3)
 all_games = [g for g in all_games if g['game_time'] > cutoff_time]
 
 live_games = [g for g in all_games if g['state'] == 'in']
-
-# Sort by edge score (highest first)
 all_games.sort(key=lambda x: x['edge_score'], reverse=True)
 
 # Stats row
@@ -512,10 +702,9 @@ with col2:
     st.metric("Live Now", len(live_games))
 with col3:
     strong_picks = len([g for g in all_games if g['edge_score'] >= 80])
-    st.metric("Strong Picks", strong_picks)
+    st.metric("🔥 Strong", strong_picks)
 with col4:
-    avg_edge = sum(g['edge_score'] for g in all_games) / len(all_games) if all_games else 0
-    st.metric("Avg Edge Score", f"{avg_edge:.1f}")
+    st.metric("🏷️ Tags Today", today_tags)
 
 # Legend
 st.markdown("""
@@ -530,6 +719,97 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ============================================================
+# TODAY'S STRONG PICKS TRACKER
+# ============================================================
+today_strong = [p for p in st.session_state.strong_picks.get('picks', []) 
+                if p.get('sport') == 'Soccer' and today_str in p.get('timestamp', '')]
+
+if today_strong:
+    st.markdown("### 🏷️ TODAY'S STRONG PICKS")
+    
+    for sp in today_strong:
+        gk = sp.get('game', '')
+        pick = sp.get('pick', '')
+        ml_num = sp.get('ml_number', 0)
+        
+        # Find matching game
+        matching_game = None
+        for g in all_games:
+            if g.get('game_key') == gk:
+                matching_game = g
+                break
+        
+        if matching_game:
+            state = matching_game.get('state', 'pre')
+            if state == 'post':
+                home_score = int(matching_game.get('home_score', 0) or 0)
+                away_score = int(matching_game.get('away_score', 0) or 0)
+                
+                # Determine if pick won (soccer: win or draw matters)
+                if pick == matching_game.get('home_team'):
+                    pick_won = home_score > away_score
+                else:
+                    pick_won = away_score > home_score
+                
+                if pick_won:
+                    result_badge = '<span style="background:#00aa00;color:#fff;padding:4px 12px;border-radius:4px;font-weight:bold">✅ WON</span>'
+                    border_color = "#00aa00"
+                else:
+                    result_badge = '<span style="background:#aa0000;color:#fff;padding:4px 12px;border-radius:4px;font-weight:bold">❌ LOST</span>'
+                    border_color = "#aa0000"
+                
+                st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px">
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span>
+<b style="color:#fff">{escape_html(pick)}</b>
+<span style="color:#888">{home_score}-{away_score}</span>
+</div>
+{result_badge}
+</div>
+</div>""", unsafe_allow_html=True)
+            elif state == 'in':
+                home_score = int(matching_game.get('home_score', 0) or 0)
+                away_score = int(matching_game.get('away_score', 0) or 0)
+                clock = matching_game.get('clock', '')
+                
+                if pick == matching_game.get('home_team'):
+                    lead = home_score - away_score
+                else:
+                    lead = away_score - home_score
+                
+                lead_color = "#00ff00" if lead > 0 else "#ff4444" if lead < 0 else "#888"
+                
+                st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid #ffaa00;margin-bottom:10px">
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span>
+<b style="color:#fff">{escape_html(pick)}</b>
+<span style="color:{lead_color};font-weight:bold">{lead:+d}</span>
+</div>
+<span style="background:#aa0000;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75em">🔴 LIVE {escape_html(clock)}</span>
+</div>
+</div>""", unsafe_allow_html=True)
+            else:
+                st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid #444;margin-bottom:10px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span>
+<b style="color:#fff">{escape_html(pick)}</b>
+<span style="background:#1e3a5f;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em">PRE</span>
+</div>
+</div>""", unsafe_allow_html=True)
+        else:
+            st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid #444;margin-bottom:10px">
+<div style="display:flex;align-items:center;gap:12px">
+<span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span>
+<b style="color:#fff">{escape_html(pick)}</b>
+<span style="color:#666">(game not in current feed)</span>
+</div>
+</div>""", unsafe_allow_html=True)
+    
+    st.markdown("---")
+
 # Live Games
 if live_games:
     st.markdown("### 🔴 Live Matches")
@@ -542,13 +822,13 @@ if live_games:
                 <span class="live-badge">LIVE</span>
                 <span class="league-badge league-{game['league'].lower()}">{LEAGUES[game['league']]['name']}</span>
                 <br><br>
-                <strong>{game['home_team']}</strong> {game['home_score']} - {game['away_score']} <strong>{game['away_team']}</strong>
+                <strong>{escape_html(game['home_team'])}</strong> {game['home_score']} - {game['away_score']} <strong>{escape_html(game['away_team'])}</strong>
                 <br>
-                <small>⏱️ {game['clock']} | {game['status_detail']}</small>
+                <small>⏱️ {escape_html(game['clock'])} | {escape_html(game['status_detail'])}</small>
             </div>
             """, unsafe_allow_html=True)
         with col2:
-            st.markdown(f"**Pick:** {game['pick']}")
+            st.markdown(f"**Pick:** {escape_html(game['pick'])}")
             st.markdown(f"**Edge:** {game['edge_score']}")
         with col3:
             st.link_button("📈 Trade on Kalshi", game['fallback_url'])
@@ -556,18 +836,23 @@ if live_games:
 
 # Top Pick
 if all_games:
-    # Get top pick from upcoming/live games only
     upcoming_games = [g for g in all_games if g['state'] in ['pre', 'in']]
     
     if upcoming_games:
         top_pick = upcoming_games[0]
+        existing_tag = get_strong_pick_for_game(top_pick['game_key'])
+        
+        tag_badge = ""
+        if existing_tag:
+            tag_badge = f'<span style="background:#ffd700;color:#000;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-left:8px">ML-{existing_tag["ml_number"]:03d}</span>'
+        
         st.markdown("### 🏆 Top Pick")
         st.markdown(f"""
         <div class="top-pick-card">
             <span class="league-badge league-{top_pick['league'].lower()}">{LEAGUES[top_pick['league']]['name']}</span>
-            <h2 style="margin: 12px 0; color: white;">{top_pick['home_team']} vs {top_pick['away_team']}</h2>
+            <h2 style="margin: 12px 0; color: white;">{escape_html(top_pick['home_team'])} vs {escape_html(top_pick['away_team'])}</h2>
             <p style="font-size: 1.2rem; color: #a0d2ff;">
-                <strong>🎯 Pick: {top_pick['pick']}</strong>
+                <strong>🎯 Pick: {escape_html(top_pick['pick'])}</strong>{tag_badge}
             </p>
             <p style="font-size: 1.5rem; margin: 8px 0;">
                 <span class="{top_pick['signal_class']}">{top_pick['signal']}</span> | 
@@ -589,6 +874,15 @@ if all_games:
             <br><a href="{top_pick['kalshi_url']}" target="_blank" style="color: #888; font-size: 0.8rem;">Try direct game link (may 404)</a>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Strong Pick Button for top pick
+        if top_pick['is_strong'] and top_pick['strong_eligible'] and not existing_tag and top_pick['state'] != 'post':
+            if st.button(f"➕ Add Strong Pick: {top_pick['pick']}", key=f"strong_top_{top_pick['game_key']}", use_container_width=True):
+                ml_num = add_strong_pick(top_pick['game_key'], top_pick['pick'], "Soccer")
+                st.success(f"✅ Tagged ML-{ml_num:03d}: {top_pick['pick']}")
+                st.rerun()
+        elif top_pick['is_strong'] and not top_pick['strong_eligible'] and not existing_tag:
+            st.markdown(f"<div style='color:#ff6666;font-size:0.85em;margin-top:8px'>⚠️ Strong Pick blocked: {', '.join(top_pick['block_reasons'])}</div>", unsafe_allow_html=True)
     else:
         st.info("📅 No upcoming games scheduled. Check back later!")
 
@@ -598,20 +892,23 @@ if all_games:
     st.markdown("*Sorted by Edge Score (highest first) — Completed games excluded*")
 
     for game in all_games:
+        existing_tag = get_strong_pick_for_game(game['game_key'])
+        
         col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
         
         with col1:
             state_icon = "🔴" if game['state'] == 'in' else "⏳"
+            tag_indicator = f' <span style="background:#ffd700;color:#000;padding:1px 6px;border-radius:3px;font-size:0.7em">ML-{existing_tag["ml_number"]:03d}</span>' if existing_tag else ""
             st.markdown(f"""
             <div class="pick-card">
                 {state_icon} <span class="league-badge league-{game['league'].lower()}">{LEAGUES[game['league']]['name']}</span>
-                <strong>{game['home_team']}</strong> vs <strong>{game['away_team']}</strong>
+                <strong>{escape_html(game['home_team'])}</strong> vs <strong>{escape_html(game['away_team'])}</strong>{tag_indicator}
                 <br><small>📅 {game['game_time'].strftime('%b %d, %I:%M %p ET')}</small>
             </div>
             """, unsafe_allow_html=True)
         
         with col2:
-            st.markdown(f"**Pick:** {game['pick']}")
+            st.markdown(f"**Pick:** {escape_html(game['pick'])}")
             st.markdown(f"<span class='{game['signal_class']}'>{game['signal']}</span>", unsafe_allow_html=True)
         
         with col3:
@@ -620,6 +917,15 @@ if all_games:
         with col4:
             st.link_button("Trade", game['fallback_url'], use_container_width=True)
             st.caption(f"[Direct link]({game['kalshi_url']})")
+        
+        # Strong Pick Button
+        if game['is_strong'] and game['strong_eligible'] and not existing_tag and game['state'] != 'post':
+            if st.button(f"➕ Add Strong Pick", key=f"strong_{game['game_key']}", use_container_width=True):
+                ml_num = add_strong_pick(game['game_key'], game['pick'], "Soccer")
+                st.success(f"✅ Tagged ML-{ml_num:03d}: {game['pick']}")
+                st.rerun()
+        elif game['is_strong'] and not game['strong_eligible'] and not existing_tag and game['state'] != 'post':
+            st.markdown(f"<div style='color:#ff6666;font-size:0.75em;margin-bottom:8px'>⚠️ Strong Pick blocked: {', '.join(game['block_reasons'])}</div>", unsafe_allow_html=True)
 else:
     st.info("📅 No upcoming games found for the selected leagues. Check back later!")
 
@@ -655,11 +961,21 @@ with st.expander("📖 How to Use Soccer Edge Finder"):
     | ⚡ LEAN | 50-64 | Slight alignment - small edge |
     | ⏸️ HOLD | <50 | No clear edge - pass or look at draw |
     
-    ### Why STRONG Is Rare
+    ### 3-Gate Strong Pick System
     
-    STRONG should be scarce. Scarcity = credibility.
+    A pick must pass ALL 3 gates to qualify for tagging:
     
-    Users forgive missed LEANs. They don't forgive frequent STRONG misses.
+    **Gate 1: Match Stability**
+    - Rating difference must be 5+ (no coin-flips)
+    
+    **Gate 2: Cushion Tier**
+    - Pre-game: Edge score 80+
+    - Live: Need 2+ goal lead
+    
+    **Gate 3: Pace Direction**
+    - Blocks late-game (75+ min) close games (≤1 goal)
+    
+    When all gates pass, the ➕ button appears.
     
     ### Trading Tips
     
@@ -676,10 +992,4 @@ with st.expander("📖 How to Use Soccer Edge Finder"):
 
 # Footer
 st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #666; font-size: 0.8rem; padding: 20px;">
-    <p>⚠️ <strong>Disclaimer:</strong> This tool provides analysis for educational purposes only. 
-    Past performance does not guarantee future results. Trade responsibly.</p>
-    <p>© 2025 BigSnapshot | <a href="https://bigsnapshot.com">bigsnapshot.com</a></p>
-</div>
-""", unsafe_allow_html=True)
+st.caption("⚠️ Educational only. Not financial advice. v18.2")
