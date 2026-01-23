@@ -769,7 +769,7 @@ st.divider()
 # ============================================================
 # 🎯 ML PICKS
 # ============================================================
-st.subheader("🎯 ML PICKS")
+st.subheader("🎯 NHL ML PICKS")
 
 shown = 0
 for r in ml_results:
