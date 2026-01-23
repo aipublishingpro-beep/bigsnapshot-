@@ -699,7 +699,7 @@ top_pick = get_top_pick()
 if top_pick and top_pick["score"] >= 8.0:
     tier, color, is_tracked = get_signal_tier(top_pick["score"])
     kalshi_url = build_kalshi_ml_url(top_pick["away"], top_pick["home"])
-    buy_btn = get_buy_button_html(kalshi_url, "🎯 BUY NOW")
+    buy_btn = get_buy_button_html(kalshi_url, f"🎯 BUY {escape_html(top_pick['pick_code'])}")
     tracked_badge = ' <span style="background:#00ff00;color:#000;padding:2px 6px;border-radius:4px;font-size:0.4em;vertical-align:middle">TRACKED</span>' if is_tracked else ""
     st.markdown(f"""
     <div style="background:linear-gradient(135deg,#0a2a0a,#1a3a1a);padding:20px;border-radius:12px;border:3px solid {color};margin:15px 0;text-align:center">
@@ -1000,7 +1000,7 @@ if games:
 <span style="color:#38bdf8;font-weight:bold">{r['score']}</span>{tracked_badge}{ml_badge}
 <span style="color:{status_color};font-size:0.75em">{status_badge}</span>
 </div>
-<a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:4px 10px;border-radius:4px;font-size:0.75em;font-weight:bold;text-decoration:none">BUY</a>
+<a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:4px 10px;border-radius:4px;font-size:0.75em;font-weight:bold;text-decoration:none">BUY {pick_safe}</a>
 </div>
 <div style="color:#666;font-size:0.75em;margin:-2px 0 2px 14px">{reasons_str}</div>
 {scanner_html}""", unsafe_allow_html=True)
