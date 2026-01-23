@@ -7,17 +7,11 @@ from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
 
-# ============================================================
-# GA4 TRACKING
-# ============================================================
 st.markdown("""
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
 <script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# MOBILE CSS
-# ============================================================
 st.markdown("""
 <style>
 @media (max-width: 768px) {
@@ -29,14 +23,6 @@ st.markdown("""
     h3 { font-size: 1rem !important; }
     button { padding: 8px 12px !important; font-size: 0.85em !important; }
 }
-</style>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# PAGE STYLES
-# ============================================================
-st.markdown("""
-<style>
 .stApp {background-color: #0d1117;}
 div[data-testid="stMarkdownContainer"] p {color: #c9d1d9;}
 </style>
@@ -54,7 +40,6 @@ CITY_CONFIG = {
     "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97},
     "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23},
 }
-
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
 def get_bracket_bounds(range_str):
@@ -124,13 +109,8 @@ def fetch_kalshi_brackets(series_ticker):
                 yes_price = (yb + ya) / 2
             else:
                 yes_price = ya or yb or 0
-            brackets.append({
-                "range": range_txt,
-                "mid": mid,
-                "yes": yes_price,
-                "ticker": ticker,
-                "url": f"https://kalshi.com/markets/{series_ticker.lower()}/{ticker.lower()}" if ticker else "#"
-            })
+            brackets.append({"range": range_txt, "mid": mid, "yes": yes_price, "ticker": ticker,
+                "url": f"https://kalshi.com/markets/{series_ticker.lower()}/{ticker.lower()}" if ticker else "#"})
         brackets.sort(key=lambda x: x['mid'] or 0)
         return brackets
     except:
@@ -161,18 +141,8 @@ def fetch_nws_6hr_extremes(station):
                     max_6hr_text = cells[8].text.strip() if len(cells) > 8 else ""
                     min_6hr_text = cells[9].text.strip() if len(cells) > 9 else ""
                     if max_6hr_text or min_6hr_text:
-                        max_val = None
-                        min_val = None
-                        if max_6hr_text:
-                            try:
-                                max_val = float(max_6hr_text)
-                            except:
-                                pass
-                        if min_6hr_text:
-                            try:
-                                min_val = float(min_6hr_text)
-                            except:
-                                pass
+                        max_val = float(max_6hr_text) if max_6hr_text else None
+                        min_val = float(min_6hr_text) if min_6hr_text else None
                         if max_val is not None or min_val is not None:
                             time_key = time_val.replace(":", "")[:4]
                             time_key = time_key[:2] + ":" + time_key[2:]
@@ -215,10 +185,7 @@ def fetch_nws_observations(station):
         current = readings[0]["temp"]
         low = min(r["temp"] for r in readings)
         high = max(r["temp"] for r in readings)
-        display_readings = [
-            {"time": r["time"].strftime("%H:%M"), "temp": r["temp"]}
-            for r in readings
-        ]
+        display_readings = [{"time": r["time"].strftime("%H:%M"), "temp": r["temp"]} for r in readings]
         return current, low, high, display_readings
     except:
         return None, None, None, []
@@ -237,9 +204,7 @@ def fetch_nws_forecast(lat, lon):
         if resp.status_code != 200:
             return None
         periods = resp.json().get("properties", {}).get("periods", [])
-        if not periods:
-            return None
-        return periods[:4]
+        return periods[:4] if periods else None
     except:
         return None
 
@@ -256,9 +221,7 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
             break
     market_fav = max(brackets, key=lambda b: b['yes'])
     st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
-    edge_cents = 0
-    if winner_data:
-        edge_cents = market_fav['yes'] - winner_data['yes']
+    edge_cents = market_fav['yes'] - winner_data['yes'] if winner_data else 0
     for b in brackets:
         is_winner = b['range'] == winning_bracket
         is_market_fav = b['range'] == market_fav['range']
@@ -289,23 +252,16 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
                 icon = ""
             name_style = "color:#e5e7eb;font-weight:500"
             model_txt = "—"
-        html = f'''<div style="{box_style}">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-                <span style="{name_style}">{b['range']}{icon}</span>
-                <div style="display:flex;gap:12px;align-items:center">
-                    <span style="color:#f59e0b">Kalshi {b['yes']:.0f}¢</span>
-                    <span style="color:#9ca3af">{model_txt}</span>
-                </div>
-            </div>
-        </div>'''
+        html = f'''<div style="{box_style}"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <span style="{name_style}">{b['range']}{icon}</span>
+            <div style="display:flex;gap:12px;align-items:center">
+                <span style="color:#f59e0b">Kalshi {b['yes']:.0f}¢</span>
+                <span style="color:#9ca3af">{model_txt}</span>
+            </div></div></div>'''
         st.markdown(html, unsafe_allow_html=True)
     if winner_data:
         if winner_data['yes'] >= 99:
-            card = f'''
-            <div style="background:#1a2e1a;border:2px solid #22c55e;border-radius:10px;padding:18px;text-align:center;margin-top:12px">
-                <div style="color:#22c55e;font-size:1.1em;font-weight:700">✅ Market settled — outcome confirmed</div>
-                <div style="color:#fff;font-size:1.2em;margin-top:8px">{winning_bracket}</div>
-            </div>'''
+            card = f'<div style="background:#1a2e1a;border:2px solid #22c55e;border-radius:10px;padding:18px;text-align:center;margin-top:12px"><div style="color:#22c55e;font-size:1.1em;font-weight:700">✅ Market settled — outcome confirmed</div><div style="color:#fff;font-size:1.2em;margin-top:8px">{winning_bracket}</div></div>'
         else:
             potential_profit = 100 - winner_data['yes']
             edge_score_line = ""
@@ -335,23 +291,11 @@ default_city = query_params.get("city", "New York City")
 if default_city not in CITY_LIST:
     default_city = "New York City"
 
-c1, c2 = st.columns([4, 1])
-with c1:
-    city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
-with c2:
-    cfg = CITY_CONFIG.get(city, {})
-    nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
-    st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
-
-if st.button("⭐ Set as Default City", use_container_width=False):
-    st.query_params["city"] = city
-    st.success(f"✓ Bookmark this page to save {city} as default!")
-
-# Owner-only access for 6hr extremes section
-OWNER_KEY = "edge2026"  # Change this to your secret
+# Owner check
+OWNER_KEY = "edge2026"
 is_owner = query_params.get("key") == OWNER_KEY
 
-# Owner-only sidebar tips
+# Owner sidebar tips
 if is_owner:
     with st.sidebar:
         st.markdown("""
@@ -373,6 +317,18 @@ if is_owner:
         </div>
         """, unsafe_allow_html=True)
 
+c1, c2 = st.columns([4, 1])
+with c1:
+    city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
+with c2:
+    cfg = CITY_CONFIG.get(city, {})
+    nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
+    st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
+
+if st.button("⭐ Set as Default City", use_container_width=False):
+    st.query_params["city"] = city
+    st.success(f"✓ Bookmark this page to save {city} as default!")
+
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
 extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else {}
 
@@ -383,41 +339,39 @@ if current_temp:
             <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#22c55e">{cfg.get('station', 'N/A')}</strong></span>
         </div>
         <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
-            <div>
-                <div style="color:#6b7280;font-size:0.8em">CURRENT</div>
-                <div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div>
-            </div>
-            <div>
-                <div style="color:#3b82f6;font-size:0.8em">TODAY'S LOW</div>
-                <div style="color:#3b82f6;font-size:1.5em;font-weight:700">{obs_low}°F</div>
-            </div>
-            <div>
-                <div style="color:#ef4444;font-size:0.8em">{"TODAY'S HIGH" if now.hour >= 15 else "TODAY'S HIGH SO FAR"}</div>
-                <div style="color:#ef4444;font-size:1.5em;font-weight:700">{obs_high}°F</div>
-            </div>
+            <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div></div>
+            <div><div style="color:#3b82f6;font-size:0.8em">TODAY'S LOW</div><div style="color:#3b82f6;font-size:1.5em;font-weight:700">{obs_low}°F</div></div>
+            <div><div style="color:#ef4444;font-size:0.8em">{"TODAY'S HIGH" if now.hour >= 15 else "TODAY'S HIGH SO FAR"}</div><div style="color:#ef4444;font-size:1.5em;font-weight:700">{obs_high}°F</div></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
     if readings:
         with st.expander("📊 Recent NWS Observations", expanded=True):
-            min_temp = min(r['temp'] for r in readings)
-            low_reversal_idx = None
             display_list = readings if is_owner else readings[:8]
+            
+            # Find reversal indices
+            min_temp = min(r['temp'] for r in display_list)
+            low_reversal_idx = None
             for i, r in enumerate(display_list):
                 if r['temp'] == min_temp:
                     low_reversal_idx = i
                     break
-            max_temp = max(r['temp'] for r in readings)
+            
+            max_temp = max(r['temp'] for r in display_list)
             high_reversal_idx = None
             if now.hour >= 12:
-                for i, r in enumerate(readings):
+                for i, r in enumerate(display_list):
                     reading_hour = int(r['time'].split(':')[0])
                     if r['temp'] == max_temp and reading_hour >= 12:
                         high_reversal_idx = i
                         break
             
-            for i, r in enumerate(readings):
+            # Confirmation indices (2 rows above = index - 2)
+            low_confirm_idx = (low_reversal_idx - 2) if (low_reversal_idx is not None and low_reversal_idx >= 2) else None
+            high_confirm_idx = (high_reversal_idx - 2) if (high_reversal_idx is not None and high_reversal_idx >= 2) else None
+            
+            for i, r in enumerate(display_list):
                 time_key = r['time']
                 six_hr_max = extremes_6hr.get(time_key, {}).get('max')
                 six_hr_min = extremes_6hr.get(time_key, {}).get('min')
@@ -429,6 +383,16 @@ if current_temp:
                     if six_hr_min is not None:
                         parts.append(f"<span style='color:#3b82f6'>6hr↓{six_hr_min:.0f}°</span>")
                     six_hr_display = " ".join(parts)
+                
+                # Show CONFIRMED LOW bar
+                if is_owner and low_confirm_idx is not None and i == low_confirm_idx:
+                    st.markdown('<div style="display:flex;justify-content:center;align-items:center;padding:8px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW</span></div>', unsafe_allow_html=True)
+                
+                # Show CONFIRMED HIGH bar
+                if is_owner and high_confirm_idx is not None and i == high_confirm_idx:
+                    st.markdown('<div style="display:flex;justify-content:center;align-items:center;padding:8px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED HIGH</span></div>', unsafe_allow_html=True)
+                
+                # Row styling
                 if i == low_reversal_idx:
                     row_style = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
                     time_style = "color:#fbbf24;font-weight:600"
@@ -444,18 +408,12 @@ if current_temp:
                     time_style = "color:#9ca3af"
                     temp_style = "color:#fff;font-weight:600"
                     label = ""
-                st.markdown(f"""
-                <div style='{row_style}'>
-                    <span style='{time_style};min-width:50px'>{r['time']}</span>
-                    <span style='flex:1;text-align:center;font-size:0.85em'>{six_hr_display}</span>
-                    <span style='{temp_style}'>{r['temp']}°F{label}</span>
-                </div>
-                """, unsafe_allow_html=True)
+                
+                st.markdown(f"<div style='{row_style}'><span style='{time_style};min-width:50px'>{r['time']}</span><span style='flex:1;text-align:center;font-size:0.85em'>{six_hr_display}</span><span style='{temp_style}'>{r['temp']}°F{label}</span></div>", unsafe_allow_html=True)
 else:
     st.warning("⚠️ Could not fetch NWS observations")
 
 st.markdown("---")
-
 col_high, col_low = st.columns(2)
 
 with col_high:
@@ -474,24 +432,10 @@ with col_high:
                 st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
                 for b in brackets_high:
                     is_fav = b['range'] == market_fav['range']
-                    if is_fav:
-                        box_style = "background:#1a1a2e;border:1px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:5px 0"
-                        icon = " ⭐"
-                    else:
-                        box_style = "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
-                        icon = ""
-                    html = f'''<div style="{box_style}">
-                        <div style="display:flex;justify-content:space-between;align-items:center">
-                            <span style="color:#e5e7eb">{b['range']}{icon}</span>
-                            <span style="color:#f59e0b">Kalshi {b['yes']:.0f}¢</span>
-                        </div>
-                    </div>'''
-                    st.markdown(html, unsafe_allow_html=True)
-                st.markdown(f'''
-                <div style="text-align:center;margin-top:12px">
-                    <a href="{market_fav['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a>
-                </div>
-                ''', unsafe_allow_html=True)
+                    box_style = "background:#1a1a2e;border:1px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:5px 0" if is_fav else "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
+                    icon = " ⭐" if is_fav else ""
+                    st.markdown(f'<div style="{box_style}"><div style="display:flex;justify-content:space-between;align-items:center"><span style="color:#e5e7eb">{b["range"]}{icon}</span><span style="color:#f59e0b">Kalshi {b["yes"]:.0f}¢</span></div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="text-align:center;margin-top:12px"><a href="{market_fav["url"]}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a></div>', unsafe_allow_html=True)
     else:
         st.error("Could not fetch observations")
 
@@ -511,30 +455,15 @@ with col_low:
                 st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
                 for b in brackets_low:
                     is_fav = b['range'] == market_fav['range']
-                    if is_fav:
-                        box_style = "background:#1a1a2e;border:1px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:5px 0"
-                        icon = " ⭐"
-                    else:
-                        box_style = "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
-                        icon = ""
-                    html = f'''<div style="{box_style}">
-                        <div style="display:flex;justify-content:space-between;align-items:center">
-                            <span style="color:#e5e7eb">{b['range']}{icon}</span>
-                            <span style="color:#f59e0b">Kalshi {b['yes']:.0f}¢</span>
-                        </div>
-                    </div>'''
-                    st.markdown(html, unsafe_allow_html=True)
-                st.markdown(f'''
-                <div style="text-align:center;margin-top:12px">
-                    <a href="{market_fav['url']}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a>
-                </div>
-                ''', unsafe_allow_html=True)
+                    box_style = "background:#1a1a2e;border:1px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:5px 0" if is_fav else "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
+                    icon = " ⭐" if is_fav else ""
+                    st.markdown(f'<div style="{box_style}"><div style="display:flex;justify-content:space-between;align-items:center"><span style="color:#e5e7eb">{b["range"]}{icon}</span><span style="color:#f59e0b">Kalshi {b["yes"]:.0f}¢</span></div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="text-align:center;margin-top:12px"><a href="{market_fav["url"]}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a></div>', unsafe_allow_html=True)
     else:
         st.error("Could not fetch observations")
 
 st.markdown("---")
 st.subheader("📡 NWS Forecast")
-
 forecast = fetch_nws_forecast(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
 if forecast:
     fcols = st.columns(len(forecast))
@@ -544,28 +473,14 @@ if forecast:
             temp = period.get("temperature", "")
             unit = period.get("temperatureUnit", "F")
             short = period.get("shortForecast", "")
-            if "night" in name.lower() or "tonight" in name.lower():
-                bg = "#1a1a2e"
-                temp_color = "#3b82f6"
-            else:
-                bg = "#1f2937"
-                temp_color = "#ef4444"
-            st.markdown(f"""
-            <div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center">
-                <div style="color:#9ca3af;font-size:0.8em;font-weight:600">{name}</div>
-                <div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div>
-                <div style="color:#6b7280;font-size:0.75em;margin-top:5px">{short}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            bg = "#1a1a2e" if "night" in name.lower() or "tonight" in name.lower() else "#1f2937"
+            temp_color = "#3b82f6" if "night" in name.lower() or "tonight" in name.lower() else "#ef4444"
+            st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em;font-weight:600">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em;margin-top:5px">{short}</div></div>', unsafe_allow_html=True)
 else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown("""
-<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center">
-<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.3</span>
-</div>
-""", unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.4</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     st.markdown("""
@@ -580,33 +495,21 @@ Compares actual NWS temperature observations against Kalshi prediction market pr
 
 **📊 6-Hour Extremes**
 
-The observations show **6hr↑** (6-hour max) and **6hr↓** (6-hour min) from official NWS METAR reports at synoptic times (00Z, 06Z, 12Z, 18Z). These are the official recorded extremes over the past 6 hours — useful for confirming the actual high/low.
+The observations show **6hr↑** (6-hour max) and **6hr↓** (6-hour min) from official NWS METAR reports at synoptic times (00Z, 06Z, 12Z, 18Z).
 
 **🚨 Severity Indicators**
 
 • 🚨🚨 **EXTREME** (50+ cents) — Red glow, "Market broken"
 • 🚨 **BIG** (30-49 cents) — Amber glow, "Major mispricing"  
 • ⚠️ **MODERATE** (15-29 cents) — Gold highlight, "Edge present"
-• 🎯 **NONE** (<15 cents) — Standard display, no edge score shown
+• 🎯 **NONE** (<15 cents) — Standard display
 
 **⚠️ Important Notes**
 
 • This is NOT financial advice
 • Weather can change — especially HIGH temps before 3 PM
 • Always verify on Kalshi before trading
-• Kalshi uses specific weather stations — slight differences possible
 """)
 
-st.markdown("""
-<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px;padding:0 20px">
-⚠️ For entertainment and educational purposes only. This tool displays observed temperature data alongside Kalshi market prices. It does not constitute financial advice.
-Kalshi settles markets using official weather stations, which may differ slightly from NWS observations shown here.
-Always verify market details on Kalshi before trading.
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:10px;padding:0 20px">
-Questions or feedback? DM me on X: @AIPublishingPro
-</div>
-""", unsafe_allow_html=True)
+st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px;padding:0 20px">⚠️ For entertainment and educational purposes only. This tool displays observed temperature data alongside Kalshi market prices. It does not constitute financial advice. Kalshi settles markets using official weather stations, which may differ slightly from NWS observations shown here. Always verify market details on Kalshi before trading.</div>', unsafe_allow_html=True)
+st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:10px;padding:0 20px">Questions or feedback? DM me on X: @AIPublishingPro</div>', unsafe_allow_html=True)
