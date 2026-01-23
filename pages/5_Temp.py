@@ -132,20 +132,26 @@ def fetch_nws_6hr_extremes(station):
         today = datetime.now(eastern).day
         all_6hr_maxes = []
         all_6hr_mins = []
+        current_date = None
         for row in rows[3:]:
             cells = row.find_all('td')
             if len(cells) >= 10:
                 try:
                     date_val = cells[0].text.strip()
                     time_val = cells[1].text.strip()
-                    if date_val and int(date_val) != today:
+                    # Track date - rows without date inherit from previous row
+                    if date_val:
+                        current_date = int(date_val)
+                    if current_date is None or current_date != today:
                         continue
                     max_6hr_text = cells[8].text.strip() if len(cells) > 8 else ""
                     min_6hr_text = cells[9].text.strip() if len(cells) > 9 else ""
                     if max_6hr_text or min_6hr_text:
                         max_val = float(max_6hr_text) if max_6hr_text else None
                         min_val = float(min_6hr_text) if min_6hr_text else None
-                        if max_val is not None:
+                        # Only include 6hr HIGH from times after 12:00 (noon)
+                        time_hour = int(time_val.replace(":", "")[:2]) if time_val else 0
+                        if max_val is not None and time_hour >= 12:
                             all_6hr_maxes.append(max_val)
                         if min_val is not None:
                             all_6hr_mins.append(min_val)
@@ -309,9 +315,9 @@ if is_owner:
             <div style="color:#22c55e;font-weight:700;margin-bottom:8px">🔒 EDGE TIPS</div>
             <div style="color:#c9d1d9;font-size:0.85em;line-height:1.5">
                 <b>LOW (Safer):</b><br>
-                • Wait for ✅ CONFIRMED bar<br>
-                • Shows after 1 rising reading<br>
-                • Sun up = no going back<br><br>
+                • Click ✅ CONFIRMED bar to buy<br>
+                • Shows bracket + price + time<br>
+                • Sun up = locked in<br><br>
                 <b>HIGH (Riskier):</b><br>
                 • Wait for ✅ CONFIRMED bar<br>
                 • Or wait for 18:51 6hr confirm<br><br>
@@ -337,6 +343,10 @@ if st.button("⭐ Set as Default City", use_container_width=False):
 
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
 extremes_6hr, official_high, official_low = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else ({}, None, None)
+
+# Pre-fetch brackets for owner confirmation display
+brackets_low_data = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC")) if is_owner else None
+brackets_high_data = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY")) if is_owner else None
 
 if current_temp:
     # Build display with official extremes for owner
@@ -415,11 +425,45 @@ if current_temp:
                 
                 # Show CONFIRMED LOW bar (OWNER ONLY)
                 if is_owner and low_confirm_idx is not None and i == low_confirm_idx:
-                    st.markdown('<div style="display:flex;justify-content:center;align-items:center;padding:8px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW — BUY NOW</span></div>', unsafe_allow_html=True)
+                    # Find winning bracket for LOW
+                    low_bracket_info = ""
+                    low_bracket_link = "#"
+                    if brackets_low_data and obs_low:
+                        for b in brackets_low_data:
+                            if temp_in_bracket(obs_low, b['range']):
+                                low_bracket_info = f" → {b['range']} @ {b['yes']:.0f}¢"
+                                low_bracket_link = b['url']
+                                break
+                    # Time since confirmation
+                    confirm_time = display_list[low_confirm_idx]['time']
+                    try:
+                        confirm_dt = datetime.strptime(confirm_time, "%H:%M").replace(year=now.year, month=now.month, day=now.day, tzinfo=eastern)
+                        mins_ago = int((now - confirm_dt).total_seconds() / 60)
+                        time_ago = f" ({mins_ago}m ago)" if mins_ago > 0 else " (just now)"
+                    except:
+                        time_ago = ""
+                    st.markdown(f'<a href="{low_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW{low_bracket_info}{time_ago} — CLICK TO BUY</span></div></a>', unsafe_allow_html=True)
                 
                 # Show CONFIRMED HIGH bar (OWNER ONLY)
                 if is_owner and high_confirm_idx is not None and i == high_confirm_idx:
-                    st.markdown('<div style="display:flex;justify-content:center;align-items:center;padding:8px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED HIGH — BUY NOW</span></div>', unsafe_allow_html=True)
+                    # Find winning bracket for HIGH
+                    high_bracket_info = ""
+                    high_bracket_link = "#"
+                    if brackets_high_data and obs_high:
+                        for b in brackets_high_data:
+                            if temp_in_bracket(obs_high, b['range']):
+                                high_bracket_info = f" → {b['range']} @ {b['yes']:.0f}¢"
+                                high_bracket_link = b['url']
+                                break
+                    # Time since confirmation
+                    confirm_time = display_list[high_confirm_idx]['time']
+                    try:
+                        confirm_dt = datetime.strptime(confirm_time, "%H:%M").replace(year=now.year, month=now.month, day=now.day, tzinfo=eastern)
+                        mins_ago = int((now - confirm_dt).total_seconds() / 60)
+                        time_ago = f" ({mins_ago}m ago)" if mins_ago > 0 else " (just now)"
+                    except:
+                        time_ago = ""
+                    st.markdown(f'<a href="{high_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED HIGH{high_bracket_info}{time_ago} — CLICK TO BUY</span></div></a>', unsafe_allow_html=True)
                 
                 # Row styling
                 if i == low_reversal_idx:
@@ -509,7 +553,7 @@ else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.5</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.6</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     docs = """
@@ -548,7 +592,7 @@ Green CONFIRMED bars appear immediately after the first reading that proves reve
 • LOW confirmed = next reading is HIGHER than the low
 • HIGH confirmed = next reading is LOWER than the high
 
-This is the safest earliest signal to trade.
+**One-click to trade**: Bar shows bracket, price, time since confirmed, and links directly to Kalshi market.
 """
     st.markdown(docs)
 
