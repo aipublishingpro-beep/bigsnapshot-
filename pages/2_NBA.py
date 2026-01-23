@@ -609,6 +609,16 @@ def get_strong_pick_for_game(game_key):
 def is_game_already_tagged(game_key):
     return get_strong_pick_for_game(game_key) is not None
 
+def delete_strong_pick(ml_number):
+    picks = st.session_state.strong_picks.get("picks", [])
+    st.session_state.strong_picks["picks"] = [p for p in picks if p.get("ml_number") != ml_number]
+    save_strong_picks(st.session_state.strong_picks)
+
+def clear_today_strong_picks(sport="NBA"):
+    picks = st.session_state.strong_picks.get("picks", [])
+    st.session_state.strong_picks["picks"] = [p for p in picks if not (p.get('sport') == sport and today_str in p.get('timestamp', ''))]
+    save_strong_picks(st.session_state.strong_picks)
+
 # FETCH DATA
 games = fetch_espn_scores()
 game_list = sorted(list(games.keys()))
@@ -654,11 +664,11 @@ with st.sidebar:
     st.header("📊 MODEL INFO")
     st.markdown("Proprietary multi-factor model analyzing matchups, injuries, rest, travel, momentum, and historical edges.")
     st.divider()
-    st.caption("v18.3 NBA EDGE")
+    st.caption("v18.4 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
-st.caption("Proprietary ML Model + Live Tracker | v18.3")
+st.caption("Proprietary ML Model + Live Tracker | v18.4")
 st.markdown("<p style='color:#888;font-size:0.85em;margin-top:-10px'>Only 🔒 STRONG picks are tracked. All others are informational.</p>", unsafe_allow_html=True)
 
 # TOP PICK OF THE DAY
@@ -921,6 +931,8 @@ st.divider()
 st.subheader("🎯 ML PICKS")
 
 if games:
+    # Calculate all eligible strong picks first
+    eligible_strong_picks = []
     ml_results = []
     for gk, g in games.items():
         away, home = g["away_team"], g["home_team"]
@@ -937,16 +949,43 @@ if games:
             eligible, block_reasons, checks = check_strong_pick_eligible(
                 gk, pick, g, injuries, yesterday_teams, all_streaks
             )
-            ml_results.append({
+            result = {
                 "pick": pick, "pick_code": pick_code, "opp": opp, "opp_code": opp_code,
                 "score": score, "color": color, "tier": tier, "reasons": reasons,
                 "is_home": is_home, "away": away, "home": home,
                 "pick_net": pick_net, "opp_net": opp_net, "opp_out": opp_out,
                 "is_tracked": is_tracked, "game_key": gk,
                 "strong_eligible": eligible, "block_reasons": block_reasons, "checks": checks
-            })
+            }
+            ml_results.append(result)
+            # Track eligible strong picks (not yet tagged, not final, is tracked, eligible)
+            existing_tag = get_strong_pick_for_game(gk)
+            if (is_tracked and eligible and not existing_tag 
+                and g.get('status_type') != "STATUS_FINAL"):
+                eligible_strong_picks.append(result)
         except: continue
+    
     ml_results.sort(key=lambda x: x["score"], reverse=True)
+    
+    # ADD ALL STRONG PICKS BUTTON
+    if eligible_strong_picks:
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#1a3a1a,#0a2a0a);padding:12px;border-radius:8px;margin-bottom:15px;border:2px solid #00ff00">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                <div>
+                    <span style="color:#00ff00;font-weight:bold;font-size:1.1em">🏷️ {len(eligible_strong_picks)} Eligible Strong Picks</span>
+                    <span style="color:#888;margin-left:10px">{', '.join([r['pick_code'] for r in eligible_strong_picks])}</span>
+                </div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+        if st.button(f"➕ Add All {len(eligible_strong_picks)} Strong Picks", key="add_all_strong", type="primary", use_container_width=True):
+            added = []
+            for r in eligible_strong_picks:
+                ml_num = add_strong_pick(r["game_key"], r["pick"])
+                added.append(f"ML-{ml_num:03d} {r['pick_code']}")
+            st.success(f"✅ Tagged: {', '.join(added)}")
+            st.rerun()
+        st.markdown("")
+    
     for r in ml_results:
         if r["score"] < 5.5: continue
         kalshi_url = build_kalshi_ml_url(r["away"], r["home"])
@@ -986,7 +1025,7 @@ if games:
 {scanner_html}""", unsafe_allow_html=True)
         if (r["is_tracked"] and r["strong_eligible"] and not existing_tag 
             and g.get('status_type') != "STATUS_FINAL"):
-            if st.button(f"➕ Add #Strong Pick", key=f"strong_{r['game_key']}", use_container_width=True):
+            if st.button(f"➕ Add Strong Pick", key=f"strong_{r['game_key']}", use_container_width=True):
                 ml_num = add_strong_pick(r["game_key"], r["pick"])
                 st.success(f"✅ Tagged ML-{ml_num:03d}: {r['pick_code']}")
                 st.rerun()
@@ -1035,6 +1074,28 @@ if today_strong:
                 </div>
                 <div style="color:#888;font-size:0.8em;margin-top:4px">Score: {pick_score}-{opp_score} (Lead: {lead:+d})</div>
             </div>""", unsafe_allow_html=True)
+            if st.button(f"🗑️ Remove ML-{ml_num:03d}", key=f"del_strong_{ml_num}", use_container_width=False):
+                delete_strong_pick(ml_num)
+                st.rerun()
+        else:
+            # Game not in today's data
+            st.markdown(f"""<div style="background:linear-gradient(135deg,#1a2a1a,#0a1a0a);padding:10px 14px;border-radius:8px;border:2px solid #888;margin-bottom:6px">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div>
+                        <span style="background:#ffd700;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold;font-size:0.85em">ML-{ml_num:03d}</span>
+                        <span style="color:#fff;font-weight:bold;margin-left:8px">{escape_html(KALSHI_CODES.get(pick, '???'))}</span>
+                        <span style="color:#666;margin-left:6px">{escape_html(gk.replace('@', ' @ '))}</span>
+                    </div>
+                    <span style="color:#888;font-weight:bold">⏳ PENDING</span>
+                </div>
+            </div>""", unsafe_allow_html=True)
+            if st.button(f"🗑️ Remove ML-{ml_num:03d}", key=f"del_strong_old_{ml_num}", use_container_width=False):
+                delete_strong_pick(ml_num)
+                st.rerun()
+    st.markdown("")
+    if st.button("🗑️ Clear All Today's Strong Picks", key="clear_all_strong", use_container_width=True, type="secondary"):
+        clear_today_strong_picks("NBA")
+        st.rerun()
     st.divider()
 
 # HOT STREAKS
@@ -1184,13 +1245,11 @@ if st.session_state.positions:
             pick = pos.get('pick', '')
             parts = gk.split("@")
             
-            # For ML positions
             if pos_type == 'ml':
                 pick_score = g['home_score'] if pick == parts[1] else g['away_score']
                 opp_score = g['away_score'] if pick == parts[1] else g['home_score']
                 lead = pick_score - opp_score
             else:
-                # For totals
                 pick_score = g['total']
                 opp_score = 0
                 lead = 0
@@ -1211,7 +1270,6 @@ if st.session_state.positions:
                     label, clr = "⏳ PENDING", "#888"
                     pnl = f"Win: +${potential:.2f}"
             else:
-                # Totals position
                 threshold = pos.get('threshold', 230.5) if isinstance(pos.get('threshold'), (int, float)) else float(str(pos.get('threshold', '230.5')).split()[-1]) if pos.get('threshold') else 230.5
                 side = pos.get('side', 'NO')
                 if 'YES' in str(pick).upper():
@@ -1265,7 +1323,6 @@ if st.session_state.positions:
                     save_positions(st.session_state.positions)
                     st.rerun()
             
-            # EDIT MODE
             if st.session_state.editing_position == idx:
                 st.markdown("<div style='background:#0f172a;padding:12px;border-radius:6px;margin-top:6px;border:1px solid #38bdf8'>", unsafe_allow_html=True)
                 st.caption(f"✏️ Editing: {gk.replace('@', ' @ ')}")
@@ -1278,18 +1335,15 @@ if st.session_state.positions:
                 with ec3:
                     new_contracts = st.number_input("Contracts", min_value=1, value=contracts, key=f"edit_contracts_{idx}")
                 
-                # Pick selection based on type
                 if new_type == "ml":
                     current_pick_idx = 0 if pick == parts[1] else 1
                     new_pick = st.radio("Pick (ML)", [parts[1], parts[0]], index=current_pick_idx, horizontal=True, key=f"edit_pick_{idx}")
                 else:
-                    # For totals
                     tc1, tc2 = st.columns(2)
                     with tc1:
                         current_side = "YES" if "YES" in str(pick).upper() else "NO"
                         side = st.radio("Side", ["YES", "NO"], index=0 if current_side == "YES" else 1, horizontal=True, key=f"edit_side_{idx}")
                     with tc2:
-                        # Try to extract current line
                         try:
                             current_line = float(str(pick).split()[-1]) if pick else 230.5
                             line_idx = THRESHOLDS.index(current_line) if current_line in THRESHOLDS else 5
@@ -1315,7 +1369,6 @@ if st.session_state.positions:
                         st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
         else:
-            # Game not found in today's games
             st.markdown(f"""<div style='background:#1a1a2e;padding:10px;border-radius:6px;border-left:3px solid #888;margin-bottom:6px'>
                 <div style='color:#888'>{escape_html(gk.replace('@', ' @ '))} — Game data not available</div>
                 <div style='color:#666;font-size:0.8em'>Type: {pos_type} | Pick: {escape_html(str(pos.get('pick', '')))} | {pos.get('contracts', 1)}x @ {pos.get('price', 50)}¢</div>
@@ -1353,7 +1406,6 @@ if sel != "Select...":
     with c2:
         st.markdown(buy_button(totals_url, "🔗 Totals Market"), unsafe_allow_html=True)
     
-    # Position type selector
     pos_type = st.radio("Position Type", ["ML (Moneyline)", "Totals (Over/Under)"], horizontal=True, key="add_pos_type")
     
     if "ML" in pos_type:
@@ -1434,12 +1486,12 @@ with st.expander("📖 HOW TO USE THIS APP", expanded=False):
 
 ### 🏷️ **Strong Pick System**
 
-The "➕ Add #Strong Pick" button only appears when ALL conditions pass:
+The "➕ Add Strong Pick" button only appears when ALL conditions pass:
 - **Cushion = WIDE** (projected margin ≥6 pts)
 - **Pace ≠ NEGATIVE** (no late-game chaos)
 - **Match Analyzer ≠ UNSTABLE** (predictable matchup)
 
-This prevents tagging risky games as Strong Picks.
+Use **"➕ Add All Strong Picks"** to tag all eligible picks at once.
 
 ---
 
@@ -1482,8 +1534,8 @@ Click **BUY** buttons to go directly to Kalshi markets (opens in new tab).
 
 ---
 
-*Built for Kalshi. v18.3*
+*Built for Kalshi. v18.4*
 """)
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v18.3")
+st.caption("⚠️ Educational only. Not financial advice. v18.4")
