@@ -483,7 +483,7 @@ st.markdown("---")
 st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.4</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
-    st.markdown("""
+    docs = """
 **🌡️ What This App Does**
 
 Compares actual NWS temperature observations against Kalshi prediction market prices to find edge opportunities.
@@ -492,10 +492,6 @@ Compares actual NWS temperature observations against Kalshi prediction market pr
 
 • **LOW Temperature**: Usually bottoms out between 4-7 AM. Look for the ↩️ REVERSAL in observations — that confirms the low is set.
 • **HIGH Temperature**: Usually peaks between 12-5 PM. Once you see temps dropping after the peak, the high is locked.
-
-**📊 6-Hour Extremes**
-
-The observations show **6hr↑** (6-hour max) and **6hr↓** (6-hour min) from official NWS METAR reports at synoptic times (00Z, 06Z, 12Z, 18Z).
 
 **🚨 Severity Indicators**
 
@@ -509,7 +505,19 @@ The observations show **6hr↑** (6-hour max) and **6hr↓** (6-hour min) from o
 • This is NOT financial advice
 • Weather can change — especially HIGH temps before 3 PM
 • Always verify on Kalshi before trading
-""")
+"""
+    if is_owner:
+        docs += """
+
+**📊 6-Hour Extremes (Owner Only)**
+
+The observations show **6hr↑** (6-hour max) and **6hr↓** (6-hour min) from official NWS METAR reports at synoptic times (00Z, 06Z, 12Z, 18Z). These bracket the true daily high/low.
+
+**✅ Confirmation Bars (Owner Only)**
+
+Green CONFIRMED bars appear 2 readings after reversal — your signal to trade.
+"""
+    st.markdown(docs)
 
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px;padding:0 20px">⚠️ For entertainment and educational purposes only. This tool displays observed temperature data alongside Kalshi market prices. It does not constitute financial advice. Kalshi settles markets using official weather stations, which may differ slightly from NWS observations shown here. Always verify market details on Kalshi before trading.</div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:10px;padding:0 20px">Questions or feedback? DM me on X: @AIPublishingPro</div>', unsafe_allow_html=True)
