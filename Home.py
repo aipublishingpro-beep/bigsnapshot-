@@ -102,12 +102,13 @@ st.subheader("🛠️ Your Tools")
 
 tools = [
     {"name": "🏀 NBA Edge Finder", "desc": "ML picks, live tracking, streaks", "page": "pages/2_NBA.py", "status": "LIVE"},
-    {"name": "🏈 NFL Edge Finder", "desc": "Coming soon", "page": "pages/1_NFL.py", "status": "SOON"},
-    {"name": "🏀 NCAA Basketball", "desc": "Coming soon", "page": "pages/7_NCAA.py", "status": "SOON"},
-    {"name": "🏒 NHL Edge Finder", "desc": "Coming soon", "page": "pages/3_NHL.py", "status": "SOON"},
-    {"name": "⚾ MLB Edge Finder", "desc": "Coming soon", "page": "pages/4_MLB.py", "status": "SOON"},
-    {"name": "⚽ Soccer Edge Finder", "desc": "Coming soon", "page": "pages/8_Soccer.py", "status": "SOON"},
-    {"name": "📊 Economics", "desc": "Coming soon", "page": "pages/9_Economics.py", "status": "SOON"},
+    {"name": "🏈 NFL Edge Finder", "desc": "ML picks, injury analysis", "page": "pages/1_NFL.py", "status": "LIVE"},
+    {"name": "🏀 NCAA Basketball", "desc": "College hoops edge analysis", "page": "pages/7_NCAA.py", "status": "LIVE"},
+    {"name": "🏒 NHL Edge Finder", "desc": "Hockey ML picks, B2B tracking", "page": "pages/3_NHL.py", "status": "LIVE"},
+    {"name": "⚾ MLB Edge Finder", "desc": "Coming March 2026", "page": "pages/4_MLB.py", "status": "SOON"},
+    {"name": "⚽ Soccer Edge Finder", "desc": "Multi-league analysis", "page": "pages/8_Soccer.py", "status": "LIVE"},
+    {"name": "📊 Economics", "desc": "FRED data signals", "page": "pages/9_Economics.py", "status": "LIVE"},
+    {"name": "🌡️ Temperature", "desc": "NWS forecast arbitrage", "page": "pages/5_Temp.py", "status": "LIVE"},
 ]
 
 cols = st.columns(2)
