@@ -86,6 +86,20 @@ if not st.session_state.authenticated:
     </div>
     """, unsafe_allow_html=True)
     
+    # ============ FREE TEMP BUTTON (COSTCO CHICKEN) ============
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("""
+        <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #3a2a1a 0%, #4a3a2a 100%); border-radius: 16px; border: 2px solid #f97316;">
+            <div style="font-size: 50px; margin-bottom: 10px;">🌡️</div>
+            <h3 style="color: #f97316; margin-bottom: 10px;">Try It Free</h3>
+            <p style="color: #ccc; font-size: 14px; margin-bottom: 15px;">See how we detect edge in temperature markets — no signup required.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("🌡️ TRY TEMP EDGE FINDER FREE", use_container_width=True, type="secondary", key="free_temp"):
+            st.switch_page("pages/5_Temp.py")
+    
     # ============ STRIPE PAYMENT SECTION ============
     if from_payment:
         st.markdown("""
@@ -143,10 +157,10 @@ if not st.session_state.authenticated:
             <h3 style="color: #4ade80; margin-bottom: 5px;">Soccer</h3>
             <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">LIVE</span>
         </div>
-        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
+        <div style="background: linear-gradient(135deg, #3a2a1a 0%, #4a3a2a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #f97316;">
             <div style="font-size: 50px; margin-bottom: 10px;">🌡️</div>
-            <h3 style="color: #4ade80; margin-bottom: 5px;">Temp</h3>
-            <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">LIVE</span>
+            <h3 style="color: #f97316; margin-bottom: 5px;">Temp</h3>
+            <span style="background:#f97316;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
         </div>
         <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
             <div style="font-size: 50px; margin-bottom: 10px;">📈</div>
