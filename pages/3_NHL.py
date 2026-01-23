@@ -1,6 +1,20 @@
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="NHL Edge Finder", page_icon="🏒", layout="wide")
+
+# ============================================================
+# GA4 ANALYTICS - MUST BE RIGHT AFTER set_page_config
+# ============================================================
+components.html("""
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-1T35YHHYBC', { send_page_view: true });
+</script>
+""", height=0)
 
 from auth import require_auth
 require_auth()
@@ -64,14 +78,6 @@ def get_strong_pick_for_game(game_key):
 
 def is_game_already_tagged(game_key):
     return get_strong_pick_for_game(game_key) is not None
-
-# ============================================================
-# GA4 TRACKING
-# ============================================================
-st.markdown("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
-<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
-""", unsafe_allow_html=True)
 
 # ============================================================
 # MOBILE CSS
