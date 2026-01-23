@@ -107,6 +107,4 @@ st.markdown("""
 
 # Footer
 st.markdown("---")
-st.caption("⚾ MLB Edge Finder | BigSnapshot.com")
-st.caption("Check back in Spring 2026 for live markets!")
-st.caption("⚠️ Not financial advice.")
+st.caption("⚠️ Educational only. Not financial advice. v18.2")
