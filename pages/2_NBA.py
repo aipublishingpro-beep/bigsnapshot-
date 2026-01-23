@@ -967,25 +967,6 @@ if games:
     
     ml_results.sort(key=lambda x: x["score"], reverse=True)
     
-    # ADD ALL STRONG PICKS BUTTON
-    if eligible_strong_picks:
-        st.markdown(f"""<div style="background:linear-gradient(135deg,#1a3a1a,#0a2a0a);padding:12px;border-radius:8px;margin-bottom:15px;border:2px solid #00ff00">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-                <div>
-                    <span style="color:#00ff00;font-weight:bold;font-size:1.1em">🏷️ {len(eligible_strong_picks)} Eligible Strong Picks</span>
-                    <span style="color:#888;margin-left:10px">{', '.join([r['pick_code'] for r in eligible_strong_picks])}</span>
-                </div>
-            </div>
-        </div>""", unsafe_allow_html=True)
-        if st.button(f"➕ Add All {len(eligible_strong_picks)} Strong Picks", key="add_all_strong", type="primary", use_container_width=True):
-            added = []
-            for r in eligible_strong_picks:
-                ml_num = add_strong_pick(r["game_key"], r["pick"])
-                added.append(f"ML-{ml_num:03d} {r['pick_code']}")
-            st.success(f"✅ Tagged: {', '.join(added)}")
-            st.rerun()
-        st.markdown("")
-    
     for r in ml_results:
         if r["score"] < 5.5: continue
         kalshi_url = build_kalshi_ml_url(r["away"], r["home"])
@@ -1025,6 +1006,25 @@ if games:
 {scanner_html}""", unsafe_allow_html=True)
         if r["is_tracked"] and not r["strong_eligible"] and not existing_tag:
             st.markdown(f"<div style='color:#ff6666;font-size:0.75em;margin-bottom:8px;margin-left:14px'>⚠️ Blocked: {', '.join(r['block_reasons'])}</div>", unsafe_allow_html=True)
+    
+    # ADD ALL STRONG PICKS BUTTON - AT BOTTOM
+    if eligible_strong_picks:
+        st.markdown("")
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#1a3a1a,#0a2a0a);padding:12px;border-radius:8px;border:2px solid #00ff00">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                <div>
+                    <span style="color:#00ff00;font-weight:bold;font-size:1.1em">🏷️ {len(eligible_strong_picks)} Eligible Strong Picks</span>
+                    <span style="color:#888;margin-left:10px">{', '.join([r['pick_code'] for r in eligible_strong_picks])}</span>
+                </div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+        if st.button(f"➕ Add All {len(eligible_strong_picks)} Strong Picks", key="add_all_strong", type="primary", use_container_width=True):
+            added = []
+            for r in eligible_strong_picks:
+                ml_num = add_strong_pick(r["game_key"], r["pick"])
+                added.append(f"ML-{ml_num:03d} {r['pick_code']}")
+            st.success(f"✅ Tagged: {', '.join(added)}")
+            st.rerun()
 else:
     st.info("No games today — check back later!")
 
