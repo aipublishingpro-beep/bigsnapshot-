@@ -139,7 +139,6 @@ def fetch_nws_6hr_extremes(station):
                 try:
                     date_val = cells[0].text.strip()
                     time_val = cells[1].text.strip()
-                    # Track date - rows without date inherit from previous row
                     if date_val:
                         current_date = int(date_val)
                     if current_date is None or current_date != today:
@@ -149,7 +148,6 @@ def fetch_nws_6hr_extremes(station):
                     if max_6hr_text or min_6hr_text:
                         max_val = float(max_6hr_text) if max_6hr_text else None
                         min_val = float(min_6hr_text) if min_6hr_text else None
-                        # Only include 6hr HIGH from times after 12:00 (noon)
                         time_hour = int(time_val.replace(":", "")[:2]) if time_val else 0
                         if max_val is not None and time_hour >= 12:
                             all_6hr_maxes.append(max_val)
@@ -349,7 +347,6 @@ brackets_low_data = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC")) if is_own
 brackets_high_data = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY")) if is_owner else None
 
 if current_temp:
-    # Build display with official extremes for owner
     if is_owner and (official_high or official_low):
         st.markdown(f"""
         <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
@@ -381,7 +378,6 @@ if current_temp:
         with st.expander("📊 Recent NWS Observations", expanded=True):
             display_list = readings if is_owner else readings[:8]
             
-            # Find reversal indices
             min_temp = min(r['temp'] for r in display_list)
             low_reversal_idx = None
             for i, r in enumerate(display_list):
@@ -398,7 +394,6 @@ if current_temp:
                         high_reversal_idx = i
                         break
             
-            # Confirmation: first reading AFTER reversal that proves trend reversed (OWNER ONLY)
             low_confirm_idx = None
             if is_owner and low_reversal_idx is not None and low_reversal_idx >= 1:
                 if display_list[low_reversal_idx - 1]['temp'] > min_temp:
@@ -423,9 +418,7 @@ if current_temp:
                             parts.append(f"<span style='color:#3b82f6'>6hr↓{six_hr_min:.0f}°</span>")
                         six_hr_display = " ".join(parts)
                 
-                # Show CONFIRMED LOW bar (OWNER ONLY)
                 if is_owner and low_confirm_idx is not None and i == low_confirm_idx:
-                    # Find winning bracket for LOW
                     low_bracket_info = ""
                     low_bracket_link = "#"
                     if brackets_low_data and obs_low:
@@ -434,7 +427,6 @@ if current_temp:
                                 low_bracket_info = f" → {b['range']} @ {b['yes']:.0f}¢"
                                 low_bracket_link = b['url']
                                 break
-                    # Time since confirmation
                     confirm_time = display_list[low_confirm_idx]['time']
                     try:
                         confirm_dt = datetime.strptime(confirm_time, "%H:%M").replace(year=now.year, month=now.month, day=now.day, tzinfo=eastern)
@@ -444,9 +436,7 @@ if current_temp:
                         time_ago = ""
                     st.markdown(f'<a href="{low_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW{low_bracket_info}{time_ago} — CLICK TO BUY</span></div></a>', unsafe_allow_html=True)
                 
-                # Show CONFIRMED HIGH bar (OWNER ONLY)
                 if is_owner and high_confirm_idx is not None and i == high_confirm_idx:
-                    # Find winning bracket for HIGH
                     high_bracket_info = ""
                     high_bracket_link = "#"
                     if brackets_high_data and obs_high:
@@ -455,7 +445,6 @@ if current_temp:
                                 high_bracket_info = f" → {b['range']} @ {b['yes']:.0f}¢"
                                 high_bracket_link = b['url']
                                 break
-                    # Time since confirmation
                     confirm_time = display_list[high_confirm_idx]['time']
                     try:
                         confirm_dt = datetime.strptime(confirm_time, "%H:%M").replace(year=now.year, month=now.month, day=now.day, tzinfo=eastern)
@@ -465,7 +454,6 @@ if current_temp:
                         time_ago = ""
                     st.markdown(f'<a href="{high_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED HIGH{high_bracket_info}{time_ago} — CLICK TO BUY</span></div></a>', unsafe_allow_html=True)
                 
-                # Row styling
                 if i == low_reversal_idx:
                     row_style = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
                     time_style = "color:#fbbf24;font-weight:600"
@@ -489,8 +477,7 @@ else:
 # ========== POSITION TRACKER ==========
 st.markdown("---")
 with st.expander("📊 POSITION TRACKER", expanded=False):
-    
-        pcol1, pcol2 = st.columns(2)
+    pcol1, pcol2 = st.columns(2)
     
     with pcol1:
         st.markdown("**LOW Position**")
@@ -503,19 +490,16 @@ with st.expander("📊 POSITION TRACKER", expanded=False):
             low_entry = st.number_input("Entry Price (¢)", value=24, min_value=1, max_value=99, key="low_entry")
             low_contracts = st.number_input("Contracts", value=195, min_value=1, key="low_contracts")
             
-            # Calculate cushion and status
             if obs_low:
                 if low_bet_type == "YES ≥ threshold":
                     cushion = obs_low - low_threshold
                     cushion_label = f"+{cushion:.1f}°F above threshold"
                 else:
-                    # Range bet - check both bounds
                     cushion_lower = obs_low - low_threshold
                     cushion_upper = low_threshold_upper - obs_low
                     cushion = min(cushion_lower, cushion_upper)
                     cushion_label = f"Low:{cushion_lower:+.1f}° / High:{cushion_upper:+.1f}°"
                 
-                # Status thresholds
                 if cushion >= 10:
                     status = "🟢 LOCKED"
                     status_color = "#22c55e"
@@ -541,7 +525,6 @@ with st.expander("📊 POSITION TRACKER", expanded=False):
                     status_color = "#dc2626"
                     status_bg = "#450a0a"
                 
-                # P&L calc
                 cost = low_contracts * low_entry / 100
                 if cushion >= 0:
                     payout = low_contracts * 1.0
@@ -579,19 +562,16 @@ with st.expander("📊 POSITION TRACKER", expanded=False):
             high_entry = st.number_input("Entry Price (¢)", value=30, min_value=1, max_value=99, key="high_entry")
             high_contracts = st.number_input("Contracts", value=100, min_value=1, key="high_contracts")
             
-            # Calculate cushion and status
             if obs_high:
                 if high_bet_type == "YES ≤ threshold":
                     cushion = high_threshold - obs_high
                     cushion_label = f"+{cushion:.1f}°F below threshold"
                 else:
-                    # Range bet - check both bounds
                     cushion_lower = obs_high - high_threshold_lower
                     cushion_upper = high_threshold - obs_high
                     cushion = min(cushion_lower, cushion_upper)
                     cushion_label = f"Low:{cushion_lower:+.1f}° / High:{cushion_upper:+.1f}°"
                 
-                # Status thresholds (different for HIGH since it can still move)
                 time_risk = " ⚠️ HIGH NOT LOCKED" if now.hour < 15 else ""
                 
                 if cushion >= 10:
@@ -615,7 +595,6 @@ with st.expander("📊 POSITION TRACKER", expanded=False):
                     status_color = "#dc2626"
                     status_bg = "#450a0a"
                 
-                # P&L calc
                 cost = high_contracts * high_entry / 100
                 if cushion >= 0:
                     payout = high_contracts * 1.0
