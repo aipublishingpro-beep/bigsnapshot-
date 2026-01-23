@@ -341,8 +341,16 @@ with c2:
     nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
     st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
 
+# FIX: Preserve all existing query params when setting default city
 if st.button("⭐ Set as Default City", use_container_width=False):
-    st.query_params["city"] = city
+    # Capture all existing params
+    existing_params = dict(st.query_params)
+    # Update city
+    existing_params["city"] = city
+    # Clear and set all params to preserve mode=owner
+    st.query_params.clear()
+    for key, value in existing_params.items():
+        st.query_params[key] = value
     st.success(f"✓ Bookmark this page to save {city} as default!")
 
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
@@ -691,7 +699,7 @@ else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.9</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v4.0</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     docs = """
