@@ -1,7 +1,19 @@
 import streamlit as st
-from streamlit_js_eval import streamlit_js_eval
 
 st.set_page_config(page_title="BigSnapshot", page_icon="🎯", layout="wide")
+
+import streamlit.components.v1 as components
+components.html("""
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-1T35YHHYBC', { send_page_view: true });
+</script>
+""", height=0)
+
+from streamlit_js_eval import streamlit_js_eval
 
 # ============================================================
 # 🔐 AUTH BOOTSTRAP — READ FROM LOCALSTORAGE ON EVERY LOAD
@@ -27,16 +39,7 @@ VALID_PASSWORD = "snapcrackle2026"
 # ============================================================
 # STYLES
 # ============================================================
-st.markdown("""
-<style>
-    .main-header { font-size: 2.5em; font-weight: bold; color: #fff; text-align: center; margin-bottom: 10px; }
-    .sub-header { color: #888; text-align: center; margin-bottom: 30px; }
-    .tool-card { background: linear-gradient(135deg, #0f172a, #1e293b); padding: 20px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 15px; }
-    .tool-title { font-size: 1.3em; font-weight: bold; color: #fff; margin-bottom: 8px; }
-    .tool-desc { color: #94a3b8; font-size: 0.9em; }
-    .status-badge { background: #22c55e; color: #000; padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; }
-</style>
-""", unsafe_allow_html=True)
+st.markdown('<style>.main-header { font-size: 2.5em; font-weight: bold; color: #fff; text-align: center; margin-bottom: 10px; } .sub-header { color: #888; text-align: center; margin-bottom: 30px; } .tool-card { background: linear-gradient(135deg, #0f172a, #1e293b); padding: 20px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 15px; } .tool-title { font-size: 1.3em; font-weight: bold; color: #fff; margin-bottom: 8px; } .tool-desc { color: #94a3b8; font-size: 0.9em; } .status-badge { background: #22c55e; color: #000; padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; }</style>', unsafe_allow_html=True)
 
 # ============================================================
 # MAIN UI
@@ -111,15 +114,7 @@ cols = st.columns(2)
 for i, tool in enumerate(tools):
     with cols[i % 2]:
         status_color = "#22c55e" if tool["status"] == "LIVE" else "#64748b"
-        st.markdown(f"""
-        <div class="tool-card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="tool-title">{tool['name']}</div>
-                <span style="background: {status_color}; color: #000; padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold;">{tool['status']}</span>
-            </div>
-            <div class="tool-desc">{tool['desc']}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="tool-card"><div style="display: flex; justify-content: space-between; align-items: center;"><div class="tool-title">{tool["name"]}</div><span style="background: {status_color}; color: #000; padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold;">{tool["status"]}</span></div><div class="tool-desc">{tool["desc"]}</div></div>', unsafe_allow_html=True)
         
         if tool["status"] == "LIVE":
             if st.button(f"Open {tool['name'].split()[1]}", key=f"open_{i}", use_container_width=True):
