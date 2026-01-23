@@ -1023,14 +1023,8 @@ if games:
 </div>
 <div style="color:#666;font-size:0.75em;margin:-2px 0 2px 14px">{reasons_str}</div>
 {scanner_html}""", unsafe_allow_html=True)
-        if (r["is_tracked"] and r["strong_eligible"] and not existing_tag 
-            and g.get('status_type') != "STATUS_FINAL"):
-            if st.button(f"➕ Add Strong Pick", key=f"strong_{r['game_key']}", use_container_width=True):
-                ml_num = add_strong_pick(r["game_key"], r["pick"])
-                st.success(f"✅ Tagged ML-{ml_num:03d}: {r['pick_code']}")
-                st.rerun()
-        elif r["is_tracked"] and not r["strong_eligible"] and not existing_tag:
-            st.markdown(f"<div style='color:#ff6666;font-size:0.75em;margin-bottom:8px;margin-left:14px'>⚠️ Strong Pick blocked: {', '.join(r['block_reasons'])}</div>", unsafe_allow_html=True)
+        if r["is_tracked"] and not r["strong_eligible"] and not existing_tag:
+            st.markdown(f"<div style='color:#ff6666;font-size:0.75em;margin-bottom:8px;margin-left:14px'>⚠️ Blocked: {', '.join(r['block_reasons'])}</div>", unsafe_allow_html=True)
 else:
     st.info("No games today — check back later!")
 
