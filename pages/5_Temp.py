@@ -486,6 +486,162 @@ if current_temp:
 else:
     st.warning("⚠️ Could not fetch NWS observations")
 
+# ========== POSITION TRACKER ==========
+st.markdown("---")
+with st.expander("📊 POSITION TRACKER", expanded=False):
+    
+        pcol1, pcol2 = st.columns(2)
+    
+    with pcol1:
+        st.markdown("**LOW Position**")
+        low_has_position = st.checkbox("I have a LOW position", key="low_pos")
+        if low_has_position:
+            low_bet_type = st.selectbox("Bet Type", ["YES ≥ threshold", "YES in range"], key="low_bet")
+            low_threshold = st.number_input("Threshold (°F)", value=18, key="low_thresh")
+            if low_bet_type == "YES in range":
+                low_threshold_upper = st.number_input("Upper bound (°F)", value=25, key="low_thresh_up")
+            low_entry = st.number_input("Entry Price (¢)", value=24, min_value=1, max_value=99, key="low_entry")
+            low_contracts = st.number_input("Contracts", value=195, min_value=1, key="low_contracts")
+            
+            # Calculate cushion and status
+            if obs_low:
+                if low_bet_type == "YES ≥ threshold":
+                    cushion = obs_low - low_threshold
+                    cushion_label = f"+{cushion:.1f}°F above threshold"
+                else:
+                    # Range bet - check both bounds
+                    cushion_lower = obs_low - low_threshold
+                    cushion_upper = low_threshold_upper - obs_low
+                    cushion = min(cushion_lower, cushion_upper)
+                    cushion_label = f"Low:{cushion_lower:+.1f}° / High:{cushion_upper:+.1f}°"
+                
+                # Status thresholds
+                if cushion >= 10:
+                    status = "🟢 LOCKED"
+                    status_color = "#22c55e"
+                    status_bg = "#14532d"
+                elif cushion >= 5:
+                    status = "🟢 VERY SAFE"
+                    status_color = "#22c55e"
+                    status_bg = "#14532d"
+                elif cushion >= 3:
+                    status = "🟡 SAFE"
+                    status_color = "#eab308"
+                    status_bg = "#3d3510"
+                elif cushion >= 1:
+                    status = "🟠 CAUTION"
+                    status_color = "#f59e0b"
+                    status_bg = "#451a03"
+                elif cushion >= 0:
+                    status = "🔴 AT RISK"
+                    status_color = "#ef4444"
+                    status_bg = "#450a0a"
+                else:
+                    status = "💀 BUSTED"
+                    status_color = "#dc2626"
+                    status_bg = "#450a0a"
+                
+                # P&L calc
+                cost = low_contracts * low_entry / 100
+                if cushion >= 0:
+                    payout = low_contracts * 1.0
+                    profit = payout - cost
+                    profit_pct = (profit / cost) * 100
+                    pnl_display = f"+${profit:.2f} ({profit_pct:.0f}%)"
+                    pnl_color = "#22c55e"
+                else:
+                    pnl_display = f"-${cost:.2f} (LOSS)"
+                    pnl_color = "#ef4444"
+                
+                st.markdown(f'''
+                <div style="background:{status_bg};border:2px solid {status_color};border-radius:8px;padding:15px;margin-top:10px">
+                    <div style="color:{status_color};font-size:1.3em;font-weight:700;text-align:center">{status}</div>
+                    <div style="color:#fff;text-align:center;margin-top:8px">
+                        <div>Current Low: <strong>{obs_low}°F</strong></div>
+                        <div>Your Threshold: <strong>{low_threshold}°F</strong></div>
+                        <div style="color:{status_color};font-weight:700;font-size:1.1em;margin-top:5px">CUSHION: {cushion_label}</div>
+                    </div>
+                    <div style="border-top:1px solid #30363d;margin-top:10px;padding-top:10px;text-align:center">
+                        <div style="color:#9ca3af">Entry: {low_contracts} @ {low_entry}¢ = ${cost:.2f}</div>
+                        <div style="color:{pnl_color};font-weight:700;font-size:1.1em">Projected P&L: {pnl_display}</div>
+                    </div>
+                </div>
+                ''', unsafe_allow_html=True)
+    
+    with pcol2:
+        st.markdown("**HIGH Position**")
+        high_has_position = st.checkbox("I have a HIGH position", key="high_pos")
+        if high_has_position:
+            high_bet_type = st.selectbox("Bet Type", ["YES ≤ threshold", "YES in range"], key="high_bet")
+            high_threshold = st.number_input("Threshold (°F)", value=45, key="high_thresh")
+            if high_bet_type == "YES in range":
+                high_threshold_lower = st.number_input("Lower bound (°F)", value=40, key="high_thresh_low")
+            high_entry = st.number_input("Entry Price (¢)", value=30, min_value=1, max_value=99, key="high_entry")
+            high_contracts = st.number_input("Contracts", value=100, min_value=1, key="high_contracts")
+            
+            # Calculate cushion and status
+            if obs_high:
+                if high_bet_type == "YES ≤ threshold":
+                    cushion = high_threshold - obs_high
+                    cushion_label = f"+{cushion:.1f}°F below threshold"
+                else:
+                    # Range bet - check both bounds
+                    cushion_lower = obs_high - high_threshold_lower
+                    cushion_upper = high_threshold - obs_high
+                    cushion = min(cushion_lower, cushion_upper)
+                    cushion_label = f"Low:{cushion_lower:+.1f}° / High:{cushion_upper:+.1f}°"
+                
+                # Status thresholds (different for HIGH since it can still move)
+                time_risk = " ⚠️ HIGH NOT LOCKED" if now.hour < 15 else ""
+                
+                if cushion >= 10:
+                    status = "🟢 VERY SAFE" + time_risk
+                    status_color = "#22c55e"
+                    status_bg = "#14532d"
+                elif cushion >= 5:
+                    status = "🟡 SAFE" + time_risk
+                    status_color = "#eab308"
+                    status_bg = "#3d3510"
+                elif cushion >= 3:
+                    status = "🟠 CAUTION" + time_risk
+                    status_color = "#f59e0b"
+                    status_bg = "#451a03"
+                elif cushion >= 0:
+                    status = "🔴 AT RISK" + time_risk
+                    status_color = "#ef4444"
+                    status_bg = "#450a0a"
+                else:
+                    status = "💀 BUSTED"
+                    status_color = "#dc2626"
+                    status_bg = "#450a0a"
+                
+                # P&L calc
+                cost = high_contracts * high_entry / 100
+                if cushion >= 0:
+                    payout = high_contracts * 1.0
+                    profit = payout - cost
+                    profit_pct = (profit / cost) * 100
+                    pnl_display = f"+${profit:.2f} ({profit_pct:.0f}%)"
+                    pnl_color = "#22c55e"
+                else:
+                    pnl_display = f"-${cost:.2f} (LOSS)"
+                    pnl_color = "#ef4444"
+                
+                st.markdown(f'''
+                <div style="background:{status_bg};border:2px solid {status_color};border-radius:8px;padding:15px;margin-top:10px">
+                    <div style="color:{status_color};font-size:1.3em;font-weight:700;text-align:center">{status}</div>
+                    <div style="color:#fff;text-align:center;margin-top:8px">
+                        <div>Current High: <strong>{obs_high}°F</strong></div>
+                        <div>Your Threshold: <strong>{high_threshold}°F</strong></div>
+                        <div style="color:{status_color};font-weight:700;font-size:1.1em;margin-top:5px">CUSHION: {cushion_label}</div>
+                    </div>
+                    <div style="border-top:1px solid #30363d;margin-top:10px;padding-top:10px;text-align:center">
+                        <div style="color:#9ca3af">Entry: {high_contracts} @ {high_entry}¢ = ${cost:.2f}</div>
+                        <div style="color:{pnl_color};font-weight:700;font-size:1.1em">Projected P&L: {pnl_display}</div>
+                    </div>
+                </div>
+                ''', unsafe_allow_html=True)
+
 st.markdown("---")
 col_high, col_low = st.columns(2)
 
@@ -553,7 +709,7 @@ else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.6</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.7</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     docs = """
@@ -572,6 +728,23 @@ Compares actual NWS temperature observations against Kalshi prediction market pr
 • 🚨 **BIG** (30-49 cents) — Amber glow, "Major mispricing"  
 • ⚠️ **MODERATE** (15-29 cents) — Gold highlight, "Edge present"
 • 🎯 **NONE** (<15 cents) — Standard display
+
+**📊 Position Tracker**
+
+Track your open positions and monitor your cushion (safety margin):
+
+1. Click "I have a LOW/HIGH position"
+2. Select bet type: "YES ≥ threshold" or "YES in range"
+3. Enter your threshold, entry price, and contract count
+4. See real-time cushion status and projected P&L
+
+**Cushion Status Levels:**
+• 🟢 **LOCKED** (+10°F+) — Position is virtually guaranteed
+• 🟢 **VERY SAFE** (+5-9°F) — Extremely unlikely to lose
+• 🟡 **SAFE** (+3-4°F) — Comfortable margin
+• 🟠 **CAUTION** (+1-2°F) — Monitor closely
+• 🔴 **AT RISK** (0°F) — On the edge
+• 💀 **BUSTED** (below 0) — Position lost
 
 **⚠️ Important Notes**
 
