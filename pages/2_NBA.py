@@ -514,6 +514,141 @@ with col4:
 st.divider()
 
 # ============================================================
+# 🏥 INJURY REPORT
+# ============================================================
+st.subheader("🏥 INJURY REPORT")
+
+# Star player tiers (3 stars = superstar, 2 stars = all-star, 1 star = starter)
+STAR_TIERS = {
+    "Nikola Jokic": 3, "Shai Gilgeous-Alexander": 3, "Giannis Antetokounmpo": 3, "Luka Doncic": 3,
+    "Joel Embiid": 3, "Jayson Tatum": 3, "Stephen Curry": 3, "Kevin Durant": 3, "LeBron James": 3,
+    "Anthony Edwards": 3, "Ja Morant": 3, "Donovan Mitchell": 3, "Trae Young": 3, "Devin Booker": 3,
+    "Jaylen Brown": 2, "Anthony Davis": 2, "Damian Lillard": 2, "Kyrie Irving": 2, "Jimmy Butler": 2,
+    "Bam Adebayo": 2, "Tyrese Haliburton": 2, "De'Aaron Fox": 2, "Jalen Brunson": 2, "Chet Holmgren": 2,
+    "Paolo Banchero": 2, "Franz Wagner": 2, "Scottie Barnes": 2, "Evan Mobley": 2, "Darius Garland": 2,
+    "Zion Williamson": 2, "Brandon Ingram": 2, "LaMelo Ball": 2, "Cade Cunningham": 2, "Jalen Williams": 2,
+    "Tyrese Maxey": 2, "Desmond Bane": 2, "Jamal Murray": 2, "Pascal Siakam": 2, "Lauri Markkanen": 2,
+    "Victor Wembanyama": 2, "Alperen Sengun": 2, "Derrick White": 2, "Domantas Sabonis": 2,
+    "Julius Randle": 1, "RJ Barrett": 1, "Mikal Bridges": 1, "Anfernee Simons": 1, "Jalen Green": 1,
+    "Fred VanVleet": 1, "Scoot Henderson": 1, "Bennedict Mathurin": 1, "Keegan Murray": 1,
+    "Zach LaVine": 1, "DeMar DeRozan": 1, "Kawhi Leonard": 1, "Paul George": 1, "Bradley Beal": 1,
+    "Draymond Green": 1, "Karl-Anthony Towns": 1, "Rudy Gobert": 1, "Jordan Poole": 1
+}
+
+injured_stars = []
+for team, team_injuries in injuries.items():
+    if team not in today_teams: continue
+    for inj in team_injuries:
+        name = inj.get("name", "")
+        status = inj.get("status", "").upper()
+        if "OUT" in status or "DTD" in status or "DOUBT" in status:
+            tier = 0
+            for star_name, star_tier in STAR_TIERS.items():
+                if star_name.lower() in name.lower():
+                    tier = star_tier
+                    break
+            if tier > 0:
+                injured_stars.append({
+                    "name": name, "team": team, "status": "OUT" if "OUT" in status else "DTD" if "DTD" in status else "DOUBT",
+                    "tier": tier
+                })
+
+injured_stars.sort(key=lambda x: (-x['tier'], x['team']))
+
+if injured_stars:
+    cols = st.columns(3)
+    for i, inj in enumerate(injured_stars):
+        with cols[i % 3]:
+            stars = "⭐" * inj['tier']
+            status_color = "#ff4444" if inj['status'] == "OUT" else "#ffaa00"
+            st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#2a1a2a);padding:10px;border-radius:6px;border-left:3px solid {status_color};margin-bottom:6px">
+                <div style="color:#fff;font-weight:bold">{stars} {escape_html(inj['name'])} 🔥</div>
+                <div style="color:{status_color};font-size:0.85em">{inj['status']} • {escape_html(inj['team'])}</div>
+            </div>""", unsafe_allow_html=True)
+    
+    # B2B teams
+    if yesterday_teams:
+        b2b_list = ", ".join(sorted(yesterday_teams))
+        st.markdown(f"""<div style="background:#1a2a3a;padding:10px 14px;border-radius:6px;margin-top:10px">
+            <span style="color:#38bdf8">🏨 B2B:</span> <span style="color:#fff">{escape_html(b2b_list)}</span>
+        </div>""", unsafe_allow_html=True)
+else:
+    st.info("No major injuries reported for today's games")
+
+st.divider()
+
+# ============================================================
+# 🎯 ML PICKS - CLEAN FORMAT LIKE YOUR OLD VERSION
+# ============================================================
+st.subheader("🎯 ML PICKS")
+
+if games:
+    ml_results = []
+    for gk, g in games.items():
+        away, home = g["away_team"], g["home_team"]
+        try:
+            pick, score, reasons, home_out, away_out, home_net, away_net = calc_ml_score(home, away, yesterday_teams, injuries, last_5)
+            is_home = pick == home
+            opp = away if is_home else home
+            ml_results.append({
+                "pick": pick, "opp": opp, "score": score, "reasons": reasons,
+                "away": away, "home": home, "game_key": gk,
+                "home_win_pct": TEAM_STATS.get(pick, {}).get('home_win_pct', 0.5) if is_home else TEAM_STATS.get(pick, {}).get('away_win_pct', 0.5)
+            })
+        except: continue
+    
+    ml_results.sort(key=lambda x: x["score"], reverse=True)
+    
+    # Only show picks with score >= 5.5
+    display_results = [r for r in ml_results if r["score"] >= 5.5]
+    
+    for r in display_results:
+        kalshi_url = build_kalshi_ml_url(r["away"], r["home"])
+        reasons_str = " • ".join([escape_html(reason) for reason in r["reasons"][:4]])
+        win_pct = int(r["home_win_pct"] * 100)
+        existing_tag = get_strong_pick_for_game(r["game_key"])
+        
+        # Border color based on score
+        if r["score"] >= 8.0:
+            border_color = "#00ff00"
+        elif r["score"] >= 6.5:
+            border_color = "#38bdf8"
+        else:
+            border_color = "#ffaa00"
+        
+        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:#0f172a;padding:10px 14px;margin-bottom:6px;border-radius:6px;border-left:3px solid {border_color}">
+<div style="flex:1">
+<span style="color:#fff;font-weight:bold">{escape_html(r['pick'])}</span>
+<span style="color:#666"> vs {escape_html(r['opp'])}</span>
+<span style="color:#38bdf8;font-weight:bold;margin-left:8px">{r['score']}/10</span>
+<span style="color:#888;margin-left:10px;font-size:0.85em">{reasons_str} • 🏟️ {win_pct}%</span>
+</div>
+<a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:8px 16px;border-radius:6px;font-weight:bold;text-decoration:none;white-space:nowrap">BUY {escape_html(r['pick'])}</a>
+</div>""", unsafe_allow_html=True)
+    
+    # ADD ALL PICKS TO POSITIONS BUTTON AT BOTTOM
+    existing_position_games = [p.get('game') for p in st.session_state.positions]
+    untagged = [r for r in display_results if r["game_key"] not in existing_position_games]
+    if untagged:
+        st.markdown("")
+        if st.button(f"➕ Add {len(untagged)} Picks to Positions", key="add_all_picks", use_container_width=True):
+            for r in untagged:
+                st.session_state.positions.append({
+                    "game": r["game_key"],
+                    "type": "ml",
+                    "pick": r["pick"],
+                    "price": 50,
+                    "contracts": 1
+                })
+            save_positions(st.session_state.positions)
+            st.success(f"✅ Added {len(untagged)} picks to Active Positions — scroll down to edit price/contracts")
+            st.rerun()
+else:
+    st.info("No games today — check back later!")
+
+st.divider()
+
+# ============================================================
 # 🎯 CUSHION SCANNER
 # ============================================================
 st.subheader("🎯 CUSHION SCANNER")
