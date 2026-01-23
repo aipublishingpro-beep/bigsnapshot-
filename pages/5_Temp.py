@@ -122,14 +122,16 @@ def fetch_nws_6hr_extremes(station):
     try:
         resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
         if resp.status_code != 200:
-            return {}
+            return {}, None, None
         soup = BeautifulSoup(resp.text, 'html.parser')
         table = soup.find('table')
         if not table:
-            return {}
+            return {}, None, None
         rows = table.find_all('tr')
         extremes = {}
         today = datetime.now(eastern).day
+        all_6hr_maxes = []
+        all_6hr_mins = []
         for row in rows[3:]:
             cells = row.find_all('td')
             if len(cells) >= 10:
@@ -143,15 +145,20 @@ def fetch_nws_6hr_extremes(station):
                     if max_6hr_text or min_6hr_text:
                         max_val = float(max_6hr_text) if max_6hr_text else None
                         min_val = float(min_6hr_text) if min_6hr_text else None
-                        if max_val is not None or min_val is not None:
-                            time_key = time_val.replace(":", "")[:4]
-                            time_key = time_key[:2] + ":" + time_key[2:]
-                            extremes[time_key] = {"max": max_val, "min": min_val}
+                        if max_val is not None:
+                            all_6hr_maxes.append(max_val)
+                        if min_val is not None:
+                            all_6hr_mins.append(min_val)
+                        time_key = time_val.replace(":", "")[:4]
+                        time_key = time_key[:2] + ":" + time_key[2:]
+                        extremes[time_key] = {"max": max_val, "min": min_val}
                 except:
                     continue
-        return extremes
+        official_high = max(all_6hr_maxes) if all_6hr_maxes else None
+        official_low = min(all_6hr_mins) if all_6hr_mins else None
+        return extremes, official_high, official_low
     except:
-        return {}
+        return {}, None, None
 
 @st.cache_data(ttl=120)
 def fetch_nws_observations(station):
@@ -303,12 +310,12 @@ if is_owner:
             <div style="color:#22c55e;font-weight:700;margin-bottom:8px">🔒 EDGE TIPS</div>
             <div style="color:#c9d1d9;font-size:0.85em;line-height:1.5">
                 <b>LOW (Safer):</b><br>
-                • Wait 1hr after reversal<br>
-                • 2+ rising readings = locked<br>
+                • Wait for ✅ CONFIRMED bar<br>
+                • Shows after 1 rising reading<br>
                 • Sun up = no going back<br><br>
                 <b>HIGH (Riskier):</b><br>
-                • Wait for 18:51 6hr confirm<br>
-                • Or skip entirely<br><br>
+                • Wait for ✅ CONFIRMED bar<br>
+                • Or wait for 18:51 6hr confirm<br><br>
                 <b>6hr Extremes:</b><br>
                 • 06:51 & 12:51 bracket LOW<br>
                 • 12:51 & 18:51 bracket HIGH<br>
@@ -330,21 +337,36 @@ if st.button("⭐ Set as Default City", use_container_width=False):
     st.success(f"✓ Bookmark this page to save {city} as default!")
 
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
-extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else {}
+extremes_6hr, official_high, official_low = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else ({}, None, None)
 
 if current_temp:
-    st.markdown(f"""
-    <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
-        <div style="text-align:center;margin-bottom:10px">
-            <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#22c55e">{cfg.get('station', 'N/A')}</strong></span>
+    # Build display with official extremes for owner
+    if is_owner and (official_high or official_low):
+        st.markdown(f"""
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
+            <div style="text-align:center;margin-bottom:10px">
+                <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#22c55e">{cfg.get('station', 'N/A')}</strong></span>
+            </div>
+            <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
+                <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div></div>
+                <div><div style="color:#3b82f6;font-size:0.8em">TODAY'S LOW</div><div style="color:#3b82f6;font-size:1.5em;font-weight:700">{obs_low}°F</div>{f'<div style="color:#22c55e;font-size:0.7em">6hr Official: {official_low:.0f}°F</div>' if official_low else ''}</div>
+                <div><div style="color:#ef4444;font-size:0.8em">{"TODAY'S HIGH" if now.hour >= 15 else "TODAY'S HIGH SO FAR"}</div><div style="color:#ef4444;font-size:1.5em;font-weight:700">{obs_high}°F</div>{f'<div style="color:#22c55e;font-size:0.7em">6hr Official: {official_high:.0f}°F</div>' if official_high else ''}</div>
+            </div>
         </div>
-        <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
-            <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div></div>
-            <div><div style="color:#3b82f6;font-size:0.8em">TODAY'S LOW</div><div style="color:#3b82f6;font-size:1.5em;font-weight:700">{obs_low}°F</div></div>
-            <div><div style="color:#ef4444;font-size:0.8em">{"TODAY'S HIGH" if now.hour >= 15 else "TODAY'S HIGH SO FAR"}</div><div style="color:#ef4444;font-size:1.5em;font-weight:700">{obs_high}°F</div></div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
+            <div style="text-align:center;margin-bottom:10px">
+                <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#22c55e">{cfg.get('station', 'N/A')}</strong></span>
+            </div>
+            <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
+                <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div></div>
+                <div><div style="color:#3b82f6;font-size:0.8em">TODAY'S LOW</div><div style="color:#3b82f6;font-size:1.5em;font-weight:700">{obs_low}°F</div></div>
+                <div><div style="color:#ef4444;font-size:0.8em">{"TODAY'S HIGH" if now.hour >= 15 else "TODAY'S HIGH SO FAR"}</div><div style="color:#ef4444;font-size:1.5em;font-weight:700">{obs_high}°F</div></div>
+            </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
     if readings:
         with st.expander("📊 Recent NWS Observations", expanded=True):
@@ -367,30 +389,38 @@ if current_temp:
                         high_reversal_idx = i
                         break
             
-            # Confirmation indices (2 rows above = index - 2)
-            low_confirm_idx = (low_reversal_idx - 2) if (low_reversal_idx is not None and low_reversal_idx >= 2) else None
-            high_confirm_idx = (high_reversal_idx - 2) if (high_reversal_idx is not None and high_reversal_idx >= 2) else None
+            # Confirmation: first reading AFTER reversal that proves trend reversed (OWNER ONLY)
+            low_confirm_idx = None
+            if is_owner and low_reversal_idx is not None and low_reversal_idx >= 1:
+                if display_list[low_reversal_idx - 1]['temp'] > min_temp:
+                    low_confirm_idx = low_reversal_idx - 1
+            
+            high_confirm_idx = None
+            if is_owner and high_reversal_idx is not None and high_reversal_idx >= 1:
+                if display_list[high_reversal_idx - 1]['temp'] < max_temp:
+                    high_confirm_idx = high_reversal_idx - 1
             
             for i, r in enumerate(display_list):
                 time_key = r['time']
-                six_hr_max = extremes_6hr.get(time_key, {}).get('max')
-                six_hr_min = extremes_6hr.get(time_key, {}).get('min')
                 six_hr_display = ""
-                if six_hr_max is not None or six_hr_min is not None:
-                    parts = []
-                    if six_hr_max is not None:
-                        parts.append(f"<span style='color:#ef4444'>6hr↑{six_hr_max:.0f}°</span>")
-                    if six_hr_min is not None:
-                        parts.append(f"<span style='color:#3b82f6'>6hr↓{six_hr_min:.0f}°</span>")
-                    six_hr_display = " ".join(parts)
+                if is_owner:
+                    six_hr_max = extremes_6hr.get(time_key, {}).get('max')
+                    six_hr_min = extremes_6hr.get(time_key, {}).get('min')
+                    if six_hr_max is not None or six_hr_min is not None:
+                        parts = []
+                        if six_hr_max is not None:
+                            parts.append(f"<span style='color:#ef4444'>6hr↑{six_hr_max:.0f}°</span>")
+                        if six_hr_min is not None:
+                            parts.append(f"<span style='color:#3b82f6'>6hr↓{six_hr_min:.0f}°</span>")
+                        six_hr_display = " ".join(parts)
                 
-                # Show CONFIRMED LOW bar
+                # Show CONFIRMED LOW bar (OWNER ONLY)
                 if is_owner and low_confirm_idx is not None and i == low_confirm_idx:
-                    st.markdown('<div style="display:flex;justify-content:center;align-items:center;padding:8px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW</span></div>', unsafe_allow_html=True)
+                    st.markdown('<div style="display:flex;justify-content:center;align-items:center;padding:8px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW — BUY NOW</span></div>', unsafe_allow_html=True)
                 
-                # Show CONFIRMED HIGH bar
+                # Show CONFIRMED HIGH bar (OWNER ONLY)
                 if is_owner and high_confirm_idx is not None and i == high_confirm_idx:
-                    st.markdown('<div style="display:flex;justify-content:center;align-items:center;padding:8px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED HIGH</span></div>', unsafe_allow_html=True)
+                    st.markdown('<div style="display:flex;justify-content:center;align-items:center;padding:8px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED HIGH — BUY NOW</span></div>', unsafe_allow_html=True)
                 
                 # Row styling
                 if i == low_reversal_idx:
@@ -480,7 +510,7 @@ else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.4</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.5</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     docs = """
@@ -515,7 +545,11 @@ The observations show **6hr↑** (6-hour max) and **6hr↓** (6-hour min) from o
 
 **✅ Confirmation Bars (Owner Only)**
 
-Green CONFIRMED bars appear 2 readings after reversal — your signal to trade.
+Green CONFIRMED bars appear immediately after the first reading that proves reversal:
+• LOW confirmed = next reading is HIGHER than the low
+• HIGH confirmed = next reading is LOWER than the high
+
+This is the safest earliest signal to trade.
 """
     st.markdown(docs)
 
