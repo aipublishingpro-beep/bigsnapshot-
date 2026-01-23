@@ -1,6 +1,19 @@
 import streamlit as st
-from auth import require_auth
 
+st.set_page_config(page_title="NCAA Edge Finder", page_icon="🎓", layout="wide")
+
+import streamlit.components.v1 as components
+components.html("""
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-1T35YHHYBC', { send_page_view: true });
+</script>
+""", height=0)
+
+from auth import require_auth
 require_auth()
 
 import requests
@@ -12,28 +25,10 @@ import time
 import hashlib
 from styles import apply_styles, buy_button
 
-st.set_page_config(page_title="NCAA Edge Finder", page_icon="🎓", layout="wide")
-
 apply_styles()
 
-# ========== GOOGLE ANALYTICS ==========
-st.markdown("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
-<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
-""", unsafe_allow_html=True)
-
 # ========== MOBILE CSS ==========
-st.markdown("""
-<style>
-    @media (max-width: 768px) {
-        .stApp { padding: 0.5rem; }
-        h1 { font-size: 1.5rem !important; }
-        h2 { font-size: 1.2rem !important; }
-        div[data-testid="column"] { width: 100% !important; flex: 100% !important; min-width: 100% !important; }
-        .stButton button { padding: 8px 12px !important; font-size: 14px !important; }
-    }
-</style>
-""", unsafe_allow_html=True)
+st.markdown('<style>@media (max-width: 768px) { .stApp { padding: 0.5rem; } h1 { font-size: 1.5rem !important; } h2 { font-size: 1.2rem !important; } div[data-testid="column"] { width: 100% !important; flex: 100% !important; min-width: 100% !important; } .stButton button { padding: 8px 12px !important; font-size: 14px !important; } }</style>', unsafe_allow_html=True)
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
@@ -880,36 +875,13 @@ with st.sidebar:
     st.header("🏷️ STRONG PICKS")
     today_tags = len([p for p in st.session_state.strong_picks.get('picks', []) 
                       if p.get('sport') == 'NCAA' and today_str in p.get('timestamp', '')])
-    st.markdown(f"""
-<div style="background:#0f172a;padding:12px;border-radius:8px;border-left:4px solid #00ff00;margin-bottom:12px">
-<div style="color:#00ff00;font-weight:bold">Next ML#: ML-{get_next_ml_number():03d}</div>
-<div style="color:#888;font-size:0.85em;margin-top:4px">Today's Tags: {today_tags}</div>
-</div>
-""", unsafe_allow_html=True)
+    st.markdown(f'<div style="background:#0f172a;padding:12px;border-radius:8px;border-left:4px solid #00ff00;margin-bottom:12px"><div style="color:#00ff00;font-weight:bold">Next ML#: ML-{get_next_ml_number():03d}</div><div style="color:#888;font-size:0.85em;margin-top:4px">Today\'s Tags: {today_tags}</div></div>', unsafe_allow_html=True)
     
     st.divider()
     st.header("📖 PICK TIERS")
-    st.markdown("""
-<div style="background:#0f172a;padding:10px;border-radius:6px;border-left:4px solid #00ff00;margin-bottom:10px">
-<span style="color:#00ff00;font-weight:bold">🔒 STRONG</span><br>
-<span style="color:#888;font-size:0.85em">Top 3 by score</span>
-</div>
-
-<div style="background:#0f172a;padding:10px;border-radius:6px;border-left:4px solid #ffaa00">
-<span style="color:#ffaa00;font-weight:bold">🟡 LEAN</span><br>
-<span style="color:#888;font-size:0.85em">Next 5 picks</span>
-</div>
-""", unsafe_allow_html=True)
+    st.markdown('<div style="background:#0f172a;padding:10px;border-radius:6px;border-left:4px solid #00ff00;margin-bottom:10px"><span style="color:#00ff00;font-weight:bold">🔒 STRONG</span><br><span style="color:#888;font-size:0.85em">Top 3 by score</span></div><div style="background:#0f172a;padding:10px;border-radius:6px;border-left:4px solid #ffaa00"><span style="color:#ffaa00;font-weight:bold">🟡 LEAN</span><br><span style="color:#888;font-size:0.85em">Next 5 picks</span></div>', unsafe_allow_html=True)
     st.divider()
-    st.markdown("""
-<div style="background:#0f172a;padding:10px;border-radius:6px">
-<span style="color:#888;font-size:0.85em">
-🎯 Max 3 strong picks<br>
-🟡 Max 5 lean picks<br>
-🔗 All link to Kalshi
-</span>
-</div>
-""", unsafe_allow_html=True)
+    st.markdown('<div style="background:#0f172a;padding:10px;border-radius:6px"><span style="color:#888;font-size:0.85em">🎯 Max 3 strong picks<br>🟡 Max 5 lean picks<br>🔗 All link to Kalshi</span></div>', unsafe_allow_html=True)
     st.divider()
     
     with st.expander("ℹ️ How to Use", expanded=False):
@@ -941,12 +913,7 @@ When all gates pass, the ➕ button appears.
 st.title("🎓 NCAA EDGE FINDER")
 st.caption("Signal Analysis | v18.2")
 
-st.markdown("""
-<div style="background:#0f172a;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:4px solid #00ff00">
-    <span style="color:#00ff00;font-weight:bold">🔒 STRONG</span> = Top 3 picks &nbsp;|&nbsp; 
-    <span style="color:#ffaa00;font-weight:bold">🟡 LEAN</span> = Next 5 picks
-</div>
-""", unsafe_allow_html=True)
+st.markdown('<div style="background:#0f172a;padding:12px 16px;border-radius:8px;margin:10px 0;border-left:4px solid #00ff00"><span style="color:#00ff00;font-weight:bold">🔒 STRONG</span> = Top 3 picks &nbsp;|&nbsp; <span style="color:#ffaa00;font-weight:bold">🟡 LEAN</span> = Next 5 picks</div>', unsafe_allow_html=True)
 
 # ============================================================
 # STATS
@@ -992,9 +959,7 @@ if today_strong:
     
     if wins + losses > 0:
         record_color = "#00ff00" if wins > losses else "#ff4444" if losses > wins else "#888"
-        st.markdown(f"""<div style="background:#0f172a;padding:12px 16px;border-radius:8px;border:1px solid {record_color};margin-bottom:14px">
-<div style="color:{record_color};font-weight:bold;font-size:1.1em">📊 STRONG PICKS: {wins}W-{losses}L ({pending} pending)</div>
-</div>""", unsafe_allow_html=True)
+        st.markdown(f'<div style="background:#0f172a;padding:12px 16px;border-radius:8px;border:1px solid {record_color};margin-bottom:14px"><div style="color:{record_color};font-weight:bold;font-size:1.1em">📊 STRONG PICKS: {wins}W-{losses}L ({pending} pending)</div></div>', unsafe_allow_html=True)
     
     for sp in today_strong:
         g = games.get(sp.get('game'))
@@ -1015,16 +980,7 @@ if today_strong:
                     result_badge = '<span style="background:#aa0000;color:#fff;padding:4px 12px;border-radius:4px;font-weight:bold">❌ LOST</span>'
                     border_color = "#aa0000"
                 
-                st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px">
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-<div style="display:flex;align-items:center;gap:12px">
-<span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span>
-<b style="color:#fff">{escape_html(pick)}</b>
-<span style="color:#888">{pick_score}-{opp_score}</span>
-</div>
-{result_badge}
-</div>
-</div>""", unsafe_allow_html=True)
+                st.markdown(f'<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div style="display:flex;align-items:center;gap:12px"><span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span><b style="color:#fff">{escape_html(pick)}</b><span style="color:#888">{pick_score}-{opp_score}</span></div>{result_badge}</div></div>', unsafe_allow_html=True)
             else:
                 # Live or scheduled
                 if g['period'] > 0:
@@ -1038,24 +994,9 @@ if today_strong:
                     status_badge = '<span style="background:#1e3a5f;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em">PRE</span>'
                     lead_display = ''
                 
-                st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid #ffaa00;margin-bottom:10px">
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-<div style="display:flex;align-items:center;gap:12px">
-<span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span>
-<b style="color:#fff">{escape_html(pick)}</b>
-{lead_display}
-</div>
-{status_badge}
-</div>
-</div>""", unsafe_allow_html=True)
+                st.markdown(f'<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid #ffaa00;margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div style="display:flex;align-items:center;gap:12px"><span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span><b style="color:#fff">{escape_html(pick)}</b>{lead_display}</div>{status_badge}</div></div>', unsafe_allow_html=True)
         else:
-            st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid #444;margin-bottom:10px">
-<div style="display:flex;align-items:center;gap:12px">
-<span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span>
-<b style="color:#fff">{escape_html(pick)}</b>
-<span style="color:#666">(game not found)</span>
-</div>
-</div>""", unsafe_allow_html=True)
+            st.markdown(f'<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid #444;margin-bottom:10px"><div style="display:flex;align-items:center;gap:12px"><span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span><b style="color:#fff">{escape_html(pick)}</b><span style="color:#666">(game not found)</span></div></div>', unsafe_allow_html=True)
     
     st.divider()
 
@@ -1087,9 +1028,7 @@ if finished_conviction_list:
     
     if wins > 0 or losses > 0:
         record_color = "#00ff00" if wins > losses else "#ff4444" if losses > wins else "#888"
-        st.markdown(f"""<div style="background:#0f172a;padding:12px 16px;border-radius:8px;border:1px solid {record_color};margin-bottom:14px">
-<div style="color:{record_color};font-weight:bold;font-size:1.1em;margin-bottom:8px">📊 TODAY'S STRONG PICKS: {wins}-{losses}</div>
-</div>""", unsafe_allow_html=True)
+        st.markdown(f'<div style="background:#0f172a;padding:12px 16px;border-radius:8px;border:1px solid {record_color};margin-bottom:14px"><div style="color:{record_color};font-weight:bold;font-size:1.1em;margin-bottom:8px">📊 TODAY\'S STRONG PICKS: {wins}-{losses}</div></div>', unsafe_allow_html=True)
     
     for p in finished_conviction_list:
         g = games.get(p['game_key'])
@@ -1108,26 +1047,12 @@ if finished_conviction_list:
             pick_score = g['home_score'] if pick == g['home_abbrev'] else g['away_score']
             opp_score = g['away_score'] if pick == g['home_abbrev'] else g['home_score']
             
-            st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px;opacity:0.85">
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-<span style="color:#00ff00;font-weight:bold">🔒 STRONG</span>
-<b style="color:#fff;font-size:1.2em">{escape_html(p['market_pick'])}</b>
-<span style="color:#666">v {escape_html(p['market_opp'])}</span>
-<span style="color:#38bdf8;font-weight:bold">{p['market_score']}</span>
-<span style="color:#888">{pick_score}-{opp_score}</span>
-</div>
-{result_badge}
-</div>
-</div>""", unsafe_allow_html=True)
+            st.markdown(f'<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px;opacity:0.85"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="color:#00ff00;font-weight:bold">🔒 STRONG</span><b style="color:#fff;font-size:1.2em">{escape_html(p["market_pick"])}</b><span style="color:#666">v {escape_html(p["market_opp"])}</span><span style="color:#38bdf8;font-weight:bold">{p["market_score"]}</span><span style="color:#888">{pick_score}-{opp_score}</span></div>{result_badge}</div></div>', unsafe_allow_html=True)
     
     st.markdown("---")
 
 if len(live_conviction_list) > 0:
-    st.markdown(f"""<div style="background:#1a2a1a;padding:12px 16px;border-radius:8px;border:1px solid #00ff00;margin-bottom:14px">
-<div style="color:#00ff00;font-weight:bold;font-size:1em;margin-bottom:4px">🔒 {len(live_conviction_list)} STRONG pick{'s are' if len(live_conviction_list) > 1 else ' is'} now LIVE</div>
-<div style="color:#aaa;font-size:0.85em">Scroll down to LIVE section to track.</div>
-</div>""", unsafe_allow_html=True)
+    st.markdown(f'<div style="background:#1a2a1a;padding:12px 16px;border-radius:8px;border:1px solid #00ff00;margin-bottom:14px"><div style="color:#00ff00;font-weight:bold;font-size:1em;margin-bottom:4px">🔒 {len(live_conviction_list)} STRONG pick{"s are" if len(live_conviction_list) > 1 else " is"} now LIVE</div><div style="color:#aaa;font-size:0.85em">Scroll down to LIVE section to track.</div></div>', unsafe_allow_html=True)
 
 if all_picks:
     for p in all_picks:
@@ -1166,19 +1091,7 @@ if all_picks:
         else:
             tag_badge = ''
         
-        st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px">
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-{tier_badge}
-<b style="color:#fff;font-size:1.2em">{escape_html(p['market_pick'])}</b>
-<span style="color:#666">v {escape_html(p['market_opp'])}</span>
-<span style="color:#38bdf8;font-weight:bold">{p['market_score']}</span>
-{status_badge}{score_display}{tag_badge}
-</div>
-<a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY {escape_html(p['market_pick'])}</a>
-</div>
-<div style="color:#666;font-size:0.8em;margin-top:8px">{reasons_str}</div>
-</div>""", unsafe_allow_html=True)
+        st.markdown(f'<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">{tier_badge}<b style="color:#fff;font-size:1.2em">{escape_html(p["market_pick"])}</b><span style="color:#666">v {escape_html(p["market_opp"])}</span><span style="color:#38bdf8;font-weight:bold">{p["market_score"]}</span>{status_badge}{score_display}{tag_badge}</div><a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY {escape_html(p["market_pick"])}</a></div><div style="color:#666;font-size:0.8em;margin-top:8px">{reasons_str}</div></div>', unsafe_allow_html=True)
         
         # Strong Pick Button (only for STRONG tier, passes 3 gates, not tagged, not final)
         if is_strong_tier and p.get("strong_eligible") and not existing_tag and p.get("status_type") != "STATUS_FINAL":
@@ -1208,11 +1121,7 @@ if all_picks:
                 st.rerun()
 
 else:
-    st.markdown("""
-    <div style="background:#0f172a;padding:30px;border-radius:12px;text-align:center">
-        <div style="color:#666;font-size:1em">No picks today</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div style="background:#0f172a;padding:30px;border-radius:12px;text-align:center"><div style="color:#666;font-size:1em">No picks today</div></div>', unsafe_allow_html=True)
 
 st.divider()
 
@@ -1260,19 +1169,7 @@ if live_games:
             tier_badge = '<span style="color:#ffaa00;font-weight:bold">🟡 LEAN</span>'
             border_clr = "#ffaa00"
         
-        st.markdown(f"""<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_clr};margin-bottom:10px">
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-<div style="display:flex;align-items:center;gap:12px">
-{tier_badge}
-<b style="color:#fff;font-size:1.1em">{escape_html(g['away_abbrev'])} {g['away_score']} @ {escape_html(g['home_abbrev'])} {g['home_score']}</b>
-</div>
-<div style="display:flex;align-items:center;gap:12px">
-<span style="color:{clr};font-weight:bold">{half_label} {escape_html(clock)}</span>
-<span style="color:#666">{pace_display}</span>
-<a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY {escape_html(buy_team)}</a>
-</div>
-</div>
-</div>""", unsafe_allow_html=True)
+        st.markdown(f'<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_clr};margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div style="display:flex;align-items:center;gap:12px">{tier_badge}<b style="color:#fff;font-size:1.1em">{escape_html(g["away_abbrev"])} {g["away_score"]} @ {escape_html(g["home_abbrev"])} {g["home_score"]}</b></div><div style="display:flex;align-items:center;gap:12px"><span style="color:{clr};font-weight:bold">{half_label} {escape_html(clock)}</span><span style="color:#666">{pace_display}</span><a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY {escape_html(buy_team)}</a></div></div></div>', unsafe_allow_html=True)
     st.divider()
 
 # ============================================================
@@ -1304,9 +1201,7 @@ if st.session_state.ncaa_positions:
             half_label = "H1" if g['period'] == 1 else "H2" if g['period'] == 2 else f"OT{g['period']-2}" if g['period'] > 2 else ""
             status = "FINAL" if is_final else f"{half_label} {escape_html(g['clock'])}" if g['period'] > 0 else ""
             
-            st.markdown(f"""<div style='background:#0a0a14;padding:10px;border-radius:6px;border-left:2px solid {clr};margin-bottom:6px'>
-                <div style='display:flex;justify-content:space-between;font-size:0.85em'><b style='color:#888'>{escape_html(gk.replace('@', ' @ '))}</b> <span style='color:#444'>{status}</span> <b style='color:{clr}'>{label}</b></div>
-                <div style='color:#555;margin-top:4px;font-size:0.75em'>Signal: {escape_html(pick)} | {lead:+d}</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"<div style='background:#0a0a14;padding:10px;border-radius:6px;border-left:2px solid {clr};margin-bottom:6px'><div style='display:flex;justify-content:space-between;font-size:0.85em'><b style='color:#888'>{escape_html(gk.replace('@', ' @ '))}</b> <span style='color:#444'>{status}</span> <b style='color:{clr}'>{label}</b></div><div style='color:#555;margin-top:4px;font-size:0.75em'>Signal: {escape_html(pick)} | {lead:+d}</div></div>", unsafe_allow_html=True)
             
             col1, col2 = st.columns([3, 1])
             with col2:
@@ -1403,17 +1298,7 @@ if cush_results:
         half_label = "H1" if r['period'] == 1 else "H2" if r['period'] == 2 else f"OT{r['period']-2}"
         side_color = "#00aa00" if cush_side == "NO" else "#cc6600"
         
-        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:3px solid {r['pace_color']};flex-wrap:wrap;gap:8px">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <b style="color:#fff">{escape_html(r['game'].replace('@', ' @ '))}</b>
-            <span style="color:#888">{half_label} {escape_html(r['clock'])}</span>
-            <span style="color:#888">{r['total']}pts/{r['mins']:.0f}min</span>
-            <span style="color:#888">Proj: <b style="color:#fff">{r['projected']}</b></span>
-            <span style="background:{side_color};color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold">🎯 {cush_side} {r['safe_line']}</span>
-            <span style="color:#00ff00;font-weight:bold">+{r['cushion']:.0f} cushion</span>
-            <span style="color:{r['pace_color']}">{r['pace_status']}</span>
-        </div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(f'<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:3px solid {r["pace_color"]};flex-wrap:wrap;gap:8px"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><b style="color:#fff">{escape_html(r["game"].replace("@", " @ "))}</b><span style="color:#888">{half_label} {escape_html(r["clock"])}</span><span style="color:#888">{r["total"]}pts/{r["mins"]:.0f}min</span><span style="color:#888">Proj: <b style="color:#fff">{r["projected"]}</b></span><span style="background:{side_color};color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold">🎯 {cush_side} {r["safe_line"]}</span><span style="color:#00ff00;font-weight:bold">+{r["cushion"]:.0f} cushion</span><span style="color:{r["pace_color"]}">{r["pace_status"]}</span></div></div>', unsafe_allow_html=True)
 else:
     st.info(f"No {cush_side} opportunities with 6+ cushion. Check back when games are live with {cush_min}+ minutes played.")
 
@@ -1468,16 +1353,7 @@ if pace_data:
         
         status = "FINAL" if p['final'] else f"{half_label} {p['clock']}"
         
-        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:8px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {clr};flex-wrap:wrap;gap:8px">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <b style="color:#fff">{escape_html(p['game'].replace('@', ' @ '))}</b>
-            <span style="color:#666">{status}</span>
-            <span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span>
-            <span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span>
-            <span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span>
-            {rec_html}
-        </div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(f'<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:8px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {clr};flex-wrap:wrap;gap:8px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="color:#fff">{escape_html(p["game"].replace("@", " @ "))}</b><span style="color:#666">{status}</span><span style="color:#888">{p["total"]}pts/{p["mins"]:.0f}min</span><span style="color:{clr};font-weight:bold">{p["pace"]}/min {lbl}</span><span style="color:#888">Proj: <b style="color:#fff">{p["proj"]}</b></span>{rec_html}</div></div>', unsafe_allow_html=True)
 else:
     st.info("No games with 5+ minutes played yet")
 
@@ -1502,10 +1378,7 @@ with st.expander(f"📺 ALL GAMES ({len(games)})", expanded=False):
         else:
             status, clr = "—", "#333"
         
-        st.markdown(f"""<div style="display:flex;justify-content:space-between;background:#050508;padding:5px 10px;margin-bottom:2px;border-radius:4px;font-size:0.85em">
-            <div><span style="color:#666">{escape_html(away_display)}{escape_html(g['away_abbrev'])}</span> {g['away_score']} @ <span style="color:#666">{escape_html(home_display)}{escape_html(g['home_abbrev'])}</span> {g['home_score']}</div>
-            <span style="color:{clr};font-size:0.8em">{status}</span>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(f'<div style="display:flex;justify-content:space-between;background:#050508;padding:5px 10px;margin-bottom:2px;border-radius:4px;font-size:0.85em"><div><span style="color:#666">{escape_html(away_display)}{escape_html(g["away_abbrev"])}</span> {g["away_score"]} @ <span style="color:#666">{escape_html(home_display)}{escape_html(g["home_abbrev"])}</span> {g["home_score"]}</div><span style="color:{clr};font-size:0.8em">{status}</span></div>', unsafe_allow_html=True)
 
 st.divider()
 st.caption("⚠️ Educational only. Not financial advice. v18.2")
