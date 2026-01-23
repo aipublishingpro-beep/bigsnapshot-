@@ -351,6 +351,28 @@ if st.button("⭐ Set as Default City", use_container_width=False):
 OWNER_KEY = "edge2026"  # Change this to your secret
 is_owner = query_params.get("key") == OWNER_KEY
 
+# Owner-only sidebar tips
+if is_owner:
+    with st.sidebar:
+        st.markdown("""
+        <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
+            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">🔒 EDGE TIPS</div>
+            <div style="color:#c9d1d9;font-size:0.85em;line-height:1.5">
+                <b>LOW (Safer):</b><br>
+                • Wait 1hr after reversal<br>
+                • 2+ rising readings = locked<br>
+                • Sun up = no going back<br><br>
+                <b>HIGH (Riskier):</b><br>
+                • Wait for 18:51 6hr confirm<br>
+                • Or skip entirely<br><br>
+                <b>6hr Extremes:</b><br>
+                • 06:51 & 12:51 bracket LOW<br>
+                • 12:51 & 18:51 bracket HIGH<br>
+                • Official NWS confirmation
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
 extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else {}
 
