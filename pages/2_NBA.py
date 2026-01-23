@@ -987,7 +987,7 @@ if games:
         opp_safe = escape_html(r['opp_code'])
         checks = r.get("checks", {})
         scanner_html = ""
-        if r["is_tracked"]:
+        if r["score"] >= 10.0:
             cushion_label, cushion_color, _ = checks.get("cushion", ("", "", False))
             pace_label, pace_color, _ = checks.get("pace", ("", "", False))
             stability_label, stability_color, _, _ = checks.get("stability", ("", "", False, []))
@@ -1004,7 +1004,7 @@ if games:
 </div>
 <div style="color:#666;font-size:0.75em;margin:-2px 0 2px 14px">{reasons_str}</div>
 {scanner_html}""", unsafe_allow_html=True)
-        if r["is_tracked"] and not r["strong_eligible"] and not existing_tag:
+        if r["score"] >= 10.0 and not r["strong_eligible"] and not existing_tag:
             st.markdown(f"<div style='color:#ff6666;font-size:0.75em;margin-bottom:8px;margin-left:14px'>⚠️ Blocked: {', '.join(r['block_reasons'])}</div>", unsafe_allow_html=True)
     
     # ADD ALL STRONG PICKS BUTTON - AT BOTTOM
