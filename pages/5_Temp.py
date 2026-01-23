@@ -3,6 +3,7 @@ import requests
 from datetime import datetime, timedelta
 import pytz
 import re
+from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
 
@@ -151,6 +152,69 @@ def fetch_kalshi_brackets(series_ticker):
         return None
 
 @st.cache_data(ttl=120)
+def fetch_nws_6hr_extremes(station):
+    """Fetch 6-hour max/min from NWS observation history HTML page"""
+    url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
+    try:
+        resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
+        if resp.status_code != 200:
+            return {}
+        
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        table = soup.find('table')
+        if not table:
+            return {}
+        
+        rows = table.find_all('tr')
+        extremes = {}
+        today = datetime.now(eastern).day
+        
+        for row in rows[3:]:  # Skip header rows
+            cells = row.find_all('td')
+            if len(cells) >= 10:
+                try:
+                    date_val = cells[0].text.strip()
+                    time_val = cells[1].text.strip()
+                    
+                    # Only get today's data
+                    if date_val and int(date_val) != today:
+                        continue
+                    
+                    # 6-hour max is column 8 (index 7 after 0-indexing, but table structure varies)
+                    # Looking at the table: Date, Time, Wind, Vis, Weather, Sky, Temp, Dwpt, 6hr Max, 6hr Min...
+                    # Columns: 0=Date, 1=Time, 2=Wind, 3=Vis, 4=Weather, 5=Sky, 6=Temp, 7=Dwpt, 8=6hrMax, 9=6hrMin
+                    max_6hr_text = cells[8].text.strip() if len(cells) > 8 else ""
+                    min_6hr_text = cells[9].text.strip() if len(cells) > 9 else ""
+                    
+                    # Only store if we have actual values
+                    if max_6hr_text or min_6hr_text:
+                        # Parse the float values
+                        max_val = None
+                        min_val = None
+                        if max_6hr_text:
+                            try:
+                                max_val = float(max_6hr_text)
+                            except:
+                                pass
+                        if min_6hr_text:
+                            try:
+                                min_val = float(min_6hr_text)
+                            except:
+                                pass
+                        
+                        if max_val is not None or min_val is not None:
+                            # Key by time (e.g., "18:51")
+                            time_key = time_val.replace(":", "")[:4]
+                            time_key = time_key[:2] + ":" + time_key[2:]
+                            extremes[time_key] = {"max": max_val, "min": min_val}
+                except:
+                    continue
+        
+        return extremes
+    except:
+        return {}
+
+@st.cache_data(ttl=120)
 def fetch_nws_observations(station):
     """Fetch today's hourly observations from NWS"""
     url = f"https://api.weather.gov/stations/{station}/observations"
@@ -245,7 +309,6 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
     market_fav = max(brackets, key=lambda b: b['yes'])
     st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
     
-    # Calculate edge once
     edge_cents = 0
     if winner_data:
         edge_cents = market_fav['yes'] - winner_data['yes']
@@ -255,24 +318,19 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
         is_market_fav = b['range'] == market_fav['range']
         
         if is_winner:
-            # Apply severity-based styling to ACTUAL bracket
             if edge_cents >= 50:
-                # EXTREME EDGE
                 box_style = "background:linear-gradient(135deg,#4a1010,#2d1f0a);border:2px solid #dc2626;box-shadow:0 0 20px rgba(220,38,38,0.5);border-radius:6px;padding:12px 14px;margin:8px 0"
                 name_style = "color:#f87171;font-weight:700;font-size:1.05em"
                 icon = " 🚨🚨"
             elif edge_cents >= 30:
-                # BIG EDGE
                 box_style = "background:linear-gradient(135deg,#451a03,#2d1f0a);border:2px solid #f59e0b;box-shadow:0 0 18px rgba(245,158,11,0.5);border-radius:6px;padding:12px 14px;margin:8px 0"
                 name_style = "color:#fbbf24;font-weight:700;font-size:1.05em"
                 icon = " 🚨"
             elif edge_cents >= 15:
-                # MODERATE EDGE
                 box_style = "background:linear-gradient(135deg,#3d3510,#1a1408);border:2px solid #ca8a04;box-shadow:0 0 12px rgba(202,138,4,0.4);border-radius:6px;padding:12px 14px;margin:8px 0"
                 name_style = "color:#eab308;font-weight:700;font-size:1.05em"
                 icon = " ⚠️"
             else:
-                # NO EDGE - default actual styling
                 box_style = "background:linear-gradient(135deg,#2d1f0a,#1a1408);border:2px solid #f59e0b;box-shadow:0 0 15px rgba(245,158,11,0.4);border-radius:6px;padding:12px 14px;margin:8px 0"
                 name_style = "color:#fbbf24;font-weight:700;font-size:1.05em"
                 icon = " 🎯"
@@ -300,7 +358,6 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
     
     if winner_data:
         if winner_data['yes'] >= 99:
-            # Market settled
             card = f'''
             <div style="background:#1a2e1a;border:2px solid #22c55e;border-radius:10px;padding:18px;text-align:center;margin-top:12px">
                 <div style="color:#22c55e;font-size:1.1em;font-weight:700">✅ Market settled — outcome confirmed</div>
@@ -309,7 +366,6 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
         else:
             potential_profit = 100 - winner_data['yes']
             
-            # Build edge score line (only if edge >= 15)
             edge_score_line = ""
             if edge_cents >= 50:
                 edge_score_line = f'<div style="color:#f87171;font-size:1em;font-weight:700;margin-top:6px">EDGE SCORE: +{edge_cents:.0f} (Market broken)</div>'
@@ -318,7 +374,6 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
             elif edge_cents >= 15:
                 edge_score_line = f'<div style="color:#eab308;font-size:1em;font-weight:700;margin-top:6px">EDGE SCORE: +{edge_cents:.0f} (Edge present)</div>'
             
-            # Card styling based on edge severity
             if edge_cents >= 50:
                 card_style = "background:linear-gradient(135deg,#4a1010,#2d0a0a);border:2px solid #dc2626;box-shadow:0 0 25px rgba(220,38,38,0.6)"
             elif edge_cents >= 30:
@@ -353,6 +408,7 @@ if st.button("⭐ Set as Default City", use_container_width=False):
     st.success(f"✓ Bookmark this page to save {city} as default!")
 
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
+extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"))
 
 if current_temp:
     st.markdown(f"""
@@ -398,22 +454,46 @@ if current_temp:
                         break
             
             for i, r in enumerate(readings[:8]):
+                # Check for 6-hour extremes at this time
+                time_key = r['time']
+                has_6hr = time_key in extremes_6hr
+                six_hr_max = extremes_6hr.get(time_key, {}).get('max')
+                six_hr_min = extremes_6hr.get(time_key, {}).get('min')
+                
+                # Build 6-hour display string
+                six_hr_display = ""
+                if six_hr_max is not None or six_hr_min is not None:
+                    parts = []
+                    if six_hr_max is not None:
+                        parts.append(f"<span style='color:#ef4444'>6hr↑{six_hr_max:.0f}°</span>")
+                    if six_hr_min is not None:
+                        parts.append(f"<span style='color:#3b82f6'>6hr↓{six_hr_min:.0f}°</span>")
+                    six_hr_display = " ".join(parts)
+                
                 if i == low_reversal_idx:
-                    row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
+                    row_style = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
                     time_style = "color:#fbbf24;font-weight:600"
                     temp_style = "color:#fbbf24;font-weight:700"
                     label = " ↩️ LOW"
                 elif i == high_reversal_idx:
-                    row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d0a0a,#1a0808);border:1px solid #ef4444;margin:2px 0"
+                    row_style = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d0a0a,#1a0808);border:1px solid #ef4444;margin:2px 0"
                     time_style = "color:#f87171;font-weight:600"
                     temp_style = "color:#f87171;font-weight:700"
                     label = " ↩️ HIGH"
                 else:
-                    row_style = "display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #30363d"
+                    row_style = "display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-bottom:1px solid #30363d"
                     time_style = "color:#9ca3af"
                     temp_style = "color:#fff;font-weight:600"
                     label = ""
-                st.markdown(f"<div style='{row_style}'><span style='{time_style}'>{r['time']}</span><span style='{temp_style}'>{r['temp']}°F{label}</span></div>", unsafe_allow_html=True)
+                
+                # Three-column layout: Time | 6hr extremes | Current temp
+                st.markdown(f"""
+                <div style='{row_style}'>
+                    <span style='{time_style};min-width:50px'>{r['time']}</span>
+                    <span style='flex:1;text-align:center;font-size:0.85em'>{six_hr_display}</span>
+                    <span style='{temp_style}'>{r['temp']}°F{label}</span>
+                </div>
+                """, unsafe_allow_html=True)
 else:
     st.warning("⚠️ Could not fetch NWS observations")
 
@@ -535,7 +615,7 @@ else:
 st.markdown("---")
 st.markdown("""
 <div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center">
-<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.2</span>
+<b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.3</span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -551,6 +631,10 @@ with st.expander("❓ How to Use This App"):
     • **HIGH Temperature**: Usually peaks between 12-5 PM. Once you see temps dropping after the peak, the high is locked.
     
     The app highlights the reversal point when detected — that's your confirmation.
+    
+    **📊 6-Hour Extremes (New!)**
+    
+    The observations now show **6hr↑** (6-hour max) and **6hr↓** (6-hour min) from official NWS METAR reports at synoptic times (00Z, 06Z, 12Z, 18Z). These are the official recorded extremes over the past 6 hours — useful for confirming the actual high/low.
     
     **🧠 Philosophy**
     
@@ -600,6 +684,7 @@ with st.expander("❓ How to Use This App"):
     **📊 Data Sources**
     
     • **Observations**: Live hourly readings from NWS weather stations
+    • **6-Hour Extremes**: Official METAR reports from NWS observation history
     • **Brackets**: Real-time prices from Kalshi API
     • **Forecast**: NWS official forecast for reference
     
