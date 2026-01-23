@@ -381,27 +381,32 @@ if current_temp:
     if readings:
         with st.expander("📊 Recent NWS Observations", expanded=True):
             display_list = readings if is_owner else readings[:8]
-            min_temp = min(r['temp'] for r in display_list)
+            
+            # FIX: Use actual obs_low/obs_high instead of calculating from truncated display_list
+            # Only mark LOW if the actual low temp is visible in display_list
             low_reversal_idx = None
-            for i, r in enumerate(display_list):
-                if r['temp'] == min_temp:
-                    low_reversal_idx = i
-                    break
-            max_temp = max(r['temp'] for r in display_list)
+            if obs_low:
+                for i, r in enumerate(display_list):
+                    if r['temp'] == obs_low:
+                        low_reversal_idx = i
+                        break
+            
+            # Only mark HIGH if the actual high temp is visible in display_list AND it's after noon
             high_reversal_idx = None
-            if now.hour >= 12:
+            if obs_high and now.hour >= 12:
                 for i, r in enumerate(display_list):
                     reading_hour = int(r['time'].split(':')[0])
-                    if r['temp'] == max_temp and reading_hour >= 12:
+                    if r['temp'] == obs_high and reading_hour >= 12:
                         high_reversal_idx = i
                         break
+            
             low_confirm_idx = None
             if is_owner and low_reversal_idx is not None and low_reversal_idx >= 1:
-                if display_list[low_reversal_idx - 1]['temp'] > min_temp:
+                if display_list[low_reversal_idx - 1]['temp'] > obs_low:
                     low_confirm_idx = low_reversal_idx - 1
             high_confirm_idx = None
             if is_owner and high_reversal_idx is not None and high_reversal_idx >= 1:
-                if display_list[high_reversal_idx - 1]['temp'] < max_temp:
+                if display_list[high_reversal_idx - 1]['temp'] < obs_high:
                     high_confirm_idx = high_reversal_idx - 1
             for i, r in enumerate(display_list):
                 time_key = r['time']
@@ -686,7 +691,7 @@ else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.8</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.9</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     docs = """
