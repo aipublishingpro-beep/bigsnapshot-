@@ -28,7 +28,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "18.3"
+VERSION = "18.4"
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -538,9 +538,9 @@ def calc_ml_score(home_abbr, away_abbr, yesterday_teams, injuries):
         return away_abbr, away_final, reasons_away[:4]
 
 def get_signal_tier(score):
-    if score >= 8.0:
+    if score >= 9.0:
         return "🔒 STRONG", "#00ff00"
-    elif score >= 6.5:
+    elif score >= 7.0:
         return "🔵 BUY", "#00aaff"
     elif score >= 5.5:
         return "🟡 LEAN", "#ffff00"
@@ -568,11 +568,11 @@ with st.sidebar:
     
     st.header("📖 SIGNAL TIERS")
     st.markdown("""
-🔒 **STRONG** → 8.0+ <span style="color:#888;font-size:0.8em;">Tracked</span>
+🔒 **STRONG** → 9.0+ <span style="color:#888;font-size:0.8em;">Tracked</span>
 
-🔵 **BUY** → 6.5-7.9 <span style="color:#888;font-size:0.8em;">Info only</span>
+🔵 **BUY** → 7.0-8.9 <span style="color:#888;font-size:0.8em;">Info only</span>
 
-🟡 **LEAN** → 5.5-6.4 <span style="color:#888;font-size:0.8em;">Slight edge</span>
+🟡 **LEAN** → 5.5-6.9 <span style="color:#888;font-size:0.8em;">Slight edge</span>
 
 ⚪ **PASS** → Below 5.5 <span style="color:#888;font-size:0.8em;">No edge</span>
 """, unsafe_allow_html=True)
@@ -638,8 +638,8 @@ with col4:
 # ============================================================
 st.markdown("""
 <div style="background: #1a1a2e; border-radius: 8px; padding: 10px 15px; margin: 10px 0;">
-    <span style="color: #00ff00;">🔒 STRONG 8.0+</span> &nbsp;|&nbsp;
-    <span style="color: #00aaff;">🔵 BUY 6.5+</span> &nbsp;|&nbsp;
+    <span style="color: #00ff00;">🔒 STRONG 9.0+</span> &nbsp;|&nbsp;
+    <span style="color: #00aaff;">🔵 BUY 7.0+</span> &nbsp;|&nbsp;
     <span style="color: #ffff00;">🟡 LEAN 5.5+</span> &nbsp;|&nbsp;
     <span style="color: #888;">⚪ PASS &lt;5.5</span>
 </div>
@@ -706,8 +706,8 @@ for game_key, g in games.items():
         "period": g.get("period", 0)
     }
     
-    # Check Strong Pick eligibility
-    is_tracked = score >= 8.0
+    # Check Strong Pick eligibility (9.0+ threshold)
+    is_tracked = score >= 9.0
     strong_eligible, block_reasons, gate_results = check_strong_pick_eligible(
         game_key, pick, game_data, injuries, yesterday_teams
     )
@@ -872,17 +872,17 @@ This tool analyzes NHL games and identifies moneyline betting opportunities on K
 
 **Understanding the Signals:**
 
-🔒 **STRONG (8.0+):** High confidence pick — eligible for Strong Pick tagging
+🔒 **STRONG (9.0+):** High confidence pick — eligible for Strong Pick tagging
 
-🔵 **BUY (6.5-7.9):** Good edge detected
+🔵 **BUY (7.0-8.9):** Good edge detected
 
-🟡 **LEAN (5.5-6.4):** Slight edge
+🟡 **LEAN (5.5-6.9):** Slight edge
 
 ⚪ **PASS (Below 5.5):** No clear edge
 
 **Strong Pick System:**
 
-All 🔒 STRONG (8.0+) pre-game picks get the "Add Strong Pick" button.
+All 🔒 STRONG (9.0+) pre-game picks get the "Add Strong Pick" button.
 
 For **LIVE games**, picks must pass 3 gates:
 
