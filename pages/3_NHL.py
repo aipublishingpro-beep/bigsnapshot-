@@ -695,14 +695,7 @@ if today_strong:
                     result_color = "#f59e0b"
                 break
         
-        st.markdown(f"""
-        <div style="background: #0f172a; padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid {result_color};">
-            <span style="color: #ffd700; font-weight: bold;">ML-{ml_num:03d}</span>
-            <span style="color: #fff; margin-left: 12px; font-weight: 600;">{pick_team}</span>
-            <span style="color: #666; margin-left: 8px;">({game_key})</span>
-            <span style="color: {result_color}; float: right;">{result_text}</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"""<div style="background:#0f172a;padding:12px 16px;border-radius:8px;margin-bottom:8px;border-left:4px solid {result_color};"><span style="color:#ffd700;font-weight:bold;">ML-{ml_num:03d}</span><span style="color:#fff;margin-left:12px;font-weight:600;">{pick_team}</span><span style="color:#666;margin-left:8px;">({game_key})</span><span style="color:{result_color};float:right;">{result_text}</span></div>""", unsafe_allow_html=True)
     st.divider()
 
 # ============================================================
@@ -760,23 +753,8 @@ ml_results.sort(key=lambda x: x["score"], reverse=True)
 # ============================================================
 if ml_results and ml_results[0]["score"] >= 6.5:
     top = ml_results[0]
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #064e3b, #022c22); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 2px solid #10b981;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-            <div>
-                <span style="color: #10b981; font-size: 0.9em;">💰 TOP PICK OF THE DAY</span>
-                <h2 style="color: #fff; margin: 5px 0;">{top['pick']} <span style="color: #888; font-weight: normal;">vs {top['opponent']}</span></h2>
-                <span style="color: {top['color']}; font-size: 1.3em; font-weight: bold;">{top['score']}/10</span>
-                <span style="color: #888; margin-left: 15px;">{' • '.join(top['reasons'])}</span>
-            </div>
-            <a href="{top['kalshi_url']}" target="_blank" style="text-decoration: none;">
-                <button style="background: linear-gradient(135deg, #16a34a, #22c55e); color: white; padding: 12px 28px; border: none; border-radius: 8px; font-size: 1em; font-weight: 700; cursor: pointer;">
-                    BUY {top['pick']} →
-                </button>
-            </a>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    top_reasons = ' • '.join(top['reasons'])
+    st.markdown(f"""<div style="background:linear-gradient(135deg,#064e3b,#022c22);border-radius:12px;padding:20px;margin-bottom:20px;border:2px solid #10b981;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;"><div><span style="color:#10b981;font-size:0.9em;">💰 TOP PICK OF THE DAY</span><h2 style="color:#fff;margin:5px 0;">{top['pick']} <span style="color:#888;font-weight:normal;">vs {top['opponent']}</span></h2><span style="color:{top['color']};font-size:1.3em;font-weight:bold;">{top['score']}/10</span><span style="color:#888;margin-left:15px;">{top_reasons}</span></div><a href="{top['kalshi_url']}" target="_blank" style="text-decoration:none;"><button style="background:linear-gradient(135deg,#16a34a,#22c55e);color:white;padding:12px 28px;border:none;border-radius:8px;font-size:1em;font-weight:700;cursor:pointer;">BUY {top['pick']} →</button></a></div></div>""", unsafe_allow_html=True)
 
 # ============================================================
 # 🔥 HOT STREAKS + ❄️ FADE ALERTS
@@ -821,22 +799,7 @@ for r in ml_results:
     if existing_tag:
         tag_html = f'<span style="background:#ffd700;color:#000;padding:2px 8px;border-radius:4px;font-size:0.75em;margin-left:10px;">ML-{existing_tag["ml_number"]:03d}</span>'
     
-    st.markdown(f"""
-    <div style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #0f172a, #020617); padding: 12px 15px; margin-bottom: 8px; border-radius: 8px; border-left: 4px solid {r['color']};">
-        <div>
-            <span style="font-weight: bold; color: #fff; font-size: 1.1em;">{r['pick']}</span>
-            <span style="color: #666;"> vs {r['opponent']}</span>
-            <span style="color: {r['color']}; font-weight: bold; margin-left: 12px;">{r['score']}/10</span>
-            {tag_html}
-            <span style="color: #888; font-size: 0.85em; margin-left: 12px;">{reasons_str}</span>
-        </div>
-        <a href="{r['kalshi_url']}" target="_blank" style="text-decoration: none;">
-            <button style="background-color: #16a34a; color: white; padding: 8px 16px; border: none; border-radius: 6px; font-size: 0.9em; font-weight: 600; cursor: pointer;">
-                BUY {r['pick']}
-            </button>
-        </a>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:12px 15px;margin-bottom:8px;border-radius:8px;border-left:4px solid {r['color']};"><div><span style="font-weight:bold;color:#fff;font-size:1.1em;">{r['pick']}</span><span style="color:#666;"> vs {r['opponent']}</span><span style="color:{r['color']};font-weight:bold;margin-left:12px;">{r['score']}/10</span>{tag_html}<span style="color:#888;font-size:0.85em;margin-left:12px;">{reasons_str}</span></div><a href="{r['kalshi_url']}" target="_blank" style="text-decoration:none;"><button style="background-color:#16a34a;color:white;padding:8px 16px;border:none;border-radius:6px;font-size:0.9em;font-weight:600;cursor:pointer;">BUY {r['pick']}</button></a></div>""", unsafe_allow_html=True)
     
     # Strong Pick Button
     if r["is_tracked"] and r["strong_eligible"] and not existing_tag and r["status"] != "STATUS_FINAL":
