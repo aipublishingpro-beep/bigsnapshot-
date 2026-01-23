@@ -28,7 +28,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "18.2"
+VERSION = "18.3"
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -194,6 +194,7 @@ def get_injury_impact(team_abbr, injuries):
 
 # ============================================================
 # STRONG PICK GATE FUNCTIONS (NHL-specific thresholds)
+# Gates only apply to LIVE games - scheduled games auto-pass
 # ============================================================
 def get_match_stability(home_abbr, away_abbr, injuries, yesterday_teams):
     """
@@ -233,63 +234,36 @@ def get_match_stability(home_abbr, away_abbr, injuries, yesterday_teams):
 
 def get_cushion_tier(game_data, pick_team):
     """
-    NHL Cushion Tier Check
+    NHL Cushion Tier Check (LIVE GAMES ONLY)
     Returns: (tier_label, tier_color, is_wide)
-    NHL thresholds: home_advantage=0.2 goals (via win%), wide_lead=2 goals
     """
     home_abbr = game_data.get('home_abbr')
     away_abbr = game_data.get('away_abbr')
     
-    if game_data.get('status_type') == "STATUS_SCHEDULED":
-        # Pre-game: Use goal differential proxy
-        home_gf = TEAM_STATS.get(home_abbr, {}).get('goals_for', 2.8)
-        home_ga = TEAM_STATS.get(home_abbr, {}).get('goals_against', 2.9)
-        away_gf = TEAM_STATS.get(away_abbr, {}).get('goals_for', 2.8)
-        away_ga = TEAM_STATS.get(away_abbr, {}).get('goals_against', 2.9)
-        
-        home_diff = home_gf - home_ga
-        away_diff = away_gf - away_ga
-        home_advantage = 0.2
-        
-        if pick_team == home_abbr:
-            diff = home_diff - away_diff + home_advantage
-        else:
-            diff = away_diff - home_diff - home_advantage
-        
-        if diff >= 0.5:
-            return "🟢 WIDE", "#00ff00", True
-        elif diff >= 0.1:
-            return "🟡 NARROW", "#ffaa00", False
-        else:
-            return "🔴 NEGATIVE", "#ff4444", False
+    # Live: Use actual score
+    home_score = game_data.get('home_score', 0)
+    away_score = game_data.get('away_score', 0)
+    
+    if pick_team == home_abbr:
+        lead = home_score - away_score
     else:
-        # Live: Use actual score
-        home_score = game_data.get('home_score', 0)
-        away_score = game_data.get('away_score', 0)
-        
-        if pick_team == home_abbr:
-            lead = home_score - away_score
-        else:
-            lead = away_score - home_score
-        
-        wide_threshold = 2  # NHL: 2 goals = safe
-        
-        if lead >= wide_threshold:
-            return "🟢 WIDE", "#00ff00", True
-        elif lead >= 0:
-            return "🟡 NARROW", "#ffaa00", False
-        else:
-            return "🔴 NEGATIVE", "#ff4444", False
+        lead = away_score - home_score
+    
+    wide_threshold = 2  # NHL: 2 goals = safe
+    
+    if lead >= wide_threshold:
+        return "🟢 WIDE", "#00ff00", True
+    elif lead >= 0:
+        return "🟡 NARROW", "#ffaa00", False
+    else:
+        return "🔴 NEGATIVE", "#ff4444", False
 
 def get_pace_direction(game_data):
     """
-    NHL Pace Direction Check
+    NHL Pace Direction Check (LIVE GAMES ONLY)
     Returns: (pace_label, pace_color, is_positive)
     NHL: P3 with 1 goal or less = NEGATIVE
     """
-    if game_data.get('status_type') == "STATUS_SCHEDULED":
-        return "🟢 CONTROLLED", "#00ff00", True
-    
     period = game_data.get('period', 0)
     home_score = game_data.get('home_score', 0)
     away_score = game_data.get('away_score', 0)
@@ -306,7 +280,17 @@ def get_pace_direction(game_data):
         return "🟢 CONTROLLED", "#00ff00", True
 
 def check_strong_pick_eligible(game_key, pick_team, game_data, injuries, yesterday_teams):
-    """Check if pick passes all 3 gates for Strong Pick status"""
+    """Check if pick passes all 3 gates for Strong Pick status
+    NOTE: Gates only apply to LIVE games. Scheduled games auto-pass."""
+    
+    # Scheduled games auto-pass - gates only for live games
+    if game_data.get('status_type') == "STATUS_SCHEDULED":
+        return True, [], {
+            "stability": ("✅ PRE-GAME", "#00ff00", True, []),
+            "cushion": ("✅ PRE-GAME", "#00ff00", True),
+            "pace": ("✅ PRE-GAME", "#00ff00", True)
+        }
+    
     home_abbr = game_data.get('home_abbr')
     away_abbr = game_data.get('away_abbr')
     
@@ -801,13 +785,14 @@ for r in ml_results:
     
     st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:12px 15px;margin-bottom:8px;border-radius:8px;border-left:4px solid {r['color']};"><div><span style="font-weight:bold;color:#fff;font-size:1.1em;">{r['pick']}</span><span style="color:#666;"> vs {r['opponent']}</span><span style="color:{r['color']};font-weight:bold;margin-left:12px;">{r['score']}/10</span>{tag_html}<span style="color:#888;font-size:0.85em;margin-left:12px;">{reasons_str}</span></div><a href="{r['kalshi_url']}" target="_blank" style="text-decoration:none;"><button style="background-color:#16a34a;color:white;padding:8px 16px;border:none;border-radius:6px;font-size:0.9em;font-weight:600;cursor:pointer;">BUY {r['pick']}</button></a></div>""", unsafe_allow_html=True)
     
-    # Strong Pick Button
+    # Strong Pick Button - show for 8.0+ that pass gates and aren't already tagged
     if r["is_tracked"] and r["strong_eligible"] and not existing_tag and r["status"] != "STATUS_FINAL":
         if st.button(f"➕ Add Strong Pick", key=f"strong_{r['game_key']}", use_container_width=True):
             ml_num = add_strong_pick(r["game_key"], r["pick"], "NHL")
             st.success(f"✅ Tagged ML-{ml_num:03d}: {r['pick']} ({r['game_key']})")
             st.rerun()
-    elif r["is_tracked"] and not r["strong_eligible"] and not existing_tag:
+    # Show block reason only for LIVE games that fail gates
+    elif r["is_tracked"] and not r["strong_eligible"] and not existing_tag and r["status"] != "STATUS_SCHEDULED":
         st.markdown(f"<div style='color:#ff6666;font-size:0.75em;margin-bottom:8px;margin-left:14px'>⚠️ Strong Pick blocked: {', '.join(r['block_reasons'])}</div>", unsafe_allow_html=True)
 
 if shown == 0:
@@ -895,13 +880,15 @@ This tool analyzes NHL games and identifies moneyline betting opportunities on K
 
 ⚪ **PASS (Below 5.5):** No clear edge
 
-**Strong Pick System (3 Gates):**
+**Strong Pick System:**
 
-Only 🔒 STRONG picks can become Strong Picks, and they must pass ALL 3 gates:
+All 🔒 STRONG (8.0+) pre-game picks get the "Add Strong Pick" button.
 
-1. **🛡️ Cushion Gate** — Must be WIDE (+0.5 goal diff pre-game, or 2+ goal lead live)
-2. **⏱️ Pace Gate** — Must be CONTROLLED/NEUTRAL (not P3 within 1 goal)
-3. **🔬 Match Gate** — Must be STABLE/VOLATILE (no coin flips, not both teams B2B)
+For **LIVE games**, picks must pass 3 gates:
+
+1. **🛡️ Cushion Gate** — Must have 2+ goal lead
+2. **⏱️ Pace Gate** — Not in P3 within 1 goal
+3. **🔬 Match Gate** — No extreme instability factors
 
 **Key Indicators:**
 
