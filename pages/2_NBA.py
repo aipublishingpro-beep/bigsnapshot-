@@ -514,6 +514,143 @@ with col4:
 st.divider()
 
 # ============================================================
+# 🎯 CUSHION SCANNER
+# ============================================================
+st.subheader("🎯 CUSHION SCANNER")
+st.caption("Find safe NO/YES totals opportunities in live games")
+
+cs1, cs2 = st.columns([1, 1])
+cush_min = cs1.selectbox("Min minutes", [6, 9, 12, 15, 18], index=0, key="cush_min_select")
+cush_side = cs2.selectbox("Side", ["NO", "YES"], key="cush_side_select")
+
+live_count = sum(1 for g in games.values() if g['status_type'] not in ["STATUS_FINAL", "STATUS_SCHEDULED"])
+st.caption(f"📊 {len(games)} games | {live_count} live")
+
+cush_results = []
+for gk, g in games.items():
+    mins = get_minutes_played(g['period'], g['clock'], g['status_type'])
+    total = g['total']
+    if g['status_type'] == "STATUS_FINAL": continue
+    if mins < cush_min: continue
+    if mins <= 0: continue
+    pace = total / mins
+    remaining_min = max(48 - mins, 1)
+    projected_final = round(total + pace * remaining_min)
+    if cush_side == "NO":
+        base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected_final), len(THRESHOLDS)-1)
+        safe_idx = min(base_idx + 2, len(THRESHOLDS) - 1)
+        safe_line = THRESHOLDS[safe_idx]
+        cushion = safe_line - projected_final
+    else:
+        base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected_final), 0)
+        safe_idx = max(base_idx - 2, 0)
+        safe_line = THRESHOLDS[safe_idx]
+        cushion = projected_final - safe_line
+    if cushion < 6: continue
+    if cush_side == "NO":
+        if pace < 4.5: pace_status, pace_color = "✅ SLOW", "#00ff00"
+        elif pace < 4.8: pace_status, pace_color = "⚠️ AVG", "#ffff00"
+        else: pace_status, pace_color = "❌ FAST", "#ff0000"
+    else:
+        if pace > 5.1: pace_status, pace_color = "✅ FAST", "#00ff00"
+        elif pace > 4.8: pace_status, pace_color = "⚠️ AVG", "#ffff00"
+        else: pace_status, pace_color = "❌ SLOW", "#ff0000"
+    cush_results.append({
+        'game': gk, 'total': total, 'mins': mins, 'pace': pace,
+        'pace_status': pace_status, 'pace_color': pace_color,
+        'projected': projected_final, 'cushion': cushion,
+        'safe_line': safe_line, 'period': g['period'], 'clock': g['clock']
+    })
+
+cush_results.sort(key=lambda x: x['cushion'], reverse=True)
+
+if cush_results:
+    for r in cush_results:
+        game_parts = r['game'].split('@')
+        away_t, home_t = game_parts[0], game_parts[1]
+        kalshi_url = build_kalshi_totals_url(away_t, home_t)
+        btn_label = f"BUY {cush_side} {r['safe_line']}"
+        btn_color = "#00aa00" if cush_side == "NO" else "#cc6600"
+        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:3px solid {r['pace_color']};flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <b style="color:#fff">{escape_html(r['game'].replace('@', ' @ '))}</b>
+            <span style="color:#888">Q{r['period']} {escape_html(str(r['clock']))}</span>
+            <span style="color:#888">{r['total']}pts/{r['mins']:.0f}min</span>
+            <span style="color:#888">Proj: <b style="color:#fff">{r['projected']}</b></span>
+            <span style="background:#ff8800;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold">🎯 {r['safe_line']}</span>
+            <span style="color:#00ff00;font-weight:bold">+{r['cushion']:.0f}</span>
+            <span style="color:{r['pace_color']}">{r['pace_status']}</span>
+        </div>
+        <a href="{kalshi_url}" target="_blank" style="background:{btn_color};color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">🛡️+2 {btn_label}</a>
+        </div>""", unsafe_allow_html=True)
+else:
+    st.info(f"No {cush_side} opportunities with 6+ cushion. Check back when games are live with {cush_min}+ minutes played.")
+
+st.divider()
+
+# ============================================================
+# 🔥 PACE SCANNER
+# ============================================================
+st.subheader("🔥 PACE SCANNER")
+st.caption("Track scoring pace for all live games — Find NO/YES opportunities")
+
+pace_data = []
+for gk, g in games.items():
+    mins = get_minutes_played(g['period'], g['clock'], g['status_type'])
+    if mins >= 6:
+        pace = round(g['total'] / mins, 2)
+        pace_data.append({
+            "game": gk, "pace": pace, "proj": round(pace * 48), 
+            "total": g['total'], "mins": mins, 
+            "period": g['period'], "clock": g['clock'], 
+            "final": g['status_type'] == "STATUS_FINAL"
+        })
+
+pace_data.sort(key=lambda x: x['pace'])
+
+if pace_data:
+    for p in pace_data:
+        game_parts = p['game'].split('@')
+        away_t, home_t = game_parts[0], game_parts[1]
+        kalshi_url = build_kalshi_totals_url(away_t, home_t)
+        if p['pace'] < 4.5:
+            lbl, clr = "🟢 SLOW", "#00ff00"
+            base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > p['proj']), len(THRESHOLDS)-1)
+            safe_idx = min(base_idx + 2, len(THRESHOLDS) - 1)
+            rec_line = THRESHOLDS[safe_idx]
+            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#00aa00;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY NO {rec_line}</a>' if not p['final'] else ""
+        elif p['pace'] < 4.8:
+            lbl, clr = "🟡 AVG", "#ffff00"
+            btn_html = ""
+        elif p['pace'] < 5.2:
+            lbl, clr = "🟠 FAST", "#ff8800"
+            base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), 0)
+            safe_idx = max(base_idx - 2, 0)
+            rec_line = THRESHOLDS[safe_idx]
+            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#cc6600;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
+        else:
+            lbl, clr = "🔴 SHOOTOUT", "#ff0000"
+            base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), 0)
+            safe_idx = max(base_idx - 2, 0)
+            rec_line = THRESHOLDS[safe_idx]
+            btn_html = f'<span style="color:#888;font-size:0.8em">🛡️+2</span> <a href="{kalshi_url}" target="_blank" style="background:#cc0000;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:bold">BUY YES {rec_line}</a>' if not p['final'] else ""
+        status = "FINAL" if p['final'] else f"Q{p['period']} {p['clock']}"
+        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0f172a,#020617);padding:8px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {clr};flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <b style="color:#fff">{escape_html(p['game'].replace('@', ' @ '))}</b>
+            <span style="color:#666">{status}</span>
+            <span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span>
+            <span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span>
+            <span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span>
+        </div>
+        <div>{btn_html}</div>
+        </div>""", unsafe_allow_html=True)
+else:
+    st.info("No games with 6+ minutes played yet")
+
+st.divider()
+
+# ============================================================
 # 🎯 ML PICKS - CLEAN FORMAT LIKE YOUR OLD VERSION
 # ============================================================
 st.subheader("🎯 ML PICKS")
