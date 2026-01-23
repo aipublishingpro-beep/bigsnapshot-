@@ -483,9 +483,9 @@ with st.expander("📊 POSITION TRACKER", expanded=False):
         st.markdown("**LOW Position**")
         low_has_position = st.checkbox("I have a LOW position", key="low_pos")
         if low_has_position:
-            low_bet_type = st.selectbox("Bet Type", ["YES ≥ threshold", "YES in range"], key="low_bet")
+            low_bet_type = st.selectbox("Bet Type", ["YES ≥ threshold", "YES in range", "NO ≥ threshold", "NO in range"], key="low_bet")
             low_threshold = st.number_input("Threshold (°F)", value=18, key="low_thresh")
-            if low_bet_type == "YES in range":
+            if low_bet_type in ["YES in range", "NO in range"]:
                 low_threshold_upper = st.number_input("Upper bound (°F)", value=25, key="low_thresh_up")
             low_entry = st.number_input("Entry Price (¢)", value=24, min_value=1, max_value=99, key="low_entry")
             low_contracts = st.number_input("Contracts", value=195, min_value=1, key="low_contracts")
@@ -494,11 +494,19 @@ with st.expander("📊 POSITION TRACKER", expanded=False):
                 if low_bet_type == "YES ≥ threshold":
                     cushion = obs_low - low_threshold
                     cushion_label = f"+{cushion:.1f}°F above threshold"
-                else:
+                elif low_bet_type == "NO ≥ threshold":
+                    cushion = low_threshold - obs_low
+                    cushion_label = f"+{cushion:.1f}°F below threshold"
+                elif low_bet_type == "YES in range":
                     cushion_lower = obs_low - low_threshold
                     cushion_upper = low_threshold_upper - obs_low
                     cushion = min(cushion_lower, cushion_upper)
                     cushion_label = f"Low:{cushion_lower:+.1f}° / High:{cushion_upper:+.1f}°"
+                else:  # NO in range
+                    dist_to_lower = low_threshold - obs_low
+                    dist_to_upper = obs_low - low_threshold_upper
+                    cushion = max(dist_to_lower, dist_to_upper)
+                    cushion_label = f"Outside range by {cushion:.1f}°F"
                 
                 if cushion >= 10:
                     status = "🟢 LOCKED"
@@ -555,9 +563,9 @@ with st.expander("📊 POSITION TRACKER", expanded=False):
         st.markdown("**HIGH Position**")
         high_has_position = st.checkbox("I have a HIGH position", key="high_pos")
         if high_has_position:
-            high_bet_type = st.selectbox("Bet Type", ["YES ≤ threshold", "YES in range"], key="high_bet")
+            high_bet_type = st.selectbox("Bet Type", ["YES ≤ threshold", "YES in range", "NO ≤ threshold", "NO in range"], key="high_bet")
             high_threshold = st.number_input("Threshold (°F)", value=45, key="high_thresh")
-            if high_bet_type == "YES in range":
+            if high_bet_type in ["YES in range", "NO in range"]:
                 high_threshold_lower = st.number_input("Lower bound (°F)", value=40, key="high_thresh_low")
             high_entry = st.number_input("Entry Price (¢)", value=30, min_value=1, max_value=99, key="high_entry")
             high_contracts = st.number_input("Contracts", value=100, min_value=1, key="high_contracts")
@@ -566,11 +574,19 @@ with st.expander("📊 POSITION TRACKER", expanded=False):
                 if high_bet_type == "YES ≤ threshold":
                     cushion = high_threshold - obs_high
                     cushion_label = f"+{cushion:.1f}°F below threshold"
-                else:
+                elif high_bet_type == "NO ≤ threshold":
+                    cushion = obs_high - high_threshold
+                    cushion_label = f"+{cushion:.1f}°F above threshold"
+                elif high_bet_type == "YES in range":
                     cushion_lower = obs_high - high_threshold_lower
                     cushion_upper = high_threshold - obs_high
                     cushion = min(cushion_lower, cushion_upper)
                     cushion_label = f"Low:{cushion_lower:+.1f}° / High:{cushion_upper:+.1f}°"
+                else:  # NO in range
+                    dist_to_lower = high_threshold_lower - obs_high
+                    dist_to_upper = obs_high - high_threshold
+                    cushion = max(dist_to_lower, dist_to_upper)
+                    cushion_label = f"Outside range by {cushion:.1f}°F"
                 
                 time_risk = " ⚠️ HIGH NOT LOCKED" if now.hour < 15 else ""
                 
