@@ -1,22 +1,24 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 from datetime import datetime, timedelta
 import pytz
 import re
 from bs4 import BeautifulSoup
 
-# ========== GA4 ANALYTICS - MUST BE FIRST ==========
-st.markdown("""
+# ========== PAGE CONFIG MUST BE FIRST ==========
+st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
+
+# ========== GA4 ANALYTICS ==========
+components.html("""
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'G-1T35YHHYBC', { 'send_page_view': true });
+  gtag('config', 'G-1T35YHHYBC', { send_page_view: true });
 </script>
-""", unsafe_allow_html=True)
-
-st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
+""", height=0)
 
 st.markdown("""
 <style>
@@ -308,10 +310,8 @@ default_city = query_params.get("city", "New York City")
 if default_city not in CITY_LIST:
     default_city = "New York City"
 
-# Owner check
 is_owner = query_params.get("mode") == "owner"
 
-# Owner sidebar tips
 if is_owner:
     with st.sidebar:
         st.markdown("""
@@ -347,8 +347,6 @@ if st.button("⭐ Set as Default City", use_container_width=False):
 
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
 extremes_6hr, official_high, official_low = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else ({}, None, None)
-
-# Pre-fetch brackets for owner confirmation display
 brackets_low_data = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC")) if is_owner else None
 brackets_high_data = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY")) if is_owner else None
 
@@ -383,14 +381,12 @@ if current_temp:
     if readings:
         with st.expander("📊 Recent NWS Observations", expanded=True):
             display_list = readings if is_owner else readings[:8]
-            
             min_temp = min(r['temp'] for r in display_list)
             low_reversal_idx = None
             for i, r in enumerate(display_list):
                 if r['temp'] == min_temp:
                     low_reversal_idx = i
                     break
-            
             max_temp = max(r['temp'] for r in display_list)
             high_reversal_idx = None
             if now.hour >= 12:
@@ -399,17 +395,14 @@ if current_temp:
                     if r['temp'] == max_temp and reading_hour >= 12:
                         high_reversal_idx = i
                         break
-            
             low_confirm_idx = None
             if is_owner and low_reversal_idx is not None and low_reversal_idx >= 1:
                 if display_list[low_reversal_idx - 1]['temp'] > min_temp:
                     low_confirm_idx = low_reversal_idx - 1
-            
             high_confirm_idx = None
             if is_owner and high_reversal_idx is not None and high_reversal_idx >= 1:
                 if display_list[high_reversal_idx - 1]['temp'] < max_temp:
                     high_confirm_idx = high_reversal_idx - 1
-            
             for i, r in enumerate(display_list):
                 time_key = r['time']
                 six_hr_display = ""
@@ -423,7 +416,6 @@ if current_temp:
                         if six_hr_min is not None:
                             parts.append(f"<span style='color:#3b82f6'>6hr↓{six_hr_min:.0f}°</span>")
                         six_hr_display = " ".join(parts)
-                
                 if is_owner and low_confirm_idx is not None and i == low_confirm_idx:
                     low_bracket_info = ""
                     low_bracket_link = "#"
@@ -441,7 +433,6 @@ if current_temp:
                     except:
                         time_ago = ""
                     st.markdown(f'<a href="{low_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW{low_bracket_info}{time_ago} — CLICK TO BUY</span></div></a>', unsafe_allow_html=True)
-                
                 if is_owner and high_confirm_idx is not None and i == high_confirm_idx:
                     high_bracket_info = ""
                     high_bracket_link = "#"
@@ -459,7 +450,6 @@ if current_temp:
                     except:
                         time_ago = ""
                     st.markdown(f'<a href="{high_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED HIGH{high_bracket_info}{time_ago} — CLICK TO BUY</span></div></a>', unsafe_allow_html=True)
-                
                 if i == low_reversal_idx:
                     row_style = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
                     time_style = "color:#fbbf24;font-weight:600"
@@ -475,17 +465,14 @@ if current_temp:
                     time_style = "color:#9ca3af"
                     temp_style = "color:#fff;font-weight:600"
                     label = ""
-                
                 st.markdown(f"<div style='{row_style}'><span style='{time_style};min-width:50px'>{r['time']}</span><span style='flex:1;text-align:center;font-size:0.85em'>{six_hr_display}</span><span style='{temp_style}'>{r['temp']}°F{label}</span></div>", unsafe_allow_html=True)
 else:
     st.warning("⚠️ Could not fetch NWS observations")
 
-# ========== POSITION TRACKER ==========
 st.markdown("---")
 with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
     st.caption("⚡ Quick calculator — enter your position to check cushion & P/L. Resets on refresh.")
     pcol1, pcol2 = st.columns(2)
-    
     with pcol1:
         st.markdown("**LOW Position**")
         low_has_position = st.checkbox("I have a LOW position", key="low_pos")
@@ -496,7 +483,6 @@ with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
                 low_threshold_upper = st.number_input("Upper bound (°F)", value=25, key="low_thresh_up")
             low_entry = st.number_input("Entry Price (¢)", value=24, min_value=1, max_value=99, key="low_entry")
             low_contracts = st.number_input("Contracts", value=195, min_value=1, key="low_contracts")
-            
             if obs_low:
                 if low_bet_type == "YES ≥ threshold":
                     cushion = obs_low - low_threshold
@@ -509,12 +495,11 @@ with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
                     cushion_upper = low_threshold_upper - obs_low
                     cushion = min(cushion_lower, cushion_upper)
                     cushion_label = f"Low:{cushion_lower:+.1f}° / High:{cushion_upper:+.1f}°"
-                else:  # NO in range
+                else:
                     dist_to_lower = low_threshold - obs_low
                     dist_to_upper = obs_low - low_threshold_upper
                     cushion = max(dist_to_lower, dist_to_upper)
                     cushion_label = f"Outside range by {cushion:.1f}°F"
-                
                 if cushion >= 10:
                     status = "🟢 LOCKED"
                     status_color = "#22c55e"
@@ -539,7 +524,6 @@ with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
                     status = "💀 BUSTED"
                     status_color = "#dc2626"
                     status_bg = "#450a0a"
-                
                 cost = low_contracts * low_entry / 100
                 if cushion >= 0:
                     payout = low_contracts * 1.0
@@ -550,7 +534,6 @@ with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
                 else:
                     pnl_display = f"-${cost:.2f} (LOSS)"
                     pnl_color = "#ef4444"
-                
                 st.markdown(f'''
                 <div style="background:{status_bg};border:2px solid {status_color};border-radius:8px;padding:15px;margin-top:10px">
                     <div style="color:{status_color};font-size:1.3em;font-weight:700;text-align:center">{status}</div>
@@ -565,7 +548,6 @@ with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
                     </div>
                 </div>
                 ''', unsafe_allow_html=True)
-    
     with pcol2:
         st.markdown("**HIGH Position**")
         high_has_position = st.checkbox("I have a HIGH position", key="high_pos")
@@ -576,7 +558,6 @@ with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
                 high_threshold_lower = st.number_input("Lower bound (°F)", value=40, key="high_thresh_low")
             high_entry = st.number_input("Entry Price (¢)", value=30, min_value=1, max_value=99, key="high_entry")
             high_contracts = st.number_input("Contracts", value=100, min_value=1, key="high_contracts")
-            
             if obs_high:
                 if high_bet_type == "YES ≤ threshold":
                     cushion = high_threshold - obs_high
@@ -589,14 +570,12 @@ with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
                     cushion_upper = high_threshold - obs_high
                     cushion = min(cushion_lower, cushion_upper)
                     cushion_label = f"Low:{cushion_lower:+.1f}° / High:{cushion_upper:+.1f}°"
-                else:  # NO in range
+                else:
                     dist_to_lower = high_threshold_lower - obs_high
                     dist_to_upper = obs_high - high_threshold
                     cushion = max(dist_to_lower, dist_to_upper)
                     cushion_label = f"Outside range by {cushion:.1f}°F"
-                
                 time_risk = " ⚠️ HIGH NOT LOCKED" if now.hour < 15 else ""
-                
                 if cushion >= 10:
                     status = "🟢 VERY SAFE" + time_risk
                     status_color = "#22c55e"
@@ -617,7 +596,6 @@ with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
                     status = "💀 BUSTED"
                     status_color = "#dc2626"
                     status_bg = "#450a0a"
-                
                 cost = high_contracts * high_entry / 100
                 if cushion >= 0:
                     payout = high_contracts * 1.0
@@ -628,7 +606,6 @@ with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
                 else:
                     pnl_display = f"-${cost:.2f} (LOSS)"
                     pnl_color = "#ef4444"
-                
                 st.markdown(f'''
                 <div style="background:{status_bg};border:2px solid {status_color};border-radius:8px;padding:15px;margin-top:10px">
                     <div style="color:{status_color};font-size:1.3em;font-weight:700;text-align:center">{status}</div>
@@ -646,7 +623,6 @@ with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
 
 st.markdown("---")
 col_high, col_low = st.columns(2)
-
 with col_high:
     st.subheader("☀️ HIGH TEMP")
     hour = now.hour
@@ -669,7 +645,6 @@ with col_high:
                 st.markdown(f'<div style="text-align:center;margin-top:12px"><a href="{market_fav["url"]}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a></div>', unsafe_allow_html=True)
     else:
         st.error("Could not fetch observations")
-
 with col_low:
     st.subheader("🌙 LOW TEMP")
     hour = now.hour
