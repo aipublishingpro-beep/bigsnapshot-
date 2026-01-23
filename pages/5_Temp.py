@@ -5,12 +5,18 @@ import pytz
 import re
 from bs4 import BeautifulSoup
 
-st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
-
+# ========== GA4 ANALYTICS - MUST BE FIRST ==========
 st.markdown("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
-<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-1T35YHHYBC', { 'send_page_view': true });
+</script>
 """, unsafe_allow_html=True)
+
+st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
 
 st.markdown("""
 <style>
@@ -476,7 +482,8 @@ else:
 
 # ========== POSITION TRACKER ==========
 st.markdown("---")
-with st.expander("📊 POSITION TRACKER", expanded=False):
+with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
+    st.caption("⚡ Quick calculator — enter your position to check cushion & P/L. Resets on refresh.")
     pcol1, pcol2 = st.columns(2)
     
     with pcol1:
@@ -704,7 +711,7 @@ else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.7</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v3.8</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     docs = """
@@ -724,12 +731,16 @@ Compares actual NWS temperature observations against Kalshi prediction market pr
 • ⚠️ **MODERATE** (15-29 cents) — Gold highlight, "Edge present"
 • 🎯 **NONE** (<15 cents) — Standard display
 
-**📊 Position Tracker**
+**📊 Position Calculator**
 
-Track your open positions and monitor your cushion (safety margin):
+Quick tool to check your cushion and projected P&L. **Not saved** — resets on page refresh. Just enter your position details when you want to check status:
 
 1. Click "I have a LOW/HIGH position"
-2. Select bet type: "YES ≥ threshold" or "YES in range"
+2. Select bet type:
+   - YES ≥ threshold (low stays above X)
+   - YES in range (temp lands in X-Y range)
+   - NO ≥ threshold (low drops below X)
+   - NO in range (temp lands outside X-Y range)
 3. Enter your threshold, entry price, and contract count
 4. See real-time cushion status and projected P&L
 
