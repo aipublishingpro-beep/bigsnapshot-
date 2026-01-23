@@ -347,8 +347,12 @@ if st.button("⭐ Set as Default City", use_container_width=False):
     st.query_params["city"] = city
     st.success(f"✓ Bookmark this page to save {city} as default!")
 
+# Owner-only access for 6hr extremes section
+OWNER_KEY = "edge2026"  # Change this to your secret
+is_owner = query_params.get("key") == OWNER_KEY
+
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
-extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"))
+extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else {}
 
 if current_temp:
     st.markdown(f"""
@@ -377,7 +381,8 @@ if current_temp:
         with st.expander("📊 Recent NWS Observations", expanded=True):
             min_temp = min(r['temp'] for r in readings)
             low_reversal_idx = None
-            for i, r in enumerate(readings):
+            display_list = readings if is_owner else readings[:8]
+            for i, r in enumerate(display_list):
                 if r['temp'] == min_temp:
                     low_reversal_idx = i
                     break
