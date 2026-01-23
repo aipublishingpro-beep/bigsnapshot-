@@ -562,16 +562,23 @@ if games:
 <a href="{kalshi_url}" target="_blank" style="background:#00c853;color:#000;padding:8px 16px;border-radius:6px;font-weight:bold;text-decoration:none;white-space:nowrap">BUY {escape_html(r['pick'])}</a>
 </div>""", unsafe_allow_html=True)
     
-    # ADD ALL PICKS BUTTON AT BOTTOM
-    untagged = [r for r in display_results if not get_strong_pick_for_game(r["game_key"])]
+    # ADD ALL PICKS TO POSITIONS BUTTON AT BOTTOM
+    # Check which picks are not already in positions
+    existing_position_games = [p.get('game') for p in st.session_state.positions]
+    untagged = [r for r in display_results if r["game_key"] not in existing_position_games]
     if untagged:
         st.markdown("")
-        if st.button(f"➕ Add {len(untagged)} Picks", key="add_all_picks", use_container_width=True):
-            added = []
+        if st.button(f"➕ Add {len(untagged)} Picks to Positions", key="add_all_picks", use_container_width=True):
             for r in untagged:
-                ml_num = add_strong_pick(r["game_key"], r["pick"])
-                added.append(f"ML-{ml_num:03d}")
-            st.success(f"✅ Tagged: {', '.join(added)}")
+                st.session_state.positions.append({
+                    "game": r["game_key"],
+                    "type": "ml",
+                    "pick": r["pick"],
+                    "price": 50,  # Default price
+                    "contracts": 1  # Default contracts
+                })
+            save_positions(st.session_state.positions)
+            st.success(f"✅ Added {len(untagged)} picks to Active Positions — scroll down to edit price/contracts")
             st.rerun()
 else:
     st.info("No games today — check back later!")
