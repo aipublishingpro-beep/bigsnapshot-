@@ -299,8 +299,7 @@ if default_city not in CITY_LIST:
     default_city = "New York City"
 
 # Owner check
-OWNER_KEY = "edge2026"
-is_owner = query_params.get("key") == OWNER_KEY
+is_owner = query_params.get("mode") == "owner"
 
 # Owner sidebar tips
 if is_owner:
