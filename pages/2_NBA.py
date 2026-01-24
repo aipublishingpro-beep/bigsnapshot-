@@ -14,8 +14,20 @@ def send_ga4_event(page_title, page_path):
 
 send_ga4_event("NBA Edge Finder", "/NBA")
 
-from auth import require_auth
-require_auth()
+import extra_streamlit_components as stx
+
+# Cookie-based persistent auth (survives refresh/redeploy)
+cookie_manager = stx.CookieManager()
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+saved_auth = cookie_manager.get("authenticated")
+if saved_auth == "true":
+    st.session_state.authenticated = True
+
+if not st.session_state.authenticated:
+    st.switch_page("Home.py")
 
 import requests
 import json
@@ -104,6 +116,51 @@ KALSHI_CODES = {
 }
 
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5, 250.5, 255.5]
+
+# H2H History - Teams that historically dominate others
+H2H_EDGES = {
+    ("Boston", "Philadelphia"): "Boston",
+    ("Boston", "New York"): "Boston",
+    ("Cleveland", "Chicago"): "Cleveland",
+    ("Oklahoma City", "Utah"): "Oklahoma City",
+    ("Denver", "Portland"): "Denver",
+    ("Milwaukee", "Indiana"): "Milwaukee",
+    ("Golden State", "Portland"): "Golden State",
+    ("LA Lakers", "San Antonio"): "LA Lakers",
+    ("Miami", "Atlanta"): "Miami",
+    ("Phoenix", "Sacramento"): "Phoenix",
+    ("Minnesota", "Charlotte"): "Minnesota",
+    ("Dallas", "Houston"): "Dallas",
+    ("Memphis", "New Orleans"): "Memphis",
+}
+
+# Team locations for travel fatigue (timezone/region)
+TEAM_LOCATIONS = {
+    "Boston": "ET", "Brooklyn": "ET", "New York": "ET", "Philadelphia": "ET", "Toronto": "ET",
+    "Atlanta": "ET", "Charlotte": "ET", "Miami": "ET", "Orlando": "ET", "Washington": "ET",
+    "Chicago": "CT", "Cleveland": "ET", "Detroit": "ET", "Indiana": "ET", "Milwaukee": "CT",
+    "Dallas": "CT", "Houston": "CT", "Memphis": "CT", "New Orleans": "CT", "San Antonio": "CT",
+    "Denver": "MT", "Minnesota": "CT", "Oklahoma City": "CT", "Portland": "PT", "Utah": "MT",
+    "Golden State": "PT", "LA Clippers": "PT", "LA Lakers": "PT", "Phoenix": "MT", "Sacramento": "PT",
+}
+
+def is_cross_country(team1, team2):
+    """Check if travel between two teams is cross-country (ET<->PT)"""
+    loc1 = TEAM_LOCATIONS.get(team1, "")
+    loc2 = TEAM_LOCATIONS.get(team2, "")
+    if (loc1 == "ET" and loc2 == "PT") or (loc1 == "PT" and loc2 == "ET"):
+        return True
+    return False
+
+def get_h2h_edge(home, away):
+    """Check if there's a historical H2H edge"""
+    key1 = (home, away)
+    key2 = (away, home)
+    if key1 in H2H_EDGES:
+        return H2H_EDGES[key1]
+    if key2 in H2H_EDGES:
+        return H2H_EDGES[key2]
+    return None
 
 @st.cache_data(ttl=120)
 def fetch_games():
@@ -258,6 +315,8 @@ def calc_edge(home, away, injuries, rest):
     a_net = a_stats.get("net", 0)
     home_out = injuries.get(home, [])
     away_out = injuries.get(away, [])
+    
+    # Star injuries (+3 to +5)
     for star, (team, tier) in STARS.items():
         if team == home and any(star.lower() in p.lower() for p in home_out):
             pts = 5 if tier == 3 else 3
@@ -267,6 +326,8 @@ def calc_edge(home, away, injuries, rest):
             pts = 5 if tier == 3 else 3
             home_pts += pts
             home_reasons.append(f"{star.split()[-1]} OUT")
+    
+    # Rest advantage (+4) and rested bonus (+2)
     h_b2b = home in rest.get("b2b", set())
     a_b2b = away in rest.get("b2b", set())
     h_rested = home in rest.get("rested", set())
@@ -283,6 +344,25 @@ def calc_edge(home, away, injuries, rest):
     elif a_rested and h_b2b:
         away_pts += 2
         away_reasons.append("Rested")
+    
+    # Travel fatigue (+2) - Cross-country + B2B = death
+    if a_b2b and is_cross_country(away, home):
+        home_pts += 2
+        home_reasons.append("Travel fatigue")
+    elif h_b2b and is_cross_country(home, away):
+        away_pts += 2
+        away_reasons.append("Travel fatigue")
+    
+    # H2H history (+1.5)
+    h2h_winner = get_h2h_edge(home, away)
+    if h2h_winner == home:
+        home_pts += 1.5
+        home_reasons.append("H2H edge")
+    elif h2h_winner == away:
+        away_pts += 1.5
+        away_reasons.append("H2H edge")
+    
+    # Net rating gap (+1 to +3)
     net_gap = h_net - a_net
     if net_gap >= 15:
         home_pts += 3
@@ -302,9 +382,13 @@ def calc_edge(home, away, injuries, rest):
     elif net_gap <= -5:
         away_pts += 1
         away_reasons.append(f"Net +{-net_gap:.0f}")
+    
+    # Denver altitude (+1.5)
     if home == "Denver":
         home_pts += 1.5
         home_reasons.append("Altitude")
+    
+    # Pace mismatch (+1.5)
     h_pace = h_stats.get("pace", 99)
     a_pace = a_stats.get("pace", 99)
     if h_pace >= 101 and a_pace <= 98:
@@ -313,14 +397,20 @@ def calc_edge(home, away, injuries, rest):
     elif a_pace >= 101 and h_pace <= 98:
         away_pts += 1.5
         away_reasons.append("Pace edge")
+    
+    # Fade weak home (+1.5)
     h_tier = h_stats.get("tier", "mid")
     a_tier = a_stats.get("tier", "mid")
     if h_tier == "weak" and a_tier in ["elite", "good"]:
         away_pts += 1.5
         away_reasons.append("Fade weak home")
+    
+    # Road value for elite teams (+1)
     if a_tier == "elite" and h_tier != "elite":
         away_pts += 1
         away_reasons.append("Road value")
+    
+    # Calculate probability
     base_prob = 50 + (net_gap * 1.5)
     base_prob = max(25, min(85, base_prob))
     total_pts = home_pts + away_pts
@@ -398,13 +488,18 @@ def save_positions(positions):
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v2.2 | {now.strftime('%b %d, %Y %I:%M %p ET')} | 10-Factor Model")
+st.caption(f"v2.3 | {now.strftime('%b %d, %Y %I:%M %p ET')} | 12-Factor Model")
 
 with st.sidebar:
     st.header("📊 PICK LEGEND")
     st.success("🔒 **STRONG** — 75%+ probability")
     st.info("🔵 **BUY** — 68-74% probability")
     st.warning("🟡 **LEAN** — 60-67% probability")
+    st.markdown("---")
+    st.markdown("**How to use:**")
+    st.markdown("1. Check Model % vs Kalshi price")
+    st.markdown("2. Only buy if Kalshi < 'Buy under'")
+    st.markdown("3. That gap = your edge")
     st.markdown("---")
     st.header("📈 POSITION STATUS")
     st.markdown("**ML Bets:**")
@@ -595,28 +690,6 @@ for g in games:
     else:
         status = "Scheduled"
     st.markdown(f"**{away}** ({a_net:+.1f}) {a_display} {a_streak} — {g['away_score']} @ {g['home_score']} — **{home}** ({h_net:+.1f}) {h_display} {h_streak} | {status}")
-
-st.divider()
-
-# METHODOLOGY
-with st.expander("📖 How This Works"):
-    st.markdown("""
-**10-FACTOR MODEL**
-
-| Factor | Points |
-|--------|--------|
-| Star OUT (MVP) | +5 |
-| Star OUT (All-Star) | +3 |
-| Rest vs B2B | +4 |
-| Net Rating 15+ | +3 |
-| Net Rating 10+ | +2 |
-| Denver Altitude | +1.5 |
-| Pace Mismatch | +1.5 |
-| Fade Weak Home | +1.5 |
-| Road Value | +1 |
-
-**Only shows 60%+ picks. Buy under = Model - 8¢**
-""")
 
 st.divider()
 
@@ -920,4 +993,4 @@ elif away_team == home_team and away_team != "Select...":
     st.error("Select two different teams")
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v2.2")
+st.caption("⚠️ Educational only. Not financial advice. v2.3")
