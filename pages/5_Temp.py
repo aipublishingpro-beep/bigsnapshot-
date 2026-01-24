@@ -7,7 +7,7 @@ import re
 from bs4 import BeautifulSoup
 
 # ========== PAGE CONFIG MUST BE FIRST ==========
-st.set_page_config(page_title="Temp Edge Finder", page_icon="🌡️", layout="wide")
+st.set_page_config(page_title="LOW Temp Edge Finder", page_icon="🌡️", layout="wide")
 
 # ========== GA4 ANALYTICS ==========
 components.html("""
@@ -303,8 +303,9 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
         st.markdown(card, unsafe_allow_html=True)
 
 # ========== HEADER ==========
-st.title("🌡️ TEMP EDGE FINDER")
-st.caption(f"Live NWS Observations + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')}")
+st.title("🌡️ LOW TEMP EDGE FINDER")
+st.caption(f"Live NWS Observations + Kalshi LOW Markets | {now.strftime('%b %d, %Y %I:%M %p ET')}")
+st.markdown('<div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:12px;margin:10px 0;text-align:center"><span style="color:#4ade80;font-weight:600">📈 We\'ve seen consistent results on LOW temps — they lock in by 6 AM and rarely change. That\'s why we focus here.</span></div>', unsafe_allow_html=True)
 
 query_params = st.query_params
 default_city = query_params.get("city", "New York City")
@@ -353,10 +354,9 @@ if st.button("⭐ Set as Default City", use_container_width=False):
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
 extremes_6hr, official_high, official_low = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else ({}, None, None)
 brackets_low_data = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC")) if is_owner else None
-brackets_high_data = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY")) if is_owner else None
 
 if current_temp:
-    if is_owner and (official_high or official_low):
+    if is_owner and official_low:
         st.markdown(f"""
         <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
             <div style="text-align:center;margin-bottom:10px">
@@ -365,7 +365,6 @@ if current_temp:
             <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
                 <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div></div>
                 <div><div style="color:#3b82f6;font-size:0.8em">TODAY'S LOW</div><div style="color:#3b82f6;font-size:1.5em;font-weight:700">{obs_low}°F</div>{f'<div style="color:#22c55e;font-size:0.7em">6hr Official: {official_low:.0f}°F</div>' if official_low else ''}</div>
-                <div><div style="color:#ef4444;font-size:0.8em">{"TODAY'S HIGH" if now.hour >= 15 else "TODAY'S HIGH SO FAR"}</div><div style="color:#ef4444;font-size:1.5em;font-weight:700">{obs_high}°F</div>{f'<div style="color:#22c55e;font-size:0.7em">6hr Official: {official_high:.0f}°F</div>' if official_high else ''}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -378,7 +377,6 @@ if current_temp:
             <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
                 <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div></div>
                 <div><div style="color:#3b82f6;font-size:0.8em">TODAY'S LOW</div><div style="color:#3b82f6;font-size:1.5em;font-weight:700">{obs_low}°F</div></div>
-                <div><div style="color:#ef4444;font-size:0.8em">{"TODAY'S HIGH" if now.hour >= 15 else "TODAY'S HIGH SO FAR"}</div><div style="color:#ef4444;font-size:1.5em;font-weight:700">{obs_high}°F</div></div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -395,22 +393,10 @@ if current_temp:
                         low_reversal_idx = i
                         break
             
-            high_reversal_idx = None
-            if obs_high and now.hour >= 12:
-                for i, r in enumerate(display_list):
-                    reading_hour = int(r['time'].split(':')[0])
-                    if r['temp'] == obs_high and reading_hour >= 12:
-                        high_reversal_idx = i
-                        break
-            
             low_confirm_idx = None
             if is_owner and low_reversal_idx is not None and low_reversal_idx >= 1:
                 if display_list[low_reversal_idx - 1]['temp'] > obs_low:
                     low_confirm_idx = low_reversal_idx - 1
-            high_confirm_idx = None
-            if is_owner and high_reversal_idx is not None and high_reversal_idx >= 1:
-                if display_list[high_reversal_idx - 1]['temp'] < obs_high:
-                    high_confirm_idx = high_reversal_idx - 1
             for i, r in enumerate(display_list):
                 time_key = r['time']
                 six_hr_display = ""
@@ -441,33 +427,11 @@ if current_temp:
                     except:
                         time_ago = ""
                     st.markdown(f'<a href="{low_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW{low_bracket_info}{time_ago} — CLICK TO BUY</span></div></a>', unsafe_allow_html=True)
-                if is_owner and high_confirm_idx is not None and i == high_confirm_idx:
-                    high_bracket_info = ""
-                    high_bracket_link = "#"
-                    if brackets_high_data and obs_high:
-                        for b in brackets_high_data:
-                            if temp_in_bracket(obs_high, b['range']):
-                                high_bracket_info = f" → {b['range']} @ {b['yes']:.0f}¢"
-                                high_bracket_link = b['url']
-                                break
-                    confirm_time = display_list[high_confirm_idx]['time']
-                    try:
-                        confirm_dt = datetime.strptime(confirm_time, "%H:%M").replace(year=now.year, month=now.month, day=now.day, tzinfo=eastern)
-                        mins_ago = int((now - confirm_dt).total_seconds() / 60)
-                        time_ago = f" ({mins_ago}m ago)" if mins_ago > 0 else " (just now)"
-                    except:
-                        time_ago = ""
-                    st.markdown(f'<a href="{high_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED HIGH{high_bracket_info}{time_ago} — CLICK TO BUY</span></div></a>', unsafe_allow_html=True)
                 if i == low_reversal_idx:
                     row_style = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
                     time_style = "color:#fbbf24;font-weight:600"
                     temp_style = "color:#fbbf24;font-weight:700"
                     label = " ↩️ LOW"
-                elif i == high_reversal_idx:
-                    row_style = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d0a0a,#1a0808);border:1px solid #ef4444;margin:2px 0"
-                    time_style = "color:#f87171;font-weight:600"
-                    temp_style = "color:#f87171;font-weight:700"
-                    label = " ↩️ HIGH"
                 else:
                     row_style = "display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-bottom:1px solid #30363d"
                     time_style = "color:#9ca3af"
@@ -479,202 +443,105 @@ else:
 
 st.markdown("---")
 with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
-    st.caption("⚡ Quick calculator — enter your position to check cushion & P/L. Resets on refresh.")
-    pcol1, pcol2 = st.columns(2)
-    with pcol1:
-        st.markdown("**LOW Position**")
-        low_has_position = st.checkbox("I have a LOW position", key="low_pos")
-        if low_has_position:
-            low_bet_type = st.selectbox("Bet Type", ["YES ≥ threshold", "YES in range", "NO ≥ threshold", "NO in range"], key="low_bet")
-            low_threshold = st.number_input("Threshold (°F)", value=18, key="low_thresh")
-            if low_bet_type in ["YES in range", "NO in range"]:
-                low_threshold_upper = st.number_input("Upper bound (°F)", value=25, key="low_thresh_up")
-            low_entry = st.number_input("Entry Price (¢)", value=24, min_value=1, max_value=99, key="low_entry")
-            low_contracts = st.number_input("Contracts", value=195, min_value=1, key="low_contracts")
-            if obs_low:
-                if low_bet_type == "YES ≥ threshold":
-                    cushion = obs_low - low_threshold
-                    cushion_label = f"+{cushion:.1f}°F above threshold"
-                elif low_bet_type == "NO ≥ threshold":
-                    cushion = low_threshold - obs_low
-                    cushion_label = f"+{cushion:.1f}°F below threshold"
-                elif low_bet_type == "YES in range":
-                    cushion_lower = obs_low - low_threshold
-                    cushion_upper = low_threshold_upper - obs_low
-                    cushion = min(cushion_lower, cushion_upper)
-                    cushion_label = f"Low:{cushion_lower:+.1f}° / High:{cushion_upper:+.1f}°"
-                else:
-                    dist_to_lower = low_threshold - obs_low
-                    dist_to_upper = obs_low - low_threshold_upper
-                    cushion = max(dist_to_lower, dist_to_upper)
-                    cushion_label = f"Outside range by {cushion:.1f}°F"
-                if cushion >= 10:
-                    status = "🟢 LOCKED"
-                    status_color = "#22c55e"
-                    status_bg = "#14532d"
-                elif cushion >= 5:
-                    status = "🟢 VERY SAFE"
-                    status_color = "#22c55e"
-                    status_bg = "#14532d"
-                elif cushion >= 3:
-                    status = "🟡 SAFE"
-                    status_color = "#eab308"
-                    status_bg = "#3d3510"
-                elif cushion >= 1:
-                    status = "🟠 CAUTION"
-                    status_color = "#f59e0b"
-                    status_bg = "#451a03"
-                elif cushion >= 0:
-                    status = "🔴 AT RISK"
-                    status_color = "#ef4444"
-                    status_bg = "#450a0a"
-                else:
-                    status = "💀 BUSTED"
-                    status_color = "#dc2626"
-                    status_bg = "#450a0a"
-                cost = low_contracts * low_entry / 100
-                if cushion >= 0:
-                    payout = low_contracts * 1.0
-                    profit = payout - cost
-                    profit_pct = (profit / cost) * 100
-                    pnl_display = f"+${profit:.2f} ({profit_pct:.0f}%)"
-                    pnl_color = "#22c55e"
-                else:
-                    pnl_display = f"-${cost:.2f} (LOSS)"
-                    pnl_color = "#ef4444"
-                st.markdown(f'''
-                <div style="background:{status_bg};border:2px solid {status_color};border-radius:8px;padding:15px;margin-top:10px">
-                    <div style="color:{status_color};font-size:1.3em;font-weight:700;text-align:center">{status}</div>
-                    <div style="color:#fff;text-align:center;margin-top:8px">
-                        <div>Current Low: <strong>{obs_low}°F</strong></div>
-                        <div>Your Threshold: <strong>{low_threshold}°F</strong></div>
-                        <div style="color:{status_color};font-weight:700;font-size:1.1em;margin-top:5px">CUSHION: {cushion_label}</div>
-                    </div>
-                    <div style="border-top:1px solid #30363d;margin-top:10px;padding-top:10px;text-align:center">
-                        <div style="color:#9ca3af">Entry: {low_contracts} @ {low_entry}¢ = ${cost:.2f}</div>
-                        <div style="color:{pnl_color};font-weight:700;font-size:1.1em">Projected P&L: {pnl_display}</div>
-                    </div>
+    st.caption("⚡ Quick calculator — enter your LOW position to check cushion & P/L. Resets on refresh.")
+    st.markdown("**LOW Position**")
+    low_has_position = st.checkbox("I have a LOW position", key="low_pos")
+    if low_has_position:
+        low_bet_type = st.selectbox("Bet Type", ["YES ≥ threshold", "YES in range", "NO ≥ threshold", "NO in range"], key="low_bet")
+        low_threshold = st.number_input("Threshold (°F)", value=18, key="low_thresh")
+        if low_bet_type in ["YES in range", "NO in range"]:
+            low_threshold_upper = st.number_input("Upper bound (°F)", value=25, key="low_thresh_up")
+        low_entry = st.number_input("Entry Price (¢)", value=24, min_value=1, max_value=99, key="low_entry")
+        low_contracts = st.number_input("Contracts", value=195, min_value=1, key="low_contracts")
+        if obs_low:
+            if low_bet_type == "YES ≥ threshold":
+                cushion = obs_low - low_threshold
+                cushion_label = f"+{cushion:.1f}°F above threshold"
+            elif low_bet_type == "NO ≥ threshold":
+                cushion = low_threshold - obs_low
+                cushion_label = f"+{cushion:.1f}°F below threshold"
+            elif low_bet_type == "YES in range":
+                cushion_lower = obs_low - low_threshold
+                cushion_upper = low_threshold_upper - obs_low
+                cushion = min(cushion_lower, cushion_upper)
+                cushion_label = f"Low:{cushion_lower:+.1f}° / High:{cushion_upper:+.1f}°"
+            else:
+                dist_to_lower = low_threshold - obs_low
+                dist_to_upper = obs_low - low_threshold_upper
+                cushion = max(dist_to_lower, dist_to_upper)
+                cushion_label = f"Outside range by {cushion:.1f}°F"
+            if cushion >= 10:
+                status = "🟢 LOCKED"
+                status_color = "#22c55e"
+                status_bg = "#14532d"
+            elif cushion >= 5:
+                status = "🟢 VERY SAFE"
+                status_color = "#22c55e"
+                status_bg = "#14532d"
+            elif cushion >= 3:
+                status = "🟡 SAFE"
+                status_color = "#eab308"
+                status_bg = "#3d3510"
+            elif cushion >= 1:
+                status = "🟠 CAUTION"
+                status_color = "#f59e0b"
+                status_bg = "#451a03"
+            elif cushion >= 0:
+                status = "🔴 AT RISK"
+                status_color = "#ef4444"
+                status_bg = "#450a0a"
+            else:
+                status = "💀 BUSTED"
+                status_color = "#dc2626"
+                status_bg = "#450a0a"
+            cost = low_contracts * low_entry / 100
+            if cushion >= 0:
+                payout = low_contracts * 1.0
+                profit = payout - cost
+                profit_pct = (profit / cost) * 100
+                pnl_display = f"+${profit:.2f} ({profit_pct:.0f}%)"
+                pnl_color = "#22c55e"
+            else:
+                pnl_display = f"-${cost:.2f} (LOSS)"
+                pnl_color = "#ef4444"
+            st.markdown(f'''
+            <div style="background:{status_bg};border:2px solid {status_color};border-radius:8px;padding:15px;margin-top:10px">
+                <div style="color:{status_color};font-size:1.3em;font-weight:700;text-align:center">{status}</div>
+                <div style="color:#fff;text-align:center;margin-top:8px">
+                    <div>Current Low: <strong>{obs_low}°F</strong></div>
+                    <div>Your Threshold: <strong>{low_threshold}°F</strong></div>
+                    <div style="color:{status_color};font-weight:700;font-size:1.1em;margin-top:5px">CUSHION: {cushion_label}</div>
                 </div>
-                ''', unsafe_allow_html=True)
-    with pcol2:
-        st.markdown("**HIGH Position**")
-        high_has_position = st.checkbox("I have a HIGH position", key="high_pos")
-        if high_has_position:
-            high_bet_type = st.selectbox("Bet Type", ["YES ≤ threshold", "YES in range", "NO ≤ threshold", "NO in range"], key="high_bet")
-            high_threshold = st.number_input("Threshold (°F)", value=45, key="high_thresh")
-            if high_bet_type in ["YES in range", "NO in range"]:
-                high_threshold_lower = st.number_input("Lower bound (°F)", value=40, key="high_thresh_low")
-            high_entry = st.number_input("Entry Price (¢)", value=30, min_value=1, max_value=99, key="high_entry")
-            high_contracts = st.number_input("Contracts", value=100, min_value=1, key="high_contracts")
-            if obs_high:
-                if high_bet_type == "YES ≤ threshold":
-                    cushion = high_threshold - obs_high
-                    cushion_label = f"+{cushion:.1f}°F below threshold"
-                elif high_bet_type == "NO ≤ threshold":
-                    cushion = obs_high - high_threshold
-                    cushion_label = f"+{cushion:.1f}°F above threshold"
-                elif high_bet_type == "YES in range":
-                    cushion_lower = obs_high - high_threshold_lower
-                    cushion_upper = high_threshold - obs_high
-                    cushion = min(cushion_lower, cushion_upper)
-                    cushion_label = f"Low:{cushion_lower:+.1f}° / High:{cushion_upper:+.1f}°"
-                else:
-                    dist_to_lower = high_threshold_lower - obs_high
-                    dist_to_upper = obs_high - high_threshold
-                    cushion = max(dist_to_lower, dist_to_upper)
-                    cushion_label = f"Outside range by {cushion:.1f}°F"
-                time_risk = " ⚠️ HIGH NOT LOCKED" if now.hour < 15 else ""
-                if cushion >= 10:
-                    status = "🟢 VERY SAFE" + time_risk
-                    status_color = "#22c55e"
-                    status_bg = "#14532d"
-                elif cushion >= 5:
-                    status = "🟡 SAFE" + time_risk
-                    status_color = "#eab308"
-                    status_bg = "#3d3510"
-                elif cushion >= 3:
-                    status = "🟠 CAUTION" + time_risk
-                    status_color = "#f59e0b"
-                    status_bg = "#451a03"
-                elif cushion >= 0:
-                    status = "🔴 AT RISK" + time_risk
-                    status_color = "#ef4444"
-                    status_bg = "#450a0a"
-                else:
-                    status = "💀 BUSTED"
-                    status_color = "#dc2626"
-                    status_bg = "#450a0a"
-                cost = high_contracts * high_entry / 100
-                if cushion >= 0:
-                    payout = high_contracts * 1.0
-                    profit = payout - cost
-                    profit_pct = (profit / cost) * 100
-                    pnl_display = f"+${profit:.2f} ({profit_pct:.0f}%)"
-                    pnl_color = "#22c55e"
-                else:
-                    pnl_display = f"-${cost:.2f} (LOSS)"
-                    pnl_color = "#ef4444"
-                st.markdown(f'''
-                <div style="background:{status_bg};border:2px solid {status_color};border-radius:8px;padding:15px;margin-top:10px">
-                    <div style="color:{status_color};font-size:1.3em;font-weight:700;text-align:center">{status}</div>
-                    <div style="color:#fff;text-align:center;margin-top:8px">
-                        <div>Current High: <strong>{obs_high}°F</strong></div>
-                        <div>Your Threshold: <strong>{high_threshold}°F</strong></div>
-                        <div style="color:{status_color};font-weight:700;font-size:1.1em;margin-top:5px">CUSHION: {cushion_label}</div>
-                    </div>
-                    <div style="border-top:1px solid #30363d;margin-top:10px;padding-top:10px;text-align:center">
-                        <div style="color:#9ca3af">Entry: {high_contracts} @ {high_entry}¢ = ${cost:.2f}</div>
-                        <div style="color:{pnl_color};font-weight:700;font-size:1.1em">Projected P&L: {pnl_display}</div>
-                    </div>
+                <div style="border-top:1px solid #30363d;margin-top:10px;padding-top:10px;text-align:center">
+                    <div style="color:#9ca3af">Entry: {low_contracts} @ {low_entry}¢ = ${cost:.2f}</div>
+                    <div style="color:{pnl_color};font-weight:700;font-size:1.1em">Projected P&L: {pnl_display}</div>
                 </div>
-                ''', unsafe_allow_html=True)
+            </div>
+            ''', unsafe_allow_html=True)
 
 st.markdown("---")
-col_high, col_low = st.columns(2)
-with col_high:
-    st.subheader("☀️ HIGH TEMP")
-    hour = now.hour
-    if obs_high:
-        st.metric("📈 High So Far", f"{obs_high}°F")
-        brackets_high = fetch_kalshi_brackets(cfg.get("high", "KXHIGHNY"))
-        if hour >= 15:
-            st.caption("✅ High likely locked in (after 3 PM)")
-            render_brackets_with_actual(brackets_high, obs_high, "HIGH")
-        else:
-            st.caption(f"⏳ Too early — HIGH peaks 12-5 PM. Check back later.")
-            if brackets_high:
-                market_fav = max(brackets_high, key=lambda b: b['yes'])
-                st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
-                for b in brackets_high:
-                    is_fav = b['range'] == market_fav['range']
-                    box_style = "background:#1a1a2e;border:1px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:5px 0" if is_fav else "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
-                    icon = " ⭐" if is_fav else ""
-                    st.markdown(f'<div style="{box_style}"><div style="display:flex;justify-content:space-between;align-items:center"><span style="color:#e5e7eb">{b["range"]}{icon}</span><span style="color:#f59e0b">Kalshi {b["yes"]:.0f}¢</span></div></div>', unsafe_allow_html=True)
-                st.markdown(f'<div style="text-align:center;margin-top:12px"><a href="{market_fav["url"]}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a></div>', unsafe_allow_html=True)
+st.subheader("🌙 LOW TEMP")
+st.caption("💡 LOW locks in by 6 AM and rarely changes — this is where the edge is.")
+hour = now.hour
+if obs_low:
+    st.metric("📉 Today's Low", f"{obs_low}°F")
+    brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
+    if hour >= 6:
+        st.caption("✅ Low locked in (after 6 AM)")
+        render_brackets_with_actual(brackets_low, obs_low, "LOW")
     else:
-        st.error("Could not fetch observations")
-with col_low:
-    st.subheader("🌙 LOW TEMP")
-    hour = now.hour
-    if obs_low:
-        st.metric("📉 Today's Low", f"{obs_low}°F")
-        brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
-        if hour >= 6:
-            st.caption("✅ Low locked in (after 6 AM)")
-            render_brackets_with_actual(brackets_low, obs_low, "LOW")
-        else:
-            st.caption(f"⏳ Low may still drop (before 6 AM)")
-            if brackets_low:
-                market_fav = max(brackets_low, key=lambda b: b['yes'])
-                st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
-                for b in brackets_low:
-                    is_fav = b['range'] == market_fav['range']
-                    box_style = "background:#1a1a2e;border:1px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:5px 0" if is_fav else "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
-                    icon = " ⭐" if is_fav else ""
-                    st.markdown(f'<div style="{box_style}"><div style="display:flex;justify-content:space-between;align-items:center"><span style="color:#e5e7eb">{b["range"]}{icon}</span><span style="color:#f59e0b">Kalshi {b["yes"]:.0f}¢</span></div></div>', unsafe_allow_html=True)
-                st.markdown(f'<div style="text-align:center;margin-top:12px"><a href="{market_fav["url"]}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a></div>', unsafe_allow_html=True)
-    else:
-        st.error("Could not fetch observations")
+        st.caption(f"⏳ Low may still drop (before 6 AM)")
+        if brackets_low:
+            market_fav = max(brackets_low, key=lambda b: b['yes'])
+            st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
+            for b in brackets_low:
+                is_fav = b['range'] == market_fav['range']
+                box_style = "background:#1a1a2e;border:1px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:5px 0" if is_fav else "background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:5px 0"
+                icon = " ⭐" if is_fav else ""
+                st.markdown(f'<div style="{box_style}"><div style="display:flex;justify-content:space-between;align-items:center"><span style="color:#e5e7eb">{b["range"]}{icon}</span><span style="color:#f59e0b">Kalshi {b["yes"]:.0f}¢</span></div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="text-align:center;margin-top:12px"><a href="{market_fav["url"]}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY MARKET FAVORITE</a></div>', unsafe_allow_html=True)
+else:
+    st.error("Could not fetch observations")
 
 st.markdown("---")
 st.subheader("📡 NWS Forecast")
@@ -694,18 +561,18 @@ else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 EXPERIMENTAL</b> <span style="color:#000">— Temperature Edge Finder v4.0</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v4.1</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     docs = """
 **🌡️ What This App Does**
 
-Compares actual NWS temperature observations against Kalshi prediction market prices to find edge opportunities.
+Compares actual NWS temperature observations against Kalshi LOW temperature market prices to find edge opportunities.
 
 **⏰ When to Check**
 
-• **LOW Temperature**: Usually bottoms out between 4-7 AM. Look for the ↩️ REVERSAL in observations — that confirms the low is set.
-• **HIGH Temperature**: Usually peaks between 12-5 PM. Once you see temps dropping after the peak, the high is locked.
+• **LOW Temperature**: Usually bottoms out between 4-7 AM. Look for the ↩️ REVERSAL in observations — that confirms the low is locked in.
+• After 6 AM, the LOW is typically set and won't change.
 
 **🚨 Severity Indicators**
 
@@ -716,16 +583,7 @@ Compares actual NWS temperature observations against Kalshi prediction market pr
 
 **📊 Position Calculator**
 
-Quick tool to check your cushion and projected P&L. **Not saved** — resets on page refresh. Just enter your position details when you want to check status:
-
-1. Click "I have a LOW/HIGH position"
-2. Select bet type:
-   - YES ≥ threshold (low stays above X)
-   - YES in range (temp lands in X-Y range)
-   - NO ≥ threshold (low drops below X)
-   - NO in range (temp lands outside X-Y range)
-3. Enter your threshold, entry price, and contract count
-4. See real-time cushion status and projected P&L
+Quick tool to check your cushion and projected P&L. **Not saved** — resets on page refresh.
 
 **Cushion Status Levels:**
 • 🟢 **LOCKED** (+10°F+) — Position is virtually guaranteed
@@ -738,25 +596,24 @@ Quick tool to check your cushion and projected P&L. **Not saved** — resets on 
 **⚠️ Important Notes**
 
 • This is NOT financial advice
-• Weather can change — especially HIGH temps before 3 PM
 • Always verify on Kalshi before trading
+• This app focuses on LOW temps because they lock in reliably by 6 AM
 """
     if is_owner:
         docs += """
 
 **📊 6-Hour Extremes (Owner Only)**
 
-The observations show **6hr↑** (6-hour max) and **6hr↓** (6-hour min) from official NWS METAR reports at synoptic times (00Z, 06Z, 12Z, 18Z). These bracket the true daily high/low.
+The observations show **6hr↑** (6-hour max) and **6hr↓** (6-hour min) from official NWS METAR reports at synoptic times (00Z, 06Z, 12Z, 18Z). These bracket the true daily low.
 
 **✅ Confirmation Bars (Owner Only)**
 
 Green CONFIRMED bars appear immediately after the first reading that proves reversal:
 • LOW confirmed = next reading is HIGHER than the low
-• HIGH confirmed = next reading is LOWER than the high
 
 **One-click to trade**: Bar shows bracket, price, time since confirmed, and links directly to Kalshi market.
 """
     st.markdown(docs)
 
-st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px;padding:0 20px">⚠️ For entertainment and educational purposes only. This tool displays observed temperature data alongside Kalshi market prices. It does not constitute financial advice. Kalshi settles markets using official weather stations, which may differ slightly from NWS observations shown here. Always verify market details on Kalshi before trading.</div>', unsafe_allow_html=True)
+st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px;padding:0 20px">⚠️ For entertainment and educational purposes only. This tool displays observed LOW temperature data alongside Kalshi market prices. It does not constitute financial advice. Kalshi settles markets using official weather stations, which may differ slightly from NWS observations shown here. Always verify market details on Kalshi before trading.</div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:10px;padding:0 20px">Questions or feedback? DM me on X: @AIPublishingPro</div>', unsafe_allow_html=True)
