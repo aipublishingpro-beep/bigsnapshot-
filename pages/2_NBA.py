@@ -411,7 +411,7 @@ def save_positions(positions):
 
 # UI
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v4.0 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
+st.caption(f"v4.1 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
 
 st.markdown('<div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;"><p style="color: #e94560; font-weight: 600; margin: 0 0 6px 0;">⚠️ IMPORTANT DISCLAIMER</p><p style="color: #ccc; font-size: 0.85em; margin: 0; line-height: 1.5;">This is <strong>not</strong> a predictive model. The Edge Score shows how many factors currently favor one side — it is <strong>not</strong> a win probability. We show the edge, <strong>you make the call</strong>.</p></div>', unsafe_allow_html=True)
 
@@ -430,14 +430,14 @@ if "positions" not in st.session_state: st.session_state.positions = load_positi
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Today's Games", len(games))
-c2.metric("🔴 Live Now", len([g for g in games if g['status'] == 'STATUS_IN_PROGRESS']))
+c2.metric("🔴 Live Now", len([g for g in games if g['status'] in ['STATUS_IN_PROGRESS', 'STATUS_HALFTIME']]))
 c3.metric("B2B Teams", len(rest.get("b2b", set())))
 c4.metric("Last Update", now.strftime("%I:%M:%S %p"))
 
 st.divider()
 
 # LIVE EDGE MONITOR
-live_games = [g for g in games if g['status'] == 'STATUS_IN_PROGRESS']
+live_games = [g for g in games if g['status'] in ['STATUS_IN_PROGRESS', 'STATUS_HALFTIME']]
 
 if live_games:
     st.subheader("🔴 LIVE EDGE MONITOR")
@@ -465,6 +465,7 @@ if live_games:
         projected, pace = get_safe_projection(total, mins)
         conviction_text, conviction_color = get_conviction(mins, lead)
         pace_label = get_pace_label(pace)
+        time_display = "HALFTIME" if g['status'] == 'STATUS_HALFTIME' else f"Q{g['period']} {g['clock']}"
         
         # Build totals line
         if user_pos and user_pos.get('type') == 'totals' and projected:
@@ -479,7 +480,7 @@ if live_games:
             elif pos_cushion >= 0: pos_status, pos_color = "🟡 CLOSE", "#cccc00"
             elif pos_cushion >= -5: pos_status, pos_color = "🟠 RISKY", "#ff9900"
             else: pos_status, pos_color = "🔴 DANGER", "#ff6666"
-            totals_line = f'<span style="color: {pos_color}; font-weight: bold;">MY BET: {pos_side} {pos_line} → {pos_status} (+{pos_cushion:.0f})</span> | <span style="color: #888;">Proj: {projected} | {pos_contracts}x @ {pos_price}¢</span>'
+            totals_line = f'<span style="color: {pos_color}; font-weight: bold; font-size: 1.2em;">MY BET: {pos_side} {pos_line} → {pos_status} ({pos_cushion:+.0f})</span> | <span style="color: #888;">Proj: {projected} | {pos_contracts}x @ {pos_price}¢</span>'
         elif projected:
             safe_no, no_cushion, safe_yes, yes_cushion = get_totals_thresholds(projected)
             if no_cushion >= 10: no_label = f'<span style="color: #00ff00; font-weight: bold;">🟢 NO {safe_no} (+{no_cushion}) SAFE</span>'
@@ -500,7 +501,7 @@ if live_games:
             elif alignment >= 60: border_color, bg_color = "#88cc00", "#1a1f0d"
             else: border_color, bg_color = "#cccc00", "#1f1f0d"
             card_html = f'<div style="background: linear-gradient(135deg, #1a1a1a 0%, {bg_color} 100%); border: 2px solid {border_color}; border-radius: 10px; padding: 16px; margin: 10px 0;">'
-            card_html += f'<div style="display: flex; justify-content: space-between; align-items: center;"><div><span style="color: #fff; font-size: 1.1em; font-weight: bold;">{g["away"]} @ {g["home"]}</span><span style="color: #888; margin-left: 12px;">Q{g["period"]} {g["clock"]}</span></div><div><span style="color: #fff; font-size: 1.2em; font-weight: bold;">{g["away_score"]} - {g["home_score"]}</span></div></div>'
+            card_html += f'<div style="display: flex; justify-content: space-between; align-items: center;"><div><span style="color: #fff; font-size: 1.1em; font-weight: bold;">{g["away"]} @ {g["home"]}</span><span style="color: #888; margin-left: 12px;">{time_display}</span></div><div><span style="color: #fff; font-size: 1.2em; font-weight: bold;">{g["away_score"]} - {g["home_score"]}</span></div></div>'
             card_html += f'<div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;"><div><span style="color: #aaa;">Edge:</span><span style="color: {border_color}; font-size: 1.3em; font-weight: bold; margin-left: 8px;">{pick}</span><span style="color: #888; margin-left: 8px;">({ml_lead:+d} lead)</span><span style="color: #666; margin-left: 8px;">{pace_label}</span></div><div><span style="background: {border_color}; color: #000; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 1.1em;">{alignment}/100</span></div></div>'
             card_html += f'<div style="margin-top: 8px;"><span style="color: {conviction_color}; font-weight: bold;">{conviction_text}</span></div>'
             card_html += f'<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">{totals_line}</div></div>'
@@ -512,7 +513,7 @@ if live_games:
         else:
             edge_status = "TOO EARLY" if mins < 6 else "TOO CLOSE"
             card_html = '<div style="background: #1a1a1a; border: 1px solid #555; border-radius: 10px; padding: 16px; margin: 10px 0;">'
-            card_html += f'<div style="display: flex; justify-content: space-between; align-items: center;"><div><span style="color: #fff; font-size: 1.1em; font-weight: bold;">{g["away"]} @ {g["home"]}</span><span style="color: #888; margin-left: 12px;">Q{g["period"]} {g["clock"]}</span></div><div><span style="color: #fff; font-size: 1.2em; font-weight: bold;">{g["away_score"]} - {g["home_score"]}</span></div></div>'
+            card_html += f'<div style="display: flex; justify-content: space-between; align-items: center;"><div><span style="color: #fff; font-size: 1.1em; font-weight: bold;">{g["away"]} @ {g["home"]}</span><span style="color: #888; margin-left: 12px;">{time_display}</span></div><div><span style="color: #fff; font-size: 1.2em; font-weight: bold;">{g["away_score"]} - {g["home_score"]}</span></div></div>'
             card_html += f'<div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;"><div><span style="color: #888;">ML Edge: {edge_status}</span><span style="color: #666; margin-left: 8px;">({lead:+d})</span><span style="color: #666; margin-left: 8px;">{pace_label}</span></div><div><span style="background: #555; color: #aaa; padding: 6px 14px; border-radius: 6px; font-weight: bold;">—/100</span></div></div>'
             card_html += f'<div style="margin-top: 8px;"><span style="color: {conviction_color}; font-weight: bold;">{conviction_text}</span></div>'
             card_html += f'<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">{totals_line}</div></div>'
@@ -564,7 +565,7 @@ st.markdown('<div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e
 
 picks = []
 for g in games:
-    if g["status"] in ["STATUS_FINAL", "STATUS_IN_PROGRESS"]: continue
+    if g["status"] != "STATUS_SCHEDULED": continue
     result = calc_edge(g["home"], g["away"], injuries, rest)
     if result:
         result.update({"status": g["status"], "period": g["period"], "clock": g["clock"], "home_score": g["home_score"], "away_score": g["away_score"], "time": g.get("time", ""), "datetime": g.get("datetime")})
@@ -598,6 +599,7 @@ for g in games:
     h_net, a_net = TEAM_STATS.get(home, {}).get("net", 0), TEAM_STATS.get(away, {}).get("net", 0)
     h_rec, a_rec = team_record.get(home, []), team_record.get(away, [])
     if g["status"] == "STATUS_FINAL": status = f"✅ {home if g['home_score'] > g['away_score'] else away} wins"
+    elif g["status"] == "STATUS_HALFTIME": status = "⏸️ HALFTIME"
     elif g["status"] == "STATUS_IN_PROGRESS": status = f"🔴 Q{g['period']} {g['clock']}"
     else: status = "Scheduled"
     st.markdown(f"**{away}** ({a_net:+.1f}) {get_record_display(a_rec)} {get_streak(a_rec)} — {g['away_score']} @ {g['home_score']} — **{home}** ({h_net:+.1f}) {get_record_display(h_rec)} {get_streak(h_rec)} | {status}")
@@ -615,7 +617,7 @@ if st.session_state.positions:
         cost, potential = round(price * contracts / 100, 2), round((100 - price) * contracts / 100, 2)
         pick, parts = pos.get('pick', ''), gk.split("@")
         mins = get_minutes_played(g['period'], g['clock'], g['status'])
-        is_final, is_live = g['status'] == "STATUS_FINAL", g['status'] == "STATUS_IN_PROGRESS"
+        is_final, is_live = g['status'] == "STATUS_FINAL", g['status'] in ["STATUS_IN_PROGRESS", "STATUS_HALFTIME"]
         total = g['home_score'] + g['away_score']
         
         if pos_type == 'totals':
@@ -658,7 +660,7 @@ if st.session_state.positions:
             else:
                 label, status_color, pnl = "⏳ PENDING", "info", f"Win: +${potential:.2f}"
         
-        status = "FINAL" if is_final else f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "Scheduled"
+        status = "FINAL" if is_final else "HALFTIME" if g['status'] == "STATUS_HALFTIME" else f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "Scheduled"
         type_label = "TOTAL" if pos_type == "totals" else "ML"
         if status_color == "success": st.success(f"**{gk.replace('@', ' @ ')}** | {status} | **{label}**")
         elif status_color == "error": st.error(f"**{gk.replace('@', ' @ ')}** | {status} | **{label}**")
@@ -677,4 +679,4 @@ if st.session_state.positions:
 else:
     st.info("No active positions — use '➕ Track My Bet' on live games above")
 
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v4.0")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v4.1")
