@@ -638,9 +638,11 @@ else:
 st.divider()
 
 # ============================================================
-# TODAY'S GAMES
+# TODAY'S GAMES — 5 DAY TEAM RECORD
 # ============================================================
-st.subheader("📺 TODAY'S GAMES")
+st.subheader("📺 TODAY'S GAMES — 5 Day Record")S — 5 DAY TEAM FORM
+# ============================================================
+st.subheader("📺 TODAY'S GAMES — 5 Day Form")
 
 for g in games:
     home, away = g["home"], g["away"]
@@ -664,56 +666,6 @@ for g in games:
         status = "Scheduled"
     
     st.markdown(f"**{away}** ({a_net:+.1f}) {a_form_display} {a_streak} — {g['away_score']} @ {g['home_score']} — **{home}** ({h_net:+.1f}) {h_form_display} {h_streak} | {status}")
-
-st.divider()
-
-# ============================================================
-# TEAM FORM
-# ============================================================
-st.subheader("🔥 TEAM FORM (Last 5 Games)")
-
-if team_form:
-    # Calculate wins and sort
-    form_data = []
-    for team in sorted(TEAM_STATS.keys()):
-        form_list = team_form.get(team, [])
-        wins = form_list.count("W") if form_list else 0
-        streak = get_form_streak(form_list)
-        form_data.append({
-            "team": team,
-            "form": form_list,
-            "wins": wins,
-            "streak": streak,
-            "display": get_form_display(form_list)
-        })
-    
-    # Sort by wins descending
-    form_data.sort(key=lambda x: (-x["wins"], x["team"]))
-    
-    # Hot teams
-    hot_teams = [t for t in form_data if t["wins"] >= 4]
-    cold_teams = [t for t in form_data if t["wins"] <= 1]
-    
-    if hot_teams:
-        st.markdown("**🔥 HOT (4-5 wins)**")
-        for t in hot_teams:
-            st.success(f"**{t['team']}** — {t['display']} ({t['wins']}-{5-t['wins']}) {t['streak']}")
-    
-    if cold_teams:
-        st.markdown("**❄️ COLD (0-1 wins)**")
-        for t in cold_teams:
-            st.error(f"**{t['team']}** — {t['display']} ({t['wins']}-{5-t['wins']}) {t['streak']}")
-    
-    with st.expander("📊 All Teams Form"):
-        for t in form_data:
-            if t["wins"] >= 4:
-                st.markdown(f"🔥 **{t['team']}** — {t['display']} ({t['wins']}-{5-t['wins']}) {t['streak']}")
-            elif t["wins"] <= 1:
-                st.markdown(f"❄️ **{t['team']}** — {t['display']} ({t['wins']}-{5-t['wins']}) {t['streak']}")
-            else:
-                st.markdown(f"**{t['team']}** — {t['display']} ({t['wins']}-{5-t['wins']}) {t['streak']}")
-else:
-    st.info("Form data loading...")
 
 st.divider()
 
