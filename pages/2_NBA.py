@@ -559,7 +559,7 @@ def save_positions(positions):
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v2.8 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
+st.caption(f"v2.9 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
 
 st.markdown("""
 <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
@@ -621,6 +621,25 @@ if live_games:
     </p>
     </div>
     """, unsafe_allow_html=True)
+    
+    with st.expander("📖 TIMING GUIDE — When to buy?"):
+        st.markdown("""
+        **The key question: How long into a game before buying with conviction?**
+        
+        | Quarter | Lead | Conviction |
+        |---------|------|------------|
+        | Q1 (0-12 min) | Any | 🔴 LOW |
+        | Q2 (12-24 min) | 10+ | 🟡 MEDIUM |
+        | Q3 (24-36 min) | 12+ | 🟢 GOOD |
+        | Q4 (36-44 min) | 15+ | 🟢🟢 HIGH |
+        | Q4 (44+ min) | 10+ | 🟢🟢🟢 VERY HIGH |
+        
+        **Sweet spot:** Q3 with double-digit lead. Real separation + still value in price.
+        
+        **Too early risk:** Up 12 in Q1 means nothing — one cold streak and it's tied.
+        
+        **Too late risk:** Up 20 with 3 min left — Kalshi price already 90¢, no value left.
+        """)
     
     # Calculate edge for all live games
     live_edges = []
@@ -1212,4 +1231,67 @@ elif away_team == home_team and away_team != "Select...":
     st.error("Select two different teams")
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v2.8")
+
+# HOW TO USE
+with st.expander("📖 HOW TO USE THIS APP"):
+    st.markdown("""
+    ### What This App Does
+    
+    **We show the edge — you make the call.** This app displays factor alignment for NBA games, not predictions. Higher scores mean more factors favor one side.
+    
+    ---
+    
+    ### Two Views
+    
+    **🎯 Pre-Game Alignment** — Shows all scheduled games sorted by tip-off time. Edge score based on:
+    - Star player injuries (+5 for MVP-tier, +3 for All-Star)
+    - Back-to-back fatigue (+4)
+    - Rest advantage (+2)
+    - Travel fatigue (+2 for cross-country)
+    - Net rating gap (+1 to +3)
+    - Head-to-head history (+1.5)
+    - Pace mismatch (+1.5)
+    - Home altitude - Denver (+1.5)
+    
+    **🔴 Live Edge Monitor** — Shows all live games sorted by alignment. Updates every 24 seconds based on:
+    - Current lead size
+    - Time remaining
+    - Quarter context
+    
+    ---
+    
+    ### Edge Score Guide
+    
+    | Score | Meaning |
+    |-------|---------|
+    | 75+ | Strong alignment — multiple factors |
+    | 60-74 | Good alignment — several factors |
+    | 50-59 | Weak alignment — few factors |
+    | TOO CLOSE | No clear edge — lead under 5 |
+    | TOO EARLY | Under 6 minutes played |
+    
+    ---
+    
+    ### Live Timing Guide
+    
+    | Quarter | Lead | Conviction |
+    |---------|------|------------|
+    | Q1 | Any | 🔴 LOW |
+    | Q2 | 10+ | 🟡 MEDIUM |
+    | Q3 | 12+ | 🟢 GOOD |
+    | Q4 | 15+ | 🟢🟢 HIGH |
+    | Q4 (4 min left) | 10+ | 🟢🟢🟢 VERY HIGH |
+    
+    **Sweet spot:** Q3 with double-digit lead
+    
+    ---
+    
+    ### Important Reminders
+    
+    ⚠️ Edge Score ≠ Win Probability  
+    ⚠️ This is not a predictive model  
+    ⚠️ Past performance doesn't guarantee results  
+    ⚠️ Only risk what you can afford to lose  
+    """)
+
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v2.9")
