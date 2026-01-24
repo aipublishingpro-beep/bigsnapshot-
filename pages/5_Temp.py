@@ -37,14 +37,15 @@ div[data-testid="stMarkdownContainer"] p {color: #c9d1d9;}
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
+# All Kalshi Temperature Cities with LOCAL TIMEZONES
 CITY_CONFIG = {
-    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67},
-    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75},
-    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67},
-    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41},
-    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29},
-    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97},
-    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23},
+    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central"},
+    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central"},
+    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "tz": "US/Mountain"},
+    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific"},
+    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern"},
+    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern"},
+    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern"},
 }
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
@@ -171,16 +172,18 @@ def fetch_nws_6hr_extremes(station):
         return {}, None, None
 
 @st.cache_data(ttl=120)
-def fetch_nws_observations(station):
+def fetch_nws_observations(station, city_tz_str):
+    """Fetch NWS observations and convert to city's LOCAL timezone"""
     url = f"https://api.weather.gov/stations/{station}/observations?limit=100"
     try:
+        city_tz = pytz.timezone(city_tz_str)
         resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
         if resp.status_code != 200:
             return None, None, None, []
         observations = resp.json().get("features", [])
         if not observations:
             return None, None, None, []
-        today = datetime.now(eastern).date()
+        today = datetime.now(city_tz).date()
         readings = []
         for obs in observations:
             props = obs.get("properties", {})
@@ -190,10 +193,10 @@ def fetch_nws_observations(station):
                 continue
             try:
                 ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                ts_local = ts.astimezone(eastern)
+                ts_local = ts.astimezone(city_tz)  # Convert to CITY'S timezone
                 if ts_local.date() == today:
                     temp_f = round(temp_c * 9/5 + 32, 1)
-                    readings.append({"time": ts_local, "temp": temp_f})
+                    readings.append({"time": ts_local, "temp": temp_f, "hour": ts_local.hour})
             except:
                 continue
         if not readings:
@@ -202,7 +205,7 @@ def fetch_nws_observations(station):
         current = readings[0]["temp"]
         low = min(r["temp"] for r in readings)
         high = max(r["temp"] for r in readings)
-        display_readings = [{"time": r["time"].strftime("%H:%M"), "temp": r["temp"]} for r in readings]
+        display_readings = [{"time": r["time"].strftime("%H:%M"), "temp": r["temp"], "hour": r["hour"]} for r in readings]
         return current, low, high, display_readings
     except:
         return None, None, None, []
@@ -335,6 +338,11 @@ with c2:
     nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
     st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
 
+cfg = CITY_CONFIG.get(city, {})
+city_tz_str = cfg.get("tz", "US/Eastern")
+city_tz = pytz.timezone(city_tz_str)
+city_now = datetime.now(city_tz)
+
 if st.button("⭐ Set as Default City", use_container_width=False):
     existing_params = dict(st.query_params)
     existing_params["city"] = city
@@ -343,16 +351,18 @@ if st.button("⭐ Set as Default City", use_container_width=False):
         st.query_params[key] = value
     st.success(f"✓ Bookmark this page to save {city} as default!")
 
-current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"))
+# Fetch with city's timezone
+current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"), city_tz_str)
 extremes_6hr, official_high, official_low = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else ({}, None, None)
 brackets_low_data = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC")) if is_owner else None
 
 if current_temp:
+    tz_abbrev = city_now.strftime('%Z')
     if is_owner and official_low:
         st.markdown(f"""
         <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
             <div style="text-align:center;margin-bottom:10px">
-                <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#22c55e">{cfg.get('station', 'N/A')}</strong></span>
+                <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#22c55e">{cfg.get('station', 'N/A')}</strong> | Times in <strong style="color:#f59e0b">{tz_abbrev}</strong></span>
             </div>
             <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
                 <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div></div>
@@ -364,7 +374,7 @@ if current_temp:
         st.markdown(f"""
         <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
             <div style="text-align:center;margin-bottom:10px">
-                <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#22c55e">{cfg.get('station', 'N/A')}</strong></span>
+                <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#22c55e">{cfg.get('station', 'N/A')}</strong> | Times in <strong style="color:#f59e0b">{tz_abbrev}</strong></span>
             </div>
             <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
                 <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div></div>
@@ -377,11 +387,13 @@ if current_temp:
         with st.expander("📊 Recent NWS Observations", expanded=True):
             display_list = readings
             
-            # Show amber LOW reversal row where the low occurred IN THE MORNING (before noon)
+            # Show amber LOW reversal row at the EARLIEST occurrence of the low (morning LOCAL time)
             low_reversal_idx = None
             if obs_low:
-                for i, r in enumerate(display_list):
-                    reading_hour = int(r['time'].split(':')[0])
+                # Iterate backwards (oldest first) to find the first/earliest occurrence
+                for i in range(len(display_list) - 1, -1, -1):
+                    r = display_list[i]
+                    reading_hour = r.get('hour', 12)  # Use stored LOCAL hour
                     if r['temp'] == obs_low and reading_hour < 12:
                         low_reversal_idx = i
                         break
@@ -416,8 +428,8 @@ if current_temp:
                                 break
                     confirm_time = display_list[low_confirm_idx]['time']
                     try:
-                        confirm_dt = datetime.strptime(confirm_time, "%H:%M").replace(year=now.year, month=now.month, day=now.day, tzinfo=eastern)
-                        mins_ago = int((now - confirm_dt).total_seconds() / 60)
+                        confirm_dt = datetime.strptime(confirm_time, "%H:%M").replace(year=city_now.year, month=city_now.month, day=city_now.day, tzinfo=city_tz)
+                        mins_ago = int((city_now - confirm_dt).total_seconds() / 60)
                         time_ago = f" ({mins_ago}m ago)" if mins_ago > 0 else " (just now)"
                     except:
                         time_ago = ""
@@ -439,16 +451,16 @@ else:
 
 st.markdown("---")
 st.subheader("🌙 LOW TEMP")
-st.caption("💡 LOW locks in by 6 AM and rarely changes — this is where the edge is.")
-hour = now.hour
+st.caption("💡 LOW locks in by 6 AM local time and rarely changes — this is where the edge is.")
+hour = city_now.hour  # Use city's LOCAL hour
 if obs_low:
     st.metric("📉 Today's Low", f"{obs_low}°F")
     brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
     if hour >= 6:
-        st.caption("✅ Low locked in (after 6 AM)")
+        st.caption("✅ Low locked in (after 6 AM local)")
         render_brackets_with_actual(brackets_low, obs_low, "LOW")
     else:
-        st.caption(f"⏳ Low may still drop (before 6 AM)")
+        st.caption(f"⏳ Low may still drop (before 6 AM local)")
         if brackets_low:
             market_fav = max(brackets_low, key=lambda b: b['yes'])
             st.caption(f"Market favorite: {market_fav['range']} @ {market_fav['yes']:.0f}¢")
@@ -479,7 +491,7 @@ else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v4.1</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v4.2</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     docs = """
@@ -489,8 +501,8 @@ Compares actual NWS temperature observations against Kalshi LOW temperature mark
 
 **⏰ When to Check**
 
-• **LOW Temperature**: Usually bottoms out between 4-7 AM. Look for the ↩️ REVERSAL in observations — that confirms the low is locked in.
-• After 6 AM, the LOW is typically set and won't change.
+• **LOW Temperature**: Usually bottoms out between 4-7 AM local time. Look for the ↩️ REVERSAL in observations — that confirms the low is locked in.
+• After 6 AM local, the LOW is typically set and won't change.
 
 **🚨 Severity Indicators**
 
@@ -499,23 +511,23 @@ Compares actual NWS temperature observations against Kalshi LOW temperature mark
 • ⚠️ **MODERATE** (15-29 cents) — Gold highlight, "Edge present"
 • 🎯 **NONE** (<15 cents) — Standard display
 
-**📊 Position Calculator**
+**📊 NWS Stations (Kalshi Settlement Sources)**
 
-Quick tool to check your cushion and projected P&L.
-
-**Cushion Status Levels:**
-• 🟢 **LOCKED** (+10°F+) — Position is virtually guaranteed
-• 🟢 **VERY SAFE** (+5-9°F) — Extremely unlikely to lose
-• 🟡 **SAFE** (+3-4°F) — Comfortable margin
-• 🟠 **CAUTION** (+1-2°F) — Monitor closely
-• 🔴 **AT RISK** (0°F) — On the edge
-• 💀 **BUSTED** (below 0) — Position lost
+| City | Station | Timezone |
+|------|---------|----------|
+| Austin | KAUS (Bergstrom) | Central |
+| Chicago | KMDW (Midway) | Central |
+| Denver | KDEN (Denver Intl) | Mountain |
+| Los Angeles | KLAX (LAX) | Pacific |
+| Miami | KMIA (Miami Intl) | Eastern |
+| New York City | KNYC (Central Park) | Eastern |
+| Philadelphia | KPHL (PHL Airport) | Eastern |
 
 **⚠️ Important Notes**
 
 • This is NOT financial advice
 • Always verify on Kalshi before trading
-• This app focuses on LOW temps because they lock in reliably by 6 AM
+• Times shown are in the city's LOCAL timezone
 """
     if is_owner:
         docs += """
