@@ -449,18 +449,20 @@ with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
     col_calc, col_clear = st.columns([3, 1])
     with col_clear:
         if st.button("🗑️ Clear", key="clear_calc"):
-            st.session_state.low_pos = False
+            for key in ["low_pos", "low_bet", "low_thresh", "low_thresh_up", "low_entry", "low_contracts"]:
+                if key in st.session_state:
+                    del st.session_state[key]
             st.rerun()
     
     st.markdown("**LOW Position**")
     low_has_position = st.checkbox("I have a LOW position", key="low_pos")
     if low_has_position:
         low_bet_type = st.selectbox("Bet Type", ["YES ≥ threshold", "YES in range", "NO ≥ threshold", "NO in range"], key="low_bet")
-        low_threshold = st.number_input("Threshold (°F)", value=18, key="low_thresh")
+        low_threshold = st.number_input("Threshold (°F)", value=0, key="low_thresh")
         if low_bet_type in ["YES in range", "NO in range"]:
-            low_threshold_upper = st.number_input("Upper bound (°F)", value=25, key="low_thresh_up")
-        low_entry = st.number_input("Entry Price (¢)", value=24, min_value=1, max_value=99, key="low_entry")
-        low_contracts = st.number_input("Contracts", value=195, min_value=1, key="low_contracts")
+            low_threshold_upper = st.number_input("Upper bound (°F)", value=0, key="low_thresh_up")
+        low_entry = st.number_input("Entry Price (¢)", value=1, min_value=1, max_value=99, key="low_entry")
+        low_contracts = st.number_input("Contracts", value=1, min_value=1, key="low_contracts")
         if obs_low:
             if low_bet_type == "YES ≥ threshold":
                 cushion = obs_low - low_threshold
