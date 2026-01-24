@@ -756,6 +756,11 @@ if live_games:
     
     live_edges.sort(key=lambda x: x['alignment'], reverse=True)
     
+    # Load positions for matching
+    positions_by_game = {}
+    for pos in st.session_state.positions:
+        positions_by_game[pos['game']] = pos
+    
     for item in live_edges:
         g = item['game']
         ml = item['ml']
@@ -763,6 +768,10 @@ if live_games:
         lead = item['lead']
         kalshi_url = build_kalshi_url(g['away'], g['home'])
         kalshi_totals_url = build_kalshi_totals_url(g['away'], g['home'])
+        
+        # Check for user position on this game
+        game_key = f"{g['away']}@{g['home']}"
+        user_pos = positions_by_game.get(game_key)
         
         # Calculate projection with cap
         total = g['home_score'] + g['away_score']
@@ -772,23 +781,40 @@ if live_games:
         conviction_text, conviction_color = get_conviction(mins, lead)
         pace_label = get_pace_label(pace)
         
-        if ml:
-            alignment = ml['alignment']
-            pick = ml['pick']
-            ml_lead = ml['lead']
+        # Build user position status if exists
+        if user_pos and user_pos.get('type') == 'totals' and projected:
+            pos_pick = user_pos.get('pick', '')
+            pos_side = 'YES' if 'YES' in pos_pick.upper() else 'NO'
+            pos_line = float(pos_pick.split()[-1]) if pos_pick else 230.5
+            pos_price = user_pos.get('price', 50)
+            pos_contracts = user_pos.get('contracts', 1)
             
-            if alignment >= 75:
-                border_color = "#00ff00"
-                bg_color = "#0d1f0d"
-            elif alignment >= 60:
-                border_color = "#88cc00"
-                bg_color = "#1a1f0d"
+            if pos_side == 'YES':
+                pos_cushion = projected - pos_line
             else:
-                border_color = "#cccc00"
-                bg_color = "#1f1f0d"
+                pos_cushion = pos_line - projected
             
-            # Build totals display
-            if projected:
+            if pos_cushion >= 20:
+                pos_status = "🟢🟢🟢 LOCKED"
+                pos_color = "#00ff00"
+            elif pos_cushion >= 10:
+                pos_status = "🟢🟢 VERY SAFE"
+                pos_color = "#00ff00"
+            elif pos_cushion >= 5:
+                pos_status = "🟢 SAFE"
+                pos_color = "#88cc00"
+            elif pos_cushion >= 0:
+                pos_status = "🟡 CLOSE"
+                pos_color = "#cccc00"
+            elif pos_cushion >= -5:
+                pos_status = "🟠 RISKY"
+                pos_color = "#ff9900"
+            else:
+                pos_status = "🔴 DANGER"
+                pos_color = "#ff6666"
+            
+            totals_line = f'<span style="color: {pos_color}; font-weight: bold;">MY BET: {pos_side} {pos_line} → {pos_status} (+{pos_cushion:.0f})</span> | <span style="color: #888;">{pos_contracts}x @ {pos_price}¢</span>'
+        elif projected:
                 safe_no, no_cushion, safe_yes, yes_cushion = get_totals_thresholds(projected)
                 # Format cushions with proper signs and labels
                 if no_cushion >= 10:
