@@ -187,12 +187,23 @@ def fetch_games():
                 else:
                     away = {"team": name, "score": score}
             status = event.get("status", {})
+            # Get game start time
+            game_time = event.get("date", "")
+            try:
+                game_dt = datetime.fromisoformat(game_time.replace("Z", "+00:00"))
+                game_dt_eastern = game_dt.astimezone(eastern)
+                time_str = game_dt_eastern.strftime("%I:%M %p")
+            except:
+                time_str = ""
+                game_dt_eastern = None
             games.append({
                 "home": home["team"], "away": away["team"],
                 "home_score": home["score"], "away_score": away["score"],
                 "status": status.get("type", {}).get("name", ""),
                 "period": status.get("period", 0),
-                "clock": status.get("displayClock", "")
+                "clock": status.get("displayClock", ""),
+                "time": time_str,
+                "datetime": game_dt_eastern
             })
         return games
     except:
@@ -548,7 +559,7 @@ def save_positions(positions):
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v2.7 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
+st.caption(f"v2.8 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
 
 st.markdown("""
 <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
@@ -762,7 +773,7 @@ st.markdown("""
 <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #4a9eff; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
 <p style="color: #4a9eff; font-weight: 600; margin: 0 0 6px 0;">📊 ALL SCHEDULED GAMES — FACTOR ALIGNMENT</p>
 <p style="color: #ccc; font-size: 0.85em; margin: 0; line-height: 1.5;">
-We show the edge — <strong>you make the call</strong>. Higher score = more factors favor that side. Sorted by alignment.
+We show the edge — <strong>you make the call</strong>. Higher score = more factors favor that side. Sorted by game time (soonest first).
 </p>
 </div>
 """, unsafe_allow_html=True)
@@ -785,6 +796,8 @@ for g in games:
         result["clock"] = g["clock"]
         result["home_score"] = g["home_score"]
         result["away_score"] = g["away_score"]
+        result["time"] = g.get("time", "")
+        result["datetime"] = g.get("datetime")
         picks.append(result)
     else:
         # No clear edge - still show the game
@@ -801,9 +814,12 @@ for g in games:
             "period": g["period"],
             "clock": g["clock"],
             "home_score": g["home_score"],
-            "away_score": g["away_score"]
+            "away_score": g["away_score"],
+            "time": g.get("time", ""),
+            "datetime": g.get("datetime")
         })
-picks.sort(key=lambda x: (-x["edge_score"], -x["edge_pts"]))
+# Sort by game time (soonest first)
+picks.sort(key=lambda x: x["datetime"] if x["datetime"] else datetime.max.replace(tzinfo=eastern))
 
 if picks:
     for p in picks:
@@ -813,6 +829,7 @@ if picks:
         if p["pick"]:
             # Has clear edge
             reasons_str = " • ".join(p["reasons"])
+            game_time = p.get("time", "")
             
             # Color based on score
             if edge_score >= 75:
@@ -830,6 +847,7 @@ if picks:
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
                     <div>
                         <span style="color: #fff; font-size: 1.1em; font-weight: bold;">{p['away']} @ {p['home']}</span>
+                        <span style="color: #888; margin-left: 12px;">{game_time}</span>
                     </div>
                     <div style="text-align: right;">
                         <span style="background: {border_color}; color: #000; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 1.1em;">{edge_score}/100</span>
@@ -849,11 +867,13 @@ if picks:
             st.link_button(f"🎯 EDGE: {p['pick']} — BUY ON KALSHI", kalshi_url)
         else:
             # No clear edge
+            game_time = p.get("time", "")
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, #1a1a1a 0%, #1a1a1a 100%); border: 1px solid #555; border-radius: 10px; padding: 16px; margin: 10px 0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
                     <div>
                         <span style="color: #fff; font-size: 1.1em; font-weight: bold;">{p['away']} @ {p['home']}</span>
+                        <span style="color: #888; margin-left: 12px;">{game_time}</span>
                     </div>
                     <div style="text-align: right;">
                         <span style="background: #555; color: #aaa; padding: 6px 14px; border-radius: 6px; font-weight: bold;">—/100</span>
@@ -1192,4 +1212,4 @@ elif away_team == home_team and away_team != "Select...":
     st.error("Select two different teams")
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v2.7")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v2.8")
