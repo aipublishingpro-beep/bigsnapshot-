@@ -487,11 +487,11 @@ with st.sidebar:
 | 10 | 🆚 H2H | +0.5 |
 """)
     st.divider()
-    st.caption("v18.6 NBA EDGE")
+    st.caption("v18.7 NBA EDGE")
 
 # TITLE
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v18.6 • {now.strftime('%b %d, %Y %I:%M %p ET')}")
+st.caption(f"v18.7 • {now.strftime('%b %d, %Y %I:%M %p ET')}")
 
 # STATS ROW
 col1, col2, col3, col4 = st.columns(4)
@@ -779,6 +779,7 @@ if st.session_state.positions:
                     label, clr = "⏳ PENDING", "#888"
                     pnl = f"Win: +${potential:.2f}"
             else:
+                # TOTALS - Use pace-based labels
                 threshold = float(str(pos.get('pick', '230.5')).split()[-1]) if pos.get('pick') else 230.5
                 side = 'YES' if 'YES' in str(pos.get('pick', '')).upper() else 'NO'
                 if is_final:
@@ -788,11 +789,15 @@ if st.session_state.positions:
                 elif g['period'] > 0:
                     mins = get_minutes_played(g['period'], g['clock'], g['status_type'])
                     pace_val = g['total'] / mins if mins > 0 else 0
-                    proj = round(pace_val * 48) if mins > 0 else 0
-                    cushion = (proj - threshold) if side == 'YES' else (threshold - proj)
-                    if cushion >= 10: label, clr = "🟢 CRUISING", "#00ff00"
-                    elif cushion >= 0: label, clr = "🟡 CLOSE", "#ffff00"
-                    else: label, clr = "🔴 BEHIND", "#ff0000"
+                    # Pace-based status for totals
+                    if side == 'NO':
+                        if pace_val < 4.5: label, clr = "🟢 VERY SAFE", "#00ff00"
+                        elif pace_val < 4.8: label, clr = "🟡 WARNING", "#ffff00"
+                        else: label, clr = "🔴 DANGER", "#ff0000"
+                    else:  # YES
+                        if pace_val > 5.2: label, clr = "🟢 VERY SAFE", "#00ff00"
+                        elif pace_val > 4.8: label, clr = "🟡 WARNING", "#ffff00"
+                        else: label, clr = "🔴 DANGER", "#ff0000"
                     pnl = f"Win: +${potential:.2f}"
                 else:
                     label, clr = "⏳ PENDING", "#888"
@@ -915,4 +920,4 @@ else:
     st.info("No games today")
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v18.6")
+st.caption("⚠️ Educational only. Not financial advice. v18.7")
