@@ -7,6 +7,7 @@ st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide"
 # GA4 ANALYTICS - SERVER-SIDE MEASUREMENT PROTOCOL
 # ============================================================
 import uuid
+import requests as req_ga
 
 def send_ga4_event(page_title, page_path):
     try:
@@ -25,8 +26,8 @@ def send_ga4_event(page_title, page_path):
                 }
             }]
         }
-        requests.post(url, json=payload, timeout=2)
-    except:
+        req_ga.post(url, json=payload, timeout=2)
+    except Exception as e:
         pass
 
 # Fire pageview
