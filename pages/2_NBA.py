@@ -209,7 +209,7 @@ def fetch_games():
     except:
         return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=120)
 def fetch_injuries():
     injuries = {}
     try:
@@ -344,6 +344,7 @@ def calc_live_ml_alignment(game):
     away = game['away']
     home_score = game['home_score']
     away_score = game['away_score']
+    total = home_score + away_score
     mins = get_minutes_played(game['period'], game['clock'], game['status'])
     
     if mins < 6:
@@ -378,6 +379,15 @@ def calc_live_ml_alignment(game):
         if abs(lead_home) >= 15:
             live_score += 8 if lead_home > 0 else -8
     
+    # Pace adjustment - fast pace = leads less sticky
+    pace = total / mins
+    if pace > 5.0 and abs(lead_home) >= 10:
+        # Fast game, discount the lead slightly
+        live_score += -4 if lead_home > 0 else 4
+    elif pace < 4.2 and abs(lead_home) >= 10:
+        # Slow grind, lead is stickier
+        live_score += 3 if lead_home > 0 else -3
+    
     # Determine pick
     if live_score >= 55:
         pick = home
@@ -399,7 +409,8 @@ def calc_live_ml_alignment(game):
         'home': home,
         'away': away,
         'home_score': home_score,
-        'away_score': away_score
+        'away_score': away_score,
+        'pace': round(pace, 1)
     }
 
 def calc_edge(home, away, injuries, rest):
@@ -559,7 +570,7 @@ def save_positions(positions):
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v2.9 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
+st.caption(f"v3.0 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
 
 st.markdown("""
 <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
@@ -598,11 +609,12 @@ injuries = fetch_injuries()
 rest = fetch_rest_days()
 team_record = fetch_team_record()
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("Today's Games", len(games))
 live_count = len([g for g in games if g['status'] == 'STATUS_IN_PROGRESS'])
 c2.metric("🔴 Live Now", live_count)
 c3.metric("B2B Teams", len(rest.get("b2b", set())))
+c4.metric("Last Update", now.strftime("%I:%M:%S %p"))
 
 st.divider()
 
@@ -1294,4 +1306,4 @@ with st.expander("📖 HOW TO USE THIS APP"):
     ⚠️ Only risk what you can afford to lose  
     """)
 
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v2.9")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v3.0")
