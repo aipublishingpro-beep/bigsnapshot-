@@ -1,4 +1,78 @@
-import streamlit as st
+else:
+            # Too close to call for ML — but still show totals
+            lead = item.get('lead', 0)
+            mins = item.get('mins', 0)
+            
+            # Calculate totals even for close games
+            total = g['home_score'] + g['away_score']
+            pace = total / mins if mins > 0 else 0
+            projected = round(pace * 48) if pace > 0 else 0
+            
+            # Pace label
+            if pace > 5.0:
+                pace_label = "🔥 FAST"
+            elif pace < 4.2:
+                pace_label = "🐢 SLOW"
+            else:
+                pace_label = "⚖️ AVG"
+            
+            # Find safe thresholds (2 levels away)
+            no_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected), len(THRESHOLDS)-1)
+            safe_no_idx = min(no_idx + 1, len(THRESHOLDS) - 1)
+            safe_no = THRESHOLDS[safe_no_idx]
+            no_cushion = safe_no - projected
+            
+            yes_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected), 0)
+            safe_yes_idx = max(yes_idx - 1, 0)
+            safe_yes = THRESHOLDS[safe_yes_idx]
+            yes_cushion = projected - safe_yes
+            
+            # Totals indicator colors
+            no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
+            yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
+            
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #1a1a1a 0%, #1a1a1a 100%); border: 1px solid #555; border-radius: 10px; padding: 16px; margin: 10px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <span style="color: #fff; font-size: 1.1em; font-weight: bold;">{g['away']} @ {g['home']}</span>
+                        <span style="color: #888; margin-left: 12px;">Q{g['period']} {g['clock']}</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="color: #fff; font-size: 1.2em; font-weight: bold;">{g['away_score']} - {g['home_score']}</span>
+                    </div>
+                </div>
+                <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <span style="color: #888;">ML Edge:</span>
+                        <span style="color: #888; margin-left: 8px;">{'TOO EARLY' if mins < 6 else 'TOO CLOSE'}</span>
+                        <span style="color: #666; margin-left: 8px;">({lead:+d})</span>
+                        <span style="color: #666; margin-left: 8px;">{pace_label if mins >= 6 else ''}</span>
+                    </div>
+                    <div>
+                        <span style="background: #555; color: #aaa; padding: 6px 14px; border-radius: 6px; font-weight: bold;">—/100</span>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
+                    <span style="color: #888;">Proj: {projected}</span>
+                    <span style="color: #888; margin-left: 15px;">|</span>
+                    <span style="color: {no_color}; margin-left: 15px;">NO {safe_no} (+{no_cushion})</span>
+                    <span style="color: #888; margin-left: 15px;">|</span>
+                    <span style="color: {yes_color}; margin-left: 15px;">YES {safe_yes} (+{yes_cushion})</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.link_button(f"👀 VIEW ML", kalshi_url)
+            with col2:
+                kalshi_totals_url = build_kalshi_totals_url(g['away'], g['home'])
+                st.link_button(f"⬇️ NO {safe_no}", kalshi_totals_url)
+            with col3:
+                st.link_button(f"⬆️ YES {safe_yes}", kalshi_totals_url)
+        
+        st.markdown("")import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
@@ -570,7 +644,7 @@ def save_positions(positions):
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v3.0 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
+st.caption(f"v3.1 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
 
 st.markdown("""
 <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
@@ -690,6 +764,32 @@ if live_games:
             pick = ml['pick']
             lead = ml['lead']
             mins = ml['mins']
+            pace = ml.get('pace', 0)
+            
+            # Pace label
+            if pace > 5.0:
+                pace_label = "🔥 FAST"
+            elif pace < 4.2:
+                pace_label = "🐢 SLOW"
+            else:
+                pace_label = "⚖️ AVG"
+            
+            # Calculate projected total and thresholds
+            total = g['home_score'] + g['away_score']
+            projected = round(pace * 48) if pace > 0 else 0
+            
+            # Find safe thresholds (2 levels away)
+            # UNDER (NO): 2 levels above projected
+            no_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected), len(THRESHOLDS)-1)
+            safe_no_idx = min(no_idx + 1, len(THRESHOLDS) - 1)
+            safe_no = THRESHOLDS[safe_no_idx]
+            no_cushion = safe_no - projected
+            
+            # OVER (YES): 2 levels below projected
+            yes_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected), 0)
+            safe_yes_idx = max(yes_idx - 1, 0)
+            safe_yes = THRESHOLDS[safe_yes_idx]
+            yes_cushion = projected - safe_yes
             
             # Color based on alignment
             if alignment >= 75:
@@ -701,6 +801,10 @@ if live_games:
             else:
                 border_color = "#cccc00"
                 bg_color = "#1f1f0d"
+            
+            # Totals indicator colors
+            no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
+            yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
             
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, #1a1a1a 0%, {bg_color} 100%); border: 2px solid {border_color}; border-radius: 10px; padding: 16px; margin: 10px 0;">
@@ -718,14 +822,30 @@ if live_games:
                         <span style="color: #aaa;">Edge:</span>
                         <span style="color: {border_color}; font-size: 1.3em; font-weight: bold; margin-left: 8px;">{pick}</span>
                         <span style="color: #888; margin-left: 8px;">({lead:+d} lead)</span>
+                        <span style="color: #666; margin-left: 8px;">{pace_label}</span>
                     </div>
                     <div>
                         <span style="background: {border_color}; color: #000; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 1.1em;">{alignment}/100</span>
                     </div>
                 </div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
+                    <span style="color: #888;">Proj: {projected}</span>
+                    <span style="color: #888; margin-left: 15px;">|</span>
+                    <span style="color: {no_color}; margin-left: 15px;">NO {safe_no} (+{no_cushion})</span>
+                    <span style="color: #888; margin-left: 15px;">|</span>
+                    <span style="color: {yes_color}; margin-left: 15px;">YES {safe_yes} (+{yes_cushion})</span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
-            st.link_button(f"🎯 EDGE: {pick} — BUY ON KALSHI", kalshi_url)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.link_button(f"🎯 {pick} ML", kalshi_url)
+            with col2:
+                kalshi_totals_url = build_kalshi_totals_url(g['away'], g['home'])
+                st.link_button(f"⬇️ NO {safe_no}", kalshi_totals_url)
+            with col3:
+                st.link_button(f"⬆️ YES {safe_yes}", kalshi_totals_url)
         else:
             # Too close to call
             lead = item.get('lead', 0)
@@ -1306,4 +1426,4 @@ with st.expander("📖 HOW TO USE THIS APP"):
     ⚠️ Only risk what you can afford to lose  
     """)
 
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v3.0")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v3.1")
