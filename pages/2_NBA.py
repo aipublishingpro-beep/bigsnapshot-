@@ -2,6 +2,9 @@ import streamlit as st
 
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
 
+# ============================================================
+# GA4 ANALYTICS - SERVER SIDE
+# ============================================================
 import uuid
 import requests as req_ga
 
@@ -14,9 +17,11 @@ def send_ga4_event(page_title, page_path):
 
 send_ga4_event("NBA Edge Finder", "/NBA")
 
+# ============================================================
+# COOKIE AUTH CHECK
+# ============================================================
 import extra_streamlit_components as stx
 
-# Cookie-based persistent auth (survives refresh/redeploy)
 cookie_manager = stx.CookieManager()
 
 if "authenticated" not in st.session_state:
@@ -117,7 +122,6 @@ KALSHI_CODES = {
 
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5, 250.5, 255.5]
 
-# H2H History - Teams that historically dominate others
 H2H_EDGES = {
     ("Boston", "Philadelphia"): "Boston",
     ("Boston", "New York"): "Boston",
@@ -134,7 +138,6 @@ H2H_EDGES = {
     ("Memphis", "New Orleans"): "Memphis",
 }
 
-# Team locations for travel fatigue (timezone/region)
 TEAM_LOCATIONS = {
     "Boston": "ET", "Brooklyn": "ET", "New York": "ET", "Philadelphia": "ET", "Toronto": "ET",
     "Atlanta": "ET", "Charlotte": "ET", "Miami": "ET", "Orlando": "ET", "Washington": "ET",
@@ -145,7 +148,6 @@ TEAM_LOCATIONS = {
 }
 
 def is_cross_country(team1, team2):
-    """Check if travel between two teams is cross-country (ET<->PT)"""
     loc1 = TEAM_LOCATIONS.get(team1, "")
     loc2 = TEAM_LOCATIONS.get(team2, "")
     if (loc1 == "ET" and loc2 == "PT") or (loc1 == "PT" and loc2 == "ET"):
@@ -153,7 +155,6 @@ def is_cross_country(team1, team2):
     return False
 
 def get_h2h_edge(home, away):
-    """Check if there's a historical H2H edge"""
     key1 = (home, away)
     key2 = (away, home)
     if key1 in H2H_EDGES:
@@ -316,7 +317,6 @@ def calc_edge(home, away, injuries, rest):
     home_out = injuries.get(home, [])
     away_out = injuries.get(away, [])
     
-    # Star injuries (+3 to +5)
     for star, (team, tier) in STARS.items():
         if team == home and any(star.lower() in p.lower() for p in home_out):
             pts = 5 if tier == 3 else 3
@@ -327,7 +327,6 @@ def calc_edge(home, away, injuries, rest):
             home_pts += pts
             home_reasons.append(f"{star.split()[-1]} OUT")
     
-    # Rest advantage (+4) and rested bonus (+2)
     h_b2b = home in rest.get("b2b", set())
     a_b2b = away in rest.get("b2b", set())
     h_rested = home in rest.get("rested", set())
@@ -345,7 +344,6 @@ def calc_edge(home, away, injuries, rest):
         away_pts += 2
         away_reasons.append("Rested")
     
-    # Travel fatigue (+2) - Cross-country + B2B = death
     if a_b2b and is_cross_country(away, home):
         home_pts += 2
         home_reasons.append("Travel fatigue")
@@ -353,7 +351,6 @@ def calc_edge(home, away, injuries, rest):
         away_pts += 2
         away_reasons.append("Travel fatigue")
     
-    # H2H history (+1.5)
     h2h_winner = get_h2h_edge(home, away)
     if h2h_winner == home:
         home_pts += 1.5
@@ -362,7 +359,6 @@ def calc_edge(home, away, injuries, rest):
         away_pts += 1.5
         away_reasons.append("H2H edge")
     
-    # Net rating gap (+1 to +3)
     net_gap = h_net - a_net
     if net_gap >= 15:
         home_pts += 3
@@ -383,12 +379,10 @@ def calc_edge(home, away, injuries, rest):
         away_pts += 1
         away_reasons.append(f"Net +{-net_gap:.0f}")
     
-    # Denver altitude (+1.5)
     if home == "Denver":
         home_pts += 1.5
         home_reasons.append("Altitude")
     
-    # Pace mismatch (+1.5)
     h_pace = h_stats.get("pace", 99)
     a_pace = a_stats.get("pace", 99)
     if h_pace >= 101 and a_pace <= 98:
@@ -398,47 +392,43 @@ def calc_edge(home, away, injuries, rest):
         away_pts += 1.5
         away_reasons.append("Pace edge")
     
-    # Fade weak home (+1.5)
     h_tier = h_stats.get("tier", "mid")
     a_tier = a_stats.get("tier", "mid")
     if h_tier == "weak" and a_tier in ["elite", "good"]:
         away_pts += 1.5
         away_reasons.append("Fade weak home")
     
-    # Road value for elite teams (+1)
     if a_tier == "elite" and h_tier != "elite":
         away_pts += 1
         away_reasons.append("Road value")
     
-    # Calculate probability
-    base_prob = 50 + (net_gap * 1.5)
-    base_prob = max(25, min(85, base_prob))
+    # Calculate edge score (NOT probability)
+    base_score = 50 + (net_gap * 1.5)
+    base_score = max(25, min(85, base_score))
     total_pts = home_pts + away_pts
     if total_pts > 0:
         if home_pts > away_pts:
             edge_boost = (home_pts / total_pts) * 15
-            home_prob = min(90, base_prob + edge_boost)
+            edge_score = min(90, base_score + edge_boost)
             pick = home
-            prob = home_prob
             reasons = home_reasons
             edge = home_pts - away_pts
         else:
             edge_boost = (away_pts / total_pts) * 15
-            away_prob = min(90, (100 - base_prob) + edge_boost)
+            edge_score = min(90, (100 - base_score) + edge_boost)
             pick = away
-            prob = away_prob
             reasons = away_reasons
             edge = away_pts - home_pts
     else:
-        if base_prob >= 55:
-            pick, prob, reasons, edge = home, base_prob, ["Better team"], 0
-        elif base_prob <= 45:
-            pick, prob, reasons, edge = away, 100 - base_prob, ["Better team"], 0
+        if base_score >= 55:
+            pick, edge_score, reasons, edge = home, base_score, ["Better team"], 0
+        elif base_score <= 45:
+            pick, edge_score, reasons, edge = away, 100 - base_score, ["Better team"], 0
         else:
             return None
     return {
         "pick": pick, "opponent": away if pick == home else home,
-        "prob": round(prob), "edge_pts": round(edge, 1),
+        "edge_score": round(edge_score), "edge_pts": round(edge, 1),
         "reasons": reasons[:4], "home": home, "away": away,
         "is_home": pick == home
     }
@@ -488,18 +478,30 @@ def save_positions(positions):
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v2.3 | {now.strftime('%b %d, %Y %I:%M %p ET')} | 12-Factor Model")
+st.caption(f"v2.4 | {now.strftime('%b %d, %Y %I:%M %p ET')} | 12-Factor Analysis")
+
+# ============================================================
+# DISCLAIMER
+# ============================================================
+st.markdown("""
+<div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
+<p style="color: #e94560; font-weight: 600; margin: 0 0 6px 0;">⚠️ IMPORTANT DISCLAIMER</p>
+<p style="color: #ccc; font-size: 0.85em; margin: 0; line-height: 1.5;">
+This is <strong>not</strong> a predictive model with verified win rates. The Edge Score reflects how many positive factors are currently aligned — it is <strong>not</strong> a calibrated win probability. Use for idea generation and situational awareness only. No guarantee of profitability.
+</p>
+</div>
+""", unsafe_allow_html=True)
 
 with st.sidebar:
-    st.header("📊 PICK LEGEND")
-    st.success("🔒 **STRONG** — 75%+ probability")
-    st.info("🔵 **BUY** — 68-74% probability")
-    st.warning("🟡 **LEAN** — 60-67% probability")
+    st.header("📊 ALIGNMENT LEGEND")
+    st.success("🔥 **STRONG** — 75+ (multiple factors)")
+    st.info("✅ **GOOD** — 68-74 (several factors)")
+    st.warning("⚡ **MODERATE** — 60-67 (some factors)")
     st.markdown("---")
-    st.markdown("**How to use:**")
-    st.markdown("1. Check Model % vs Kalshi price")
-    st.markdown("2. Only buy if Kalshi < 'Buy under'")
-    st.markdown("3. That gap = your edge")
+    st.markdown("**What the Edge Score means:**")
+    st.markdown("• Higher = more factors align")
+    st.markdown("• NOT a win probability")
+    st.markdown("• Compare to Kalshi price yourself")
     st.markdown("---")
     st.header("📈 POSITION STATUS")
     st.markdown("**ML Bets:**")
@@ -568,8 +570,8 @@ else:
 st.divider()
 
 # ML PICKS
-st.subheader("🎯 ML PICKS")
-st.caption("Only showing picks with 60%+ probability")
+st.subheader("🎯 FACTOR ALIGNMENT")
+st.caption("Showing picks with Edge Score 60+ (multiple factors aligned)")
 
 if "positions" not in st.session_state:
     st.session_state.positions = load_positions()
@@ -583,27 +585,26 @@ for g in games:
     if g["status"] == "STATUS_FINAL":
         continue
     result = calc_edge(g["home"], g["away"], injuries, rest)
-    if result and result["prob"] >= 60:
+    if result and result["edge_score"] >= 60:
         result["status"] = g["status"]
         result["period"] = g["period"]
         result["clock"] = g["clock"]
         result["home_score"] = g["home_score"]
         result["away_score"] = g["away_score"]
         picks.append(result)
-picks.sort(key=lambda x: (-x["prob"], -x["edge_pts"]))
+picks.sort(key=lambda x: (-x["edge_score"], -x["edge_pts"]))
 
 if picks:
     for p in picks:
-        prob = p["prob"]
-        buy_under = prob - 8
+        edge_score = p["edge_score"]
         reasons_str = " • ".join(p["reasons"])
         kalshi_url = build_kalshi_url(p["away"], p["home"])
-        if prob >= 75:
-            tier = "🔒 STRONG"
-        elif prob >= 68:
-            tier = "🔵 BUY"
+        if edge_score >= 75:
+            tier = "🔥 STRONG ALIGNMENT"
+        elif edge_score >= 68:
+            tier = "✅ GOOD ALIGNMENT"
         else:
-            tier = "🟡 LEAN"
+            tier = "⚡ MODERATE ALIGNMENT"
         live_status = ""
         if p["status"] == "STATUS_IN_PROGRESS":
             pick_score = p["home_score"] if p["is_home"] else p["away_score"]
@@ -611,28 +612,27 @@ if picks:
             lead = pick_score - opp_score
             live_status = f" | 🔴 Q{p['period']} {p['clock']} ({lead:+d})"
         st.success(f"**{tier}** — **{p['pick']}** vs {p['opponent']}{live_status}")
-        col1, col2, col3 = st.columns([1, 1, 2])
-        col1.metric("Model", f"{prob}%")
-        col2.metric("Buy under", f"{buy_under}¢")
-        col3.markdown(f"**Why:** {reasons_str}")
-        st.link_button(f"BUY {p['pick']} on Kalshi", kalshi_url, type="primary")
+        col1, col2 = st.columns([1, 3])
+        col1.metric("Edge Score", f"{edge_score}/100")
+        col2.markdown(f"**Factors:** {reasons_str}")
+        st.link_button(f"VIEW {p['pick']} ON KALSHI", kalshi_url, type="primary")
         st.markdown("---")
-    st.info("💡 **TIP:** Only buy if Kalshi price is BELOW the 'Buy under' price.")
+    st.info("💡 **TIP:** Compare the Edge Score to Kalshi's current price. Higher score = more factors favor this pick, but it's NOT a win probability.")
     
     st.markdown("---")
-    if st.button("➕ ADD ALL ML PICKS TO TRACKER", type="secondary", use_container_width=True):
+    if st.button("➕ ADD ALL PICKS TO TRACKER", type="secondary", use_container_width=True):
         st.session_state.show_bulk_add = True
     
     if st.session_state.get("show_bulk_add", False):
         st.markdown("**Configure picks before adding:**")
         bulk_picks = []
         for i, p in enumerate(picks):
-            with st.expander(f"🎯 {p['pick']} vs {p['opponent']} ({p['prob']}%)", expanded=True):
+            with st.expander(f"🎯 {p['pick']} vs {p['opponent']} (Score: {p['edge_score']})", expanded=True):
                 bc1, bc2, bc3 = st.columns(3)
                 with bc1:
                     b_type = st.radio("Type", ["ML", "Totals"], key=f"bulk_type_{i}", horizontal=True)
                 with bc2:
-                    b_price = st.number_input("Price ¢", 1, 99, max(1, p['prob'] - 8), key=f"bulk_price_{i}")
+                    b_price = st.number_input("Price ¢", 1, 99, 50, key=f"bulk_price_{i}")
                 with bc3:
                     b_contracts = st.number_input("Contracts", 1, 100, 1, key=f"bulk_qty_{i}")
                 if b_type == "Totals":
@@ -666,7 +666,7 @@ if picks:
                 st.session_state.show_bulk_add = False
                 st.rerun()
 else:
-    st.info("No high-confidence picks right now.")
+    st.info("No high-alignment picks right now.")
 
 st.divider()
 
@@ -736,7 +736,7 @@ if cush_results:
     for r in cush_results:
         kalshi_url = build_kalshi_totals_url(r['away'], r['home'])
         st.markdown(f"**{r['away']} @ {r['home']}** | Q{r['period']} {r['clock']} | {r['total']}pts/{r['mins']:.0f}min | Proj: **{r['projected']}** | Target: **{r['safe_line']}** | Cushion: **+{r['cushion']:.0f}** | {r['pace_status']}")
-        st.link_button(f"BUY {cush_side} {r['safe_line']}", kalshi_url)
+        st.link_button(f"VIEW {cush_side} {r['safe_line']} ON KALSHI", kalshi_url)
         st.markdown("---")
 else:
     st.info(f"No {cush_side} opportunities with 6+ cushion yet")
@@ -978,19 +978,19 @@ if away_team != "Select..." and home_team != "Select..." and away_team != home_t
         result = calc_edge(home_team, away_team, injuries, rest)
         if result:
             st.markdown("---")
-            st.markdown("**🏆 VERDICT**")
-            prob = result["prob"]
-            buy_under = prob - 8
-            if prob >= 75:
-                st.success(f"🔒 **STRONG: {result['pick']}** — Model: {prob}% — Buy under {buy_under}¢")
-            elif prob >= 68:
-                st.info(f"🔵 **BUY: {result['pick']}** — Model: {prob}% — Buy under {buy_under}¢")
-            elif prob >= 60:
-                st.warning(f"🟡 **LEAN: {result['pick']}** — Model: {prob}% — Buy under {buy_under}¢")
+            st.markdown("**🏆 FACTOR ANALYSIS**")
+            edge_score = result["edge_score"]
+            if edge_score >= 75:
+                st.success(f"🔥 **STRONG ALIGNMENT: {result['pick']}** — Edge Score: {edge_score}/100")
+            elif edge_score >= 68:
+                st.info(f"✅ **GOOD ALIGNMENT: {result['pick']}** — Edge Score: {edge_score}/100")
+            elif edge_score >= 60:
+                st.warning(f"⚡ **MODERATE ALIGNMENT: {result['pick']}** — Edge Score: {edge_score}/100")
             else:
-                st.info(f"⚪ **NO EDGE** — Too close to call")
+                st.info(f"⚪ **LOW ALIGNMENT** — Not enough factors align clearly")
+            st.caption("Remember: Edge Score shows factor alignment, NOT win probability. Compare to Kalshi price yourself.")
 elif away_team == home_team and away_team != "Select...":
     st.error("Select two different teams")
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. v2.3")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v2.4")
