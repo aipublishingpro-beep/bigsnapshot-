@@ -2,34 +2,38 @@ import streamlit as st
 
 st.set_page_config(page_title="BigSnapshot", page_icon="🎯", layout="wide")
 
-import streamlit.components.v1 as components
-components.html("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-1T35YHHYBC', { send_page_view: true });
-</script>
-""", height=0)
+# ============================================================
+# GA4 ANALYTICS - SERVER SIDE
+# ============================================================
+import uuid
+import requests as req_ga
 
-from streamlit_js_eval import streamlit_js_eval
+def send_ga4_event(page_title, page_path):
+    try:
+        url = f"https://www.google-analytics.com/mp/collect?measurement_id=G-NQKY5VQ376&api_secret=n4oBJjH7RXi3dA7aQo2CZA"
+        payload = {"client_id": str(uuid.uuid4()), "events": [{"name": "page_view", "params": {"page_title": page_title, "page_location": f"https://bigsnapshot.streamlit.app{page_path}"}}]}
+        req_ga.post(url, json=payload, timeout=2)
+    except: pass
+
+send_ga4_event("BigSnapshot Home", "/")
 
 # ============================================================
-# 🔐 AUTH BOOTSTRAP — READ FROM LOCALSTORAGE ON EVERY LOAD
+# COOKIE AUTH - SET ON LOGIN
 # ============================================================
+import extra_streamlit_components as stx
+from datetime import datetime, timedelta
+
+cookie_manager = stx.CookieManager()
+
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.user_type = None
 
-stored_auth = streamlit_js_eval(
-    js_expressions="localStorage.getItem('bigsnapshot_auth')",
-    key="auth_bootstrap_home"
-)
-
-if stored_auth and stored_auth not in ["", "null", None]:
+# Check for existing cookie
+saved_auth = cookie_manager.get("authenticated")
+if saved_auth == "true":
     st.session_state.authenticated = True
-    st.session_state.user_type = stored_auth
+    st.session_state.user_type = "Paid Subscriber"
 
 # ============================================================
 # 🔐 PASSWORD & STRIPE CONFIG
@@ -98,6 +102,10 @@ if not st.session_state.authenticated:
         </div>
         """, unsafe_allow_html=True)
         if st.button("🌡️ TRY TEMP EDGE FINDER FREE", use_container_width=True, type="secondary", key="free_temp"):
+            # Set cookie for free access
+            cookie_manager.set("authenticated", "true", expires_at=datetime.now() + timedelta(days=7))
+            st.session_state.authenticated = True
+            st.session_state.user_type = "Free Trial"
             st.switch_page("pages/5_Temp.py")
     
     # ============ STRIPE PAYMENT SECTION ============
@@ -226,10 +234,8 @@ if not st.session_state.authenticated:
         
         if st.button("🔓 LOGIN", use_container_width=True, type="primary"):
             if password.lower() == VALID_PASSWORD.lower():
-                streamlit_js_eval(
-                    js_expressions="localStorage.setItem('bigsnapshot_auth', 'Paid Subscriber')",
-                    key="set_auth"
-                )
+                # SET THE COOKIE - This is what other pages check for
+                cookie_manager.set("authenticated", "true", expires_at=datetime.now() + timedelta(days=7))
                 st.session_state.authenticated = True
                 st.session_state.user_type = "Paid Subscriber"
                 st.rerun()
@@ -315,10 +321,7 @@ st.markdown("---")
 col1, col2, col3 = st.columns([1, 1, 1])
 with col2:
     if st.button("🚪 Logout", use_container_width=True):
-        streamlit_js_eval(
-            js_expressions="localStorage.removeItem('bigsnapshot_auth')",
-            key="clear_auth"
-        )
+        cookie_manager.delete("authenticated")
         st.session_state.authenticated = False
         st.session_state.user_type = None
         st.rerun()
