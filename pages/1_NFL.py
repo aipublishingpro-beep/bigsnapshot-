@@ -14,7 +14,9 @@ GA_TRACKING_CODE = """
   gtag('js', new Date());
   gtag('config', 'G-NQKY5VQ376', {
     page_title: 'NFL Edge Finder',
-    page_location: window.parent.location.href
+    page_location: 'https://bigsnapshot.streamlit.app/NFL',
+    cookie_flags: 'SameSite=None;Secure',
+    send_page_view: true
   });
 </script>
 """
