@@ -792,9 +792,26 @@ if live_games:
             # Build totals display
             if projected:
                 safe_no, no_cushion, safe_yes, yes_cushion = get_totals_thresholds(projected)
-                no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
-                yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
-                totals_text = f"Proj: {projected} | NO {safe_no} (+{no_cushion}) | YES {safe_yes} (+{yes_cushion})"
+                # Format cushions with proper signs and labels
+                if no_cushion >= 10:
+                    no_label = f"🟢 NO {safe_no} (+{no_cushion}) SAFE"
+                elif no_cushion >= 5:
+                    no_label = f"🟡 NO {safe_no} (+{no_cushion})"
+                elif no_cushion >= 0:
+                    no_label = f"⚪ NO {safe_no} (+{no_cushion})"
+                else:
+                    no_label = f"🔴 NO {safe_no} ({no_cushion}) AVOID"
+                
+                if yes_cushion >= 10:
+                    yes_label = f"🟢 YES {safe_yes} (+{yes_cushion}) SAFE"
+                elif yes_cushion >= 5:
+                    yes_label = f"🟡 YES {safe_yes} (+{yes_cushion})"
+                elif yes_cushion >= 0:
+                    yes_label = f"⚪ YES {safe_yes} (+{yes_cushion})"
+                else:
+                    yes_label = f"🔴 YES {safe_yes} ({yes_cushion}) AVOID"
+                
+                totals_text = f"Proj: {projected} | {no_label} | {yes_label}"
             else:
                 totals_text = f"⏳ Totals after {MIN_MINUTES_FOR_PROJECTION} min"
             
@@ -828,7 +845,26 @@ if live_games:
             # Build totals display
             if projected:
                 safe_no, no_cushion, safe_yes, yes_cushion = get_totals_thresholds(projected)
-                totals_text = f"Proj: {projected} | NO {safe_no} (+{no_cushion}) | YES {safe_yes} (+{yes_cushion})"
+                # Format cushions with proper signs and labels
+                if no_cushion >= 10:
+                    no_label = f"🟢 NO {safe_no} (+{no_cushion}) SAFE"
+                elif no_cushion >= 5:
+                    no_label = f"🟡 NO {safe_no} (+{no_cushion})"
+                elif no_cushion >= 0:
+                    no_label = f"⚪ NO {safe_no} (+{no_cushion})"
+                else:
+                    no_label = f"🔴 NO {safe_no} ({no_cushion}) AVOID"
+                
+                if yes_cushion >= 10:
+                    yes_label = f"🟢 YES {safe_yes} (+{yes_cushion}) SAFE"
+                elif yes_cushion >= 5:
+                    yes_label = f"🟡 YES {safe_yes} (+{yes_cushion})"
+                elif yes_cushion >= 0:
+                    yes_label = f"⚪ YES {safe_yes} (+{yes_cushion})"
+                else:
+                    yes_label = f"🔴 YES {safe_yes} ({yes_cushion}) AVOID"
+                
+                totals_text = f"Proj: {projected} | {no_label} | {yes_label}"
             else:
                 totals_text = f"⏳ Totals after {MIN_MINUTES_FOR_PROJECTION} min"
             
