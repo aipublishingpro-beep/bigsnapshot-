@@ -652,7 +652,7 @@ def save_positions(positions):
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v3.3 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
+st.caption(f"v3.6 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
 
 st.markdown("""
 <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
@@ -794,50 +794,20 @@ if live_games:
                 safe_no, no_cushion, safe_yes, yes_cushion = get_totals_thresholds(projected)
                 no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
                 yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
-                totals_html = f"""
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
-                    <span style="color: #888;">Proj: {projected}</span>
-                    <span style="color: #888; margin-left: 15px;">|</span>
-                    <span style="color: {no_color}; margin-left: 15px;">NO {safe_no} (+{no_cushion})</span>
-                    <span style="color: #888; margin-left: 15px;">|</span>
-                    <span style="color: {yes_color}; margin-left: 15px;">YES {safe_yes} (+{yes_cushion})</span>
-                </div>
-                """
+                totals_text = f"Proj: {projected} | NO {safe_no} (+{no_cushion}) | YES {safe_yes} (+{yes_cushion})"
             else:
-                totals_html = f"""
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
-                    <span style="color: #666;">⏳ Totals projection available after {MIN_MINUTES_FOR_PROJECTION} min</span>
-                </div>
-                """
+                totals_text = f"⏳ Totals after {MIN_MINUTES_FOR_PROJECTION} min"
             
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #1a1a1a 0%, {bg_color} 100%); border: 2px solid {border_color}; border-radius: 10px; padding: 16px; margin: 10px 0;">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                    <div>
-                        <span style="color: #fff; font-size: 1.1em; font-weight: bold;">{g['away']} @ {g['home']}</span>
-                        <span style="color: #888; margin-left: 12px;">Q{g['period']} {g['clock']}</span>
-                    </div>
-                    <div style="text-align: right;">
-                        <span style="color: #fff; font-size: 1.2em; font-weight: bold;">{g['away_score']} - {g['home_score']}</span>
-                    </div>
-                </div>
-                <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                    <div>
-                        <span style="color: #aaa;">Edge:</span>
-                        <span style="color: {border_color}; font-size: 1.3em; font-weight: bold; margin-left: 8px;">{pick}</span>
-                        <span style="color: #888; margin-left: 8px;">({ml_lead:+d} lead)</span>
-                        <span style="color: #666; margin-left: 8px;">{pace_label}</span>
-                    </div>
-                    <div>
-                        <span style="background: {border_color}; color: #000; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 1.1em;">{alignment}/100</span>
-                    </div>
-                </div>
-                <div style="margin-top: 8px;">
-                    <span style="color: {conviction_color}; font-weight: bold;">{conviction_text}</span>
-                </div>
-                {totals_html}
-            </div>
-            """, unsafe_allow_html=True)
+            card_html = f'<div style="background: linear-gradient(135deg, #1a1a1a 0%, {bg_color} 100%); border: 2px solid {border_color}; border-radius: 10px; padding: 16px; margin: 10px 0;">'
+            card_html += f'<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">'
+            card_html += f'<div><span style="color: #fff; font-size: 1.1em; font-weight: bold;">{g["away"]} @ {g["home"]}</span><span style="color: #888; margin-left: 12px;">Q{g["period"]} {g["clock"]}</span></div>'
+            card_html += f'<div><span style="color: #fff; font-size: 1.2em; font-weight: bold;">{g["away_score"]} - {g["home_score"]}</span></div></div>'
+            card_html += f'<div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">'
+            card_html += f'<div><span style="color: #aaa;">Edge:</span><span style="color: {border_color}; font-size: 1.3em; font-weight: bold; margin-left: 8px;">{pick}</span><span style="color: #888; margin-left: 8px;">({ml_lead:+d} lead)</span><span style="color: #666; margin-left: 8px;">{pace_label}</span></div>'
+            card_html += f'<div><span style="background: {border_color}; color: #000; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 1.1em;">{alignment}/100</span></div></div>'
+            card_html += f'<div style="margin-top: 8px;"><span style="color: {conviction_color}; font-weight: bold;">{conviction_text}</span></div>'
+            card_html += f'<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333; color: #888;">{totals_text}</div></div>'
+            st.markdown(card_html, unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -858,52 +828,21 @@ if live_games:
             # Build totals display
             if projected:
                 safe_no, no_cushion, safe_yes, yes_cushion = get_totals_thresholds(projected)
-                no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
-                yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
-                totals_html = f"""
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
-                    <span style="color: #888;">Proj: {projected}</span>
-                    <span style="color: #888; margin-left: 15px;">|</span>
-                    <span style="color: {no_color}; margin-left: 15px;">NO {safe_no} (+{no_cushion})</span>
-                    <span style="color: #888; margin-left: 15px;">|</span>
-                    <span style="color: {yes_color}; margin-left: 15px;">YES {safe_yes} (+{yes_cushion})</span>
-                </div>
-                """
+                totals_text = f"Proj: {projected} | NO {safe_no} (+{no_cushion}) | YES {safe_yes} (+{yes_cushion})"
             else:
-                totals_html = f"""
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
-                    <span style="color: #666;">⏳ Totals projection available after {MIN_MINUTES_FOR_PROJECTION} min</span>
-                </div>
-                """
+                totals_text = f"⏳ Totals after {MIN_MINUTES_FOR_PROJECTION} min"
             
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #1a1a1a 0%, #1a1a1a 100%); border: 1px solid #555; border-radius: 10px; padding: 16px; margin: 10px 0;">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                    <div>
-                        <span style="color: #fff; font-size: 1.1em; font-weight: bold;">{g['away']} @ {g['home']}</span>
-                        <span style="color: #888; margin-left: 12px;">Q{g['period']} {g['clock']}</span>
-                    </div>
-                    <div style="text-align: right;">
-                        <span style="color: #fff; font-size: 1.2em; font-weight: bold;">{g['away_score']} - {g['home_score']}</span>
-                    </div>
-                </div>
-                <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                    <div>
-                        <span style="color: #888;">ML Edge:</span>
-                        <span style="color: #888; margin-left: 8px;">{'TOO EARLY' if mins < 6 else 'TOO CLOSE'}</span>
-                        <span style="color: #666; margin-left: 8px;">({lead:+d})</span>
-                        <span style="color: #666; margin-left: 8px;">{pace_label}</span>
-                    </div>
-                    <div>
-                        <span style="background: #555; color: #aaa; padding: 6px 14px; border-radius: 6px; font-weight: bold;">—/100</span>
-                    </div>
-                </div>
-                <div style="margin-top: 8px;">
-                    <span style="color: {conviction_color}; font-weight: bold;">{conviction_text}</span>
-                </div>
-                {totals_html}
-            </div>
-            """, unsafe_allow_html=True)
+            edge_status = "TOO EARLY" if mins < 6 else "TOO CLOSE"
+            card_html = '<div style="background: linear-gradient(135deg, #1a1a1a 0%, #1a1a1a 100%); border: 1px solid #555; border-radius: 10px; padding: 16px; margin: 10px 0;">'
+            card_html += f'<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">'
+            card_html += f'<div><span style="color: #fff; font-size: 1.1em; font-weight: bold;">{g["away"]} @ {g["home"]}</span><span style="color: #888; margin-left: 12px;">Q{g["period"]} {g["clock"]}</span></div>'
+            card_html += f'<div><span style="color: #fff; font-size: 1.2em; font-weight: bold;">{g["away_score"]} - {g["home_score"]}</span></div></div>'
+            card_html += f'<div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">'
+            card_html += f'<div><span style="color: #888;">ML Edge:</span><span style="color: #888; margin-left: 8px;">{edge_status}</span><span style="color: #666; margin-left: 8px;">({lead:+d})</span><span style="color: #666; margin-left: 8px;">{pace_label}</span></div>'
+            card_html += '<div><span style="background: #555; color: #aaa; padding: 6px 14px; border-radius: 6px; font-weight: bold;">—/100</span></div></div>'
+            card_html += f'<div style="margin-top: 8px;"><span style="color: {conviction_color}; font-weight: bold;">{conviction_text}</span></div>'
+            card_html += f'<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333; color: #888;">{totals_text}</div></div>'
+            st.markdown(card_html, unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -1387,4 +1326,4 @@ with st.expander("📖 HOW TO USE THIS APP"):
     ⚠️ Only risk what you can afford to lose  
     """)
 
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v3.3")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v3.6")
