@@ -6,10 +6,8 @@ import pytz
 import re
 from bs4 import BeautifulSoup
 
-# ========== PAGE CONFIG MUST BE FIRST ==========
 st.set_page_config(page_title="LOW Temp Edge Finder", page_icon="🌡️", layout="wide")
 
-# ========== GA4 ANALYTICS ==========
 components.html("""
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
 <script>
@@ -174,7 +172,6 @@ def fetch_nws_6hr_extremes(station):
 
 @st.cache_data(ttl=120)
 def fetch_nws_observations(station):
-    # Add limit=100 to get full day of hourly observations (24+ readings)
     url = f"https://api.weather.gov/stations/{station}/observations?limit=100"
     try:
         resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
@@ -323,12 +320,8 @@ if is_owner:
                 • Click ✅ CONFIRMED bar to buy<br>
                 • Shows bracket + price + time<br>
                 • Sun up = locked in<br><br>
-                <b>HIGH (Riskier):</b><br>
-                • Wait for ✅ CONFIRMED bar<br>
-                • Or wait for 18:51 6hr confirm<br><br>
                 <b>6hr Extremes:</b><br>
                 • 06:51 & 12:51 bracket LOW<br>
-                • 12:51 & 18:51 bracket HIGH<br>
                 • Official NWS confirmation
             </div>
         </div>
@@ -382,7 +375,6 @@ if current_temp:
     
     if readings:
         with st.expander("📊 Recent NWS Observations", expanded=True):
-            # FIX: Show ALL readings for everyone (was readings[:8] for non-owners)
             display_list = readings
             
             # Show amber LOW reversal row where the low occurred IN THE MORNING (before noon)
@@ -398,6 +390,7 @@ if current_temp:
             if is_owner and low_reversal_idx is not None and low_reversal_idx >= 1:
                 if display_list[low_reversal_idx - 1]['temp'] > obs_low:
                     low_confirm_idx = low_reversal_idx - 1
+            
             for i, r in enumerate(display_list):
                 time_key = r['time']
                 six_hr_display = ""
@@ -411,6 +404,7 @@ if current_temp:
                         if six_hr_min is not None:
                             parts.append(f"<span style='color:#3b82f6'>6hr↓{six_hr_min:.0f}°</span>")
                         six_hr_display = " ".join(parts)
+                
                 if is_owner and low_confirm_idx is not None and i == low_confirm_idx:
                     low_bracket_info = ""
                     low_bracket_link = "#"
@@ -428,6 +422,7 @@ if current_temp:
                     except:
                         time_ago = ""
                     st.markdown(f'<a href="{low_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW{low_bracket_info}{time_ago} — CLICK TO BUY</span></div></a>', unsafe_allow_html=True)
+                
                 if i == low_reversal_idx:
                     row_style = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
                     time_style = "color:#fbbf24;font-weight:600"
@@ -443,26 +438,24 @@ else:
     st.warning("⚠️ Could not fetch NWS observations")
 
 st.markdown("---")
-with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
-    st.caption("⚡ Quick calculator — enter your LOW position to check cushion & P/L. Resets on refresh.")
+with st.expander("📊 POSITION CALCULATOR", expanded=False):
+    st.caption("⚡ Quick calculator — enter your LOW position to check cushion & P/L.")
     
-    col_calc, col_clear = st.columns([3, 1])
-    with col_clear:
-        if st.button("🗑️ Clear", key="clear_calc"):
-            for key in ["low_pos", "low_bet", "low_thresh", "low_thresh_up", "low_entry", "low_contracts"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.rerun()
+    if st.button("🗑️ Clear All", key="clear_calc"):
+        for key in list(st.session_state.keys()):
+            if key.startswith("low_"):
+                del st.session_state[key]
+        st.rerun()
     
     st.markdown("**LOW Position**")
     low_has_position = st.checkbox("I have a LOW position", key="low_pos")
     if low_has_position:
         low_bet_type = st.selectbox("Bet Type", ["YES ≥ threshold", "YES in range", "NO ≥ threshold", "NO in range"], key="low_bet")
-        low_threshold = st.number_input("Threshold (°F)", value=0, key="low_thresh")
+        low_threshold = st.number_input("Threshold (°F)", value=20, key="low_thresh")
         if low_bet_type in ["YES in range", "NO in range"]:
-            low_threshold_upper = st.number_input("Upper bound (°F)", value=0, key="low_thresh_up")
-        low_entry = st.number_input("Entry Price (¢)", value=1, min_value=1, max_value=99, key="low_entry")
-        low_contracts = st.number_input("Contracts", value=1, min_value=1, key="low_contracts")
+            low_threshold_upper = st.number_input("Upper bound (°F)", value=30, key="low_thresh_up")
+        low_entry = st.number_input("Entry Price (¢)", value=50, min_value=1, max_value=99, key="low_entry")
+        low_contracts = st.number_input("Contracts", value=10, min_value=1, key="low_contracts")
         if obs_low:
             if low_bet_type == "YES ≥ threshold":
                 cushion = obs_low - low_threshold
@@ -593,7 +586,7 @@ Compares actual NWS temperature observations against Kalshi LOW temperature mark
 
 **📊 Position Calculator**
 
-Quick tool to check your cushion and projected P&L. **Not saved** — resets on page refresh.
+Quick tool to check your cushion and projected P&L.
 
 **Cushion Status Levels:**
 • 🟢 **LOCKED** (+10°F+) — Position is virtually guaranteed
