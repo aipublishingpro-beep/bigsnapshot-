@@ -18,7 +18,7 @@ def send_ga4_event(page_title, page_path):
 send_ga4_event("Temp Edge Finder", "/Temp")
 
 # ============================================================
-# COOKIE AUTH CHECK
+# COOKIE AUTH CHECK - FREE PAGE (NO REDIRECT)
 # ============================================================
 import extra_streamlit_components as stx
 
@@ -31,8 +31,7 @@ saved_auth = cookie_manager.get("authenticated")
 if saved_auth == "true":
     st.session_state.authenticated = True
 
-if not st.session_state.authenticated:
-    st.switch_page("Home.py")
+# FREE PAGE - Anyone can access, no redirect
 
 # ============================================================
 # IMPORTS
