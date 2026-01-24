@@ -4,23 +4,33 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide")
 
 # ============================================================
-# GA4 ANALYTICS - MUST BE RIGHT AFTER set_page_config
+# GA4 ANALYTICS - SERVER-SIDE MEASUREMENT PROTOCOL
 # ============================================================
-GA_TRACKING_CODE = """
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-NQKY5VQ376', {
-    page_title: 'NFL Edge Finder',
-    page_location: 'https://bigsnapshot.streamlit.app/NFL',
-    cookie_flags: 'SameSite=None;Secure',
-    send_page_view: true
-  });
-</script>
-"""
-components.html(GA_TRACKING_CODE, height=1)
+import uuid
+
+def send_ga4_event(page_title, page_path):
+    try:
+        measurement_id = "G-NQKY5VQ376"
+        api_secret = "n4oBJjH7RXi3dA7aQo2CZA"
+        client_id = str(uuid.uuid4())
+        
+        url = f"https://www.google-analytics.com/mp/collect?measurement_id={measurement_id}&api_secret={api_secret}"
+        payload = {
+            "client_id": client_id,
+            "events": [{
+                "name": "page_view",
+                "params": {
+                    "page_title": page_title,
+                    "page_location": f"https://bigsnapshot.streamlit.app{page_path}"
+                }
+            }]
+        }
+        requests.post(url, json=payload, timeout=2)
+    except:
+        pass
+
+# Fire pageview
+send_ga4_event("NFL Edge Finder", "/NFL")
 
 # ============================================================
 # 🔐 AUTH CHECK — MUST BE AFTER GA
