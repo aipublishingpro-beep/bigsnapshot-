@@ -305,7 +305,6 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
 # ========== HEADER ==========
 st.title("🌡️ LOW TEMP EDGE FINDER")
 st.caption(f"Live NWS Observations + Kalshi LOW Markets | {now.strftime('%b %d, %Y %I:%M %p ET')}")
-st.markdown('<div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:12px;margin:10px 0;text-align:center"><span style="color:#4ade80;font-weight:600">📈 We\'ve seen consistent results on LOW temps — they lock in by 6 AM and rarely change. That\'s why we focus here.</span></div>', unsafe_allow_html=True)
 
 query_params = st.query_params
 default_city = query_params.get("city", "New York City")
