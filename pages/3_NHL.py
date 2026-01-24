@@ -1,24 +1,42 @@
 import streamlit as st
-import streamlit.components.v1 as components
 
 st.set_page_config(page_title="NHL Edge Finder", page_icon="🏒", layout="wide")
 
 # ============================================================
-# GA4 ANALYTICS - MUST BE RIGHT AFTER set_page_config
+# GA4 ANALYTICS - SERVER SIDE
 # ============================================================
-components.html("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-1T35YHHYBC', { send_page_view: true });
-</script>
-""", height=0)
+import uuid
+import requests as req_ga
 
-from auth import require_auth
-require_auth()
+def send_ga4_event(page_title, page_path):
+    try:
+        url = f"https://www.google-analytics.com/mp/collect?measurement_id=G-NQKY5VQ376&api_secret=n4oBJjH7RXi3dA7aQo2CZA"
+        payload = {"client_id": str(uuid.uuid4()), "events": [{"name": "page_view", "params": {"page_title": page_title, "page_location": f"https://bigsnapshot.streamlit.app{page_path}"}}]}
+        req_ga.post(url, json=payload, timeout=2)
+    except: pass
 
+send_ga4_event("NHL Edge Finder", "/NHL")
+
+# ============================================================
+# COOKIE AUTH CHECK
+# ============================================================
+import extra_streamlit_components as stx
+
+cookie_manager = stx.CookieManager()
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+saved_auth = cookie_manager.get("authenticated")
+if saved_auth == "true":
+    st.session_state.authenticated = True
+
+if not st.session_state.authenticated:
+    st.switch_page("Home.py")
+
+# ============================================================
+# IMPORTS
+# ============================================================
 import requests
 import json
 import os
