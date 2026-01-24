@@ -1,100 +1,129 @@
 import streamlit as st
+from streamlit_js_eval import streamlit_js_eval
 
 st.set_page_config(page_title="BigSnapshot", page_icon="🎯", layout="wide")
 
 # ============================================================
-# GA4 ANALYTICS - SERVER SIDE
+# 🔐 AUTH BOOTSTRAP — READ FROM LOCALSTORAGE ON EVERY LOAD
 # ============================================================
-import uuid
-import requests as req_ga
-import time
-
-def send_ga4_event(page_title, page_path):
-    try:
-        url = "https://www.google-analytics.com/mp/collect?measurement_id=G-NQKY5VQ376&api_secret=n4oBJjH7RXi3dA7aQo2CZA"
-        payload = {
-            "client_id": str(uuid.uuid4()),
-            "events": [{
-                "name": "page_view",
-                "params": {
-                    "page_title": page_title,
-                    "page_location": f"https://bigsnapshot.streamlit.app{page_path}"
-                }
-            }]
-        }
-        req_ga.post(url, json=payload, timeout=2)
-    except:
-        pass
-
-send_ga4_event("BigSnapshot Home", "/")
-
-# ============================================================
-# COOKIE AUTH
-# ============================================================
-import extra_streamlit_components as stx
-from datetime import datetime, timedelta
-
-cookie_manager = stx.CookieManager(key="bigsnapshot_auth_manager")
-
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.user_type = None
 
-saved_auth = None
-for _ in range(5):
-    saved_auth = cookie_manager.get("authenticated")
-    if saved_auth is not None:
-        break
-    time.sleep(0.25)
+stored_auth = streamlit_js_eval(
+    js_expressions="localStorage.getItem('bigsnapshot_auth')",
+    key="auth_bootstrap_home"
+)
 
-if saved_auth == "true":
+if stored_auth and stored_auth not in ["", "null", None]:
     st.session_state.authenticated = True
-    st.session_state.user_type = "Paid Subscriber"
+    st.session_state.user_type = stored_auth
 
 # ============================================================
-# CONFIG
+# 🔐 PASSWORD CONFIG
 # ============================================================
 VALID_PASSWORD = "snapcrackle2026"
-STRIPE_LINK = "https://buy.stripe.com/14A00lcgHe9oaIodx65Rm00"
 
 # ============================================================
-# MOBILE CSS
+# STYLES
 # ============================================================
 st.markdown("""
 <style>
-@media (max-width: 768px) {
-    .stColumns > div { flex: 1 1 100% !important; min-width: 100% !important; }
-    h1 { font-size: 1.5rem !important; }
-    h2 { font-size: 1.2rem !important; }
-    h3 { font-size: 1rem !important; }
-}
+    .main-header { font-size: 2.5em; font-weight: bold; color: #fff; text-align: center; margin-bottom: 10px; }
+    .sub-header { color: #888; text-align: center; margin-bottom: 30px; }
+    .tool-card { background: linear-gradient(135deg, #0f172a, #1e293b); padding: 20px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 15px; }
+    .tool-title { font-size: 1.3em; font-weight: bold; color: #fff; margin-bottom: 8px; }
+    .tool-desc { color: #94a3b8; font-size: 0.9em; }
+    .status-badge { background: #22c55e; color: #000; padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# LANDING PAGE (NOT LOGGED IN)
+# MAIN UI
+# ============================================================
+st.markdown('<div class="main-header">🎯 BigSnapshot</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Prediction Market Edge Tools</div>', unsafe_allow_html=True)
+
+# ============================================================
+# NOT LOGGED IN → SHOW LOGIN FORM
 # ============================================================
 if not st.session_state.authenticated:
-
-    # HERO
-    st.markdown("""
-    <div style="text-align:center;padding:60px 20px 30px 20px">
-        <div style="font-size:70px;margin-bottom:15px">🎯</div>
-        <h1 style="font-size:52px;font-weight:800;color:#fff;margin-bottom:10px">BigSnapshot</h1>
-        <p style="color:#888;font-size:20px;margin-bottom:10px">Prediction Market Edge Finder</p>
-        <p style="color:#555;font-size:14px">Structural analysis for Kalshi markets</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # VALUE PROP (FIXED — THIS WAS BROKEN)
-    st.markdown("""
-    <div style="max-width:900px;margin:0 auto;text-align:center;padding:20px">
-        <h2 style="color:#fff;margin-bottom:10px">Find real edge in prediction markets</h2>
-        <p style="color:#888;font-size:16px">
-            BigSnapshot analyzes pricing behavior, market structure, and live game dynamics
-            across Kalshi markets. No hype. No pick spam. Just probability and execution.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.markdown("---")
+    st.subheader("🔐 Subscriber Login")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        password = st.text_input("Enter access code:", type="password", key="login_password")
+        
+        if st.button("🔓 Unlock Access", use_container_width=True, type="primary"):
+            if password == VALID_PASSWORD:
+                # ✅ WRITE TO LOCALSTORAGE
+                streamlit_js_eval(
+                    js_expressions="localStorage.setItem('bigsnapshot_auth', 'Paid Subscriber')",
+                    key="set_auth"
+                )
+                st.session_state.authenticated = True
+                st.session_state.user_type = "Paid Subscriber"
+                st.rerun()
+            else:
+                st.error("❌ Invalid access code")
+    
+    st.markdown("---")
+    st.caption("Need access? Contact support.")
     st.stop()
+
+# ============================================================
+# LOGGED IN → SHOW DASHBOARD
+# ============================================================
+st.success(f"✅ Logged in as: {st.session_state.user_type}")
+
+# Logout button
+col1, col2, col3 = st.columns([2, 1, 2])
+with col2:
+    if st.button("🚪 Logout", use_container_width=True):
+        # ✅ CLEAR LOCALSTORAGE
+        streamlit_js_eval(
+            js_expressions="localStorage.removeItem('bigsnapshot_auth')",
+            key="clear_auth"
+        )
+        st.session_state.authenticated = False
+        st.session_state.user_type = None
+        st.rerun()
+
+st.markdown("---")
+
+# ============================================================
+# TOOL CARDS
+# ============================================================
+st.subheader("🛠️ Your Tools")
+
+tools = [
+    {"name": "🏀 NBA Edge Finder", "desc": "ML picks, live tracking, streaks", "page": "pages/2_NBA.py", "status": "LIVE"},
+    {"name": "🏈 NFL Edge Finder", "desc": "Coming soon", "page": "pages/1_NFL.py", "status": "SOON"},
+    {"name": "🏀 NCAA Basketball", "desc": "Coming soon", "page": "pages/7_NCAA.py", "status": "SOON"},
+    {"name": "🏒 NHL Edge Finder", "desc": "Coming soon", "page": "pages/3_NHL.py", "status": "SOON"},
+    {"name": "⚾ MLB Edge Finder", "desc": "Coming soon", "page": "pages/4_MLB.py", "status": "SOON"},
+    {"name": "⚽ Soccer Edge Finder", "desc": "Coming soon", "page": "pages/8_Soccer.py", "status": "SOON"},
+    {"name": "📊 Economics", "desc": "Coming soon", "page": "pages/9_Economics.py", "status": "SOON"},
+]
+
+cols = st.columns(2)
+for i, tool in enumerate(tools):
+    with cols[i % 2]:
+        status_color = "#22c55e" if tool["status"] == "LIVE" else "#64748b"
+        st.markdown(f"""
+        <div class="tool-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="tool-title">{tool['name']}</div>
+                <span style="background: {status_color}; color: #000; padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold;">{tool['status']}</span>
+            </div>
+            <div class="tool-desc">{tool['desc']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if tool["status"] == "LIVE":
+            if st.button(f"Open {tool['name'].split()[1]}", key=f"open_{i}", use_container_width=True):
+                st.switch_page(tool["page"])
+
+st.markdown("---")
+st.caption("© 2025 BigSnapshot. All rights reserved.")
