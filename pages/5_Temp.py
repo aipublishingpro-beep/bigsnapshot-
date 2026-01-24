@@ -385,16 +385,16 @@ if current_temp:
             # FIX: Show ALL readings for everyone (was readings[:8] for non-owners)
             display_list = readings
             
-            # Only show amber LOW reversal row in the morning (before noon) when it's actionable
+            # Show amber LOW reversal row where the low occurred
             low_reversal_idx = None
-            if obs_low and now.hour < 12:
+            if obs_low:
                 for i, r in enumerate(display_list):
                     if r['temp'] == obs_low:
                         low_reversal_idx = i
                         break
             
             low_confirm_idx = None
-            if is_owner and now.hour < 12 and low_reversal_idx is not None and low_reversal_idx >= 1:
+            if is_owner and low_reversal_idx is not None and low_reversal_idx >= 1:
                 if display_list[low_reversal_idx - 1]['temp'] > obs_low:
                     low_confirm_idx = low_reversal_idx - 1
             for i, r in enumerate(display_list):
