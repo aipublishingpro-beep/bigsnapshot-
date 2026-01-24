@@ -18,7 +18,7 @@ GA_TRACKING_CODE = """
   });
 </script>
 """
-components.html(GA_TRACKING_CODE, height=0)
+components.html(GA_TRACKING_CODE, height=1)
 
 # ============================================================
 # 🔐 AUTH CHECK — MUST BE AFTER GA
