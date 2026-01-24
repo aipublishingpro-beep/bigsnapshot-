@@ -174,7 +174,8 @@ def fetch_nws_6hr_extremes(station):
 
 @st.cache_data(ttl=120)
 def fetch_nws_observations(station):
-    url = f"https://api.weather.gov/stations/{station}/observations"
+    # Add limit=100 to get full day of hourly observations (24+ readings)
+    url = f"https://api.weather.gov/stations/{station}/observations?limit=100"
     try:
         resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
         if resp.status_code != 200:
@@ -341,13 +342,9 @@ with c2:
     nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
     st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
 
-# FIX: Preserve all existing query params when setting default city
 if st.button("⭐ Set as Default City", use_container_width=False):
-    # Capture all existing params
     existing_params = dict(st.query_params)
-    # Update city
     existing_params["city"] = city
-    # Clear and set all params to preserve mode=owner
     st.query_params.clear()
     for key, value in existing_params.items():
         st.query_params[key] = value
@@ -388,10 +385,9 @@ if current_temp:
     
     if readings:
         with st.expander("📊 Recent NWS Observations", expanded=True):
-            display_list = readings if is_owner else readings[:8]
+            # FIX: Show ALL readings for everyone (was readings[:8] for non-owners)
+            display_list = readings
             
-            # FIX: Use actual obs_low/obs_high instead of calculating from truncated display_list
-            # Only mark LOW if the actual low temp is visible in display_list
             low_reversal_idx = None
             if obs_low:
                 for i, r in enumerate(display_list):
@@ -399,7 +395,6 @@ if current_temp:
                         low_reversal_idx = i
                         break
             
-            # Only mark HIGH if the actual high temp is visible in display_list AND it's after noon
             high_reversal_idx = None
             if obs_high and now.hour >= 12:
                 for i, r in enumerate(display_list):
