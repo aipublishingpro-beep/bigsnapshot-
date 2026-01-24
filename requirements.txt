@@ -8,3 +8,4 @@ numpy
 extra-streamlit-components
 streamlit-js-eval
 beautifulsoup4
+streamlit-autorefresh
