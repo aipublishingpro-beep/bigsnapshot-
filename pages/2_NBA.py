@@ -43,6 +43,10 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
+# Check for owner mode
+query_params = st.query_params
+is_owner = query_params.get("mode") == "owner"
+
 TEAM_STATS = {
     "Atlanta": {"net": -3.2, "pace": 100.5, "home_pct": 0.52, "tier": "weak"},
     "Boston": {"net": 11.2, "pace": 99.8, "home_pct": 0.78, "tier": "elite"},
@@ -163,7 +167,7 @@ def get_h2h_edge(home, away):
         return H2H_EDGES[key2]
     return None
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=60)  # Faster refresh for live data
 def fetch_games():
     today = datetime.now(eastern).strftime('%Y%m%d')
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={today}"
@@ -307,6 +311,221 @@ def get_streak(form_list):
             break
     return f"{current}{count}"
 
+def get_minutes_played(period, clock, status):
+    if status == "STATUS_FINAL": return 48 if period <= 4 else 48 + (period - 4) * 5
+    if status == "STATUS_HALFTIME": return 24
+    if period == 0: return 0
+    try:
+        parts = str(clock).split(':')
+        mins = int(parts[0])
+        secs = int(float(parts[1])) if len(parts) > 1 else 0
+        time_left = mins + secs/60
+        if period <= 4: return (period - 1) * 12 + (12 - time_left)
+        else: return 48 + (period - 5) * 5 + (5 - time_left)
+    except: return (period - 1) * 12 if period <= 4 else 48 + (period - 5) * 5
+
+# ============================================================
+# LIVE ALIGNMENT CALCULATION (OWNER ONLY)
+# ============================================================
+def calc_live_ml_alignment(game):
+    """Calculate real-time ML alignment based on live game data"""
+    home = game['home']
+    away = game['away']
+    home_score = game['home_score']
+    away_score = game['away_score']
+    mins = get_minutes_played(game['period'], game['clock'], game['status'])
+    
+    if mins < 6:
+        return None  # Not enough data
+    
+    lead_home = home_score - away_score
+    
+    # Calculate live alignment score
+    live_score = 50  # Start neutral
+    signals = []
+    
+    # Lead factor (biggest weight)
+    if abs(lead_home) >= 20:
+        live_score += 25 if lead_home > 0 else -25
+        signals.append(f"{'Home' if lead_home > 0 else 'Away'} +20 blowout")
+    elif abs(lead_home) >= 15:
+        live_score += 18 if lead_home > 0 else -18
+        signals.append(f"{'Home' if lead_home > 0 else 'Away'} commanding lead")
+    elif abs(lead_home) >= 10:
+        live_score += 12 if lead_home > 0 else -12
+        signals.append(f"{'Home' if lead_home > 0 else 'Away'} solid lead")
+    elif abs(lead_home) >= 5:
+        live_score += 6 if lead_home > 0 else -6
+        signals.append(f"{'Home' if lead_home > 0 else 'Away'} slight lead")
+    
+    # Time factor - leads mean more later in game
+    if mins >= 36:  # Q4
+        if abs(lead_home) >= 10:
+            live_score += 15 if lead_home > 0 else -15
+            signals.append("Q4 cushion = safe")
+        elif abs(lead_home) >= 5:
+            live_score += 8 if lead_home > 0 else -8
+    elif mins >= 24:  # Q3
+        if abs(lead_home) >= 15:
+            live_score += 8 if lead_home > 0 else -8
+            signals.append("Q3 big lead")
+    
+    # Determine pick
+    if live_score >= 55:
+        pick = home
+        alignment = live_score
+    elif live_score <= 45:
+        pick = away
+        alignment = 100 - live_score
+    else:
+        return None  # Too close
+    
+    # Tier
+    if alignment >= 85:
+        tier = "🚨 LIVE LOCK"
+        tier_color = "#00ff00"
+    elif alignment >= 75:
+        tier = "🔥 STRONG LIVE"
+        tier_color = "#00cc00"
+    elif alignment >= 65:
+        tier = "✅ GOOD LIVE"
+        tier_color = "#88cc00"
+    else:
+        tier = "⚡ LEAN LIVE"
+        tier_color = "#cccc00"
+    
+    return {
+        'pick': pick,
+        'opponent': away if pick == home else home,
+        'alignment': round(alignment),
+        'lead': lead_home if pick == home else -lead_home,
+        'mins': mins,
+        'period': game['period'],
+        'clock': game['clock'],
+        'tier': tier,
+        'tier_color': tier_color,
+        'signals': signals,
+        'home': home,
+        'away': away,
+        'home_score': home_score,
+        'away_score': away_score
+    }
+
+def calc_live_totals_alignment(game):
+    """Calculate real-time totals alignment based on pace"""
+    home = game['home']
+    away = game['away']
+    total = game['home_score'] + game['away_score']
+    mins = get_minutes_played(game['period'], game['clock'], game['status'])
+    
+    if mins < 6:
+        return None
+    
+    pace = total / mins
+    projected = round(pace * 48)
+    remaining = 48 - mins
+    
+    results = []
+    
+    # Check each threshold
+    for threshold in THRESHOLDS:
+        cushion_no = threshold - projected
+        cushion_yes = projected - threshold
+        
+        # NO side analysis
+        if cushion_no >= 8:
+            no_score = 50 + min(40, cushion_no * 2)
+            
+            # Pace confirmation
+            if pace < 4.5:
+                no_score += 15
+                pace_signal = "🐢 SLOW pace confirms"
+            elif pace < 4.8:
+                no_score += 5
+                pace_signal = "⚖️ AVG pace"
+            else:
+                no_score -= 10
+                pace_signal = "⚠️ FAST pace risk"
+            
+            # Time factor
+            if mins >= 36 and cushion_no >= 12:
+                no_score += 15
+                time_signal = "Q4 + big cushion = safe"
+            elif mins >= 24 and cushion_no >= 15:
+                no_score += 10
+                time_signal = "Q3 + huge cushion"
+            else:
+                time_signal = None
+            
+            if no_score >= 65:
+                if no_score >= 85:
+                    tier = "🚨 LOCK NO"
+                elif no_score >= 75:
+                    tier = "🔥 STRONG NO"
+                else:
+                    tier = "✅ GOOD NO"
+                
+                results.append({
+                    'side': 'NO',
+                    'threshold': threshold,
+                    'alignment': min(95, round(no_score)),
+                    'cushion': cushion_no,
+                    'pace': pace,
+                    'projected': projected,
+                    'tier': tier,
+                    'pace_signal': pace_signal,
+                    'time_signal': time_signal
+                })
+        
+        # YES side analysis
+        if cushion_yes >= 8:
+            yes_score = 50 + min(40, cushion_yes * 2)
+            
+            # Pace confirmation
+            if pace > 5.2:
+                yes_score += 15
+                pace_signal = "🔥 FAST pace confirms"
+            elif pace > 4.8:
+                yes_score += 5
+                pace_signal = "⚖️ AVG pace"
+            else:
+                yes_score -= 10
+                pace_signal = "⚠️ SLOW pace risk"
+            
+            # Time factor
+            if mins >= 36 and cushion_yes >= 12:
+                yes_score += 15
+                time_signal = "Q4 + big cushion = safe"
+            elif mins >= 24 and cushion_yes >= 15:
+                yes_score += 10
+                time_signal = "Q3 + huge cushion"
+            else:
+                time_signal = None
+            
+            if yes_score >= 65:
+                if yes_score >= 85:
+                    tier = "🚨 LOCK YES"
+                elif yes_score >= 75:
+                    tier = "🔥 STRONG YES"
+                else:
+                    tier = "✅ GOOD YES"
+                
+                results.append({
+                    'side': 'YES',
+                    'threshold': threshold,
+                    'alignment': min(95, round(yes_score)),
+                    'cushion': cushion_yes,
+                    'pace': pace,
+                    'projected': projected,
+                    'tier': tier,
+                    'pace_signal': pace_signal,
+                    'time_signal': time_signal
+                })
+    
+    # Sort by alignment score
+    results.sort(key=lambda x: x['alignment'], reverse=True)
+    return results[:3] if results else None  # Top 3 opportunities
+
 def calc_edge(home, away, injuries, rest):
     home_pts, away_pts = 0, 0
     home_reasons, away_reasons = [], []
@@ -396,13 +615,12 @@ def calc_edge(home, away, injuries, rest):
     a_tier = a_stats.get("tier", "mid")
     if h_tier == "weak" and a_tier in ["elite", "good"]:
         away_pts += 1.5
-        away_reasons.append("Fade weak home")
+        away_reasons.append("Weak home")
     
     if a_tier == "elite" and h_tier != "elite":
         away_pts += 1
-        away_reasons.append("Road value")
+        away_reasons.append("Elite road")
     
-    # Calculate edge score (NOT probability)
     base_score = 50 + (net_gap * 1.5)
     base_score = max(25, min(85, base_score))
     total_pts = home_pts + away_pts
@@ -445,19 +663,6 @@ def build_kalshi_totals_url(away, home):
     date_str = datetime.now(eastern).strftime("%y%b%d").upper()
     return f"https://kalshi.com/markets/kxnbatotal/kxnbatotal-{date_str}{a_code}{h_code}"
 
-def get_minutes_played(period, clock, status):
-    if status == "STATUS_FINAL": return 48 if period <= 4 else 48 + (period - 4) * 5
-    if status == "STATUS_HALFTIME": return 24
-    if period == 0: return 0
-    try:
-        parts = str(clock).split(':')
-        mins = int(parts[0])
-        secs = int(float(parts[1])) if len(parts) > 1 else 0
-        time_left = mins + secs/60
-        if period <= 4: return (period - 1) * 12 + (12 - time_left)
-        else: return 48 + (period - 5) * 5 + (5 - time_left)
-    except: return (period - 1) * 12 if period <= 4 else 48 + (period - 5) * 5
-
 POSITIONS_FILE = "nba_positions.json"
 
 def load_positions():
@@ -478,19 +683,23 @@ def save_positions(positions):
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v2.4 | {now.strftime('%b %d, %Y %I:%M %p ET')} | 12-Factor Analysis")
+st.caption(f"v2.5 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Live Alignment")
 
-# ============================================================
-# DISCLAIMER
-# ============================================================
-st.markdown("""
-<div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
-<p style="color: #e94560; font-weight: 600; margin: 0 0 6px 0;">⚠️ IMPORTANT DISCLAIMER</p>
-<p style="color: #ccc; font-size: 0.85em; margin: 0; line-height: 1.5;">
-This is <strong>not</strong> a predictive model with verified win rates. The Edge Score reflects how many positive factors are currently aligned — it is <strong>not</strong> a calibrated win probability. Use for idea generation and situational awareness only. No guarantee of profitability.
-</p>
-</div>
-""", unsafe_allow_html=True)
+if is_owner:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #0d2d0d 100%); border: 2px solid #00ff00; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
+    <p style="color: #00ff00; font-weight: 600; margin: 0;">🔒 OWNER MODE ACTIVE — Live Alignment Enabled</p>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
+    <p style="color: #e94560; font-weight: 600; margin: 0 0 6px 0;">⚠️ IMPORTANT DISCLAIMER</p>
+    <p style="color: #ccc; font-size: 0.85em; margin: 0; line-height: 1.5;">
+    This is <strong>not</strong> a predictive model with verified win rates. The Edge Score reflects how many positive factors are currently aligned — it is <strong>not</strong> a calibrated win probability. Use for idea generation and situational awareness only.
+    </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("📊 ALIGNMENT LEGEND")
@@ -498,13 +707,18 @@ with st.sidebar:
     st.info("✅ **GOOD** — 68-74 (several factors)")
     st.warning("⚡ **MODERATE** — 60-67 (some factors)")
     st.markdown("---")
-    st.markdown("**What the Edge Score means:**")
-    st.markdown("• Higher = more factors align")
-    st.markdown("• NOT a win probability")
-    st.markdown("• Compare to Kalshi price yourself")
-    st.markdown("---")
+    if is_owner:
+        st.header("🔴 LIVE ALIGNMENT")
+        st.markdown("**ML Live Tiers:**")
+        st.markdown("🚨 LOCK — 85+ (Q4 blowout)")
+        st.markdown("🔥 STRONG — 75-84 (big lead)")
+        st.markdown("✅ GOOD — 65-74 (solid lead)")
+        st.markdown("**Totals Live Tiers:**")
+        st.markdown("🚨 LOCK — Cushion 15+ in Q4")
+        st.markdown("🔥 STRONG — Cushion 10+ + pace")
+        st.markdown("✅ GOOD — Cushion 8+ aligned")
+        st.markdown("---")
     st.header("📈 POSITION STATUS")
-    st.markdown("**ML Bets:**")
     st.markdown("🟢 VERY SAFE — Big lead late")
     st.markdown("🟢 CRUISING — 15+ lead")
     st.markdown("🟢 ON TRACK — 8+ lead")
@@ -512,12 +726,6 @@ with st.sidebar:
     st.markdown("🟠 RISKY — Down 1-7")
     st.markdown("🔴 WARNING — Down 8-14")
     st.markdown("🔴 DANGER — Down 15+")
-    st.markdown("**Totals Bets:**")
-    st.markdown("🟢 VERY SAFE — 15+ cushion")
-    st.markdown("🟢 ON TRACK — 8+ cushion")
-    st.markdown("🟡 CLOSE — 3-7 cushion")
-    st.markdown("🟠 RISKY — Within 5")
-    st.markdown("🔴 DANGER — Past line")
 
 games = fetch_games()
 injuries = fetch_injuries()
@@ -526,10 +734,75 @@ team_record = fetch_team_record()
 
 c1, c2, c3 = st.columns(3)
 c1.metric("Today's Games", len(games))
-c2.metric("B2B Teams", len(rest.get("b2b", set())))
-c3.metric("Rested Teams", len(rest.get("rested", set())))
+live_count = len([g for g in games if g['status'] == 'STATUS_IN_PROGRESS'])
+c2.metric("🔴 Live Now", live_count)
+c3.metric("B2B Teams", len(rest.get("b2b", set())))
 
 st.divider()
+
+# ============================================================
+# 🔴 LIVE ALIGNMENT SECTION (OWNER ONLY)
+# ============================================================
+if is_owner:
+    live_games = [g for g in games if g['status'] == 'STATUS_IN_PROGRESS']
+    
+    if live_games:
+        st.subheader("🔴 LIVE ALIGNMENT — REAL TIME")
+        st.caption("Auto-refresh every 60 seconds | Based on current score + pace + time remaining")
+        
+        for g in live_games:
+            st.markdown(f"### {g['away']} @ {g['home']}")
+            st.markdown(f"**Score:** {g['away_score']} - {g['home_score']} | Q{g['period']} {g['clock']}")
+            
+            # ML Live Alignment
+            ml_live = calc_live_ml_alignment(g)
+            if ml_live:
+                kalshi_url = build_kalshi_url(g['away'], g['home'])
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #1a2a1a 0%, #0d1f0d 100%); border: 2px solid {ml_live['tier_color']}; border-radius: 10px; padding: 16px; margin: 10px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                        <div>
+                            <span style="background: {ml_live['tier_color']}; color: #000; padding: 4px 12px; border-radius: 4px; font-weight: bold;">{ml_live['tier']}</span>
+                            <span style="color: #fff; font-size: 1.3em; font-weight: bold; margin-left: 12px;">{ml_live['pick']} ML</span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="color: {ml_live['tier_color']}; font-size: 1.5em; font-weight: bold;">{ml_live['alignment']}/100</span>
+                        </div>
+                    </div>
+                    <div style="color: #aaa; margin-top: 10px;">
+                        Lead: <strong style="color: {'#00ff00' if ml_live['lead'] > 0 else '#ff4444'}">{ml_live['lead']:+d}</strong> | 
+                        {ml_live['mins']:.0f} min played | 
+                        {' • '.join(ml_live['signals'])}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                st.link_button(f"🎯 BUY {ml_live['pick']} ML ON KALSHI", kalshi_url, type="primary")
+            
+            # Totals Live Alignment
+            totals_live = calc_live_totals_alignment(g)
+            if totals_live:
+                kalshi_totals_url = build_kalshi_totals_url(g['away'], g['home'])
+                st.markdown("**📊 TOTALS OPPORTUNITIES:**")
+                for t in totals_live:
+                    tier_color = "#00ff00" if "LOCK" in t['tier'] else "#00cc00" if "STRONG" in t['tier'] else "#88cc00"
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid {tier_color}; border-radius: 8px; padding: 12px; margin: 6px 0;">
+                        <span style="background: {tier_color}; color: #000; padding: 3px 10px; border-radius: 4px; font-weight: bold; font-size: 0.85em;">{t['tier']}</span>
+                        <span style="color: #fff; font-weight: bold; margin-left: 10px;">{t['side']} {t['threshold']}</span>
+                        <span style="color: #888; margin-left: 15px;">Alignment: {t['alignment']}/100</span>
+                        <div style="color: #aaa; font-size: 0.85em; margin-top: 6px;">
+                            Cushion: +{t['cushion']:.0f} | Pace: {t['pace']:.2f}/min | Proj: {t['projected']} | {t['pace_signal']}
+                            {f" | {t['time_signal']}" if t['time_signal'] else ""}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                st.link_button(f"📊 VIEW TOTALS ON KALSHI", kalshi_totals_url)
+            
+            st.markdown("---")
+    else:
+        st.info("🔴 No live games right now. Live Alignment will appear when games are in progress.")
+    
+    st.divider()
 
 # STAR INJURIES
 st.subheader("🏥 STAR INJURIES")
@@ -569,8 +842,8 @@ else:
 
 st.divider()
 
-# ML PICKS
-st.subheader("🎯 FACTOR ALIGNMENT")
+# PRE-GAME ALIGNMENT
+st.subheader("🎯 PRE-GAME ALIGNMENT")
 st.caption("Showing picks with Edge Score 60+ (multiple factors aligned)")
 
 if "positions" not in st.session_state:
@@ -617,54 +890,6 @@ if picks:
         col2.markdown(f"**Factors:** {reasons_str}")
         st.link_button(f"VIEW {p['pick']} ON KALSHI", kalshi_url, type="primary")
         st.markdown("---")
-    st.info("💡 **TIP:** Compare the Edge Score to Kalshi's current price. Higher score = more factors favor this pick, but it's NOT a win probability.")
-    
-    st.markdown("---")
-    if st.button("➕ ADD ALL PICKS TO TRACKER", type="secondary", use_container_width=True):
-        st.session_state.show_bulk_add = True
-    
-    if st.session_state.get("show_bulk_add", False):
-        st.markdown("**Configure picks before adding:**")
-        bulk_picks = []
-        for i, p in enumerate(picks):
-            with st.expander(f"🎯 {p['pick']} vs {p['opponent']} (Score: {p['edge_score']})", expanded=True):
-                bc1, bc2, bc3 = st.columns(3)
-                with bc1:
-                    b_type = st.radio("Type", ["ML", "Totals"], key=f"bulk_type_{i}", horizontal=True)
-                with bc2:
-                    b_price = st.number_input("Price ¢", 1, 99, 50, key=f"bulk_price_{i}")
-                with bc3:
-                    b_contracts = st.number_input("Contracts", 1, 100, 1, key=f"bulk_qty_{i}")
-                if b_type == "Totals":
-                    tc1, tc2 = st.columns(2)
-                    with tc1:
-                        b_side = st.radio("Side", ["YES", "NO"], key=f"bulk_side_{i}", horizontal=True)
-                    with tc2:
-                        b_line = st.selectbox("Line", THRESHOLDS, index=5, key=f"bulk_line_{i}")
-                    b_pick = f"{b_side} {b_line}"
-                else:
-                    b_pick = p['pick']
-                bulk_picks.append({
-                    "game": f"{p['away']}@{p['home']}",
-                    "type": "ml" if b_type == "ML" else "totals",
-                    "pick": b_pick,
-                    "price": b_price,
-                    "contracts": b_contracts
-                })
-        ba1, ba2 = st.columns(2)
-        with ba1:
-            if st.button("✅ ADD ALL TO TRACKER", type="primary", use_container_width=True):
-                for bp in bulk_picks:
-                    exists = any(pos['game'] == bp['game'] and pos['pick'] == bp['pick'] for pos in st.session_state.positions)
-                    if not exists:
-                        st.session_state.positions.append(bp)
-                save_positions(st.session_state.positions)
-                st.session_state.show_bulk_add = False
-                st.rerun()
-        with ba2:
-            if st.button("❌ CANCEL", use_container_width=True):
-                st.session_state.show_bulk_add = False
-                st.rerun()
 else:
     st.info("No high-alignment picks right now.")
 
@@ -693,7 +918,7 @@ for g in games:
 
 st.divider()
 
-# CUSHION SCANNER
+# CUSHION SCANNER (keeping for non-owner users too)
 st.subheader("🎯 CUSHION SCANNER")
 cs1, cs2 = st.columns([1, 1])
 cush_min = cs1.selectbox("Min minutes", [6, 9, 12, 15, 18], index=0, key="cush_min")
@@ -762,13 +987,10 @@ if pace_data:
         kalshi_url = build_kalshi_totals_url(p['away'], p['home'])
         if p['pace'] < 4.5:
             lbl = "🟢 SLOW"
-            rec = f"NO" if not p['final'] else ""
         elif p['pace'] < 4.8:
             lbl = "🟡 AVG"
-            rec = ""
         else:
             lbl = "🔴 FAST"
-            rec = f"YES" if not p['final'] else ""
         status = "FINAL" if p['final'] else f"Q{p['period']} {p['clock']}"
         st.markdown(f"**{p['away']} @ {p['home']}** | {status} | {p['total']}pts/{p['mins']:.0f}min | **{p['pace']}/min** {lbl} | Proj: **{p['proj']}**")
 else:
@@ -988,9 +1210,9 @@ if away_team != "Select..." and home_team != "Select..." and away_team != home_t
                 st.warning(f"⚡ **MODERATE ALIGNMENT: {result['pick']}** — Edge Score: {edge_score}/100")
             else:
                 st.info(f"⚪ **LOW ALIGNMENT** — Not enough factors align clearly")
-            st.caption("Remember: Edge Score shows factor alignment, NOT win probability. Compare to Kalshi price yourself.")
+            st.caption("Remember: Edge Score shows factor alignment, NOT win probability.")
 elif away_team == home_team and away_team != "Select...":
     st.error("Select two different teams")
 
 st.divider()
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v2.4")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v2.5")
