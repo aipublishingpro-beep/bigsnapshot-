@@ -47,6 +47,11 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
+# Minimum minutes before showing totals projection
+MIN_MINUTES_FOR_PROJECTION = 6
+# Maximum reasonable pace (caps projection at ~264)
+MAX_PACE = 5.5
+
 TEAM_STATS = {
     "Atlanta": {"net": -3.2, "pace": 100.5, "home_pct": 0.52, "tier": "weak"},
     "Boston": {"net": 11.2, "pace": 99.8, "home_pct": 0.78, "tier": "elite"},
@@ -166,6 +171,93 @@ def get_h2h_edge(home, away):
     if key2 in H2H_EDGES:
         return H2H_EDGES[key2]
     return None
+
+def get_conviction(mins, lead):
+    """Get conviction level based on timing guide"""
+    abs_lead = abs(lead)
+    
+    # Q4 final 4 minutes (44+ min played)
+    if mins >= 44:
+        if abs_lead >= 10:
+            return "🟢🟢🟢 VERY HIGH", "#00ff00"
+        elif abs_lead >= 5:
+            return "🟢🟢 HIGH", "#00ff00"
+        else:
+            return "🟡 MEDIUM", "#cccc00"
+    
+    # Q4 (36-44 min)
+    if mins >= 36:
+        if abs_lead >= 15:
+            return "🟢🟢 HIGH", "#00ff00"
+        elif abs_lead >= 10:
+            return "🟢 GOOD", "#88cc00"
+        elif abs_lead >= 5:
+            return "🟡 MEDIUM", "#cccc00"
+        else:
+            return "🔴 LOW", "#ff6666"
+    
+    # Q3 (24-36 min)
+    if mins >= 24:
+        if abs_lead >= 12:
+            return "🟢 GOOD", "#88cc00"
+        elif abs_lead >= 8:
+            return "🟡 MEDIUM", "#cccc00"
+        else:
+            return "🔴 LOW", "#ff6666"
+    
+    # Q2 (12-24 min)
+    if mins >= 12:
+        if abs_lead >= 10:
+            return "🟡 MEDIUM", "#cccc00"
+        else:
+            return "🔴 LOW", "#ff6666"
+    
+    # Q1 (0-12 min) - always low
+    return "🔴 LOW", "#ff6666"
+
+def get_pace_label(pace):
+    """Get pace emoji label"""
+    if pace is None:
+        return ""
+    if pace > 5.0:
+        return "🔥 FAST"
+    elif pace < 4.2:
+        return "🐢 SLOW"
+    else:
+        return "⚖️ AVG"
+
+def get_safe_projection(total, mins):
+    """Calculate projection only if enough time has passed, with pace cap"""
+    if mins < MIN_MINUTES_FOR_PROJECTION:
+        return None, None
+    
+    # Calculate raw pace and cap it
+    raw_pace = total / mins if mins > 0 else 0
+    capped_pace = min(raw_pace, MAX_PACE)
+    
+    # Project full game using capped pace
+    projected = round(capped_pace * 48)
+    
+    return projected, round(capped_pace, 2)
+
+def get_totals_thresholds(projected):
+    """Get safe NO and YES thresholds based on projection"""
+    if projected is None:
+        return None, None, None, None
+    
+    # Find safe NO (2 levels above projected)
+    no_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected), len(THRESHOLDS)-1)
+    safe_no_idx = min(no_idx + 1, len(THRESHOLDS) - 1)
+    safe_no = THRESHOLDS[safe_no_idx]
+    no_cushion = safe_no - projected
+    
+    # Find safe YES (2 levels below projected)
+    yes_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected), 0)
+    safe_yes_idx = max(yes_idx - 1, 0)
+    safe_yes = THRESHOLDS[safe_yes_idx]
+    yes_cushion = projected - safe_yes
+    
+    return safe_no, no_cushion, safe_yes, yes_cushion
 
 @st.cache_data(ttl=24)
 def fetch_games():
@@ -370,7 +462,10 @@ def calc_live_ml_alignment(game):
         if abs(lead_home) >= 15:
             live_score += 8 if lead_home > 0 else -8
     
-    pace = total / mins
+    # Calculate pace with cap
+    raw_pace = total / mins if mins > 0 else 0
+    pace = min(raw_pace, MAX_PACE)
+    
     if pace > 5.0 and abs(lead_home) >= 10:
         live_score += -4 if lead_home > 0 else 4
     elif pace < 4.2 and abs(lead_home) >= 10:
@@ -397,7 +492,7 @@ def calc_live_ml_alignment(game):
         'away': away,
         'home_score': home_score,
         'away_score': away_score,
-        'pace': round(pace, 1)
+        'pace': round(pace, 2)
     }
 
 def calc_edge(home, away, injuries, rest):
@@ -557,7 +652,7 @@ def save_positions(positions):
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v3.1 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
+st.caption(f"v3.3 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
 
 st.markdown("""
 <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
@@ -582,14 +677,12 @@ with st.sidebar:
     st.markdown("**TOO EARLY** — Under 6 min")
     st.markdown("**TOO CLOSE** — Lead under 5")
     st.markdown("---")
-    st.header("📈 POSITION STATUS")
-    st.markdown("🟢 VERY SAFE — Big lead late")
-    st.markdown("🟢 CRUISING — 15+ lead")
-    st.markdown("🟢 ON TRACK — 8+ lead")
-    st.markdown("🟡 CLOSE — 1-7 lead")
-    st.markdown("🟠 RISKY — Down 1-7")
-    st.markdown("🔴 WARNING — Down 8-14")
-    st.markdown("🔴 DANGER — Down 15+")
+    st.header("🎯 CONVICTION")
+    st.markdown("🟢🟢🟢 VERY HIGH")
+    st.markdown("🟢🟢 HIGH")
+    st.markdown("🟢 GOOD")
+    st.markdown("🟡 MEDIUM")
+    st.markdown("🔴 LOW")
 
 games = fetch_games()
 injuries = fetch_injuries()
@@ -643,15 +736,18 @@ if live_games:
     live_edges = []
     for g in live_games:
         ml_live = calc_live_ml_alignment(g)
+        mins = get_minutes_played(g['period'], g['clock'], g['status'])
+        lead = g['home_score'] - g['away_score']
+        
         if ml_live:
             live_edges.append({
                 'game': g,
                 'ml': ml_live,
-                'alignment': ml_live['alignment']
+                'alignment': ml_live['alignment'],
+                'mins': mins,
+                'lead': lead
             })
         else:
-            mins = get_minutes_played(g['period'], g['clock'], g['status'])
-            lead = g['home_score'] - g['away_score']
             live_edges.append({
                 'game': g,
                 'ml': None,
@@ -665,35 +761,23 @@ if live_games:
     for item in live_edges:
         g = item['game']
         ml = item['ml']
+        mins = item['mins']
+        lead = item['lead']
         kalshi_url = build_kalshi_url(g['away'], g['home'])
         kalshi_totals_url = build_kalshi_totals_url(g['away'], g['home'])
+        
+        # Calculate projection with cap
+        total = g['home_score'] + g['away_score']
+        projected, pace = get_safe_projection(total, mins)
+        
+        # Get conviction based on time and lead
+        conviction_text, conviction_color = get_conviction(mins, lead)
+        pace_label = get_pace_label(pace)
         
         if ml:
             alignment = ml['alignment']
             pick = ml['pick']
-            lead = ml['lead']
-            mins = ml['mins']
-            pace = ml.get('pace', 0)
-            
-            if pace > 5.0:
-                pace_label = "🔥 FAST"
-            elif pace < 4.2:
-                pace_label = "🐢 SLOW"
-            else:
-                pace_label = "⚖️ AVG"
-            
-            total = g['home_score'] + g['away_score']
-            projected = round(pace * 48) if pace > 0 else 0
-            
-            no_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected), len(THRESHOLDS)-1)
-            safe_no_idx = min(no_idx + 1, len(THRESHOLDS) - 1)
-            safe_no = THRESHOLDS[safe_no_idx]
-            no_cushion = safe_no - projected
-            
-            yes_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected), 0)
-            safe_yes_idx = max(yes_idx - 1, 0)
-            safe_yes = THRESHOLDS[safe_yes_idx]
-            yes_cushion = projected - safe_yes
+            ml_lead = ml['lead']
             
             if alignment >= 75:
                 border_color = "#00ff00"
@@ -705,8 +789,26 @@ if live_games:
                 border_color = "#cccc00"
                 bg_color = "#1f1f0d"
             
-            no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
-            yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
+            # Build totals display
+            if projected:
+                safe_no, no_cushion, safe_yes, yes_cushion = get_totals_thresholds(projected)
+                no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
+                yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
+                totals_html = f"""
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
+                    <span style="color: #888;">Proj: {projected}</span>
+                    <span style="color: #888; margin-left: 15px;">|</span>
+                    <span style="color: {no_color}; margin-left: 15px;">NO {safe_no} (+{no_cushion})</span>
+                    <span style="color: #888; margin-left: 15px;">|</span>
+                    <span style="color: {yes_color}; margin-left: 15px;">YES {safe_yes} (+{yes_cushion})</span>
+                </div>
+                """
+            else:
+                totals_html = f"""
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
+                    <span style="color: #666;">⏳ Totals projection available after {MIN_MINUTES_FOR_PROJECTION} min</span>
+                </div>
+                """
             
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, #1a1a1a 0%, {bg_color} 100%); border: 2px solid {border_color}; border-radius: 10px; padding: 16px; margin: 10px 0;">
@@ -723,20 +825,17 @@ if live_games:
                     <div>
                         <span style="color: #aaa;">Edge:</span>
                         <span style="color: {border_color}; font-size: 1.3em; font-weight: bold; margin-left: 8px;">{pick}</span>
-                        <span style="color: #888; margin-left: 8px;">({lead:+d} lead)</span>
+                        <span style="color: #888; margin-left: 8px;">({ml_lead:+d} lead)</span>
                         <span style="color: #666; margin-left: 8px;">{pace_label}</span>
                     </div>
                     <div>
                         <span style="background: {border_color}; color: #000; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 1.1em;">{alignment}/100</span>
                     </div>
                 </div>
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
-                    <span style="color: #888;">Proj: {projected}</span>
-                    <span style="color: #888; margin-left: 15px;">|</span>
-                    <span style="color: {no_color}; margin-left: 15px;">NO {safe_no} (+{no_cushion})</span>
-                    <span style="color: #888; margin-left: 15px;">|</span>
-                    <span style="color: {yes_color}; margin-left: 15px;">YES {safe_yes} (+{yes_cushion})</span>
+                <div style="margin-top: 8px;">
+                    <span style="color: {conviction_color}; font-weight: bold;">{conviction_text}</span>
                 </div>
+                {totals_html}
             </div>
             """, unsafe_allow_html=True)
             
@@ -744,36 +843,38 @@ if live_games:
             with col1:
                 st.link_button(f"🎯 {pick} ML", kalshi_url)
             with col2:
-                st.link_button(f"⬇️ NO {safe_no}", kalshi_totals_url)
+                if projected:
+                    safe_no, _, _, _ = get_totals_thresholds(projected)
+                    st.link_button(f"⬇️ NO {safe_no}", kalshi_totals_url)
+                else:
+                    st.link_button(f"⬇️ TOTALS", kalshi_totals_url)
             with col3:
-                st.link_button(f"⬆️ YES {safe_yes}", kalshi_totals_url)
+                if projected:
+                    _, _, safe_yes, _ = get_totals_thresholds(projected)
+                    st.link_button(f"⬆️ YES {safe_yes}", kalshi_totals_url)
+                else:
+                    st.link_button(f"⬆️ TOTALS", kalshi_totals_url)
         else:
-            lead = item.get('lead', 0)
-            mins = item.get('mins', 0)
-            
-            total = g['home_score'] + g['away_score']
-            pace = total / mins if mins > 0 else 0
-            projected = round(pace * 48) if pace > 0 else 0
-            
-            if pace > 5.0:
-                pace_label = "🔥 FAST"
-            elif pace < 4.2:
-                pace_label = "🐢 SLOW"
+            # Build totals display
+            if projected:
+                safe_no, no_cushion, safe_yes, yes_cushion = get_totals_thresholds(projected)
+                no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
+                yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
+                totals_html = f"""
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
+                    <span style="color: #888;">Proj: {projected}</span>
+                    <span style="color: #888; margin-left: 15px;">|</span>
+                    <span style="color: {no_color}; margin-left: 15px;">NO {safe_no} (+{no_cushion})</span>
+                    <span style="color: #888; margin-left: 15px;">|</span>
+                    <span style="color: {yes_color}; margin-left: 15px;">YES {safe_yes} (+{yes_cushion})</span>
+                </div>
+                """
             else:
-                pace_label = "⚖️ AVG"
-            
-            no_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected), len(THRESHOLDS)-1)
-            safe_no_idx = min(no_idx + 1, len(THRESHOLDS) - 1)
-            safe_no = THRESHOLDS[safe_no_idx]
-            no_cushion = safe_no - projected
-            
-            yes_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected), 0)
-            safe_yes_idx = max(yes_idx - 1, 0)
-            safe_yes = THRESHOLDS[safe_yes_idx]
-            yes_cushion = projected - safe_yes
-            
-            no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
-            yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
+                totals_html = f"""
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
+                    <span style="color: #666;">⏳ Totals projection available after {MIN_MINUTES_FOR_PROJECTION} min</span>
+                </div>
+                """
             
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, #1a1a1a 0%, #1a1a1a 100%); border: 1px solid #555; border-radius: 10px; padding: 16px; margin: 10px 0;">
@@ -791,19 +892,16 @@ if live_games:
                         <span style="color: #888;">ML Edge:</span>
                         <span style="color: #888; margin-left: 8px;">{'TOO EARLY' if mins < 6 else 'TOO CLOSE'}</span>
                         <span style="color: #666; margin-left: 8px;">({lead:+d})</span>
-                        <span style="color: #666; margin-left: 8px;">{pace_label if mins >= 6 else ''}</span>
+                        <span style="color: #666; margin-left: 8px;">{pace_label}</span>
                     </div>
                     <div>
                         <span style="background: #555; color: #aaa; padding: 6px 14px; border-radius: 6px; font-weight: bold;">—/100</span>
                     </div>
                 </div>
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
-                    <span style="color: #888;">Proj: {projected}</span>
-                    <span style="color: #888; margin-left: 15px;">|</span>
-                    <span style="color: {no_color}; margin-left: 15px;">NO {safe_no} (+{no_cushion})</span>
-                    <span style="color: #888; margin-left: 15px;">|</span>
-                    <span style="color: {yes_color}; margin-left: 15px;">YES {safe_yes} (+{yes_cushion})</span>
+                <div style="margin-top: 8px;">
+                    <span style="color: {conviction_color}; font-weight: bold;">{conviction_text}</span>
                 </div>
+                {totals_html}
             </div>
             """, unsafe_allow_html=True)
             
@@ -811,9 +909,17 @@ if live_games:
             with col1:
                 st.link_button(f"👀 VIEW ML", kalshi_url)
             with col2:
-                st.link_button(f"⬇️ NO {safe_no}", kalshi_totals_url)
+                if projected:
+                    safe_no, _, _, _ = get_totals_thresholds(projected)
+                    st.link_button(f"⬇️ NO {safe_no}", kalshi_totals_url)
+                else:
+                    st.link_button(f"⬇️ TOTALS", kalshi_totals_url)
             with col3:
-                st.link_button(f"⬆️ YES {safe_yes}", kalshi_totals_url)
+                if projected:
+                    _, _, safe_yes, _ = get_totals_thresholds(projected)
+                    st.link_button(f"⬆️ YES {safe_yes}", kalshi_totals_url)
+                else:
+                    st.link_button(f"⬆️ TOTALS", kalshi_totals_url)
         
         st.markdown("")
     
@@ -1055,7 +1161,8 @@ if st.session_state.positions:
                     label, status_color = ("✅ WON", "success") if won else ("❌ LOST", "error")
                     pnl = f"+${potential:.2f}" if won else f"-${cost:.2f}"
                 elif is_live and mins > 0:
-                    pace_val = total / mins
+                    raw_pace = total / mins
+                    pace_val = min(raw_pace, MAX_PACE)
                     projected = round(total + pace_val * (48 - mins))
                     if side == 'NO':
                         cushion = threshold - projected
@@ -1247,29 +1354,15 @@ with st.expander("📖 HOW TO USE THIS APP"):
     
     ---
     
-    ### Edge Score Guide
+    ### Conviction Guide
     
-    | Score | Meaning |
-    |-------|---------|
-    | 75+ | Strong alignment — multiple factors |
-    | 60-74 | Good alignment — several factors |
-    | 50-59 | Weak alignment — few factors |
-    | TOO CLOSE | No clear edge — lead under 5 |
-    | TOO EARLY | Under 6 minutes played |
-    
-    ---
-    
-    ### Live Timing Guide
-    
-    | Quarter | Lead | Conviction |
-    |---------|------|------------|
-    | Q1 | Any | 🔴 LOW |
-    | Q2 | 10+ | 🟡 MEDIUM |
-    | Q3 | 12+ | 🟢 GOOD |
-    | Q4 | 15+ | 🟢🟢 HIGH |
-    | Q4 (4 min left) | 10+ | 🟢🟢🟢 VERY HIGH |
-    
-    **Sweet spot:** Q2 with 12+ lead and 🐢 SLOW pace
+    | Conviction | Meaning |
+    |------------|---------|
+    | 🟢🟢🟢 VERY HIGH | Q4 final 4 min with 10+ lead |
+    | 🟢🟢 HIGH | Q4 with 15+ lead |
+    | 🟢 GOOD | Q3 with 12+ lead |
+    | 🟡 MEDIUM | Q2 with 10+ lead |
+    | 🔴 LOW | Q1 or small lead |
     
     ---
     
@@ -1282,6 +1375,8 @@ with st.expander("📖 HOW TO USE THIS APP"):
     - Yellow = cushion 5-9 (decent)
     - Gray = cushion under 5 (risky)
     
+    **Note:** Totals projection only appears after 6 minutes of game time.
+    
     ---
     
     ### Important Reminders
@@ -1292,4 +1387,4 @@ with st.expander("📖 HOW TO USE THIS APP"):
     ⚠️ Only risk what you can afford to lose  
     """)
 
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v3.1")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v3.3")
