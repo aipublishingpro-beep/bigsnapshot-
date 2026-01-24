@@ -650,7 +650,7 @@ def save_positions(positions):
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v3.8 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
+st.caption(f"v3.9 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
 
 st.markdown("""
 <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
@@ -792,26 +792,26 @@ if live_games:
                 safe_no, no_cushion, safe_yes, yes_cushion = get_totals_thresholds(projected)
                 # Format cushions with proper signs and labels
                 if no_cushion >= 10:
-                    no_label = f"🟢 NO {safe_no} (+{no_cushion}) SAFE"
+                    no_label = f'<span style="color: #00ff00; font-weight: bold;">🟢 NO {safe_no} (+{no_cushion}) SAFE</span>'
                 elif no_cushion >= 5:
-                    no_label = f"🟡 NO {safe_no} (+{no_cushion})"
+                    no_label = f'<span style="color: #88cc00;">🟡 NO {safe_no} (+{no_cushion})</span>'
                 elif no_cushion >= 0:
-                    no_label = f"⚪ NO {safe_no} (+{no_cushion})"
+                    no_label = f'<span style="color: #888;">⚪ NO {safe_no} (+{no_cushion})</span>'
                 else:
-                    no_label = f"🔴 NO {safe_no} ({no_cushion}) AVOID"
+                    no_label = f'<span style="color: #ff6666;">🔴 NO {safe_no} ({no_cushion}) AVOID</span>'
                 
                 if yes_cushion >= 10:
-                    yes_label = f"🟢 YES {safe_yes} (+{yes_cushion}) SAFE"
+                    yes_label = f'<span style="color: #00ff00; font-weight: bold;">🟢 YES {safe_yes} (+{yes_cushion}) SAFE</span>'
                 elif yes_cushion >= 5:
-                    yes_label = f"🟡 YES {safe_yes} (+{yes_cushion})"
+                    yes_label = f'<span style="color: #88cc00;">🟡 YES {safe_yes} (+{yes_cushion})</span>'
                 elif yes_cushion >= 0:
-                    yes_label = f"⚪ YES {safe_yes} (+{yes_cushion})"
+                    yes_label = f'<span style="color: #888;">⚪ YES {safe_yes} (+{yes_cushion})</span>'
                 else:
-                    yes_label = f"🔴 YES {safe_yes} ({yes_cushion}) AVOID"
+                    yes_label = f'<span style="color: #ff6666;">🔴 YES {safe_yes} ({yes_cushion}) AVOID</span>'
                 
-                totals_text = f"Proj: {projected} | {no_label} | {yes_label}"
+                totals_line = f'<span style="color: #888;">Proj: {projected}</span> | {no_label} | {yes_label}'
             else:
-                totals_text = f"⏳ Totals after {MIN_MINUTES_FOR_PROJECTION} min"
+                totals_line = f'<span style="color: #666;">⏳ Totals after {MIN_MINUTES_FOR_PROJECTION} min</span>'
             
             card_html = f'<div style="background: linear-gradient(135deg, #1a1a1a 0%, {bg_color} 100%); border: 2px solid {border_color}; border-radius: 10px; padding: 16px; margin: 10px 0;">'
             card_html += f'<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">'
@@ -821,7 +821,7 @@ if live_games:
             card_html += f'<div><span style="color: #aaa;">Edge:</span><span style="color: {border_color}; font-size: 1.3em; font-weight: bold; margin-left: 8px;">{pick}</span><span style="color: #888; margin-left: 8px;">({ml_lead:+d} lead)</span><span style="color: #666; margin-left: 8px;">{pace_label}</span></div>'
             card_html += f'<div><span style="background: {border_color}; color: #000; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 1.1em;">{alignment}/100</span></div></div>'
             card_html += f'<div style="margin-top: 8px;"><span style="color: {conviction_color}; font-weight: bold;">{conviction_text}</span></div>'
-            card_html += f'<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333; color: #888;">{totals_text}</div></div>'
+            card_html += f'<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">{totals_line}</div></div>'
             st.markdown(card_html, unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
@@ -845,26 +845,26 @@ if live_games:
                 safe_no, no_cushion, safe_yes, yes_cushion = get_totals_thresholds(projected)
                 # Format cushions with proper signs and labels
                 if no_cushion >= 10:
-                    no_label = f"🟢 NO {safe_no} (+{no_cushion}) SAFE"
+                    no_label = f'<span style="color: #00ff00; font-weight: bold;">🟢 NO {safe_no} (+{no_cushion}) SAFE</span>'
                 elif no_cushion >= 5:
-                    no_label = f"🟡 NO {safe_no} (+{no_cushion})"
+                    no_label = f'<span style="color: #88cc00;">🟡 NO {safe_no} (+{no_cushion})</span>'
                 elif no_cushion >= 0:
-                    no_label = f"⚪ NO {safe_no} (+{no_cushion})"
+                    no_label = f'<span style="color: #888;">⚪ NO {safe_no} (+{no_cushion})</span>'
                 else:
-                    no_label = f"🔴 NO {safe_no} ({no_cushion}) AVOID"
+                    no_label = f'<span style="color: #ff6666;">🔴 NO {safe_no} ({no_cushion}) AVOID</span>'
                 
                 if yes_cushion >= 10:
-                    yes_label = f"🟢 YES {safe_yes} (+{yes_cushion}) SAFE"
+                    yes_label = f'<span style="color: #00ff00; font-weight: bold;">🟢 YES {safe_yes} (+{yes_cushion}) SAFE</span>'
                 elif yes_cushion >= 5:
-                    yes_label = f"🟡 YES {safe_yes} (+{yes_cushion})"
+                    yes_label = f'<span style="color: #88cc00;">🟡 YES {safe_yes} (+{yes_cushion})</span>'
                 elif yes_cushion >= 0:
-                    yes_label = f"⚪ YES {safe_yes} (+{yes_cushion})"
+                    yes_label = f'<span style="color: #888;">⚪ YES {safe_yes} (+{yes_cushion})</span>'
                 else:
-                    yes_label = f"🔴 YES {safe_yes} ({yes_cushion}) AVOID"
+                    yes_label = f'<span style="color: #ff6666;">🔴 YES {safe_yes} ({yes_cushion}) AVOID</span>'
                 
-                totals_text = f"Proj: {projected} | {no_label} | {yes_label}"
+                totals_line = f'<span style="color: #888;">Proj: {projected}</span> | {no_label} | {yes_label}'
             else:
-                totals_text = f"⏳ Totals after {MIN_MINUTES_FOR_PROJECTION} min"
+                totals_line = f'<span style="color: #666;">⏳ Totals after {MIN_MINUTES_FOR_PROJECTION} min</span>'
             
             edge_status = "TOO EARLY" if mins < 6 else "TOO CLOSE"
             card_html = '<div style="background: linear-gradient(135deg, #1a1a1a 0%, #1a1a1a 100%); border: 1px solid #555; border-radius: 10px; padding: 16px; margin: 10px 0;">'
@@ -875,7 +875,7 @@ if live_games:
             card_html += f'<div><span style="color: #888;">ML Edge:</span><span style="color: #888; margin-left: 8px;">{edge_status}</span><span style="color: #666; margin-left: 8px;">({lead:+d})</span><span style="color: #666; margin-left: 8px;">{pace_label}</span></div>'
             card_html += '<div><span style="background: #555; color: #aaa; padding: 6px 14px; border-radius: 6px; font-weight: bold;">—/100</span></div></div>'
             card_html += f'<div style="margin-top: 8px;"><span style="color: {conviction_color}; font-weight: bold;">{conviction_text}</span></div>'
-            card_html += f'<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333; color: #888;">{totals_text}</div></div>'
+            card_html += f'<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">{totals_line}</div></div>'
             st.markdown(card_html, unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
@@ -1359,4 +1359,4 @@ with st.expander("📖 HOW TO USE THIS APP"):
     ⚠️ Only risk what you can afford to lose  
     """)
 
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v3.7")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v3.9")
