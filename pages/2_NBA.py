@@ -409,7 +409,10 @@ def save_positions(positions):
         with open(POSITIONS_FILE, 'w') as f: json.dump(positions, f, indent=2)
     except: pass
 
-# UI
+# ────────────────────────────────────────────────
+#                     MAIN UI
+# ────────────────────────────────────────────────
+
 st.title("🏀 NBA EDGE FINDER")
 st.caption(f"v4.0 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
 
@@ -535,6 +538,7 @@ if live_games:
                     save_positions(st.session_state.positions)
                     st.rerun()
         st.markdown("")
+
     st.divider()
 
 # STAR INJURIES
@@ -676,5 +680,47 @@ if st.session_state.positions:
         st.rerun()
 else:
     st.info("No active positions — use '➕ Track My Bet' on live games above")
+
+# ────────────────────────────────────────────────
+#          HOW TO USE / HELP SECTION (collapsible)
+# ────────────────────────────────────────────────
+
+with st.expander("ℹ️  How to Use NBA Edge Finder", expanded=False):
+    st.markdown("""
+    ### Welcome to NBA Edge Finder 🏀
+    
+    This tool surfaces betting **edges** based on injuries, rest, net ratings, pace, H2H, altitude, and live game flow — so you can decide faster.
+
+    #### 1. Live Edge Monitor (top when games are playing)
+    - Real-time moneyline + totals insight during live games
+    - **Edge score** (e.g. 78/100) = strength of factors favoring one side
+    - **Conviction** (🟢🟢🟢 / 🔴) factors in lead size + time left
+    - Projected total appears after ~6 minutes
+    - Click Kalshi buttons → straight to the market
+
+    #### 2. Pre-Game Alignment (lower section)
+    - Edges for upcoming games, sorted by tip-off time
+    - Green cards = strong edges (75+ = look closer)
+    - Reasons show the main drivers (e.g. "Opp B2B", "Star OUT", "Net +12")
+
+    #### 3. Track My Bet (under each live game)
+    - Add the **totals line** you're playing (YES/NO + line + price + qty)
+    - Watch the projected cushion update live
+    - Status changes: 🟢 VERY SAFE → 🔴 DANGER as game progresses
+
+    #### 4. Active Positions (bottom)
+    - All your tracked bets in one dashboard
+    - Color-coded: green = good shape, red = trouble
+    - Shows projected outcome for totals / lead safety for ML
+
+    ### Quick Tips
+    - **Edge Score ≠ guaranteed win** — it's directional info only
+    - Auto-refreshes every ~24 seconds
+    - Data from ESPN (small delays possible)
+    - Star injuries, B2B, cross-country travel, and pace get extra weight
+    - Use together with your own line shopping & research
+
+    Feedback / ideas? Hit me up → @AipublishiPRO
+    """)
 
 st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v4.0")
