@@ -1,26 +1,39 @@
 import streamlit as st
-import streamlit.components.v1 as components
 
 st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide")
 
 # ============================================================
 # GA4 ANALYTICS - MUST BE RIGHT AFTER set_page_config
 # ============================================================
-components.html("""
+st.markdown("""
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
 <script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-1T35YHHYBC', { send_page_view: true });
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-1T35YHHYBC', {
+  page_path: window.location.pathname
+});
 </script>
-""", height=0)
+""", unsafe_allow_html=True)
 
 # ============================================================
 # 🔐 AUTH CHECK — MUST BE AFTER GA
 # ============================================================
 from auth import require_auth
 require_auth()
+
+# ============================================================
+# GA4 AUTH-SAFE PAGEVIEW - FIRES AFTER AUTH REDIRECT/RERUN
+# ============================================================
+st.markdown("""
+<script>
+gtag('event', 'page_view', {
+  page_title: document.title,
+  page_path: window.location.pathname
+});
+</script>
+""", unsafe_allow_html=True)
 
 import requests
 import json
@@ -31,7 +44,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "18.2"
+VERSION = "18.3"
 
 # ============================================================
 # STRONG PICKS SYSTEM
