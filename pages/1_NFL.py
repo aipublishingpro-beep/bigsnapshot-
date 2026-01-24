@@ -7,12 +7,12 @@ st.set_page_config(page_title="NFL Edge Finder", page_icon="🏈", layout="wide"
 # GA4 ANALYTICS - MUST BE RIGHT AFTER set_page_config
 # ============================================================
 GA_TRACKING_CODE = """
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'G-1T35YHHYBC', {
+  gtag('config', 'G-NQKY5VQ376', {
     page_title: 'NFL Edge Finder',
     page_location: window.parent.location.href
   });
