@@ -385,11 +385,12 @@ if current_temp:
             # FIX: Show ALL readings for everyone (was readings[:8] for non-owners)
             display_list = readings
             
-            # Show amber LOW reversal row where the low occurred
+            # Show amber LOW reversal row where the low occurred IN THE MORNING (before noon)
             low_reversal_idx = None
             if obs_low:
                 for i, r in enumerate(display_list):
-                    if r['temp'] == obs_low:
+                    reading_hour = int(r['time'].split(':')[0])
+                    if r['temp'] == obs_low and reading_hour < 12:
                         low_reversal_idx = i
                         break
             
