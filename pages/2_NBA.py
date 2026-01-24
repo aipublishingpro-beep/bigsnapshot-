@@ -1,78 +1,4 @@
-else:
-            # Too close to call for ML — but still show totals
-            lead = item.get('lead', 0)
-            mins = item.get('mins', 0)
-            
-            # Calculate totals even for close games
-            total = g['home_score'] + g['away_score']
-            pace = total / mins if mins > 0 else 0
-            projected = round(pace * 48) if pace > 0 else 0
-            
-            # Pace label
-            if pace > 5.0:
-                pace_label = "🔥 FAST"
-            elif pace < 4.2:
-                pace_label = "🐢 SLOW"
-            else:
-                pace_label = "⚖️ AVG"
-            
-            # Find safe thresholds (2 levels away)
-            no_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected), len(THRESHOLDS)-1)
-            safe_no_idx = min(no_idx + 1, len(THRESHOLDS) - 1)
-            safe_no = THRESHOLDS[safe_no_idx]
-            no_cushion = safe_no - projected
-            
-            yes_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected), 0)
-            safe_yes_idx = max(yes_idx - 1, 0)
-            safe_yes = THRESHOLDS[safe_yes_idx]
-            yes_cushion = projected - safe_yes
-            
-            # Totals indicator colors
-            no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
-            yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
-            
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #1a1a1a 0%, #1a1a1a 100%); border: 1px solid #555; border-radius: 10px; padding: 16px; margin: 10px 0;">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                    <div>
-                        <span style="color: #fff; font-size: 1.1em; font-weight: bold;">{g['away']} @ {g['home']}</span>
-                        <span style="color: #888; margin-left: 12px;">Q{g['period']} {g['clock']}</span>
-                    </div>
-                    <div style="text-align: right;">
-                        <span style="color: #fff; font-size: 1.2em; font-weight: bold;">{g['away_score']} - {g['home_score']}</span>
-                    </div>
-                </div>
-                <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                    <div>
-                        <span style="color: #888;">ML Edge:</span>
-                        <span style="color: #888; margin-left: 8px;">{'TOO EARLY' if mins < 6 else 'TOO CLOSE'}</span>
-                        <span style="color: #666; margin-left: 8px;">({lead:+d})</span>
-                        <span style="color: #666; margin-left: 8px;">{pace_label if mins >= 6 else ''}</span>
-                    </div>
-                    <div>
-                        <span style="background: #555; color: #aaa; padding: 6px 14px; border-radius: 6px; font-weight: bold;">—/100</span>
-                    </div>
-                </div>
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
-                    <span style="color: #888;">Proj: {projected}</span>
-                    <span style="color: #888; margin-left: 15px;">|</span>
-                    <span style="color: {no_color}; margin-left: 15px;">NO {safe_no} (+{no_cushion})</span>
-                    <span style="color: #888; margin-left: 15px;">|</span>
-                    <span style="color: {yes_color}; margin-left: 15px;">YES {safe_yes} (+{yes_cushion})</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.link_button(f"👀 VIEW ML", kalshi_url)
-            with col2:
-                kalshi_totals_url = build_kalshi_totals_url(g['away'], g['home'])
-                st.link_button(f"⬇️ NO {safe_no}", kalshi_totals_url)
-            with col3:
-                st.link_button(f"⬆️ YES {safe_yes}", kalshi_totals_url)
-        
-        st.markdown("")import streamlit as st
+import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
@@ -261,7 +187,6 @@ def fetch_games():
                 else:
                     away = {"team": name, "score": score}
             status = event.get("status", {})
-            # Get game start time
             game_time = event.get("date", "")
             try:
                 game_dt = datetime.fromisoformat(game_time.replace("Z", "+00:00"))
@@ -409,11 +334,7 @@ def get_minutes_played(period, clock, status):
         else: return 48 + (period - 5) * 5 + (5 - time_left)
     except: return (period - 1) * 12 if period <= 4 else 48 + (period - 5) * 5
 
-# ============================================================
-# LIVE EDGE CALCULATION
-# ============================================================
 def calc_live_ml_alignment(game):
-    """Calculate real-time ML alignment based on live game data"""
     home = game['home']
     away = game['away']
     home_score = game['home_score']
@@ -422,18 +343,15 @@ def calc_live_ml_alignment(game):
     mins = get_minutes_played(game['period'], game['clock'], game['status'])
     
     if mins < 6:
-        return None  # Not enough data
+        return None
     
     lead_home = home_score - away_score
     
-    # Need at least 5 point lead to show edge
     if abs(lead_home) < 5:
         return None
     
-    # Calculate live alignment score
-    live_score = 50  # Start neutral
+    live_score = 50
     
-    # Lead factor (biggest weight)
     if abs(lead_home) >= 20:
         live_score += 25 if lead_home > 0 else -25
     elif abs(lead_home) >= 15:
@@ -443,26 +361,21 @@ def calc_live_ml_alignment(game):
     elif abs(lead_home) >= 5:
         live_score += 6 if lead_home > 0 else -6
     
-    # Time factor - leads mean more later in game
-    if mins >= 36:  # Q4
+    if mins >= 36:
         if abs(lead_home) >= 10:
             live_score += 15 if lead_home > 0 else -15
         elif abs(lead_home) >= 5:
             live_score += 8 if lead_home > 0 else -8
-    elif mins >= 24:  # Q3
+    elif mins >= 24:
         if abs(lead_home) >= 15:
             live_score += 8 if lead_home > 0 else -8
     
-    # Pace adjustment - fast pace = leads less sticky
     pace = total / mins
     if pace > 5.0 and abs(lead_home) >= 10:
-        # Fast game, discount the lead slightly
         live_score += -4 if lead_home > 0 else 4
     elif pace < 4.2 and abs(lead_home) >= 10:
-        # Slow grind, lead is stickier
         live_score += 3 if lead_home > 0 else -3
     
-    # Determine pick
     if live_score >= 55:
         pick = home
         alignment = live_score
@@ -470,7 +383,7 @@ def calc_live_ml_alignment(game):
         pick = away
         alignment = 100 - live_score
     else:
-        return None  # Too close
+        return None
     
     return {
         'pick': pick,
@@ -727,7 +640,6 @@ if live_games:
         **Too late risk:** Up 20 with 3 min left — Kalshi price already 90¢, no value left.
         """)
     
-    # Calculate edge for all live games
     live_edges = []
     for g in live_games:
         ml_live = calc_live_ml_alignment(g)
@@ -738,35 +650,31 @@ if live_games:
                 'alignment': ml_live['alignment']
             })
         else:
-            # Game too close or too early - still show it
             mins = get_minutes_played(g['period'], g['clock'], g['status'])
             lead = g['home_score'] - g['away_score']
             live_edges.append({
                 'game': g,
                 'ml': None,
-                'alignment': 50,  # Neutral
+                'alignment': 50,
                 'lead': lead,
                 'mins': mins
             })
     
-    # Sort by alignment (highest first)
     live_edges.sort(key=lambda x: x['alignment'], reverse=True)
     
-    # Display all live games
     for item in live_edges:
         g = item['game']
         ml = item['ml']
         kalshi_url = build_kalshi_url(g['away'], g['home'])
+        kalshi_totals_url = build_kalshi_totals_url(g['away'], g['home'])
         
         if ml:
-            # Has clear edge
             alignment = ml['alignment']
             pick = ml['pick']
             lead = ml['lead']
             mins = ml['mins']
             pace = ml.get('pace', 0)
             
-            # Pace label
             if pace > 5.0:
                 pace_label = "🔥 FAST"
             elif pace < 4.2:
@@ -774,24 +682,19 @@ if live_games:
             else:
                 pace_label = "⚖️ AVG"
             
-            # Calculate projected total and thresholds
             total = g['home_score'] + g['away_score']
             projected = round(pace * 48) if pace > 0 else 0
             
-            # Find safe thresholds (2 levels away)
-            # UNDER (NO): 2 levels above projected
             no_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected), len(THRESHOLDS)-1)
             safe_no_idx = min(no_idx + 1, len(THRESHOLDS) - 1)
             safe_no = THRESHOLDS[safe_no_idx]
             no_cushion = safe_no - projected
             
-            # OVER (YES): 2 levels below projected
             yes_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected), 0)
             safe_yes_idx = max(yes_idx - 1, 0)
             safe_yes = THRESHOLDS[safe_yes_idx]
             yes_cushion = projected - safe_yes
             
-            # Color based on alignment
             if alignment >= 75:
                 border_color = "#00ff00"
                 bg_color = "#0d1f0d"
@@ -802,7 +705,6 @@ if live_games:
                 border_color = "#cccc00"
                 bg_color = "#1f1f0d"
             
-            # Totals indicator colors
             no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
             yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
             
@@ -842,14 +744,36 @@ if live_games:
             with col1:
                 st.link_button(f"🎯 {pick} ML", kalshi_url)
             with col2:
-                kalshi_totals_url = build_kalshi_totals_url(g['away'], g['home'])
                 st.link_button(f"⬇️ NO {safe_no}", kalshi_totals_url)
             with col3:
                 st.link_button(f"⬆️ YES {safe_yes}", kalshi_totals_url)
         else:
-            # Too close to call
             lead = item.get('lead', 0)
             mins = item.get('mins', 0)
+            
+            total = g['home_score'] + g['away_score']
+            pace = total / mins if mins > 0 else 0
+            projected = round(pace * 48) if pace > 0 else 0
+            
+            if pace > 5.0:
+                pace_label = "🔥 FAST"
+            elif pace < 4.2:
+                pace_label = "🐢 SLOW"
+            else:
+                pace_label = "⚖️ AVG"
+            
+            no_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected), len(THRESHOLDS)-1)
+            safe_no_idx = min(no_idx + 1, len(THRESHOLDS) - 1)
+            safe_no = THRESHOLDS[safe_no_idx]
+            no_cushion = safe_no - projected
+            
+            yes_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected), 0)
+            safe_yes_idx = max(yes_idx - 1, 0)
+            safe_yes = THRESHOLDS[safe_yes_idx]
+            yes_cushion = projected - safe_yes
+            
+            no_color = "#00ff00" if no_cushion >= 10 else "#88cc00" if no_cushion >= 5 else "#888"
+            yes_color = "#00ff00" if yes_cushion >= 10 else "#88cc00" if yes_cushion >= 5 else "#888"
             
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, #1a1a1a 0%, #1a1a1a 100%); border: 1px solid #555; border-radius: 10px; padding: 16px; margin: 10px 0;">
@@ -864,17 +788,32 @@ if live_games:
                 </div>
                 <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
                     <div>
-                        <span style="color: #888;">Edge:</span>
+                        <span style="color: #888;">ML Edge:</span>
                         <span style="color: #888; margin-left: 8px;">{'TOO EARLY' if mins < 6 else 'TOO CLOSE'}</span>
                         <span style="color: #666; margin-left: 8px;">({lead:+d})</span>
+                        <span style="color: #666; margin-left: 8px;">{pace_label if mins >= 6 else ''}</span>
                     </div>
                     <div>
                         <span style="background: #555; color: #aaa; padding: 6px 14px; border-radius: 6px; font-weight: bold;">—/100</span>
                     </div>
                 </div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
+                    <span style="color: #888;">Proj: {projected}</span>
+                    <span style="color: #888; margin-left: 15px;">|</span>
+                    <span style="color: {no_color}; margin-left: 15px;">NO {safe_no} (+{no_cushion})</span>
+                    <span style="color: #888; margin-left: 15px;">|</span>
+                    <span style="color: {yes_color}; margin-left: 15px;">YES {safe_yes} (+{yes_cushion})</span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
-            st.link_button(f"👀 VIEW {g['away']} @ {g['home']} ON KALSHI", kalshi_url)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.link_button(f"👀 VIEW ML", kalshi_url)
+            with col2:
+                st.link_button(f"⬇️ NO {safe_no}", kalshi_totals_url)
+            with col3:
+                st.link_button(f"⬆️ YES {safe_yes}", kalshi_totals_url)
         
         st.markdown("")
     
@@ -951,7 +890,6 @@ for g in games:
         result["datetime"] = g.get("datetime")
         picks.append(result)
     else:
-        # No clear edge - still show the game
         picks.append({
             "pick": None,
             "opponent": None,
@@ -969,7 +907,6 @@ for g in games:
             "time": g.get("time", ""),
             "datetime": g.get("datetime")
         })
-# Sort by game time (soonest first)
 picks.sort(key=lambda x: x["datetime"] if x["datetime"] else datetime.max.replace(tzinfo=eastern))
 
 if picks:
@@ -978,11 +915,9 @@ if picks:
         kalshi_url = build_kalshi_url(p["away"], p["home"])
         
         if p["pick"]:
-            # Has clear edge
             reasons_str = " • ".join(p["reasons"])
             game_time = p.get("time", "")
             
-            # Color based on score
             if edge_score >= 75:
                 border_color = "#00ff00"
                 bg_color = "#0d1f0d"
@@ -1017,7 +952,6 @@ if picks:
             """, unsafe_allow_html=True)
             st.link_button(f"🎯 EDGE: {p['pick']} — BUY ON KALSHI", kalshi_url)
         else:
-            # No clear edge
             game_time = p.get("time", "")
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, #1a1a1a 0%, #1a1a1a 100%); border: 1px solid #555; border-radius: 10px; padding: 16px; margin: 10px 0;">
@@ -1063,86 +997,6 @@ for g in games:
     else:
         status = "Scheduled"
     st.markdown(f"**{away}** ({a_net:+.1f}) {a_display} {a_streak} — {g['away_score']} @ {g['home_score']} — **{home}** ({h_net:+.1f}) {h_display} {h_streak} | {status}")
-
-st.divider()
-
-# CUSHION SCANNER
-st.subheader("🎯 CUSHION SCANNER")
-cs1, cs2 = st.columns([1, 1])
-cush_min = cs1.selectbox("Min minutes", [6, 9, 12, 15, 18], index=0, key="cush_min")
-cush_side = cs2.selectbox("Side", ["NO", "YES"], key="cush_side")
-cush_results = []
-for g in games:
-    total = g['home_score'] + g['away_score']
-    mins = get_minutes_played(g['period'], g['clock'], g['status'])
-    if g['status'] == "STATUS_FINAL": continue
-    if mins < cush_min or mins <= 0: continue
-    pace = total / mins
-    remaining = max(48 - mins, 1)
-    projected = round(total + pace * remaining)
-    if cush_side == "NO":
-        base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected), len(THRESHOLDS)-1)
-        safe_idx = min(base_idx + 2, len(THRESHOLDS) - 1)
-        safe_line = THRESHOLDS[safe_idx]
-        cushion = safe_line - projected
-    else:
-        base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected), 0)
-        safe_idx = max(base_idx - 2, 0)
-        safe_line = THRESHOLDS[safe_idx]
-        cushion = projected - safe_line
-    if cushion < 6: continue
-    if cush_side == "NO":
-        if pace < 4.5: pace_status = "✅ SLOW"
-        elif pace < 4.8: pace_status = "⚠️ AVG"
-        else: pace_status = "❌ FAST"
-    else:
-        if pace > 5.1: pace_status = "✅ FAST"
-        elif pace > 4.8: pace_status = "⚠️ AVG"
-        else: pace_status = "❌ SLOW"
-    cush_results.append({
-        'home': g['home'], 'away': g['away'], 'total': total, 'mins': mins, 'pace': pace,
-        'pace_status': pace_status, 'projected': projected, 'cushion': cushion,
-        'safe_line': safe_line, 'period': g['period'], 'clock': g['clock']
-    })
-cush_results.sort(key=lambda x: x['cushion'], reverse=True)
-if cush_results:
-    for r in cush_results:
-        kalshi_url = build_kalshi_totals_url(r['away'], r['home'])
-        st.markdown(f"**{r['away']} @ {r['home']}** | Q{r['period']} {r['clock']} | {r['total']}pts/{r['mins']:.0f}min | Proj: **{r['projected']}** | Target: **{r['safe_line']}** | Cushion: **+{r['cushion']:.0f}** | {r['pace_status']}")
-        st.link_button(f"VIEW {cush_side} {r['safe_line']} ON KALSHI", kalshi_url)
-        st.markdown("---")
-else:
-    st.info(f"No {cush_side} opportunities with 6+ cushion yet")
-
-st.divider()
-
-# PACE SCANNER
-st.subheader("🔥 PACE SCANNER")
-pace_data = []
-for g in games:
-    total = g['home_score'] + g['away_score']
-    mins = get_minutes_played(g['period'], g['clock'], g['status'])
-    if mins >= 6:
-        pace = round(total / mins, 2)
-        pace_data.append({
-            "home": g['home'], "away": g['away'], "pace": pace, "proj": round(pace * 48),
-            "total": total, "mins": mins, "period": g['period'], "clock": g['clock'],
-            "final": g['status'] == "STATUS_FINAL"
-        })
-pace_data.sort(key=lambda x: x['pace'])
-if pace_data:
-    for p in pace_data:
-        kalshi_url = build_kalshi_totals_url(p['away'], p['home'])
-        if p['pace'] < 4.5:
-            lbl = "🟢 SLOW"
-        elif p['pace'] < 4.8:
-            lbl = "🟡 AVG"
-        else:
-            lbl = "🔴 FAST"
-        status = "FINAL" if p['final'] else f"Q{p['period']} {p['clock']}"
-        st.markdown(f"**{p['away']} @ {p['home']}** | {status} | {p['total']}pts/{p['mins']:.0f}min | **{p['pace']}/min** {lbl} | Proj: **{p['proj']}**")
-else:
-    st.info("No games with 6+ minutes played yet")
 
 st.divider()
 
@@ -1389,6 +1243,7 @@ with st.expander("📖 HOW TO USE THIS APP"):
     - Current lead size
     - Time remaining
     - Quarter context
+    - Pace adjustment (fast games = leads less sticky)
     
     ---
     
@@ -1414,7 +1269,18 @@ with st.expander("📖 HOW TO USE THIS APP"):
     | Q4 | 15+ | 🟢🟢 HIGH |
     | Q4 (4 min left) | 10+ | 🟢🟢🟢 VERY HIGH |
     
-    **Sweet spot:** Q3 with double-digit lead
+    **Sweet spot:** Q2 with 12+ lead and 🐢 SLOW pace
+    
+    ---
+    
+    ### Totals Guide
+    
+    Each live card shows safe thresholds for OVER/UNDER:
+    - **NO [threshold]** = Safe UNDER (2 levels above projected)
+    - **YES [threshold]** = Safe OVER (2 levels below projected)
+    - Green = cushion 10+ (strong)
+    - Yellow = cushion 5-9 (decent)
+    - Gray = cushion under 5 (risky)
     
     ---
     
