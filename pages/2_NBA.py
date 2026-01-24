@@ -801,7 +801,7 @@ if picks:
         col1, col2 = st.columns([1, 3])
         col1.metric("Edge Score", f"{edge_score}/100")
         col2.markdown(f"**Factors:** {reasons_str}")
-        st.link_button(f"VIEW {p['pick']} ON KALSHI", kalshi_url, type="primary")
+        st.link_button(f"🎯 EDGE: {p['pick']} — BUY ON KALSHI", kalshi_url, type="primary")
         st.markdown("---")
 else:
     st.info("No high-alignment picks right now.")
