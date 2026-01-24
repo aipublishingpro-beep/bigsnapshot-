@@ -8,17 +8,24 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-import streamlit.components.v1 as components
-components.html("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-1T35YHHYBC', { send_page_view: true });
-</script>
-""", height=0)
+# ============================================================
+# GA4 ANALYTICS - SERVER SIDE
+# ============================================================
+import uuid
+import requests as req_ga
 
+def send_ga4_event(page_title, page_path):
+    try:
+        url = f"https://www.google-analytics.com/mp/collect?measurement_id=G-NQKY5VQ376&api_secret=n4oBJjH7RXi3dA7aQo2CZA"
+        payload = {"client_id": str(uuid.uuid4()), "events": [{"name": "page_view", "params": {"page_title": page_title, "page_location": f"https://bigsnapshot.streamlit.app{page_path}"}}]}
+        req_ga.post(url, json=payload, timeout=2)
+    except: pass
+
+send_ga4_event("Soccer Edge Finder", "/Soccer")
+
+# ============================================================
+# COOKIE AUTH CHECK
+# ============================================================
 from auth import require_auth
 require_auth()
 
