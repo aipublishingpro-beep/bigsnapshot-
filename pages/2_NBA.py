@@ -227,18 +227,17 @@ def get_pace_label(pace):
         return "⚖️ AVG"
 
 def get_safe_projection(total, mins):
-    """Calculate projection only if enough time has passed, with pace cap"""
+    """Calculate projection only if enough time has passed"""
     if mins < MIN_MINUTES_FOR_PROJECTION:
         return None, None
     
-    # Calculate raw pace and cap it
-    raw_pace = total / mins if mins > 0 else 0
-    capped_pace = min(raw_pace, MAX_PACE)
+    # Calculate real pace - no cap after 6 min
+    pace = total / mins if mins > 0 else 0
     
-    # Project full game using capped pace
-    projected = round(capped_pace * 48)
+    # Project full game
+    projected = round(pace * 48)
     
-    return projected, round(capped_pace, 2)
+    return projected, round(pace, 2)
 
 def get_totals_thresholds(projected):
     """Get safe NO and YES thresholds based on projection"""
@@ -462,9 +461,8 @@ def calc_live_ml_alignment(game):
         if abs(lead_home) >= 15:
             live_score += 8 if lead_home > 0 else -8
     
-    # Calculate pace with cap
-    raw_pace = total / mins if mins > 0 else 0
-    pace = min(raw_pace, MAX_PACE)
+    # Calculate pace - no cap
+    pace = total / mins if mins > 0 else 0
     
     if pace > 5.0 and abs(lead_home) >= 10:
         live_score += -4 if lead_home > 0 else 4
@@ -652,7 +650,7 @@ def save_positions(positions):
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v3.6 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
+st.caption(f"v3.8 | {now.strftime('%b %d, %Y %I:%M %p ET')} | Auto-refresh 24s")
 
 st.markdown("""
 <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #e94560; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
@@ -1136,8 +1134,7 @@ if st.session_state.positions:
                     label, status_color = ("✅ WON", "success") if won else ("❌ LOST", "error")
                     pnl = f"+${potential:.2f}" if won else f"-${cost:.2f}"
                 elif is_live and mins > 0:
-                    raw_pace = total / mins
-                    pace_val = min(raw_pace, MAX_PACE)
+                    pace_val = total / mins
                     projected = round(total + pace_val * (48 - mins))
                     if side == 'NO':
                         cushion = threshold - projected
@@ -1362,4 +1359,4 @@ with st.expander("📖 HOW TO USE THIS APP"):
     ⚠️ Only risk what you can afford to lose  
     """)
 
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v3.6")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v3.7")
