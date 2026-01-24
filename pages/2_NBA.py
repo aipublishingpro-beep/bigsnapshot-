@@ -638,9 +638,9 @@ else:
 st.divider()
 
 # ============================================================
-# ALL GAMES
+# TODAY'S GAMES
 # ============================================================
-st.subheader("📺 ALL GAMES")
+st.subheader("📺 TODAY'S GAMES")
 
 for g in games:
     home, away = g["home"], g["away"]
