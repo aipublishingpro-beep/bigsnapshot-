@@ -683,6 +683,7 @@ if live_games:
                 </div>
             </div>
             """, unsafe_allow_html=True)
+            st.link_button(f"🎯 EDGE: {pick} — BUY ON KALSHI", kalshi_url)
         else:
             # Too close to call
             lead = item.get('lead', 0)
@@ -711,8 +712,8 @@ if live_games:
                 </div>
             </div>
             """, unsafe_allow_html=True)
+            st.link_button(f"👀 VIEW {g['away']} @ {g['home']} ON KALSHI", kalshi_url)
         
-        st.link_button(f"📈 VIEW {g['away']} @ {g['home']} ON KALSHI", kalshi_url)
         st.markdown("")
     
     st.divider()
@@ -757,7 +758,14 @@ st.divider()
 
 # PRE-GAME ALIGNMENT
 st.subheader("🎯 PRE-GAME ALIGNMENT")
-st.caption("Showing picks with Edge Score 60+ (multiple factors aligned)")
+st.markdown("""
+<div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #4a9eff; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
+<p style="color: #4a9eff; font-weight: 600; margin: 0 0 6px 0;">📊 ALL SCHEDULED GAMES — FACTOR ALIGNMENT</p>
+<p style="color: #ccc; font-size: 0.85em; margin: 0; line-height: 1.5;">
+We show the edge — <strong>you make the call</strong>. Higher score = more factors favor that side. Sorted by alignment.
+</p>
+</div>
+""", unsafe_allow_html=True)
 
 if "positions" not in st.session_state:
     st.session_state.positions = load_positions()
@@ -768,43 +776,99 @@ if "show_bulk_add" not in st.session_state:
 
 picks = []
 for g in games:
-    if g["status"] == "STATUS_FINAL":
+    if g["status"] == "STATUS_FINAL" or g["status"] == "STATUS_IN_PROGRESS":
         continue
     result = calc_edge(g["home"], g["away"], injuries, rest)
-    if result and result["edge_score"] >= 60:
+    if result:
         result["status"] = g["status"]
         result["period"] = g["period"]
         result["clock"] = g["clock"]
         result["home_score"] = g["home_score"]
         result["away_score"] = g["away_score"]
         picks.append(result)
+    else:
+        # No clear edge - still show the game
+        picks.append({
+            "pick": None,
+            "opponent": None,
+            "edge_score": 50,
+            "edge_pts": 0,
+            "reasons": ["No clear edge"],
+            "home": g["home"],
+            "away": g["away"],
+            "is_home": None,
+            "status": g["status"],
+            "period": g["period"],
+            "clock": g["clock"],
+            "home_score": g["home_score"],
+            "away_score": g["away_score"]
+        })
 picks.sort(key=lambda x: (-x["edge_score"], -x["edge_pts"]))
 
 if picks:
     for p in picks:
         edge_score = p["edge_score"]
-        reasons_str = " • ".join(p["reasons"])
         kalshi_url = build_kalshi_url(p["away"], p["home"])
-        if edge_score >= 75:
-            tier = "🟢 75+"
-        elif edge_score >= 68:
-            tier = "🟡 68+"
+        
+        if p["pick"]:
+            # Has clear edge
+            reasons_str = " • ".join(p["reasons"])
+            
+            # Color based on score
+            if edge_score >= 75:
+                border_color = "#00ff00"
+                bg_color = "#0d1f0d"
+            elif edge_score >= 60:
+                border_color = "#88cc00"
+                bg_color = "#1a1f0d"
+            else:
+                border_color = "#cccc00"
+                bg_color = "#1f1f0d"
+            
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #1a1a1a 0%, {bg_color} 100%); border: 2px solid {border_color}; border-radius: 10px; padding: 16px; margin: 10px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <span style="color: #fff; font-size: 1.1em; font-weight: bold;">{p['away']} @ {p['home']}</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="background: {border_color}; color: #000; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 1.1em;">{edge_score}/100</span>
+                    </div>
+                </div>
+                <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <span style="color: #aaa;">Edge:</span>
+                        <span style="color: {border_color}; font-size: 1.3em; font-weight: bold; margin-left: 8px;">{p['pick']}</span>
+                    </div>
+                    <div style="color: #888; font-size: 0.9em;">
+                        {reasons_str}
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.link_button(f"🎯 EDGE: {p['pick']} — BUY ON KALSHI", kalshi_url)
         else:
-            tier = "⚪ 60+"
-        live_status = ""
-        if p["status"] == "STATUS_IN_PROGRESS":
-            pick_score = p["home_score"] if p["is_home"] else p["away_score"]
-            opp_score = p["away_score"] if p["is_home"] else p["home_score"]
-            lead = pick_score - opp_score
-            live_status = f" | 🔴 Q{p['period']} {p['clock']} ({lead:+d})"
-        st.success(f"**{tier}** — **{p['pick']}** vs {p['opponent']}{live_status}")
-        col1, col2 = st.columns([1, 3])
-        col1.metric("Edge Score", f"{edge_score}/100")
-        col2.markdown(f"**Factors:** {reasons_str}")
-        st.link_button(f"🎯 EDGE: {p['pick']} — BUY ON KALSHI", kalshi_url, type="primary")
-        st.markdown("---")
+            # No clear edge
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #1a1a1a 0%, #1a1a1a 100%); border: 1px solid #555; border-radius: 10px; padding: 16px; margin: 10px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <span style="color: #fff; font-size: 1.1em; font-weight: bold;">{p['away']} @ {p['home']}</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="background: #555; color: #aaa; padding: 6px 14px; border-radius: 6px; font-weight: bold;">—/100</span>
+                    </div>
+                </div>
+                <div style="margin-top: 12px;">
+                    <span style="color: #888;">Edge: TOO CLOSE — No clear advantage</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.link_button(f"👀 VIEW {p['away']} @ {p['home']} ON KALSHI", kalshi_url)
+        
+        st.markdown("")
 else:
-    st.info("No high-alignment picks right now.")
+    st.info("No scheduled games right now.")
 
 st.divider()
 
