@@ -445,6 +445,13 @@ else:
 st.markdown("---")
 with st.expander("📊 POSITION CALCULATOR (not saved)", expanded=False):
     st.caption("⚡ Quick calculator — enter your LOW position to check cushion & P/L. Resets on refresh.")
+    
+    col_calc, col_clear = st.columns([3, 1])
+    with col_clear:
+        if st.button("🗑️ Clear", key="clear_calc"):
+            st.session_state.low_pos = False
+            st.rerun()
+    
     st.markdown("**LOW Position**")
     low_has_position = st.checkbox("I have a LOW position", key="low_pos")
     if low_has_position:
