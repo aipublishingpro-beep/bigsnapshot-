@@ -2,20 +2,41 @@ import streamlit as st
 
 st.set_page_config(page_title="NCAA Edge Finder", page_icon="🎓", layout="wide")
 
-import streamlit.components.v1 as components
-components.html("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-1T35YHHYBC', { send_page_view: true });
-</script>
-""", height=0)
+# ============================================================
+# GA4 ANALYTICS - SERVER SIDE
+# ============================================================
+import uuid
+import requests as req_ga
 
-from auth import require_auth
-require_auth()
+def send_ga4_event(page_title, page_path):
+    try:
+        url = f"https://www.google-analytics.com/mp/collect?measurement_id=G-NQKY5VQ376&api_secret=n4oBJjH7RXi3dA7aQo2CZA"
+        payload = {"client_id": str(uuid.uuid4()), "events": [{"name": "page_view", "params": {"page_title": page_title, "page_location": f"https://bigsnapshot.streamlit.app{page_path}"}}]}
+        req_ga.post(url, json=payload, timeout=2)
+    except: pass
 
+send_ga4_event("NCAA Edge Finder", "/NCAA")
+
+# ============================================================
+# COOKIE AUTH CHECK
+# ============================================================
+import extra_streamlit_components as stx
+
+cookie_manager = stx.CookieManager()
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+saved_auth = cookie_manager.get("authenticated")
+if saved_auth == "true":
+    st.session_state.authenticated = True
+
+if not st.session_state.authenticated:
+    st.switch_page("Home.py")
+
+# ============================================================
+# IMPORTS
+# ============================================================
 import requests
 from datetime import datetime, timedelta
 import pytz
@@ -119,106 +140,60 @@ def is_game_already_tagged(game_key):
 # 3-GATE SYSTEM FOR STRONG PICKS (NCAA THRESHOLDS)
 # ============================================================
 def get_match_stability(g, fatigue_data):
-    """
-    GATE 1: Match Stability
-    Checks: B2B fatigue, coin-flip matchups
-    Returns: (passes, reason)
-    """
     home_abbrev = g.get("home_abbrev", "")
     away_abbrev = g.get("away_abbrev", "")
-    
-    # Check B2B for picked team (will be checked after we know pick)
     home_fatigue = fatigue_data.get(home_abbrev, {})
     away_fatigue = fatigue_data.get(away_abbrev, {})
-    
-    # If both teams on B2B = volatile
     if home_fatigue.get("played_yesterday") and away_fatigue.get("played_yesterday"):
         return False, "Both teams B2B"
-    
     return True, None
 
 def get_cushion_tier(g, market_data, is_live=False):
-    """
-    GATE 2: Cushion Tier
-    NCAA thresholds: Pre=12pts diff, Live=10pts lead
-    Returns: (passes, reason)
-    """
     if is_live:
         home_score = g.get("home_score", 0)
         away_score = g.get("away_score", 0)
         pick = market_data.get("pick", "")
-        
         if pick == g.get("home_abbrev"):
             lead = home_score - away_score
         else:
             lead = away_score - home_score
-        
-        # NCAA live: need 10+ pt lead for Strong Pick
         if lead < 10:
             return False, f"Lead only {lead:+d} (need 10+)"
         return True, None
     else:
-        # Pre-game: check score differential expectation
         score = market_data.get("score", 0)
         edge = abs(market_data.get("edge", 0)) if "edge" in market_data else 0
-        
-        # NCAA pre-game: need strong edge signal (score 9.5+ or edge 3+)
         if score < 9.5 and edge < 3.0:
             return False, f"Edge too thin ({score}/10)"
         return True, None
 
 def get_pace_direction(g, market_data):
-    """
-    GATE 3: Pace Direction
-    Blocks if: Late game (2H) + close game (within 7pts)
-    NCAA: 2H = period 2, close = 7pts
-    Returns: (passes, reason)
-    """
     period = g.get("period", 0)
     status = g.get("status_type", "STATUS_SCHEDULED")
-    
-    # Only applies to live games
     if status == "STATUS_SCHEDULED" or period == 0:
         return True, None
-    
-    # Late game = 2nd half or OT
     is_late = period >= 2
-    
     if is_late:
         home_score = g.get("home_score", 0)
         away_score = g.get("away_score", 0)
         diff = abs(home_score - away_score)
-        
-        # Close game in 2H = too volatile
         if diff <= 7:
             half_label = "H2" if period == 2 else f"OT{period-2}"
             return False, f"{half_label} + only {diff}pt diff"
-    
     return True, None
 
 def check_strong_pick_eligible(g, market_data, fatigue_data):
-    """
-    Combine all 3 gates.
-    Returns: (eligible, block_reasons[])
-    """
     block_reasons = []
     is_live = g.get("period", 0) > 0 and g.get("status_type") != "STATUS_FINAL"
-    
-    # Gate 1: Match Stability
     stable, reason1 = get_match_stability(g, fatigue_data)
     if not stable:
         block_reasons.append(reason1)
-    
-    # Gate 2: Cushion Tier
     cushion, reason2 = get_cushion_tier(g, market_data, is_live)
     if not cushion:
         block_reasons.append(reason2)
-    
-    # Gate 3: Pace Direction
     pace, reason3 = get_pace_direction(g, market_data)
     if not pace:
         block_reasons.append(reason3)
-    
     return len(block_reasons) == 0, block_reasons
 
 if 'auto_refresh' not in st.session_state:
@@ -714,7 +689,6 @@ def get_final_signal(market, analyzer):
     
     agrees, agreement_strength = check_engine_agreement(market, analyzer)
     visible = passes_visibility_gate(market, analyzer)
-    conf = analyzer["confidence"]
     
     elite_path = (score >= 9.7 and agrees and pick_fatigue < 4.0)
     confirmed_path = (score >= 9.3 and agrees and pick_fatigue < 4.0 and abs(signed_edge) >= 1.5)
@@ -807,7 +781,6 @@ for gk, g in games.items():
         analyzer = team_strength_analyzer(g, streaks, splits, fatigue_data, ap_rankings)
         final = get_final_signal(market, analyzer)
         
-        # Check Strong Pick eligibility (3-gate system)
         strong_eligible, block_reasons = check_strong_pick_eligible(g, {"pick": market["pick"], "score": market["score"], "edge": analyzer["edge"]}, fatigue_data)
         
         precomputed[gk] = {
@@ -982,7 +955,6 @@ if today_strong:
                 
                 st.markdown(f'<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div style="display:flex;align-items:center;gap:12px"><span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span><b style="color:#fff">{escape_html(pick)}</b><span style="color:#888">{pick_score}-{opp_score}</span></div>{result_badge}</div></div>', unsafe_allow_html=True)
             else:
-                # Live or scheduled
                 if g['period'] > 0:
                     pick_score = g['home_score'] if pick == g['home_abbrev'] else g['away_score']
                     opp_score = g['away_score'] if pick == g['home_abbrev'] else g['home_score']
@@ -1084,7 +1056,6 @@ if all_picks:
             status_badge = '<span style="background:#1e3a5f;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:0.75em">PRE</span>'
             score_display = ''
         
-        # Show tagged indicator if already tagged
         if existing_tag:
             tag_info = get_strong_pick_for_game(p['game_key'])
             tag_badge = f'<span style="background:#00aa00;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75em;margin-left:8px">ML-{tag_info["ml_number"]:03d}</span>'
@@ -1093,7 +1064,6 @@ if all_picks:
         
         st.markdown(f'<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid {border_color};margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">{tier_badge}<b style="color:#fff;font-size:1.2em">{escape_html(p["market_pick"])}</b><span style="color:#666">v {escape_html(p["market_opp"])}</span><span style="color:#38bdf8;font-weight:bold">{p["market_score"]}</span>{status_badge}{score_display}{tag_badge}</div><a href="{kalshi_url}" target="_blank" style="background:#22c55e;color:#000;padding:8px 20px;border-radius:6px;font-weight:bold;text-decoration:none">BUY {escape_html(p["market_pick"])}</a></div><div style="color:#666;font-size:0.8em;margin-top:8px">{reasons_str}</div></div>', unsafe_allow_html=True)
         
-        # Strong Pick Button (only for STRONG tier, passes 3 gates, not tagged, not final)
         if is_strong_tier and p.get("strong_eligible") and not existing_tag and p.get("status_type") != "STATUS_FINAL":
             if st.button(f"➕ Add Strong Pick", key=f"strong_{p['game_key']}", use_container_width=True):
                 ml_num = add_strong_pick(p['game_key'], p['market_pick'], "NCAA")
@@ -1246,7 +1216,7 @@ for gk, g in games.items():
         continue
     
     pace = total / mins
-    remaining_min = max(40 - mins, 1)  # NCAA = 40 min game
+    remaining_min = max(40 - mins, 1)
     projected_final = round(total + pace * remaining_min)
     
     if cush_side == "NO":
@@ -1316,7 +1286,7 @@ for gk, g in games.items():
     if mins >= 5:
         pace = round(g['total'] / mins, 2)
         pace_data.append({
-            "game": gk, "pace": pace, "proj": round(pace * 40),  # NCAA = 40 min
+            "game": gk, "pace": pace, "proj": round(pace * 40),
             "total": g['total'], "mins": mins, 
             "period": g['period'], "clock": g['clock'], 
             "final": g['status_type'] == "STATUS_FINAL"
@@ -1328,7 +1298,6 @@ if pace_data:
     for p in pace_data:
         half_label = "H1" if p['period'] == 1 else "H2" if p['period'] == 2 else f"OT{p['period']-2}" if p['period'] > 2 else ""
         
-        # NCAA pace thresholds (adjusted for 40-min game)
         if p['pace'] < 3.2:
             lbl, clr = "🟢 SLOW", "#00ff00"
             base_idx = next((i for i, t in enumerate(NCAA_THRESHOLDS) if t > p['proj']), len(NCAA_THRESHOLDS)-1)
