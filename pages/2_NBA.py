@@ -573,13 +573,13 @@ with st.sidebar:
     *We show the edge — you make the call.*
     """)
     st.divider()
-    st.caption("v4.4 NBA EDGE")
+    st.caption("v4.5 NBA EDGE")
 
 # ============================================================
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v4.4 • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s")
+st.caption(f"v4.5 • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s")
 
 # Fetch data
 games = fetch_games()
@@ -1143,4 +1143,4 @@ with st.expander("📖 HOW TO USE", expanded=False):
     ⚠️ Only risk what you can afford to lose  
     """)
 
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v4.4")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v4.5")
