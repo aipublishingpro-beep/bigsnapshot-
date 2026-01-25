@@ -179,44 +179,63 @@ THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5, 250.5, 255
 def fetch_kalshi_prices():
     """Fetch current Kalshi NBA ML prices - REAL TIME (24s refresh)"""
     prices = {}
+    errors = []
     today = datetime.now(eastern).strftime('%y%b%d').upper()
     
-    try:
-        # Kalshi trading API endpoint
-        url = "https://trading-api.kalshi.com/trade-api/v2/markets"
-        params = {"series_ticker": "KXNBA", "status": "open", "limit": 100}
-        
-        resp = requests.get(url, params=params, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            markets = data.get("markets", [])
+    # Try multiple Kalshi API endpoints
+    endpoints = [
+        "https://api.kalshi.com/trade-api/v2/markets",
+        "https://trading-api.kalshi.com/trade-api/v2/markets",
+        "https://api.elections.kalshi.com/trade-api/v2/markets"
+    ]
+    
+    for url in endpoints:
+        try:
+            params = {"series_ticker": "KXNBA", "status": "open", "limit": 100}
+            resp = requests.get(url, params=params, timeout=10)
             
-            for market in markets:
-                ticker = market.get("ticker", "")
-                # Format: KXNBA-25JAN26-BOS
-                if today in ticker:
-                    parts = ticker.split("-")
-                    if len(parts) >= 3:
-                        team_abbrev = parts[-1]
-                        # Try different price fields
-                        yes_price = market.get("yes_ask") or market.get("yes_bid") or market.get("last_price") or market.get("latest_yes_price")
-                        no_price = market.get("no_ask") or market.get("no_bid")
-                        
-                        if yes_price:
-                            # Convert to cents if needed
-                            if yes_price <= 1:
-                                yes_price = round(yes_price * 100)
-                            if no_price and no_price <= 1:
-                                no_price = round(no_price * 100)
+            if resp.status_code == 200:
+                data = resp.json()
+                markets = data.get("markets", [])
+                
+                for market in markets:
+                    ticker = market.get("ticker", "")
+                    # Format: KXNBA-25JAN26-BOS
+                    if today in ticker:
+                        parts = ticker.split("-")
+                        if len(parts) >= 3:
+                            team_abbrev = parts[-1]
+                            # Try different price fields Kalshi might use
+                            yes_price = (market.get("yes_ask") or market.get("yes_bid") or 
+                                        market.get("last_price") or market.get("latest_yes_price") or
+                                        market.get("yes_price") or market.get("close_price"))
+                            no_price = market.get("no_ask") or market.get("no_bid") or market.get("no_price")
                             
-                            prices[team_abbrev] = {
-                                "yes": int(yes_price),
-                                "no": int(no_price) if no_price else None,
-                                "ticker": ticker
-                            }
-    except Exception as e:
-        # Silent fail - prices will show as unavailable
-        pass
+                            if yes_price:
+                                # Convert to cents if in decimal
+                                if yes_price <= 1:
+                                    yes_price = round(yes_price * 100)
+                                if no_price and no_price <= 1:
+                                    no_price = round(no_price * 100)
+                                
+                                prices[team_abbrev] = {
+                                    "yes": int(yes_price),
+                                    "no": int(no_price) if no_price else None,
+                                    "ticker": ticker
+                                }
+                
+                if prices:
+                    return prices  # Found prices, exit
+                    
+            else:
+                errors.append(f"{url}: {resp.status_code}")
+                
+        except Exception as e:
+            errors.append(f"{url}: {str(e)[:50]}")
+    
+    # Store errors for debug display
+    if errors:
+        st.session_state['kalshi_errors'] = errors
     
     return prices
 
@@ -647,6 +666,14 @@ b2b_teams = fetch_yesterday_teams()
 kalshi_prices = fetch_kalshi_prices()
 vegas_odds = fetch_vegas_odds()
 
+# Manual price storage - initialize early
+if "manual_kalshi_prices" not in st.session_state:
+    st.session_state.manual_kalshi_prices = {}
+
+# Merge any existing manual prices
+if st.session_state.manual_kalshi_prices:
+    kalshi_prices.update(st.session_state.manual_kalshi_prices)
+
 # Get today's teams
 today_teams = set()
 for g in games:
@@ -662,7 +689,7 @@ final_games = [g for g in games if g['status'] == 'STATUS_FINAL']
 # UI HEADER
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v5.0 • {now.strftime('%b %d, %Y %I:%M %p ET')} • ⚡ REAL-TIME: Scores + Kalshi every 24s")
+st.caption(f"v5.1 • {now.strftime('%b %d, %Y %I:%M %p ET')} • ⚡ REAL-TIME: Scores + Kalshi every 24s")
 
 # Stats row
 c1, c2, c3, c4 = st.columns(4)
@@ -683,6 +710,68 @@ st.markdown("""
     <p style="color: #aaa; margin: 0; font-size: 0.95em;">Find mispriced ML markets. GAP = Vegas Implied % minus Kalshi Price. Positive gap = BUY.</p>
 </div>
 """, unsafe_allow_html=True)
+
+# Show Kalshi API status
+if not kalshi_prices:
+    st.warning("⚠️ Kalshi API not returning prices. Enter manually below or check back later.")
+    
+    # Helpful links
+    st.markdown("""
+    <div style="background: #1a1a2e; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+        <span style="color: #888;">📎 Open Kalshi to get prices:</span>
+        <a href="https://kalshi.com/markets/kxnba/nba-regular-season-games" target="_blank" style="color: #22c55e; margin-left: 8px;">Kalshi NBA Markets →</a>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Show debug info if available
+    if 'kalshi_errors' in st.session_state:
+        with st.expander("🔧 Debug Info"):
+            for err in st.session_state.get('kalshi_errors', []):
+                st.code(err)
+    
+    # Manual price input
+    with st.expander("✏️ ENTER KALSHI PRICES MANUALLY", expanded=True):
+        st.caption("Open Kalshi, find today's NBA ML markets, enter YES prices in cents")
+        
+        manual_cols = st.columns(4)
+        col_idx = 0
+        
+        for g in scheduled_games:
+            away, home = g['away'], g['home']
+            home_abbrev = KALSHI_ABBREVS.get(home, "")
+            away_abbrev = KALSHI_ABBREVS.get(away, "")
+            
+            with manual_cols[col_idx % 4]:
+                home_price = st.number_input(
+                    f"{home_abbrev} YES ¢", 
+                    min_value=0, max_value=99, value=0,
+                    key=f"manual_{home_abbrev}"
+                )
+                if home_price > 0:
+                    st.session_state.manual_kalshi_prices[home_abbrev] = {"yes": home_price, "no": 100 - home_price, "ticker": f"MANUAL-{home_abbrev}"}
+                
+                away_price = st.number_input(
+                    f"{away_abbrev} YES ¢",
+                    min_value=0, max_value=99, value=0,
+                    key=f"manual_{away_abbrev}"
+                )
+                if away_price > 0:
+                    st.session_state.manual_kalshi_prices[away_abbrev] = {"yes": away_price, "no": 100 - away_price, "ticker": f"MANUAL-{away_abbrev}"}
+            
+            col_idx += 1
+        
+        # Use manual prices
+        if st.session_state.manual_kalshi_prices:
+            kalshi_prices.update(st.session_state.manual_kalshi_prices)
+            st.success(f"✅ Using {len(st.session_state.manual_kalshi_prices)} manual prices")
+        
+        if st.button("🔄 RECALCULATE EDGES", use_container_width=True):
+            st.rerun()
+else:
+    st.success(f"✅ Kalshi API connected — {len(kalshi_prices)} prices loaded")
+    with st.expander("📊 Raw Kalshi Prices"):
+        for abbrev, data in kalshi_prices.items():
+            st.write(f"{abbrev}: {data['yes']}¢ YES")
 
 misprice_data = []
 
@@ -778,9 +867,12 @@ if misprice_data:
         # Format spread display
         spread_display = f"{m['home']} {m['home_spread']:+.1f}" if m['home_spread'] <= 0 else f"{m['away']} {-m['home_spread']:+.1f}"
         
-        # Build display
-        home_price_display = f"{m['home_kalshi']}¢" if m['home_kalshi'] else "—"
-        away_price_display = f"{m['away_kalshi']}¢" if m['away_kalshi'] else "—"
+        # Build display - show source clearly
+        home_price_display = f"{m['home_kalshi']}¢" if m['home_kalshi'] else "❌ NO DATA"
+        away_price_display = f"{m['away_kalshi']}¢" if m['away_kalshi'] else "❌ NO DATA"
+        
+        # Source indicator
+        source_badge = f"<span style='background:#22c55e;color:#000;padding:2px 6px;border-radius:4px;font-size:0.7em;margin-left:8px;'>{m['vegas_source']}</span>" if m['vegas_source'] == "VEGAS" else f"<span style='background:#666;color:#fff;padding:2px 6px;border-radius:4px;font-size:0.7em;margin-left:8px;'>EST</span>"
         
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid {border_color};">
@@ -790,19 +882,18 @@ if misprice_data:
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                 <div style="text-align: center;">
-                    <div style="color: #888; font-size: 0.75em;">SPREAD</div>
+                    <div style="color: #888; font-size: 0.75em;">SPREAD {source_badge}</div>
                     <div style="color: #fff; font-weight: 600;">{spread_display}</div>
-                    <div style="color: #666; font-size: 0.7em;">{m['vegas_source']}</div>
                 </div>
                 <div style="text-align: center;">
-                    <div style="color: #888; font-size: 0.75em;">IMPLIED</div>
+                    <div style="color: #888; font-size: 0.75em;">IMPLIED %</div>
                     <div style="color: #fff;">{m['home'][:3]} {m['home_implied']}%</div>
                     <div style="color: #aaa;">{m['away'][:3]} {m['away_implied']}%</div>
                 </div>
                 <div style="text-align: center;">
                     <div style="color: #888; font-size: 0.75em;">KALSHI</div>
-                    <div style="color: #fff;">{m['home'][:3]} {home_price_display}</div>
-                    <div style="color: #aaa;">{m['away'][:3]} {away_price_display}</div>
+                    <div style="color: {'#fff' if m['home_kalshi'] else '#ff4444'};">{m['home'][:3]} {home_price_display}</div>
+                    <div style="color: {'#aaa' if m['away_kalshi'] else '#ff4444'};">{m['away'][:3]} {away_price_display}</div>
                 </div>
                 <div style="text-align: center;">
                     <div style="color: #888; font-size: 0.75em;">GAP</div>
@@ -1266,4 +1357,4 @@ This tool shows edges — you make the call.
 - Not financial advice
 """)
 
-st.caption("⚠️ Educational only. Not financial advice. v5.0")
+st.caption("⚠️ Educational only. Not financial advice. v5.1")
