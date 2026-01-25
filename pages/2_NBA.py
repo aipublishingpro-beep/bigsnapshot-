@@ -14,7 +14,7 @@ import pytz
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
-VERSION = "6.1"
+VERSION = "6.2"
 
 # ============================================================
 # TEAM DATA
@@ -348,6 +348,7 @@ if live_games:
     for g in live_games:
         edge = calc_live_edge(g, injuries, b2b_teams)
         mins = g['minutes_played']
+        total = g['total_score']
         
         if mins < 6:
             status_label, status_color = "⏳ TOO EARLY", "#888"
@@ -361,26 +362,59 @@ if live_games:
         lead_display = f"+{edge['lead']}" if edge['lead'] > 0 else str(edge['lead'])
         leader = g['home'] if edge['lead'] > 0 else g['away'] if edge['lead'] < 0 else "TIED"
         
-        safe_no = edge['proj_total'] + 12
-        safe_yes = edge['proj_total'] - 8
+        # Pace calculation
+        pace = round(total / mins, 2) if mins > 0 else 0
+        if pace < 4.2:
+            pace_lbl, pace_clr = "🐢 SLOW", "#00ff00"
+        elif pace < 4.8:
+            pace_lbl, pace_clr = "⚖️ AVG", "#ffff00"
+        elif pace < 5.2:
+            pace_lbl, pace_clr = "🔥 FAST", "#ff8800"
+        else:
+            pace_lbl, pace_clr = "🚀 SHOOTOUT", "#ff0000"
+        
+        # Cushion calculation
+        remaining = max(48 - mins, 1)
+        projected = round(total + pace * remaining) if mins > 0 else 220
+        
+        # NO cushion
+        no_base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected), len(THRESHOLDS)-1)
+        no_safe_idx = min(no_base_idx + 2, len(THRESHOLDS) - 1)
+        no_safe_line = THRESHOLDS[no_safe_idx]
+        no_cushion = no_safe_line - projected
+        
+        # YES cushion
+        yes_base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected), 0)
+        yes_safe_idx = max(yes_base_idx - 2, 0)
+        yes_safe_line = THRESHOLDS[yes_safe_idx]
+        yes_cushion = projected - yes_safe_line
         
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #444;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                 <span style="color: #fff; font-size: 1.1em; font-weight: 600;">{g['away']} @ {g['home']}</span>
-                <span style="color: #ff6b6b;">Q{g['period']} {g['clock']}</span>
+                <span style="color: #ff6b6b;">Q{g['period']} {g['clock']} • {mins} min</span>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                 <span style="color: #fff; font-size: 1.4em; font-weight: 700;">{g['away_score']} - {g['home_score']}</span>
                 <span style="color: {status_color}; font-weight: 600;">{status_label}</span>
             </div>
             <div style="color: #aaa; margin-bottom: 10px;">
-                Edge: <strong style="color: #fff;">{leader}</strong> ({lead_display}) {edge['pace_label']}
+                Edge: <strong style="color: #fff;">{leader}</strong> ({lead_display})
             </div>
-            <div style="background: #333; border-radius: 8px; padding: 10px;">
-                <span style="color: #888;">Proj: {edge['proj_total']}</span> | 
-                <span style="color: #22c55e;">NO {safe_no}</span> | 
-                <span style="color: #f97316;">YES {safe_yes}</span>
+            <div style="background: #333; border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+                <span style="color: {pace_clr}; font-weight: bold;">PACE: {pace}/min {pace_lbl}</span>
+                <span style="color: #888; margin-left: 15px;">Proj: <b style="color: #fff;">{projected}</b></span>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <div style="flex:1; background: #1a2a1a; border-radius: 8px; padding: 10px; border: 1px solid #22c55e;">
+                    <span style="color: #22c55e; font-weight: bold;">NO {no_safe_line}</span>
+                    <span style="color: #00ff00; margin-left: 10px;">+{no_cushion:.0f} cushion</span>
+                </div>
+                <div style="flex:1; background: #2a1a1a; border-radius: 8px; padding: 10px; border: 1px solid #f97316;">
+                    <span style="color: #f97316; font-weight: bold;">YES {yes_safe_line}</span>
+                    <span style="color: #ffaa00; margin-left: 10px;">+{yes_cushion:.0f} cushion</span>
+                </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -389,9 +423,9 @@ if live_games:
         with bc1:
             st.link_button(f"🎯 {edge['pick']} ML", get_kalshi_ml_link(edge['pick']), use_container_width=True)
         with bc2:
-            st.link_button(f"⬇️ NO {safe_no}", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
+            st.link_button(f"⬇️ NO {no_safe_line}", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
         with bc3:
-            st.link_button(f"⬆️ YES {safe_yes}", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
+            st.link_button(f"⬆️ YES {yes_safe_line}", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
 else:
     st.info("🕐 No live games right now.")
 
