@@ -20,7 +20,7 @@ import pytz
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
-VERSION = "5.1"
+VERSION = "5.2-debug"
 
 # ============================================================
 # KALSHI API AUTH (FIXED - uses bracket notation)
@@ -32,22 +32,32 @@ def get_kalshi_headers(method, path):
         private_key_pem = st.secrets["KALSHI_PRIVATE_KEY"]
         
         if not api_key or not private_key_pem:
+            st.session_state.kalshi_debug = "Keys empty or missing"
             return None
         
         timestamp = str(int(time.time() * 1000))
-        message = timestamp + method + path
+        
+        # Path without query for signature
+        path_for_sig = path.split('?')[0]
+        message = timestamp + method + path_for_sig
         
         private_key = serialization.load_pem_private_key(
             private_key_pem.encode(), password=None, backend=default_backend()
         )
         
+        # Use RSA-PSS (Kalshi's required method)
         signature = private_key.sign(
             message.encode(),
-            padding.PKCS1v15(),
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
             hashes.SHA256()
         )
         
         sig_b64 = base64.b64encode(signature).decode()
+        
+        st.session_state.kalshi_debug = f"✅ Keys loaded, sig created"
         
         return {
             "KALSHI-ACCESS-KEY": api_key,
@@ -55,26 +65,34 @@ def get_kalshi_headers(method, path):
             "KALSHI-ACCESS-TIMESTAMP": timestamp,
             "Content-Type": "application/json"
         }
-    except (KeyError, FileNotFoundError):
+    except KeyError as e:
+        st.session_state.kalshi_debug = f"❌ Missing secret: {e}"
+        return None
+    except FileNotFoundError:
+        st.session_state.kalshi_debug = "❌ Secrets file not found"
         return None
     except Exception as e:
+        st.session_state.kalshi_debug = f"❌ Error: {str(e)[:100]}"
         return None
 
 @st.cache_data(ttl=60)
 def fetch_kalshi_nba_prices():
     """Fetch NBA ML markets from Kalshi"""
     try:
-        path = "/trade-api/v2/markets?series_ticker=KXNBA&status=open&limit=200"
-        headers = get_kalshi_headers("GET", path)
+        path = "/trade-api/v2/markets"
+        params = "?series_ticker=KXNBA&status=open&limit=200"
+        full_path = path + params
+        
+        headers = get_kalshi_headers("GET", full_path)
         
         if not headers:
-            return {}
+            return {}, "No headers - check secrets"
         
-        url = f"https://trading-api.kalshi.com{path}"
+        url = f"https://trading-api.kalshi.com{full_path}"
         resp = requests.get(url, headers=headers, timeout=10)
         
         if resp.status_code != 200:
-            return {}
+            return {}, f"API returned {resp.status_code}: {resp.text[:200]}"
         
         data = resp.json()
         markets = data.get("markets", [])
@@ -95,9 +113,9 @@ def fetch_kalshi_nba_prices():
                         prices[team_name] = yes_ask
                         break
         
-        return prices
-    except:
-        return {}
+        return prices, f"✅ Loaded {len(prices)} prices"
+    except Exception as e:
+        return {}, f"Exception: {str(e)[:200]}"
 
 # ============================================================
 # TEAM DATA
@@ -463,7 +481,7 @@ with st.sidebar:
 games = fetch_games()
 injuries = fetch_injuries()
 b2b_teams = fetch_yesterday_teams()
-kalshi_prices = fetch_kalshi_nba_prices()
+kalshi_prices, kalshi_debug = fetch_kalshi_nba_prices()
 
 today_teams = set()
 for g in games:
@@ -484,6 +502,15 @@ c1.metric("Games Today", len(games))
 c2.metric("Live Now", len(live_games))
 c3.metric("B2B Teams", len(b2b_teams & today_teams))
 c4.metric("Kalshi API", "✅" if kalshi_prices else "⚠️")
+
+# DEBUG INFO
+with st.expander("🔧 Kalshi API Debug"):
+    st.write(f"**Status:** {kalshi_debug}")
+    if 'kalshi_debug' in st.session_state:
+        st.write(f"**Auth:** {st.session_state.kalshi_debug}")
+    st.write(f"**Prices loaded:** {len(kalshi_prices)}")
+    if kalshi_prices:
+        st.json(kalshi_prices)
 
 st.divider()
 
