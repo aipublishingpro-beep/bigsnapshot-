@@ -36,7 +36,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "20.7"
+VERSION = "20.8"
 
 # ============================================================
 # SESSION STATE FOR BALL TRACKING
@@ -156,6 +156,18 @@ STAR_TIERS = {
 
 THRESHOLDS = [37.5, 40.5, 43.5, 45.5, 47.5, 49.5, 51.5, 54.5, 57.5]
 
+# Team primary colors (hex)
+TEAM_COLORS = {
+    "ARI": "#97233F", "ATL": "#A71930", "BAL": "#241773", "BUF": "#00338D",
+    "CAR": "#0085CA", "CHI": "#C83803", "CIN": "#FB4F14", "CLE": "#311D00",
+    "DAL": "#003594", "DEN": "#FB4F14", "DET": "#0076B6", "GB": "#203731",
+    "HOU": "#03202F", "IND": "#002C5F", "JAX": "#006778", "KC": "#E31837",
+    "LV": "#000000", "LAC": "#0080C6", "LAR": "#003594", "MIA": "#008E97",
+    "MIN": "#4F2683", "NE": "#002244", "NO": "#D3BC8D", "NYG": "#0B2265",
+    "NYJ": "#125740", "PHI": "#004C54", "PIT": "#FFB612", "SF": "#AA0000",
+    "SEA": "#002244", "TB": "#D50A0A", "TEN": "#0C2340", "WAS": "#5A1414",
+}
+
 # ============================================================
 # FOOTBALL FIELD VISUALIZATION FUNCTIONS
 # ============================================================
@@ -251,6 +263,10 @@ def render_football_field(ball_yard, down, distance, possession_team, away_team,
     """Render football field with ball position, direction arrow, and play markers"""
     away_code = KALSHI_CODES.get(away_team, away_team[:3].upper() if away_team else "AWY")
     home_code = KALSHI_CODES.get(home_team, home_team[:3].upper() if home_team else "HME")
+    
+    # Get team colors for endzones
+    away_color = TEAM_COLORS.get(away_team, "#8B0000")
+    home_color = TEAM_COLORS.get(home_team, "#00008B")
     
     # Check for play type from last play
     play_status_html = ""
@@ -348,7 +364,7 @@ def render_football_field(ball_yard, down, distance, possession_team, away_team,
 <div style="display:flex;justify-content:space-between;margin-bottom:8px">
 <span style="color:#aaa">{ball_loc}</span>
 <span style="color:#fff;font-weight:bold">{situation}</span></div>
-<div style="position:relative;height:70px;background:linear-gradient(90deg,#8B0000 0%,#8B0000 10%,#228B22 10%,#228B22 90%,#00008B 90%,#00008B 100%);border-radius:8px;overflow:hidden">
+<div style="position:relative;height:70px;background:linear-gradient(90deg,{away_color} 0%,{away_color} 10%,#228B22 10%,#228B22 90%,{home_color} 90%,{home_color} 100%);border-radius:8px;overflow:hidden">
 {play_status_html}
 <div style="position:absolute;left:10%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.3)"></div>
 <div style="position:absolute;left:18%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.2)"></div>
