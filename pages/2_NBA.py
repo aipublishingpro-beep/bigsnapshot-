@@ -36,7 +36,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "4.8"
+VERSION = "4.9"
 LEAGUE_AVG_TOTAL = 225  # NBA league average total
 
 # ============================================================
@@ -590,7 +590,20 @@ if live_games:
         leader = g['home'] if edge['lead'] > 0 else g['away'] if edge['lead'] < 0 else "TIED"
         proj = edge['proj_total']
         
-        # Show projection and pace - user picks threshold on Kalshi
+        # Totals recommendation based on pace
+        if edge['pace'] < 4.2:
+            totals_rec = "NO (Under)"
+            totals_color = "#22c55e"
+            totals_note = f"Pick threshold ABOVE {proj}"
+        elif edge['pace'] > 4.8:
+            totals_rec = "YES (Over)"
+            totals_color = "#f97316"
+            totals_note = f"Pick threshold BELOW {proj}"
+        else:
+            totals_rec = "WAIT"
+            totals_color = "#888"
+            totals_note = "Pace too neutral"
+        
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #444;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -605,16 +618,19 @@ if live_games:
                 Edge: <strong style="color: #fff;">{leader}</strong> ({lead_display}) • {edge['pace_label']} ({edge['pace']:.2f}/min)
             </div>
             <div style="color: #888; font-size: 0.85em; margin-top: 6px;">
-                Projected Total: <b style="color:#fff">{proj}</b> — Pick threshold on Kalshi
+                Proj: <b style="color:#fff">{proj}</b> | 
+                Totals: <b style="color:{totals_color}">{totals_rec}</b> — {totals_note}
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        bc1, bc2 = st.columns(2)
+        bc1, bc2, bc3 = st.columns(3)
         with bc1:
             st.link_button(f"🎯 {edge['pick']} ML", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
         with bc2:
-            st.link_button(f"📊 TOTALS", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
+            st.link_button(f"⬇️ BUY NO", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
+        with bc3:
+            st.link_button(f"⬆️ BUY YES", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
         
         st.markdown("---")
 else:
@@ -676,7 +692,11 @@ if proj_results:
         <span style="color:#aaa;margin-left:8px">→ {r['rec']}</span>
         </div>""", unsafe_allow_html=True)
         
-        st.link_button(f"📊 OPEN TOTALS", get_kalshi_totals_link(r['away'], r['home']), use_container_width=True)
+        b1, b2 = st.columns(2)
+        with b1:
+            st.link_button(f"⬇️ BUY NO (above {r['projected']})", get_kalshi_totals_link(r['away'], r['home']), use_container_width=True)
+        with b2:
+            st.link_button(f"⬆️ BUY YES (below {r['projected']})", get_kalshi_totals_link(r['away'], r['home']), use_container_width=True)
 else:
     st.info(f"No games with {proj_min}+ minutes played yet")
 
