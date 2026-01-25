@@ -141,7 +141,25 @@ H2H_EDGES = {
     ("Miami", "Orlando"): 1.5, ("Dallas", "San Antonio"): 1.5, ("Memphis", "New Orleans"): 1.0,
 }
 
+STAR_TIERS = {
+    "Nikola Jokic": 3, "Shai Gilgeous-Alexander": 3, "Giannis Antetokounmpo": 3, "Luka Doncic": 3,
+    "Joel Embiid": 3, "Jayson Tatum": 3, "Stephen Curry": 3, "Kevin Durant": 3, "LeBron James": 3,
+    "Anthony Edwards": 3, "Ja Morant": 3, "Donovan Mitchell": 3, "Trae Young": 3, "Devin Booker": 3,
+    "Jaylen Brown": 2, "Anthony Davis": 2, "Damian Lillard": 2, "Kyrie Irving": 2, "Jimmy Butler": 2,
+    "Bam Adebayo": 2, "Tyrese Haliburton": 2, "De'Aaron Fox": 2, "Jalen Brunson": 2, "Chet Holmgren": 2,
+    "Paolo Banchero": 2, "Franz Wagner": 2, "Scottie Barnes": 2, "Evan Mobley": 2, "Darius Garland": 2,
+    "Zion Williamson": 2, "Brandon Ingram": 2, "LaMelo Ball": 2, "Cade Cunningham": 2, "Jalen Williams": 2,
+    "Tyrese Maxey": 2, "Desmond Bane": 2, "Jamal Murray": 2, "Pascal Siakam": 2, "Lauri Markkanen": 2,
+    "Victor Wembanyama": 2, "Alperen Sengun": 2, "Derrick White": 2, "Domantas Sabonis": 2,
+    "Julius Randle": 1, "RJ Barrett": 1, "Mikal Bridges": 1, "Anfernee Simons": 1, "Jalen Green": 1,
+    "Fred VanVleet": 1, "Scoot Henderson": 1, "Bennedict Mathurin": 1, "Keegan Murray": 1,
+    "Zach LaVine": 1, "DeMar DeRozan": 1, "Kawhi Leonard": 1, "Paul George": 1, "Bradley Beal": 1,
+    "Draymond Green": 1, "Karl-Anthony Towns": 1, "Rudy Gobert": 1, "Jordan Poole": 1
+}
+
 POSITIONS_FILE = "nba_positions.json"
+
+THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5, 250.5, 255.5]
 
 def load_positions():
     try:
@@ -226,7 +244,31 @@ def fetch_games():
 
 @st.cache_data(ttl=300)
 def fetch_injuries():
-    """Fetch injury data from ESPN"""
+    """Fetch injury data from ESPN with status"""
+    url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        injuries = {}
+        for team_data in data.get("injuries", []):
+            team_name = team_data.get("displayName", "")
+            team_key = TEAM_ABBREVS.get(team_name, team_name)
+            if not team_key:
+                continue
+            injuries[team_key] = []
+            for player in team_data.get("injuries", []):
+                athlete = player.get("athlete", {})
+                name = athlete.get("displayName", "")
+                status = player.get("status", "")
+                if name:
+                    injuries[team_key].append({"name": name, "status": status})
+        return injuries
+    except:
+        return {}
+
+@st.cache_data(ttl=300)
+def fetch_injuries_simple():
+    """Fetch injury data from ESPN - simple list of OUT players"""
     url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
     try:
         resp = requests.get(url, timeout=10)
@@ -234,7 +276,8 @@ def fetch_injuries():
         injuries = {}
         for team in data.get("items", []):
             team_name = TEAM_ABBREVS.get(team.get("team", {}).get("displayName", ""), "")
-            if not team_name: continue
+            if not team_name:
+                continue
             out_players = []
             for inj in team.get("injuries", []):
                 status = inj.get("status", "")
@@ -470,49 +513,85 @@ with st.sidebar:
     st.markdown("""
     ### How To Read Scores
     
-    | Score | Color | Meaning |
-    |-------|-------|---------|
-    | **75+** | 🟢 | STRONG — Multiple factors align |
-    | **60-74** | 🟢 | GOOD — Several factors align |
-    | **50-59** | 🟡 | MODERATE — Few factors |
-    | **Below 50** | ⚪ | WEAK — Skip or wait |
+    | Score | Label | Action |
+    |-------|-------|--------|
+    | **70+** | 🟢 STRONG | Best opportunities |
+    | **60-69** | 🟢 GOOD | Worth considering |
+    | **50-59** | 🟡 MODERATE | Wait for live |
+    | **Below 50** | ⚪ WEAK | Skip |
+    
+    ---
+    
+    ### Injury Impact
+    
+    | Stars | Impact |
+    |-------|--------|
+    | ⭐⭐⭐ | MVP out = +5 |
+    | ⭐⭐ | All-Star = +3 |
+    | ⭐ | Starter = +1 |
     
     ---
     
     ### What We Track
     
-    - 🛏️ **Opp B2B** — Opponent on back-to-back
-    - 📊 **Net Rating** — Team strength gap
-    - 🏥 **Star OUT** — Key player injured
-    - 🆚 **H2H** — Historical matchup edge
-    - 🏔️ **Altitude** — Denver home advantage
-    - 🛫 **Elite Road** — Strong team traveling
+    - 🛏️ **Opp B2B** — +4
+    - 📊 **Net Rating** — +1 to +3
+    - 🏥 **Star OUT** — +3 to +5
+    - 🆚 **H2H** — +1.5
+    - 🏔️ **Altitude** — +1.5
+    - 🛫 **Elite Road** — +1
     
     ---
     
     ### When To Act
     
-    **Pre-Game:** Look for 60+ scores
+    **Pre-Game:** Focus on 70+ STRONG
     
     **Live:** Wait for Q2 with 10+ lead and 🐢 SLOW pace
+    
+    ---
+    
+    ### Pace Guide
+    
+    | Pace | Label | Totals |
+    |------|-------|--------|
+    | <4.5 | 🐢 SLOW | Buy NO |
+    | 4.5-4.8 | ⚖️ AVG | Wait |
+    | 4.8-5.2 | 🔥 FAST | Buy YES |
+    | >5.2 | 🚀 SHOOTOUT | Buy YES |
+    
+    ---
+    
+    ### Cushion Guide
+    
+    **+10 or more** = Very safe  
+    **+6 to +9** = Safe  
+    **Under +6** = Risky
     
     ---
     
     *We show the edge — you make the call.*
     """)
     st.divider()
-    st.caption("v4.1 NBA EDGE")
+    st.caption("v4.4 NBA EDGE")
 
 # ============================================================
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v4.1 • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s")
+st.caption(f"v4.4 • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s")
 
 # Fetch data
 games = fetch_games()
 injuries = fetch_injuries()
+injuries_simple = fetch_injuries_simple()
 b2b_teams = fetch_yesterday_teams()
+
+# Get today's teams
+today_teams = set()
+for g in games:
+    today_teams.add(g['away'])
+    today_teams.add(g['home'])
 
 # Separate games
 live_games = [g for g in games if g['status'] == 'STATUS_IN_PROGRESS']
@@ -525,6 +604,67 @@ c1.metric("Today's Games", len(games))
 c2.metric("Live Now", len(live_games))
 c3.metric("B2B Teams", len(b2b_teams))
 c4.metric("Final", len(final_games))
+
+st.divider()
+
+# ============================================================
+# 🏥 INJURY REPORT
+# ============================================================
+st.subheader("🏥 INJURY REPORT")
+
+injured_stars = []
+for team, team_injuries in injuries.items():
+    if team not in today_teams:
+        continue
+    for inj in team_injuries:
+        name = inj.get("name", "")
+        status = inj.get("status", "").upper()
+        if "OUT" in status or "DTD" in status or "DOUBT" in status:
+            tier = 0
+            for star_name, star_tier in STAR_TIERS.items():
+                if star_name.lower() in name.lower():
+                    tier = star_tier
+                    break
+            if tier > 0:
+                injured_stars.append({
+                    "name": name, 
+                    "team": team, 
+                    "status": "OUT" if "OUT" in status else "DTD" if "DTD" in status else "DOUBT",
+                    "tier": tier
+                })
+
+injured_stars.sort(key=lambda x: (-x['tier'], x['team']))
+
+if injured_stars:
+    cols = st.columns(3)
+    for i, inj in enumerate(injured_stars):
+        with cols[i % 3]:
+            stars = "⭐" * inj['tier']
+            status_color = "#ff4444" if inj['status'] == "OUT" else "#ffaa00"
+            st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#2a1a2a);padding:10px;border-radius:6px;border-left:3px solid {status_color};margin-bottom:6px">
+                <div style="color:#fff;font-weight:bold">{stars} {inj['name']} 🔥</div>
+                <div style="color:{status_color};font-size:0.85em">{inj['status']} • {inj['team']}</div>
+            </div>""", unsafe_allow_html=True)
+    
+    if b2b_teams:
+        b2b_today = b2b_teams.intersection(today_teams)
+        if b2b_today:
+            b2b_list = ", ".join(sorted(b2b_today))
+            st.markdown(f"""<div style="background:#1a2a3a;padding:10px 14px;border-radius:6px;margin-top:10px">
+                <span style="color:#38bdf8">🏨 B2B Teams:</span> <span style="color:#fff">{b2b_list}</span>
+            </div>""", unsafe_allow_html=True)
+else:
+    if b2b_teams:
+        b2b_today = b2b_teams.intersection(today_teams)
+        if b2b_today:
+            b2b_list = ", ".join(sorted(b2b_today))
+            st.markdown(f"""<div style="background:#1a2a3a;padding:10px 14px;border-radius:6px">
+                <span style="color:#38bdf8">🏨 B2B Teams:</span> <span style="color:#fff">{b2b_list}</span>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.info("No major star injuries or B2B teams for today's games")
+    else:
+        st.info("No major star injuries reported for today's games")
 
 st.divider()
 
@@ -646,6 +786,167 @@ else:
 st.divider()
 
 # ============================================================
+# 🎯 CUSHION SCANNER
+# ============================================================
+st.subheader("🎯 CUSHION SCANNER")
+st.caption("Find safe NO/YES totals opportunities in live games")
+
+cs1, cs2 = st.columns([1, 1])
+cush_min = cs1.selectbox("Min minutes", [6, 9, 12, 15, 18], index=0, key="cush_min")
+cush_side = cs2.selectbox("Side", ["NO", "YES"], key="cush_side")
+
+cush_results = []
+for g in live_games:
+    mins = g['minutes_played']
+    total = g['total_score']
+    if mins < cush_min or mins <= 0:
+        continue
+    pace = total / mins
+    remaining_min = max(48 - mins, 1)
+    projected_final = round(total + pace * remaining_min)
+    
+    if cush_side == "NO":
+        base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected_final), len(THRESHOLDS)-1)
+        safe_idx = min(base_idx + 2, len(THRESHOLDS) - 1)
+        safe_line = THRESHOLDS[safe_idx]
+        cushion = safe_line - projected_final
+    else:
+        base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected_final), 0)
+        safe_idx = max(base_idx - 2, 0)
+        safe_line = THRESHOLDS[safe_idx]
+        cushion = projected_final - safe_line
+    
+    if cushion < 6:
+        continue
+    
+    if cush_side == "NO":
+        if pace < 4.5:
+            pace_status, pace_color = "✅ SLOW", "#00ff00"
+        elif pace < 4.8:
+            pace_status, pace_color = "⚠️ AVG", "#ffff00"
+        else:
+            pace_status, pace_color = "❌ FAST", "#ff0000"
+    else:
+        if pace > 5.1:
+            pace_status, pace_color = "✅ FAST", "#00ff00"
+        elif pace > 4.8:
+            pace_status, pace_color = "⚠️ AVG", "#ffff00"
+        else:
+            pace_status, pace_color = "❌ SLOW", "#ff0000"
+    
+    cush_results.append({
+        'game': f"{g['away']}@{g['home']}", 
+        'away': g['away'],
+        'home': g['home'],
+        'total': total, 
+        'mins': mins, 
+        'pace': pace,
+        'pace_status': pace_status, 
+        'pace_color': pace_color,
+        'projected': projected_final, 
+        'cushion': cushion,
+        'safe_line': safe_line, 
+        'period': g['period'], 
+        'clock': g['clock']
+    })
+
+cush_results.sort(key=lambda x: x['cushion'], reverse=True)
+
+if cush_results:
+    for r in cush_results:
+        kalshi_url = get_kalshi_totals_link(r['away'], r['home'])
+        btn_color = "#00aa00" if cush_side == "NO" else "#cc6600"
+        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:#0f172a;padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:3px solid {r['pace_color']};flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <b style="color:#fff">{r['away']} @ {r['home']}</b>
+            <span style="color:#888">Q{r['period']} {r['clock']}</span>
+            <span style="color:#888">{r['total']}pts/{r['mins']:.0f}min</span>
+            <span style="color:#888">Proj: <b style="color:#fff">{r['projected']}</b></span>
+            <span style="background:#ff8800;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold">🎯 {r['safe_line']}</span>
+            <span style="color:#00ff00;font-weight:bold">+{r['cushion']:.0f}</span>
+            <span style="color:{r['pace_color']}">{r['pace_status']}</span>
+        </div>
+        </div>""", unsafe_allow_html=True)
+        st.link_button(f"BUY {cush_side} {r['safe_line']}", kalshi_url, use_container_width=True)
+else:
+    st.info(f"No {cush_side} opportunities with 6+ cushion yet — need live games with 6+ minutes played")
+
+st.divider()
+
+# ============================================================
+# 🔥 PACE SCANNER
+# ============================================================
+st.subheader("🔥 PACE SCANNER")
+st.caption("Track scoring pace for all live games")
+
+pace_data = []
+for g in live_games:
+    mins = g['minutes_played']
+    if mins >= 6:
+        pace = round(g['total_score'] / mins, 2)
+        pace_data.append({
+            "game": f"{g['away']}@{g['home']}",
+            "away": g['away'],
+            "home": g['home'],
+            "pace": pace, 
+            "proj": round(pace * 48), 
+            "total": g['total_score'], 
+            "mins": mins, 
+            "period": g['period'], 
+            "clock": g['clock']
+        })
+
+pace_data.sort(key=lambda x: x['pace'])
+
+if pace_data:
+    for p in pace_data:
+        kalshi_url = get_kalshi_totals_link(p['away'], p['home'])
+        
+        if p['pace'] < 4.5:
+            lbl, clr = "🐢 SLOW", "#00ff00"
+            base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > p['proj']), len(THRESHOLDS)-1)
+            safe_idx = min(base_idx + 2, len(THRESHOLDS) - 1)
+            rec_line = THRESHOLDS[safe_idx]
+            rec_side = "NO"
+            btn_color = "#00aa00"
+        elif p['pace'] < 4.8:
+            lbl, clr = "⚖️ AVG", "#ffff00"
+            rec_line = None
+            rec_side = None
+            btn_color = None
+        elif p['pace'] < 5.2:
+            lbl, clr = "🔥 FAST", "#ff8800"
+            base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), 0)
+            safe_idx = max(base_idx - 2, 0)
+            rec_line = THRESHOLDS[safe_idx]
+            rec_side = "YES"
+            btn_color = "#cc6600"
+        else:
+            lbl, clr = "🚀 SHOOTOUT", "#ff0000"
+            base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < p['proj']), 0)
+            safe_idx = max(base_idx - 2, 0)
+            rec_line = THRESHOLDS[safe_idx]
+            rec_side = "YES"
+            btn_color = "#cc0000"
+        
+        st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;background:#0f172a;padding:8px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {clr};flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <b style="color:#fff">{p['away']} @ {p['home']}</b>
+            <span style="color:#666">Q{p['period']} {p['clock']}</span>
+            <span style="color:#888">{p['total']}pts/{p['mins']:.0f}min</span>
+            <span style="color:{clr};font-weight:bold">{p['pace']}/min {lbl}</span>
+            <span style="color:#888">Proj: <b style="color:#fff">{p['proj']}</b></span>
+        </div>
+        </div>""", unsafe_allow_html=True)
+        
+        if rec_line and rec_side:
+            st.link_button(f"BUY {rec_side} {rec_line}", kalshi_url, use_container_width=True)
+else:
+    st.info("No games with 6+ minutes played yet")
+
+st.divider()
+
+# ============================================================
 # 🎯 PRE-GAME ALIGNMENT
 # ============================================================
 if scheduled_games:
@@ -660,8 +961,8 @@ if scheduled_games:
     games_with_edge.sort(key=lambda x: x[2], reverse=True)
     
     for g, pick, score, factors in games_with_edge:
-        # Color coding - GREEN for 60+, YELLOW for 50-59, GRAY below 50
-        if score >= 75:
+        # Color coding - 70+ STRONG, 60-69 GOOD, 50-59 MODERATE, <50 WEAK
+        if score >= 70:
             score_color = "#22c55e"  # Bright green
             tier = "🟢 STRONG"
             border_color = "#22c55e"
@@ -761,13 +1062,29 @@ with st.expander("📖 HOW TO USE", expanded=False):
     st.markdown("""
     ### Edge Score Guide
     
-    | Score | Meaning |
-    |-------|---------|
-    | 75+ | Strong alignment — multiple factors |
-    | 60-74 | Good alignment — several factors |
-    | 50-59 | Weak alignment — few factors |
-    | TOO CLOSE | No clear edge — lead under 5 |
-    | TOO EARLY | Under 6 minutes played |
+    | Score | Label | Action |
+    |-------|-------|--------|
+    | **70+** | 🟢 STRONG | Best opportunities — multiple factors |
+    | **60-69** | 🟢 GOOD | Worth considering — solid edge |
+    | **50-59** | 🟡 MODERATE | Wait for live confirmation |
+    | **Below 50** | ⚪ WEAK | Skip |
+    | **TOO CLOSE** | ⚖️ | No clear edge — lead under 5 |
+    | **TOO EARLY** | ⏳ | Under 6 minutes played |
+    
+    ---
+    
+    ### Injury Report Guide
+    
+    | Stars | Tier | Impact |
+    |-------|------|--------|
+    | ⭐⭐⭐ | MVP-level | +5 points to opponent edge |
+    | ⭐⭐ | All-Star | +3 points to opponent edge |
+    | ⭐ | Starter | +1 point to opponent edge |
+    
+    **Status colors:**
+    - 🔴 **OUT** = Confirmed out
+    - 🟠 **DTD** = Day-to-day (monitor)
+    - 🟠 **DOUBT** = Doubtful to play
     
     ---
     
@@ -775,12 +1092,46 @@ with st.expander("📖 HOW TO USE", expanded=False):
     
     | Quarter | Lead | Conviction |
     |---------|------|------------|
-    | Q1 | Any | 🔴 LOW |
-    | Q2 | 10+ | 🟡 MEDIUM |
-    | Q3 | 12+ | 🟢 GOOD |
-    | Q4 | 15+ | 🟢🟢 HIGH |
+    | Q1 | Any | 🔴 LOW — don't enter |
+    | Q2 | 10+ | 🟡 MEDIUM — enter if 🐢 SLOW pace |
+    | Q3 | 12+ | 🟢 GOOD — sweet spot |
+    | Q4 | 15+ | 🟢🟢 HIGH — but price may be high |
     
     **Sweet spot:** Q2 with 12+ lead and 🐢 SLOW pace
+    
+    ---
+    
+    ### Pace Guide
+    
+    | Pace | Label | Meaning |
+    |------|-------|---------|
+    | <4.5 pts/min | 🐢 SLOW | Leads stick — good for NO bets |
+    | 4.5-4.8 | ⚖️ AVG | Normal game flow |
+    | 4.8-5.2 pts/min | 🔥 FAST | Leads can evaporate — consider YES |
+    | >5.2 pts/min | 🚀 SHOOTOUT | High scoring — buy YES |
+    
+    ---
+    
+    ### Cushion Scanner
+    
+    Finds safe totals opportunities based on projected final score:
+    - **+10 cushion** = Very safe threshold
+    - **+6 to +9** = Safe threshold  
+    - **Under +6** = Not shown (too risky)
+    
+    Safe NO = 2 levels ABOVE projected  
+    Safe YES = 2 levels BELOW projected
+    
+    ---
+    
+    ### Key Factors We Track
+    
+    - 🛏️ **Opp B2B** — Opponent on back-to-back (+4)
+    - 📊 **Net Rating** — Team strength gap (+1 to +3)
+    - 🏥 **Star OUT** — Key player injured (+3 to +5)
+    - 🆚 **H2H** — Historical matchup edge (+1.5)
+    - 🏔️ **Altitude** — Denver home advantage (+1.5)
+    - 🛫 **Elite Road** — Strong team traveling (+1)
     
     ---
     
@@ -792,4 +1143,4 @@ with st.expander("📖 HOW TO USE", expanded=False):
     ⚠️ Only risk what you can afford to lose  
     """)
 
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v4.1")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v4.4")
