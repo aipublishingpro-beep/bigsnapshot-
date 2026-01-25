@@ -3,6 +3,38 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
 
+# ============================================================
+# OWNER MODE CHECK - MUST BE FIRST!
+# ============================================================
+query_params = st.query_params
+owner_key = query_params.get("key", "")
+is_owner = query_params.get("mode") == "owner" and owner_key == "bigsnapshot2026"
+
+# Bypass all auth if owner
+if is_owner:
+    st.session_state.authenticated = True
+
+# ============================================================
+# COOKIE AUTH CHECK
+# ============================================================
+import extra_streamlit_components as stx
+
+cookie_manager = stx.CookieManager(key="nba_cookie")
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not is_owner:
+    try:
+        saved_auth = cookie_manager.get("authenticated")
+        if saved_auth == "true":
+            st.session_state.authenticated = True
+    except:
+        pass
+
+if not st.session_state.authenticated:
+    st.switch_page("Home.py")
+
 # Auto-refresh every 24 seconds (1 possession)
 st_autorefresh(interval=24000, key="datarefresh")
 
@@ -20,26 +52,6 @@ def send_ga4_event(page_title, page_path):
     except: pass
 
 send_ga4_event("NBA Edge Finder", "/NBA")
-
-# ============================================================
-# COOKIE AUTH CHECK
-# ============================================================
-import extra_streamlit_components as stx
-
-cookie_manager = stx.CookieManager(key="nba_cookie")
-
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-try:
-    saved_auth = cookie_manager.get("authenticated")
-    if saved_auth == "true":
-        st.session_state.authenticated = True
-except:
-    pass
-
-if not st.session_state.authenticated:
-    st.switch_page("Home.py")
 
 import requests
 import json
@@ -65,11 +77,12 @@ now = datetime.now(eastern)
 # ============================================================
 def get_kalshi_credentials():
     """Load Kalshi API credentials from Streamlit secrets - OWNER ONLY"""
-    # Only load keys if owner mode is active
+    # Only load keys if owner mode is active with correct secret key
     query_params = st.query_params
-    is_owner = query_params.get("mode") == "owner"
+    owner_key = query_params.get("key", "")
+    is_owner_mode = query_params.get("mode") == "owner" and owner_key == "bigsnapshot2026"
     
-    if not is_owner:
+    if not is_owner_mode:
         return None, None  # Public users don't get API access
     
     try:
@@ -771,7 +784,7 @@ GAP = +5¢ = 🟢 BUY
 *We find the gap — you make the call.*
 """)
     st.divider()
-    st.caption("v5.3 NBA EDGE")
+    st.caption("v5.5 NBA EDGE")
 
 # ============================================================
 # FETCH DATA
@@ -801,11 +814,67 @@ live_games = [g for g in games if g['status'] == 'STATUS_IN_PROGRESS']
 scheduled_games = [g for g in games if g['status'] == 'STATUS_SCHEDULED']
 final_games = [g for g in games if g['status'] == 'STATUS_FINAL']
 
+# Pre-calculate misprice data for scheduled games
+misprice_data = []
+for g in scheduled_games:
+    away, home = g['away'], g['home']
+    
+    # Get Kalshi prices
+    home_abbrev = KALSHI_ABBREVS.get(home, "")
+    away_abbrev = KALSHI_ABBREVS.get(away, "")
+    
+    home_kalshi = kalshi_prices.get(home_abbrev, {}).get("yes", None)
+    away_kalshi = kalshi_prices.get(away_abbrev, {}).get("yes", None)
+    
+    # Get Vegas spread (or estimate)
+    home_spread = vegas_odds.get(home, {}).get("spread", None)
+    if home_spread is None:
+        home_spread = -estimate_spread_from_stats(away, home)
+        vegas_source = "EST"
+    else:
+        vegas_source = "VEGAS"
+    
+    # Calculate implied probabilities
+    home_implied = spread_to_implied_prob(home_spread)
+    away_implied = 100 - home_implied
+    
+    # Calculate gaps
+    if home_kalshi:
+        home_gap = home_implied - home_kalshi
+    else:
+        home_gap = None
+    
+    if away_kalshi:
+        away_gap = away_implied - away_kalshi
+    else:
+        away_gap = None
+    
+    misprice_data.append({
+        "away": away,
+        "home": home,
+        "home_spread": home_spread,
+        "vegas_source": vegas_source,
+        "home_implied": home_implied,
+        "away_implied": away_implied,
+        "home_kalshi": home_kalshi,
+        "away_kalshi": away_kalshi,
+        "home_gap": home_gap,
+        "away_gap": away_gap
+    })
+
+# Sort by best gap opportunity
+def best_gap(m):
+    gaps = [g for g in [m['home_gap'], m['away_gap']] if g is not None]
+    return max(gaps) if gaps else -999
+
+misprice_data.sort(key=best_gap, reverse=True)
+
 # ============================================================
 # UI HEADER
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v5.3 • {now.strftime('%b %d, %Y %I:%M %p ET')} • ⚡ REAL-TIME: Scores + Kalshi every 24s")
+owner_badge = " 👑 OWNER" if is_owner else ""
+st.caption(f"v5.5{owner_badge} • {now.strftime('%b %d, %Y %I:%M %p ET')} • ⚡ REAL-TIME every 24s")
 
 # Stats row
 c1, c2, c3, c4 = st.columns(4)
@@ -1044,6 +1113,67 @@ if misprice_data:
 
 else:
     st.info("No scheduled games found")
+
+st.divider()
+
+# ============================================================
+# 🎯 PRE-GAME ALIGNMENT (ALWAYS SHOWS - NO PRICES NEEDED)
+# ============================================================
+if scheduled_games:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 2px solid #3b82f6;">
+        <h2 style="color: #3b82f6; margin: 0 0 8px 0;">🎯 PRE-GAME ALIGNMENT</h2>
+        <p style="color: #aaa; margin: 0; font-size: 0.95em;">Factor-based edge scores. 70+ = strong alignment. Based on injuries, B2B, net rating, H2H.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    games_with_edge = []
+    for g in scheduled_games:
+        pick, score, factors = calc_pregame_edge(g['away'], g['home'], injuries, b2b_teams)
+        games_with_edge.append((g, pick, score, factors))
+    games_with_edge.sort(key=lambda x: x[2], reverse=True)
+    
+    for g, pick, score, factors in games_with_edge:
+        if score >= 70:
+            score_color = "#22c55e"
+            tier = "🟢 STRONG"
+            border_color = "#22c55e"
+        elif score >= 60:
+            score_color = "#22c55e"
+            tier = "🟢 GOOD"
+            border_color = "#22c55e"
+        elif score >= 50:
+            score_color = "#eab308"
+            tier = "🟡 MODERATE"
+            border_color = "#eab308"
+        else:
+            score_color = "#888"
+            tier = "⚪ WEAK"
+            border_color = "#444"
+        
+        factors_display = ' • '.join(factors[:4]) if factors else 'No strong factors'
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid {border_color};">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #fff; font-size: 1.1em; font-weight: 600;">{g['away']} @ {g['home']}</span>
+                <span style="color: {score_color}; font-weight: 700; font-size: 1.1em;">{tier} {score}/100</span>
+            </div>
+            <div style="color: #888; font-size: 0.9em; margin-top: 8px;">
+                Edge: <strong style="color: #fff;">{pick}</strong>
+            </div>
+            <div style="color: #666; font-size: 0.85em; margin-top: 4px;">
+                {factors_display}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Quick action buttons
+        btn_cols = st.columns(2)
+        with btn_cols[0]:
+            st.link_button(f"🎯 {pick} ML on Kalshi", get_kalshi_ml_link(pick), use_container_width=True)
+        with btn_cols[1]:
+            st.link_button(f"📊 Totals", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
 
 # Big visual separator
 st.markdown("""
@@ -1490,4 +1620,4 @@ This tool shows edges — you make the call.
 - Not financial advice
 """)
 
-st.caption("⚠️ Educational only. Not financial advice. v5.3")
+st.caption("⚠️ Educational only. Not financial advice. v5.5")
