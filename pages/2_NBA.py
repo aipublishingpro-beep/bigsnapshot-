@@ -36,7 +36,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "5.0"
+VERSION = "5.1"
 LEAGUE_AVG_TOTAL = 225  # NBA league average total
 
 # ============================================================
@@ -498,9 +498,9 @@ for g in games:
     today_teams.add(g['away'])
     today_teams.add(g['home'])
 
-live_games = [g for g in games if g['status'] == 'STATUS_IN_PROGRESS']
-scheduled_games = [g for g in games if g['status'] == 'STATUS_SCHEDULED']
-final_games = [g for g in games if g['status'] == 'STATUS_FINAL']
+live_games = [g for g in games if g['status'] in ['STATUS_IN_PROGRESS', 'STATUS_HALFTIME', 'STATUS_END_PERIOD'] or (g['period'] > 0 and g['status'] not in ['STATUS_FINAL', 'STATUS_FULL_TIME'])]
+scheduled_games = [g for g in games if g['status'] == 'STATUS_SCHEDULED' and g['period'] == 0]
+final_games = [g for g in games if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']]
 
 # ============================================================
 # UI HEADER
