@@ -4,27 +4,27 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="NBA Edge Finder", page_icon="🏀", layout="wide")
 
 # ============================================================
-# OWNER MODE CHECK - MUST BE FIRST!
+# OWNER MODE CHECK
 # ============================================================
 query_params = st.query_params
 owner_key = query_params.get("key", "")
 is_owner = query_params.get("mode") == "owner" and owner_key == "bigsnapshot2026"
 
-# Bypass all auth if owner
-if is_owner:
-    st.session_state.authenticated = True
-
 # ============================================================
-# COOKIE AUTH CHECK
+# AUTH CHECK - Match Home.py pattern
 # ============================================================
 import extra_streamlit_components as stx
 
-cookie_manager = stx.CookieManager(key="nba_cookie")
+cookie_manager = stx.CookieManager(key="auth_cookie")
 
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-if not is_owner:
+# Owner bypass
+if is_owner:
+    st.session_state.authenticated = True
+else:
+    # Check cookie
     try:
         saved_auth = cookie_manager.get("authenticated")
         if saved_auth == "true":
