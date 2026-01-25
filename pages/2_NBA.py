@@ -189,20 +189,33 @@ def fetch_kalshi_prices():
         resp = requests.get(url, params=params, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
-            for market in data.get("markets", []):
+            markets = data.get("markets", [])
+            
+            for market in markets:
                 ticker = market.get("ticker", "")
                 # Format: KXNBA-25JAN26-BOS
                 if today in ticker:
-                    team_abbrev = ticker.split("-")[-1]
-                    yes_price = market.get("yes_ask", 0) or market.get("last_price", 0)
-                    no_price = market.get("no_ask", 0)
-                    if yes_price:
-                        prices[team_abbrev] = {
-                            "yes": round(yes_price * 100) if yes_price < 1 else yes_price,
-                            "no": round(no_price * 100) if no_price and no_price < 1 else no_price,
-                            "ticker": ticker
-                        }
+                    parts = ticker.split("-")
+                    if len(parts) >= 3:
+                        team_abbrev = parts[-1]
+                        # Try different price fields
+                        yes_price = market.get("yes_ask") or market.get("yes_bid") or market.get("last_price") or market.get("latest_yes_price")
+                        no_price = market.get("no_ask") or market.get("no_bid")
+                        
+                        if yes_price:
+                            # Convert to cents if needed
+                            if yes_price <= 1:
+                                yes_price = round(yes_price * 100)
+                            if no_price and no_price <= 1:
+                                no_price = round(no_price * 100)
+                            
+                            prices[team_abbrev] = {
+                                "yes": int(yes_price),
+                                "no": int(no_price) if no_price else None,
+                                "ticker": ticker
+                            }
     except Exception as e:
+        # Silent fail - prices will show as unavailable
         pass
     
     return prices
@@ -649,22 +662,27 @@ final_games = [g for g in games if g['status'] == 'STATUS_FINAL']
 # UI HEADER
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v5.0 • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s")
+st.caption(f"v5.0 • {now.strftime('%b %d, %Y %I:%M %p ET')} • ⚡ REAL-TIME: Scores + Kalshi every 24s")
 
 # Stats row
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Today's Games", len(games))
 c2.metric("Live Now", len(live_games))
 c3.metric("B2B Teams", len(b2b_teams & today_teams))
-c4.metric("Kalshi Prices", len(kalshi_prices))
+kalshi_status = f"✅ {len(kalshi_prices)}" if kalshi_prices else "⚠️ 0"
+c4.metric("Kalshi Prices", kalshi_status)
 
 st.divider()
 
 # ============================================================
-# 💰 MISPRICE SCANNER (NEW!)
+# 💰 SPREAD EDGE - KALSHI vs VEGAS (PRE-GAME)
 # ============================================================
-st.subheader("💰 MISPRICE SCANNER")
-st.markdown("*Compare Kalshi prices to Vegas implied probability. GAP = your edge.*")
+st.markdown("""
+<div style="background: linear-gradient(135deg, #1a472a 0%, #2d5a3d 100%); border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 2px solid #22c55e;">
+    <h2 style="color: #22c55e; margin: 0 0 8px 0;">💰 SPREAD EDGE — KALSHI vs VEGAS</h2>
+    <p style="color: #aaa; margin: 0; font-size: 0.95em;">Find mispriced ML markets. GAP = Vegas Implied % minus Kalshi Price. Positive gap = BUY.</p>
+</div>
+""", unsafe_allow_html=True)
 
 misprice_data = []
 
@@ -803,12 +821,25 @@ if misprice_data:
 else:
     st.info("No scheduled games found")
 
+# Big visual separator
+st.markdown("""
+<div style="background: linear-gradient(90deg, #22c55e, transparent, #22c55e); height: 3px; margin: 30px 0;"></div>
+<div style="text-align: center; margin-bottom: 20px;">
+    <span style="background: #0e1117; padding: 0 20px; color: #666; font-size: 0.9em;">⬇️ LIVE GAME TOOLS BELOW ⬇️</span>
+</div>
+""", unsafe_allow_html=True)
+
 st.divider()
 
 # ============================================================
 # 🏥 INJURY REPORT
 # ============================================================
-st.subheader("🏥 INJURY REPORT")
+st.markdown("""
+<div style="background: linear-gradient(135deg, #3a1a3a 0%, #4a2a4a 100%); border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #a855f7;">
+    <h3 style="color: #a855f7; margin: 0 0 4px 0;">🏥 INJURY REPORT</h3>
+    <p style="color: #888; margin: 0; font-size: 0.85em;">Star players OUT = edge for opponent. ⭐⭐⭐ MVP +5 | ⭐⭐ All-Star +3 | ⭐ Starter +1</p>
+</div>
+""", unsafe_allow_html=True)
 
 injured_stars = []
 for team, team_injuries in injuries.items():
@@ -865,8 +896,12 @@ st.divider()
 # 🔴 LIVE EDGE MONITOR
 # ============================================================
 if live_games:
-    st.subheader("🔴 LIVE EDGE MONITOR")
-    st.markdown("*Real-time edge updates every 24 seconds.*")
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #4a1a1a 0%, #6a2a2a 100%); border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 2px solid #ff4444;">
+        <h2 style="color: #ff4444; margin: 0 0 8px 0;">🔴 LIVE EDGE MONITOR</h2>
+        <p style="color: #aaa; margin: 0; font-size: 0.95em;">Real-time updates every 24 seconds. Track leads, pace, and projected totals.</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     live_with_edge = []
     for g in live_games:
@@ -930,6 +965,12 @@ if live_games:
         
         st.markdown("---")
 else:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #4a1a1a 0%, #6a2a2a 100%); border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 2px solid #ff4444;">
+        <h2 style="color: #ff4444; margin: 0 0 8px 0;">🔴 LIVE EDGE MONITOR</h2>
+        <p style="color: #aaa; margin: 0; font-size: 0.95em;">Real-time updates every 24 seconds. Track leads, pace, and projected totals.</p>
+    </div>
+    """, unsafe_allow_html=True)
     st.info("🕐 No live games right now. Check back when games tip off.")
 
 st.divider()
@@ -937,8 +978,12 @@ st.divider()
 # ============================================================
 # 🎯 CUSHION SCANNER
 # ============================================================
-st.subheader("🎯 CUSHION SCANNER")
-st.caption("Find safe NO/YES totals in live games")
+st.markdown("""
+<div style="background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #3b82f6;">
+    <h3 style="color: #3b82f6; margin: 0 0 4px 0;">🎯 CUSHION SCANNER</h3>
+    <p style="color: #888; margin: 0; font-size: 0.85em;">Find safe NO/YES totals with 6+ point buffer in live games</p>
+</div>
+""", unsafe_allow_html=True)
 
 cs1, cs2 = st.columns([1, 1])
 cush_min = cs1.selectbox("Min minutes", [6, 9, 12, 15, 18], index=0, key="cush_min")
@@ -1012,8 +1057,12 @@ st.divider()
 # ============================================================
 # 🔥 PACE SCANNER
 # ============================================================
-st.subheader("🔥 PACE SCANNER")
-st.caption("Track scoring pace for live games")
+st.markdown("""
+<div style="background: linear-gradient(135deg, #4a2a1a 0%, #5a3a2a 100%); border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #f97316;">
+    <h3 style="color: #f97316; margin: 0 0 4px 0;">🔥 PACE SCANNER</h3>
+    <p style="color: #888; margin: 0; font-size: 0.85em;">Track scoring pace — SLOW favors NO, FAST favors YES</p>
+</div>
+""", unsafe_allow_html=True)
 
 pace_data = []
 for g in live_games:
