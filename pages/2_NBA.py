@@ -20,16 +20,16 @@ import pytz
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
-VERSION = "5.0"
+VERSION = "5.1"
 
 # ============================================================
-# KALSHI API AUTH (uses st.secrets - keys stay private)
+# KALSHI API AUTH (FIXED - uses bracket notation)
 # ============================================================
 def get_kalshi_headers(method, path):
     """Generate authenticated headers for Kalshi API"""
     try:
-        api_key = st.secrets.get("KALSHI_API_KEY", "")
-        private_key_pem = st.secrets.get("KALSHI_PRIVATE_KEY", "")
+        api_key = st.secrets["KALSHI_API_KEY"]
+        private_key_pem = st.secrets["KALSHI_PRIVATE_KEY"]
         
         if not api_key or not private_key_pem:
             return None
@@ -55,7 +55,9 @@ def get_kalshi_headers(method, path):
             "KALSHI-ACCESS-TIMESTAMP": timestamp,
             "Content-Type": "application/json"
         }
-    except:
+    except (KeyError, FileNotFoundError):
+        return None
+    except Exception as e:
         return None
 
 @st.cache_data(ttl=60)
