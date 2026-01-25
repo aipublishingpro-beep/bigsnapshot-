@@ -9,136 +9,12 @@ require_auth()
 st_autorefresh(interval=24000, key="nba_refresh")
 
 import requests
-import json
-import base64
-import time
 from datetime import datetime, timedelta
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.backends import default_backend
 import pytz
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
-VERSION = "5.8"
-
-# ============================================================
-# KALSHI API AUTH (FIXED - uses bracket notation)
-# ============================================================
-def get_kalshi_headers(method, path):
-    """Generate authenticated headers for Kalshi API"""
-    try:
-        api_key = st.secrets["KALSHI_API_KEY"]
-        private_key_pem = st.secrets["KALSHI_PRIVATE_KEY"]
-        
-        if not api_key or not private_key_pem:
-            st.session_state.kalshi_debug = "Keys empty or missing"
-            return None
-        
-        timestamp = str(int(time.time() * 1000))
-        
-        # Path without query for signature
-        path_for_sig = path.split('?')[0]
-        message = timestamp + method + path_for_sig
-        
-        private_key = serialization.load_pem_private_key(
-            private_key_pem.encode(), password=None, backend=default_backend()
-        )
-        
-        # Use RSA-PSS (Kalshi's required method)
-        signature = private_key.sign(
-            message.encode(),
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
-            ),
-            hashes.SHA256()
-        )
-        
-        sig_b64 = base64.b64encode(signature).decode()
-        
-        st.session_state.kalshi_debug = f"✅ Keys loaded, sig created"
-        
-        return {
-            "KALSHI-ACCESS-KEY": api_key,
-            "KALSHI-ACCESS-SIGNATURE": sig_b64,
-            "KALSHI-ACCESS-TIMESTAMP": timestamp,
-            "Content-Type": "application/json"
-        }
-    except KeyError as e:
-        st.session_state.kalshi_debug = f"❌ Missing secret: {e}"
-        return None
-    except FileNotFoundError:
-        st.session_state.kalshi_debug = "❌ Secrets file not found"
-        return None
-    except Exception as e:
-        st.session_state.kalshi_debug = f"❌ Error: {str(e)[:100]}"
-        return None
-
-@st.cache_data(ttl=60)
-def fetch_kalshi_nba_prices():
-    """Fetch NBA ML markets from Kalshi"""
-    try:
-        headers = get_kalshi_headers("GET", "/trade-api/v2/events")
-        
-        if not headers:
-            return {}, "No headers - check secrets", []
-        
-        # Try events endpoint with NBA filter
-        url = "https://api.elections.kalshi.com/trade-api/v2/events?status=open&limit=200&series_ticker=KXNBA"
-        resp = requests.get(url, headers=headers, timeout=15)
-        
-        raw_markets = []
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            events = data.get("events", [])
-            for e in events[:10]:
-                raw_markets.append({
-                    "ticker": e.get("event_ticker", ""),
-                    "title": e.get("title", ""),
-                    "category": e.get("category", ""),
-                    "sub_title": e.get("sub_title", "")
-                })
-        
-        # Now try markets with different series tickers
-        series_to_try = ["KXNBA", "NBA", "NBAML", "KXNBAML"]
-        all_markets = []
-        
-        for series in series_to_try:
-            try:
-                path = f"/trade-api/v2/markets?series_ticker={series}&status=open&limit=200"
-                mheaders = get_kalshi_headers("GET", path)
-                murl = f"https://api.elections.kalshi.com{path}"
-                mresp = requests.get(murl, headers=mheaders, timeout=10)
-                if mresp.status_code == 200:
-                    mdata = mresp.json()
-                    mkts = mdata.get("markets", [])
-                    for m in mkts[:5]:
-                        raw_markets.append({
-                            "ticker": m.get("ticker", ""),
-                            "title": m.get("title", ""),
-                            "series": series,
-                            "yes_ask": m.get("yes_ask")
-                        })
-                    all_markets.extend(mkts)
-            except:
-                pass
-        
-        # Parse prices from all found markets
-        prices = {}
-        for m in all_markets:
-            title = m.get("title", "")
-            yes_ask = m.get("yes_ask", 0) or m.get("last_price", 0) or 0
-            
-            if " to beat " in title.lower() and yes_ask > 0:
-                team = title.split(" to beat ")[0].strip()
-                team = team.replace("Will the ", "").replace("Will ", "").strip()
-                prices[team] = yes_ask
-        
-        return prices, f"✅ Found {len(all_markets)} markets from series search", raw_markets
-    except Exception as e:
-        return {}, f"Exception: {str(e)[:200]}", []
+VERSION = "6.0"
 
 # ============================================================
 # TEAM DATA
@@ -155,17 +31,6 @@ TEAM_ABBREVS = {
     "Philadelphia 76ers": "Philadelphia", "Phoenix Suns": "Phoenix", "Portland Trail Blazers": "Portland",
     "Sacramento Kings": "Sacramento", "San Antonio Spurs": "San Antonio", "Toronto Raptors": "Toronto",
     "Utah Jazz": "Utah", "Washington Wizards": "Washington"
-}
-
-TEAM_FULL_NAMES = {
-    "Atlanta": "Hawks", "Boston": "Celtics", "Brooklyn": "Nets", "Charlotte": "Hornets",
-    "Chicago": "Bulls", "Cleveland": "Cavaliers", "Dallas": "Mavericks", "Denver": "Nuggets",
-    "Detroit": "Pistons", "Golden State": "Warriors", "Houston": "Rockets", "Indiana": "Pacers",
-    "LA Clippers": "Clippers", "LA Lakers": "Lakers", "Memphis": "Grizzlies", "Miami": "Heat",
-    "Milwaukee": "Bucks", "Minnesota": "Timberwolves", "New Orleans": "Pelicans", "New York": "Knicks",
-    "Oklahoma City": "Thunder", "Orlando": "Magic", "Philadelphia": "76ers", "Phoenix": "Suns",
-    "Portland": "Trail Blazers", "Sacramento": "Kings", "San Antonio": "Spurs", "Toronto": "Raptors",
-    "Utah": "Jazz", "Washington": "Wizards"
 }
 
 TEAM_STATS = {
@@ -201,23 +66,6 @@ TEAM_STATS = {
     "Washington": {"net": -9.5, "pace": 101.5, "tier": "weak"},
 }
 
-STAR_PLAYERS = {
-    "Boston": ["Jayson Tatum", "Jaylen Brown"],
-    "Cleveland": ["Donovan Mitchell", "Darius Garland", "Evan Mobley"],
-    "Oklahoma City": ["Shai Gilgeous-Alexander", "Chet Holmgren", "Jalen Williams"],
-    "Denver": ["Nikola Jokic", "Jamal Murray"],
-    "Milwaukee": ["Giannis Antetokounmpo", "Damian Lillard"],
-    "Minnesota": ["Anthony Edwards", "Rudy Gobert"],
-    "New York": ["Jalen Brunson", "Karl-Anthony Towns"],
-    "Phoenix": ["Kevin Durant", "Devin Booker", "Bradley Beal"],
-    "LA Lakers": ["LeBron James", "Anthony Davis"],
-    "Golden State": ["Stephen Curry", "Draymond Green"],
-    "Dallas": ["Luka Doncic", "Kyrie Irving"],
-    "Philadelphia": ["Joel Embiid", "Tyrese Maxey"],
-    "Miami": ["Jimmy Butler", "Bam Adebayo"],
-    "Memphis": ["Ja Morant", "Jaren Jackson Jr."],
-}
-
 STAR_TIERS = {
     "Nikola Jokic": 3, "Shai Gilgeous-Alexander": 3, "Giannis Antetokounmpo": 3, "Luka Doncic": 3,
     "Joel Embiid": 3, "Jayson Tatum": 3, "Stephen Curry": 3, "Kevin Durant": 3, "LeBron James": 3,
@@ -226,77 +74,6 @@ STAR_TIERS = {
 }
 
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5, 250.5, 255.5]
-
-# ============================================================
-# VEGAS IMPLIED % FROM NET RATING GAP
-# ============================================================
-def calc_vegas_implied(home, away):
-    """Calculate implied win % based on net rating + home court"""
-    home_net = TEAM_STATS.get(home, {}).get("net", 0)
-    away_net = TEAM_STATS.get(away, {}).get("net", 0)
-    
-    # Net rating gap + 3 pts home court advantage
-    gap = home_net - away_net + 3
-    
-    # Convert to implied % (roughly 2.5 pts = 10%)
-    home_implied = 50 + (gap * 2)
-    home_implied = max(20, min(85, home_implied))
-    
-    return int(home_implied), int(100 - home_implied)
-
-def calc_spread_from_net(home, away):
-    """Estimate spread from net ratings"""
-    home_net = TEAM_STATS.get(home, {}).get("net", 0)
-    away_net = TEAM_STATS.get(away, {}).get("net", 0)
-    spread = round((home_net - away_net + 3) / 2, 1)
-    return spread
-
-# ============================================================
-# SPREAD EDGE CALCULATION
-# ============================================================
-def find_spread_edges(games, kalshi_prices, min_gap=5):
-    """Find edges where Kalshi price < Vegas implied %"""
-    edges = []
-    
-    for g in games:
-        home, away = g['home'], g['away']
-        home_implied, away_implied = calc_vegas_implied(home, away)
-        spread = calc_spread_from_net(home, away)
-        
-        # Look up Kalshi prices
-        home_kalshi = kalshi_prices.get(home, kalshi_prices.get(TEAM_FULL_NAMES.get(home, ""), 0))
-        away_kalshi = kalshi_prices.get(away, kalshi_prices.get(TEAM_FULL_NAMES.get(away, ""), 0))
-        
-        # Check home team edge
-        if home_kalshi > 0:
-            home_gap = home_implied - home_kalshi
-            if home_gap >= min_gap:
-                edges.append({
-                    "game": f"{away} @ {home}",
-                    "team": home,
-                    "side": "home",
-                    "spread": f"-{abs(spread)}" if spread > 0 else f"+{abs(spread)}",
-                    "vegas_implied": home_implied,
-                    "kalshi_price": home_kalshi,
-                    "gap": home_gap
-                })
-        
-        # Check away team edge
-        if away_kalshi > 0:
-            away_gap = away_implied - away_kalshi
-            if away_gap >= min_gap:
-                edges.append({
-                    "game": f"{away} @ {home}",
-                    "team": away,
-                    "side": "away",
-                    "spread": f"+{abs(spread)}" if spread > 0 else f"-{abs(spread)}",
-                    "vegas_implied": away_implied,
-                    "kalshi_price": away_kalshi,
-                    "gap": away_gap
-                })
-    
-    edges.sort(key=lambda x: x["gap"], reverse=True)
-    return edges
 
 # ============================================================
 # ESPN FETCH
@@ -441,11 +218,9 @@ def calc_live_edge(game, injuries, b2b_teams):
     base = 50 + (net_gap * 1.5)
     base = max(25, min(75, base))
     
-    # B2B adjustment
     if away in b2b_teams: base += 4
     if home in b2b_teams: base -= 4
     
-    # Live adjustments
     live_adj = 0
     if abs(lead) >= 20: live_adj = 25 if lead > 0 else -25
     elif abs(lead) >= 15: live_adj = 18 if lead > 0 else -18
@@ -474,13 +249,6 @@ def calc_live_edge(game, injuries, b2b_teams):
 with st.sidebar:
     st.header("📖 NBA EDGE GUIDE")
     st.markdown("""
-### Spread Edge
-| GAP | Signal |
-|-----|--------|
-| **+7¢+** | 🟢 STRONG BUY |
-| **+5-6¢** | 🟢 BUY |
-| **<+5¢** | Not shown |
-
 ### Live Edge
 | Score | Action |
 |-------|--------|
@@ -494,6 +262,13 @@ with st.sidebar:
 | <4.2 | 🐢 SLOW |
 | 4.2-5.0 | ⚖️ AVG |
 | >5.0 | 🔥 FAST |
+
+### Cushion
+| Cushion | Safety |
+|---------|--------|
+| **+15** | 🟢 SAFE |
+| **+10** | 🟡 OK |
+| **<+10** | ⚠️ RISKY |
 """)
     st.divider()
     st.caption(f"v{VERSION}")
@@ -504,7 +279,6 @@ with st.sidebar:
 games = fetch_games()
 injuries = fetch_injuries()
 b2b_teams = fetch_yesterday_teams()
-kalshi_prices, kalshi_debug, raw_markets = fetch_kalshi_nba_prices()
 
 today_teams = set()
 for g in games:
@@ -520,97 +294,10 @@ scheduled_games = [g for g in games if g['status'] == 'STATUS_SCHEDULED']
 st.title("🏀 NBA EDGE FINDER")
 st.caption(f"v{VERSION} • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s")
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3 = st.columns(3)
 c1.metric("Games Today", len(games))
 c2.metric("Live Now", len(live_games))
 c3.metric("B2B Teams", len(b2b_teams & today_teams))
-c4.metric("Kalshi API", "✅" if kalshi_prices else "⚠️")
-
-# DEBUG INFO
-with st.expander("🔧 Kalshi API Debug"):
-    st.write(f"**Status:** {kalshi_debug}")
-    if 'kalshi_debug' in st.session_state:
-        st.write(f"**Auth:** {st.session_state.kalshi_debug}")
-    st.write(f"**Prices loaded:** {len(kalshi_prices)}")
-    if kalshi_prices:
-        st.json(kalshi_prices)
-    if raw_markets:
-        st.write("**Raw markets from API (first 10):**")
-        for m in raw_markets:
-            st.write(f"- {m}")
-
-st.divider()
-
-# ============================================================
-# 💰 SPREAD EDGE — KALSHI vs VEGAS (ONLY SHOWS EDGES)
-# ============================================================
-st.markdown("""
-<div style="background: linear-gradient(135deg, #0d4a0d 0%, #1a5a1a 100%); padding: 15px 20px; border-radius: 10px; margin-bottom: 15px;">
-    <h2 style="color: #4ade80; margin: 0;">💰 SPREAD EDGE — Kalshi vs Vegas</h2>
-    <p style="color: #888; margin: 5px 0 0 0;">Only showing mispriced markets (GAP ≥ 5¢)</p>
-</div>
-""", unsafe_allow_html=True)
-
-edges = find_spread_edges(scheduled_games, kalshi_prices, min_gap=5)
-
-if edges:
-    for edge in edges:
-        gap_color = "#22c55e" if edge["gap"] >= 7 else "#4ade80"
-        signal = "🟢 STRONG BUY" if edge["gap"] >= 7 else "🟢 BUY"
-        
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid {gap_color};">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <span style="color: #fff; font-size: 1.2em; font-weight: 700;">{edge['team']}</span>
-                    <span style="color: #888; margin-left: 10px;">{edge['game']}</span>
-                </div>
-                <span style="color: {gap_color}; font-weight: 700; font-size: 1.1em;">{signal}</span>
-            </div>
-            <div style="display: flex; gap: 20px; margin-top: 12px; flex-wrap: wrap;">
-                <div style="background: #333; padding: 8px 12px; border-radius: 6px;">
-                    <span style="color: #888;">Vegas:</span> 
-                    <span style="color: #fff; font-weight: 600;">{edge['spread']} ({edge['vegas_implied']}%)</span>
-                </div>
-                <div style="background: #333; padding: 8px 12px; border-radius: 6px;">
-                    <span style="color: #888;">Kalshi:</span> 
-                    <span style="color: #fff; font-weight: 600;">{edge['kalshi_price']}¢</span>
-                </div>
-                <div style="background: {gap_color}22; padding: 8px 12px; border-radius: 6px; border: 1px solid {gap_color};">
-                    <span style="color: {gap_color}; font-weight: 700;">GAP: +{edge['gap']}¢</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.link_button(f"🎯 BUY {edge['team']} on Kalshi", get_kalshi_ml_link(edge['team']), use_container_width=True)
-        st.markdown("")
-
-elif kalshi_prices:
-    st.info("⚪ No mispriced markets right now (all GAPs < 5¢). Check back closer to game time.")
-else:
-    st.warning("⚠️ Kalshi API not connected. Enter prices manually below.")
-    
-    for g in scheduled_games[:5]:
-        home, away = g['home'], g['away']
-        home_implied, away_implied = calc_vegas_implied(home, away)
-        
-        st.markdown(f"**{away} @ {home}** — Vegas: {home} {home_implied}% / {away} {away_implied}%")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            home_price = st.number_input(f"{home} Kalshi ¢", 0, 99, 0, key=f"home_{home}")
-        with col2:
-            away_price = st.number_input(f"{away} Kalshi ¢", 0, 99, 0, key=f"away_{away}")
-        
-        if home_price > 0:
-            gap = home_implied - home_price
-            if gap >= 5:
-                st.success(f"🟢 {home} GAP: +{gap}¢ — BUY")
-        if away_price > 0:
-            gap = away_implied - away_price
-            if gap >= 5:
-                st.success(f"🟢 {away} GAP: +{gap}¢ — BUY")
 
 st.divider()
 
@@ -812,11 +499,15 @@ st.divider()
 if scheduled_games:
     st.subheader("📅 SCHEDULED GAMES")
     for g in scheduled_games:
-        home_implied, away_implied = calc_vegas_implied(g['home'], g['away'])
+        home_stats = TEAM_STATS.get(g['home'], {})
+        away_stats = TEAM_STATS.get(g['away'], {})
+        home_net = home_stats.get("net", 0)
+        away_net = away_stats.get("net", 0)
+        
         st.markdown(f"""
         <div style="background: #0f172a; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
             <span style="color: #fff; font-weight: 600;">{g['away']} @ {g['home']}</span>
-            <span style="color: #888; margin-left: 15px;">Vegas: {g['home']} {home_implied}%</span>
+            <span style="color: #888; margin-left: 15px;">Net: {g['home']} ({home_net:+.1f}) vs {g['away']} ({away_net:+.1f})</span>
         </div>
         """, unsafe_allow_html=True)
 
