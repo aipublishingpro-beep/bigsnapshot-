@@ -36,7 +36,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "20.6"
+VERSION = "20.7"
 
 # ============================================================
 # SESSION STATE FOR BALL TRACKING
@@ -518,6 +518,46 @@ def fetch_injuries():
     except:
         return {}
 
+@st.cache_data(ttl=300)
+def fetch_nfl_news():
+    """Fetch NFL news from ESPN"""
+    url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=10"
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        articles = []
+        for article in data.get("articles", []):
+            headline = article.get("headline", "")
+            description = article.get("description", "")
+            published = article.get("published", "")
+            link = article.get("links", {}).get("web", {}).get("href", "")
+            
+            # Parse date
+            time_ago = ""
+            if published:
+                try:
+                    pub_dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
+                    delta = datetime.now(pytz.UTC) - pub_dt
+                    if delta.days > 0:
+                        time_ago = f"{delta.days}d ago"
+                    elif delta.seconds >= 3600:
+                        time_ago = f"{delta.seconds // 3600}h ago"
+                    else:
+                        time_ago = f"{delta.seconds // 60}m ago"
+                except:
+                    time_ago = ""
+            
+            if headline:
+                articles.append({
+                    "headline": headline,
+                    "description": description[:150] + "..." if len(description) > 150 else description,
+                    "time_ago": time_ago,
+                    "link": link
+                })
+        return articles
+    except:
+        return []
+
 # ============================================================
 # EDGE CALCULATION
 # ============================================================
@@ -701,6 +741,7 @@ with st.sidebar:
 # ============================================================
 games = fetch_games()
 injuries = fetch_injuries()
+nfl_news = fetch_nfl_news()
 
 today_teams = set()
 for g in games:
@@ -759,6 +800,36 @@ if injured_stars:
             </div>""", unsafe_allow_html=True)
 else:
     st.info("No major star injuries for today's games")
+
+st.divider()
+
+# ============================================================
+# 📰 NFL NEWS
+# ============================================================
+st.subheader("📰 NFL NEWS & SUPER BOWL")
+
+if nfl_news:
+    for article in nfl_news[:6]:
+        headline = article.get("headline", "")
+        desc = article.get("description", "")
+        time_ago = article.get("time_ago", "")
+        link = article.get("link", "")
+        
+        # Highlight Super Bowl / Playoff news
+        is_big_news = any(kw in headline.lower() for kw in ["super bowl", "playoff", "championship", "mvp", "trade", "injury"])
+        border_color = "#ffd700" if is_big_news else "#444"
+        badge = "🏆 " if "super bowl" in headline.lower() else "🔥 " if is_big_news else ""
+        
+        st.markdown(f"""<div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:12px;border-radius:8px;border-left:3px solid {border_color};margin-bottom:8px">
+            <div style="color:#fff;font-weight:bold;font-size:1em">{badge}{headline}</div>
+            <div style="color:#aaa;font-size:0.85em;margin-top:4px">{desc}</div>
+            <div style="display:flex;justify-content:space-between;margin-top:6px">
+                <span style="color:#666;font-size:0.8em">{time_ago}</span>
+                {f'<a href="{link}" target="_blank" style="color:#4a9eff;font-size:0.8em;text-decoration:none">Read more →</a>' if link else ''}
+            </div>
+        </div>""", unsafe_allow_html=True)
+else:
+    st.info("No NFL news available right now")
 
 st.divider()
 
