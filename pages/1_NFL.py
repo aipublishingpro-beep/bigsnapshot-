@@ -36,7 +36,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "20.4"
+VERSION = "20.6"
 
 # ============================================================
 # SESSION STATE FOR BALL TRACKING
@@ -832,12 +832,34 @@ if live_games:
         )
         st.markdown(field_html, unsafe_allow_html=True)
         
-        # Last play info
+        # Last play info with completion status
         last_play = g.get('last_play', {})
         if last_play and last_play.get('text'):
             play_text = last_play.get('text', '')[:120]
+            play_lower = play_text.lower()
+            
+            # Check for pass completion status
+            if "incomplete" in play_lower:
+                status_badge = '<span style="background:#ff4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">✕ INCOMPLETE</span>'
+            elif "intercepted" in play_lower:
+                status_badge = '<span style="background:#ff4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">✕ INTERCEPTED</span>'
+            elif "pass" in play_lower and ("to" in play_lower or "for" in play_lower) and "incomplete" not in play_lower:
+                status_badge = '<span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">✓ COMPLETE</span>'
+            elif "sacked" in play_lower:
+                status_badge = '<span style="background:#ff8800;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">⚠ SACK</span>'
+            elif "touchdown" in play_lower:
+                status_badge = '<span style="background:#ffd700;color:#000;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">🏈 TOUCHDOWN</span>'
+            elif "field goal" in play_lower:
+                status_badge = '<span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">🥅 FIELD GOAL</span>'
+            elif "punt" in play_lower:
+                status_badge = '<span style="background:#666;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">📤 PUNT</span>'
+            elif "rush" in play_lower or "ran" in play_lower:
+                status_badge = '<span style="background:#3b82f6;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">🏃 RUSH</span>'
+            else:
+                status_badge = ''
+            
             st.markdown(f"""<div style="background:#0a0a15;padding:8px 12px;border-radius:6px;margin-bottom:8px;border-left:3px solid #444">
-                <span style="color:#888;font-size:0.85em">📺 {play_text}...</span>
+                {status_badge}<span style="color:#888;font-size:0.85em">{play_text}...</span>
             </div>""", unsafe_allow_html=True)
         
         # Totals projection
