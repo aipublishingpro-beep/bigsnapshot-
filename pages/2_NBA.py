@@ -20,7 +20,7 @@ import pytz
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
-VERSION = "5.4-debug"
+VERSION = "5.5"
 
 # ============================================================
 # KALSHI API AUTH (FIXED - uses bracket notation)
@@ -79,8 +79,12 @@ def get_kalshi_headers(method, path):
 def fetch_kalshi_nba_prices():
     """Fetch NBA ML markets from Kalshi"""
     try:
+        # Get today's date for ticker matching
+        today_str = datetime.now(eastern).strftime('%y%b%d').upper()  # e.g., 26JAN25
+        
+        # Try to get daily game markets - they use different format
         path = "/trade-api/v2/markets"
-        params = "?series_ticker=KXNBA&status=open&limit=200"
+        params = f"?status=open&limit=500"
         full_path = path + params
         
         headers = get_kalshi_headers("GET", full_path)
@@ -89,7 +93,7 @@ def fetch_kalshi_nba_prices():
             return {}, "No headers - check secrets", []
         
         url = f"https://api.elections.kalshi.com{full_path}"
-        resp = requests.get(url, headers=headers, timeout=10)
+        resp = requests.get(url, headers=headers, timeout=15)
         
         if resp.status_code != 200:
             return {}, f"API returned {resp.status_code}: {resp.text[:200]}", []
@@ -97,9 +101,12 @@ def fetch_kalshi_nba_prices():
         data = resp.json()
         markets = data.get("markets", [])
         
+        # Filter for NBA daily games (contain "to beat" in title)
+        nba_games = [m for m in markets if "to beat" in m.get("title", "").lower() and "nba" in m.get("ticker", "").lower()]
+        
         # Store raw for debug
         raw_markets = []
-        for m in markets[:10]:  # First 10 for debug
+        for m in nba_games[:15]:
             raw_markets.append({
                 "ticker": m.get("ticker", ""),
                 "title": m.get("title", ""),
@@ -109,22 +116,20 @@ def fetch_kalshi_nba_prices():
             })
         
         prices = {}
-        for m in markets:
+        for m in nba_games:
             ticker = m.get("ticker", "")
             title = m.get("title", "")
             yes_ask = m.get("yes_ask", 0) or m.get("last_price", 0) or 0
             
-            # Extract team from title
+            # Parse "Team A to beat Team B" format
             if " to beat " in title.lower():
                 team = title.split(" to beat ")[0].strip()
-                prices[team] = yes_ask
-            elif "win" in title.lower():
-                for team_name in TEAM_FULL_NAMES.values():
-                    if team_name.lower() in title.lower():
-                        prices[team_name] = yes_ask
-                        break
+                # Remove "Will the " prefix if present
+                team = team.replace("Will the ", "").replace("Will ", "").strip()
+                if yes_ask and yes_ask > 0:
+                    prices[team] = yes_ask
         
-        return prices, f"✅ Loaded {len(prices)} prices from {len(markets)} markets", raw_markets
+        return prices, f"✅ Found {len(nba_games)} NBA games, loaded {len(prices)} prices", raw_markets
     except Exception as e:
         return {}, f"Exception: {str(e)[:200]}", []
 
