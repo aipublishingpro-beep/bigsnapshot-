@@ -36,7 +36,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "20.0"
+VERSION = "20.1"
 
 # ============================================================
 # SESSION STATE FOR BALL TRACKING
@@ -602,6 +602,22 @@ def calc_live_edge(game, injuries):
     }
 
 # ============================================================
+# KALSHI MARKET CHECK
+# ============================================================
+@st.cache_data(ttl=300)
+def check_kalshi_market_exists(ticker):
+    """Check if a Kalshi market exists - returns True/False"""
+    try:
+        url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker.upper()}"
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("market") is not None
+        return False
+    except:
+        return False
+
+# ============================================================
 # KALSHI LINKS
 # ============================================================
 def get_kalshi_ml_link(away, home, game_date=None):
@@ -833,12 +849,35 @@ if live_games:
         
         bc1, bc2, bc3 = st.columns(3)
         game_dt = g.get('game_date')
+        
+        # Build ticker to check if market exists
+        away_code = KALSHI_CODES.get(g['away'], g['away'])
+        home_code = KALSHI_CODES.get(g['home'], g['home'])
+        if game_dt:
+            date_str = game_dt.strftime('%y%b%d').upper()
+        else:
+            date_str = datetime.now(eastern).strftime('%y%b%d').upper()
+        ml_ticker = f"KXNFLGAME-{date_str}{away_code}{home_code}"
+        totals_ticker = f"KXNFLO-{date_str}{away_code}{home_code}"
+        
+        ml_exists = check_kalshi_market_exists(ml_ticker)
+        totals_exists = check_kalshi_market_exists(totals_ticker)
+        
         with bc1:
-            st.link_button(f"🎯 {edge['pick']} ML", get_kalshi_ml_link(g['away'], g['home'], game_dt), use_container_width=True)
+            if ml_exists:
+                st.link_button(f"🎯 {edge['pick']} ML", get_kalshi_ml_link(g['away'], g['home'], game_dt), use_container_width=True)
+            else:
+                st.button(f"⏳ {edge['pick']} ML - NOT LIVE", disabled=True, use_container_width=True)
         with bc2:
-            st.link_button(f"⬇️ NO {safe_no}", get_kalshi_totals_link(g['away'], g['home'], game_dt), use_container_width=True)
+            if totals_exists:
+                st.link_button(f"⬇️ NO {safe_no}", get_kalshi_totals_link(g['away'], g['home'], game_dt), use_container_width=True)
+            else:
+                st.button(f"⏳ NO - NOT LIVE", disabled=True, use_container_width=True)
         with bc3:
-            st.link_button(f"⬆️ YES {safe_yes}", get_kalshi_totals_link(g['away'], g['home'], game_dt), use_container_width=True)
+            if totals_exists:
+                st.link_button(f"⬆️ YES {safe_yes}", get_kalshi_totals_link(g['away'], g['home'], game_dt), use_container_width=True)
+            else:
+                st.button(f"⏳ YES - NOT LIVE", disabled=True, use_container_width=True)
         
         st.markdown("---")
 else:
@@ -899,7 +938,9 @@ for g in live_games:
         'pace_status': pace_status, 'pace_color': pace_color,
         'projected': projected_final, 'cushion': cushion,
         'safe_line': safe_line, 'period': g['period'], 'clock': g['clock'],
-        'game_date': g.get('game_date')
+        'game_date': g.get('game_date'),
+        'away_code': KALSHI_CODES.get(g['away'], g['away']),
+        'home_code': KALSHI_CODES.get(g['home'], g['home'])
     })
 
 cush_results.sort(key=lambda x: x['cushion'], reverse=True)
@@ -914,7 +955,19 @@ if cush_results:
         <span style="color:#00ff00;font-weight:bold;margin-left:8px">+{r['cushion']:.0f}</span>
         <span style="color:{r['pace_color']};margin-left:8px">{r['pace_status']}</span>
         </div>""", unsafe_allow_html=True)
-        st.link_button(f"BUY {cush_side} {r['safe_line']}", get_kalshi_totals_link(r['away'], r['home'], r.get('game_date')), use_container_width=True)
+        
+        # Check if market exists
+        game_dt = r.get('game_date')
+        if game_dt:
+            date_str = game_dt.strftime('%y%b%d').upper()
+        else:
+            date_str = datetime.now(eastern).strftime('%y%b%d').upper()
+        totals_ticker = f"KXNFLO-{date_str}{r['away_code']}{r['home_code']}"
+        
+        if check_kalshi_market_exists(totals_ticker):
+            st.link_button(f"BUY {cush_side} {r['safe_line']}", get_kalshi_totals_link(r['away'], r['home'], game_dt), use_container_width=True)
+        else:
+            st.button(f"⏳ {cush_side} {r['safe_line']} - NOT LIVE", disabled=True, use_container_width=True)
 else:
     st.info(f"No {cush_side} opportunities with 4+ cushion yet")
 
@@ -936,7 +989,9 @@ for g in live_games:
             "pace": pace, "proj": round(pace * 60),
             "total": g['total_score'], "mins": mins,
             "period": g['period'], "clock": g['clock'],
-            "game_date": g.get('game_date')
+            "game_date": g.get('game_date'),
+            "away_code": KALSHI_CODES.get(g['away'], g['away']),
+            "home_code": KALSHI_CODES.get(g['home'], g['home'])
         })
 
 pace_data.sort(key=lambda x: x['pace'])
@@ -965,7 +1020,17 @@ if pace_data:
         </div>""", unsafe_allow_html=True)
         
         if rec_side and rec_line:
-            st.link_button(f"BUY {rec_side} {rec_line}", get_kalshi_totals_link(p['away'], p['home'], p.get('game_date')), use_container_width=True)
+            game_dt = p.get('game_date')
+            if game_dt:
+                date_str = game_dt.strftime('%y%b%d').upper()
+            else:
+                date_str = datetime.now(eastern).strftime('%y%b%d').upper()
+            totals_ticker = f"KXNFLO-{date_str}{p['away_code']}{p['home_code']}"
+            
+            if check_kalshi_market_exists(totals_ticker):
+                st.link_button(f"BUY {rec_side} {rec_line}", get_kalshi_totals_link(p['away'], p['home'], game_dt), use_container_width=True)
+            else:
+                st.button(f"⏳ {rec_side} {rec_line} - NOT LIVE", disabled=True, use_container_width=True)
 else:
     st.info("No games with 8+ minutes played yet")
 
@@ -1006,7 +1071,21 @@ if scheduled_games:
         </div>
         """, unsafe_allow_html=True)
         
-        st.link_button(f"🎯 BUY {pick}", get_kalshi_ml_link(g['away'], g['home'], g.get('game_date')), use_container_width=True)
+        # Check if market exists before showing BUY button
+        game_dt = g.get('game_date')
+        away_code = KALSHI_CODES.get(g['away'], g['away'])
+        home_code = KALSHI_CODES.get(g['home'], g['home'])
+        if game_dt:
+            date_str = game_dt.strftime('%y%b%d').upper()
+        else:
+            date_str = datetime.now(eastern).strftime('%y%b%d').upper()
+        ml_ticker = f"KXNFLGAME-{date_str}{away_code}{home_code}"
+        
+        if check_kalshi_market_exists(ml_ticker):
+            st.link_button(f"🎯 BUY {pick}", get_kalshi_ml_link(g['away'], g['home'], game_dt), use_container_width=True)
+        else:
+            st.button(f"⏳ {pick} - MARKET NOT LIVE YET", disabled=True, use_container_width=True)
+            st.caption(f"Expected: {ml_ticker}")
 
 st.divider()
 
