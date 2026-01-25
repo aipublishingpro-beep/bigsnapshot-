@@ -369,6 +369,15 @@ def fetch_games():
             period = event.get("status", {}).get("period", 0)
             clock = event.get("status", {}).get("displayClock", "")
             
+            # Parse game date
+            game_date_str = event.get("date", "")
+            game_date = None
+            if game_date_str:
+                try:
+                    game_date = datetime.fromisoformat(game_date_str.replace("Z", "+00:00")).astimezone(eastern)
+                except:
+                    pass
+            
             # Get situation data (possession, down, distance, yard line)
             situation = comp.get("situation", {})
             poss_team_id = situation.get("possession", "")
@@ -414,6 +423,7 @@ def fetch_games():
                 "clock": clock,
                 "minutes_played": minutes_played,
                 "total_score": home_score + away_score,
+                "game_date": game_date,
                 # Field position data
                 "possession_team": possession_team,
                 "is_home_possession": is_home_possession,
@@ -594,13 +604,35 @@ def calc_live_edge(game, injuries):
 # ============================================================
 # KALSHI LINKS
 # ============================================================
-def get_kalshi_ml_link(away, home):
-    today = datetime.now(eastern).strftime('%y%b%d').upper()
-    return f"https://kalshi.com/markets/kxnflgame/nfl-regular-season-games?ticker=KXNFLGAME-{today}{away}{home}"
+def get_kalshi_ml_link(away, home, game_date=None):
+    """Build correct Kalshi ML market URL"""
+    # Convert to Kalshi codes
+    away_code = KALSHI_CODES.get(away, away)
+    home_code = KALSHI_CODES.get(home, home)
+    
+    # Use game date if provided, otherwise today
+    if game_date:
+        date_str = game_date.strftime('%y%b%d').upper()
+    else:
+        date_str = datetime.now(eastern).strftime('%y%b%d').upper()
+    
+    ticker = f"kxnflgame-{date_str.lower()}{away_code.lower()}{home_code.lower()}"
+    return f"https://kalshi.com/markets/kxnflgame/professional-football-game/{ticker}"
 
-def get_kalshi_totals_link(away, home):
-    today = datetime.now(eastern).strftime('%y%b%d').upper()
-    return f"https://kalshi.com/markets/kxnflo/nfl-total-game-points?ticker=KXNFLO-{today}-{away}{home}"
+def get_kalshi_totals_link(away, home, game_date=None):
+    """Build correct Kalshi totals market URL"""
+    # Convert to Kalshi codes
+    away_code = KALSHI_CODES.get(away, away)
+    home_code = KALSHI_CODES.get(home, home)
+    
+    # Use game date if provided, otherwise today
+    if game_date:
+        date_str = game_date.strftime('%y%b%d').upper()
+    else:
+        date_str = datetime.now(eastern).strftime('%y%b%d').upper()
+    
+    ticker = f"kxnflo-{date_str.lower()}{away_code.lower()}{home_code.lower()}"
+    return f"https://kalshi.com/markets/kxnflo/nfl-total-game-points/{ticker}"
 
 # ============================================================
 # SIDEBAR
@@ -800,12 +832,13 @@ if live_games:
         </div>""", unsafe_allow_html=True)
         
         bc1, bc2, bc3 = st.columns(3)
+        game_dt = g.get('game_date')
         with bc1:
-            st.link_button(f"🎯 {edge['pick']} ML", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
+            st.link_button(f"🎯 {edge['pick']} ML", get_kalshi_ml_link(g['away'], g['home'], game_dt), use_container_width=True)
         with bc2:
-            st.link_button(f"⬇️ NO {safe_no}", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
+            st.link_button(f"⬇️ NO {safe_no}", get_kalshi_totals_link(g['away'], g['home'], game_dt), use_container_width=True)
         with bc3:
-            st.link_button(f"⬆️ YES {safe_yes}", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
+            st.link_button(f"⬆️ YES {safe_yes}", get_kalshi_totals_link(g['away'], g['home'], game_dt), use_container_width=True)
         
         st.markdown("---")
 else:
@@ -865,7 +898,8 @@ for g in live_games:
         'total': total, 'mins': mins, 'pace': pace,
         'pace_status': pace_status, 'pace_color': pace_color,
         'projected': projected_final, 'cushion': cushion,
-        'safe_line': safe_line, 'period': g['period'], 'clock': g['clock']
+        'safe_line': safe_line, 'period': g['period'], 'clock': g['clock'],
+        'game_date': g.get('game_date')
     })
 
 cush_results.sort(key=lambda x: x['cushion'], reverse=True)
@@ -880,7 +914,7 @@ if cush_results:
         <span style="color:#00ff00;font-weight:bold;margin-left:8px">+{r['cushion']:.0f}</span>
         <span style="color:{r['pace_color']};margin-left:8px">{r['pace_status']}</span>
         </div>""", unsafe_allow_html=True)
-        st.link_button(f"BUY {cush_side} {r['safe_line']}", get_kalshi_totals_link(r['away'], r['home']), use_container_width=True)
+        st.link_button(f"BUY {cush_side} {r['safe_line']}", get_kalshi_totals_link(r['away'], r['home'], r.get('game_date')), use_container_width=True)
 else:
     st.info(f"No {cush_side} opportunities with 4+ cushion yet")
 
@@ -901,7 +935,8 @@ for g in live_games:
             "away": g['away'], "home": g['home'],
             "pace": pace, "proj": round(pace * 60),
             "total": g['total_score'], "mins": mins,
-            "period": g['period'], "clock": g['clock']
+            "period": g['period'], "clock": g['clock'],
+            "game_date": g.get('game_date')
         })
 
 pace_data.sort(key=lambda x: x['pace'])
@@ -930,7 +965,7 @@ if pace_data:
         </div>""", unsafe_allow_html=True)
         
         if rec_side and rec_line:
-            st.link_button(f"BUY {rec_side} {rec_line}", get_kalshi_totals_link(p['away'], p['home']), use_container_width=True)
+            st.link_button(f"BUY {rec_side} {rec_line}", get_kalshi_totals_link(p['away'], p['home'], p.get('game_date')), use_container_width=True)
 else:
     st.info("No games with 8+ minutes played yet")
 
@@ -971,7 +1006,7 @@ if scheduled_games:
         </div>
         """, unsafe_allow_html=True)
         
-        st.link_button(f"🎯 BUY {pick}", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
+        st.link_button(f"🎯 BUY {pick}", get_kalshi_ml_link(g['away'], g['home'], g.get('game_date')), use_container_width=True)
 
 st.divider()
 
