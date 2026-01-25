@@ -36,7 +36,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "20.3"
+VERSION = "20.4"
 
 # ============================================================
 # SESSION STATE FOR BALL TRACKING
@@ -247,10 +247,17 @@ def get_smart_ball_position(poss_text, possession_team, yards_to_endzone, is_hom
     return 50, "between_plays", None, ""
 
 def render_football_field(ball_yard, down, distance, possession_team, away_team, home_team,
-                          yards_to_endzone=None, poss_text=None, display_mode="normal"):
-    """Render football field with ball position"""
+                          yards_to_endzone=None, poss_text=None, display_mode="normal", last_play=None):
+    """Render football field with ball position, direction arrow, and play markers"""
     away_code = KALSHI_CODES.get(away_team, away_team[:3].upper() if away_team else "AWY")
     home_code = KALSHI_CODES.get(home_team, home_team[:3].upper() if home_team else "HME")
+    
+    # Check for incomplete pass
+    is_incomplete = False
+    if last_play:
+        play_text = (last_play.get("text", "") or "").lower()
+        if "incomplete" in play_text or "intercepted" in play_text:
+            is_incomplete = True
     
     # Build display elements based on mode
     if display_mode == "scoring":
@@ -258,27 +265,35 @@ def render_football_field(ball_yard, down, distance, possession_team, away_team,
         poss_display = "—"
         ball_loc = ""
         ball_style = "font-size:28px;text-shadow:0 0 20px #ffff00"
+        direction_arrow = ""
     elif display_mode == "kickoff":
         situation = poss_text or "⚡ KICKOFF"
         poss_display = "—"
         ball_loc = ""
         ball_style = "font-size:24px;text-shadow:0 0 10px #fff"
+        direction_arrow = ""
     elif display_mode == "between_plays" or not possession_team:
         situation = poss_text if poss_text else "Between Plays"
         poss_display = "—"
         ball_loc = ""
         ball_style = "font-size:24px;opacity:0.6;text-shadow:0 0 10px #fff"
+        direction_arrow = ""
     else:
         situation = f"{down} & {distance}" if down and distance else "—"
         poss_code = KALSHI_CODES.get(possession_team, possession_team[:3].upper() if possession_team else "???")
         
-        # Show attack direction
+        # Determine attack direction and arrow
         if possession_team == home_team:
-            poss_display = f"{poss_code} Ball ◄"
+            # Home team attacks LEFT (toward away endzone at 0)
+            poss_display = f"{poss_code} Ball"
+            direction_arrow = "←"
         elif possession_team == away_team:
-            poss_display = f"{poss_code} Ball ►"
+            # Away team attacks RIGHT (toward home endzone at 100)
+            poss_display = f"{poss_code} Ball"
+            direction_arrow = "→"
         else:
             poss_display = f"{poss_code} Ball"
+            direction_arrow = ""
         
         ball_loc = poss_text if poss_text else ""
         ball_style = "font-size:24px;text-shadow:0 0 10px #fff"
@@ -291,6 +306,26 @@ def render_football_field(ball_yard, down, distance, possession_team, away_team,
     # Ball percentage (10%-90% is the playing field)
     ball_pct = 10 + (ball_yard * 0.8) if ball_yard is not None else 50
     ball_pct = max(10, min(90, ball_pct))
+    
+    # Arrow position (slightly ahead of the ball in attack direction)
+    if direction_arrow:
+        if direction_arrow == "→":
+            arrow_pct = min(ball_pct + 6, 88)
+        else:
+            arrow_pct = max(ball_pct - 6, 12)
+        arrow_html = f'<div style="position:absolute;left:{arrow_pct}%;top:50%;transform:translate(-50%,-50%);color:#ffff00;font-size:20px;font-weight:bold;text-shadow:0 0 8px #000">{direction_arrow}</div>'
+    else:
+        arrow_html = ""
+    
+    # X marker for incomplete pass (slightly ahead of ball where it was thrown)
+    if is_incomplete and direction_arrow:
+        if direction_arrow == "→":
+            x_pct = min(ball_pct + 12, 85)
+        else:
+            x_pct = max(ball_pct - 12, 15)
+        x_html = f'<div style="position:absolute;left:{x_pct}%;top:50%;transform:translate(-50%,-50%);color:#ff4444;font-size:18px;font-weight:bold;text-shadow:0 0 6px #000">✕</div>'
+    else:
+        x_html = ""
     
     return f"""<div style="background:#1a1a1a;padding:15px;border-radius:10px;margin:10px 0">
 <div style="text-align:center;margin-bottom:10px;font-size:1.1em">
@@ -311,6 +346,8 @@ def render_football_field(ball_yard, down, distance, possession_team, away_team,
 <div style="position:absolute;left:82%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.2)"></div>
 <div style="position:absolute;left:90%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.3)"></div>
 <div style="position:absolute;left:{ball_pct}%;top:50%;transform:translate(-50%,-50%);{ball_style}">🏈</div>
+{arrow_html}
+{x_html}
 <div style="position:absolute;left:5%;top:50%;transform:translate(-50%,-50%);color:#fff;font-weight:bold;font-size:14px">{away_code}</div>
 <div style="position:absolute;left:95%;top:50%;transform:translate(-50%,-50%);color:#fff;font-weight:bold;font-size:14px">{home_code}</div></div>
 <div style="display:flex;justify-content:space-between;margin-top:5px;color:#888;font-size:11px">
@@ -790,7 +827,8 @@ if live_games:
             home_team=g['home'],
             yards_to_endzone=g.get('yards_to_endzone'),
             poss_text=status_text if display_mode != "normal" else g.get('poss_text'),
-            display_mode=display_mode
+            display_mode=display_mode,
+            last_play=g.get('last_play')
         )
         st.markdown(field_html, unsafe_allow_html=True)
         
