@@ -463,10 +463,51 @@ def get_kalshi_totals_link(away, home):
     return f"https://kalshi.com/markets/kxnbao/nba-total-regular-season-game-points?ticker=KXNBAO-{today}-{away_abbrev}{home_abbrev}"
 
 # ============================================================
+# SIDEBAR LEGEND
+# ============================================================
+with st.sidebar:
+    st.header("📖 ALIGNMENT GUIDE")
+    st.markdown("""
+    ### How To Read Scores
+    
+    | Score | Color | Meaning |
+    |-------|-------|---------|
+    | **75+** | 🟢 | STRONG — Multiple factors align |
+    | **60-74** | 🟢 | GOOD — Several factors align |
+    | **50-59** | 🟡 | MODERATE — Few factors |
+    | **Below 50** | ⚪ | WEAK — Skip or wait |
+    
+    ---
+    
+    ### What We Track
+    
+    - 🛏️ **Opp B2B** — Opponent on back-to-back
+    - 📊 **Net Rating** — Team strength gap
+    - 🏥 **Star OUT** — Key player injured
+    - 🆚 **H2H** — Historical matchup edge
+    - 🏔️ **Altitude** — Denver home advantage
+    - 🛫 **Elite Road** — Strong team traveling
+    
+    ---
+    
+    ### When To Act
+    
+    **Pre-Game:** Look for 60+ scores
+    
+    **Live:** Wait for Q2 with 10+ lead and 🐢 SLOW pace
+    
+    ---
+    
+    *We show the edge — you make the call.*
+    """)
+    st.divider()
+    st.caption("v4.1 NBA EDGE")
+
+# ============================================================
 # UI
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v4.0 • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s")
+st.caption(f"v4.1 • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s")
 
 # Fetch data
 games = fetch_games()
@@ -609,29 +650,42 @@ st.divider()
 # ============================================================
 if scheduled_games:
     st.subheader("🎯 PRE-GAME ALIGNMENT")
+    st.markdown("*Look for **60+** scores with multiple factors. Higher = more factors favor that side.*")
     
+    # Sort by edge score (highest first)
+    games_with_edge = []
     for g in scheduled_games:
         pick, score, factors = calc_pregame_edge(g['away'], g['home'], injuries, b2b_teams)
-        
-        # Color
+        games_with_edge.append((g, pick, score, factors))
+    games_with_edge.sort(key=lambda x: x[2], reverse=True)
+    
+    for g, pick, score, factors in games_with_edge:
+        # Color coding - GREEN for 60+, YELLOW for 50-59, GRAY below 50
         if score >= 75:
-            score_color = "#22c55e"
-            tier = "STRONG"
+            score_color = "#22c55e"  # Bright green
+            tier = "🟢 STRONG"
+            border_color = "#22c55e"
         elif score >= 60:
-            score_color = "#eab308"
-            tier = "GOOD"
+            score_color = "#22c55e"  # Green
+            tier = "🟢 GOOD"
+            border_color = "#22c55e"
+        elif score >= 50:
+            score_color = "#eab308"  # Yellow
+            tier = "🟡 MODERATE"
+            border_color = "#eab308"
         else:
-            score_color = "#888"
-            tier = "MODERATE"
+            score_color = "#888"  # Gray
+            tier = "⚪ WEAK"
+            border_color = "#444"
         
         st.markdown(f"""
-        <div style="background: #1e1e2e; border-radius: 10px; padding: 14px; margin-bottom: 10px; border-left: 4px solid {score_color};">
+        <div style="background: #1e1e2e; border-radius: 10px; padding: 14px; margin-bottom: 10px; border-left: 4px solid {border_color};">
             <div style="display: flex; justify-content: space-between;">
                 <span style="color: #fff; font-weight: 600;">{g['away']} @ {g['home']}</span>
                 <span style="color: {score_color}; font-weight: 600;">{tier} {score}/100</span>
             </div>
             <div style="color: #888; font-size: 0.85em; margin-top: 4px;">
-                Edge: {pick} • {' • '.join(factors[:3]) if factors else 'No strong factors'}
+                Edge: <strong style="color: #fff;">{pick}</strong> • {' • '.join(factors[:3]) if factors else 'No strong factors'}
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -738,4 +792,4 @@ with st.expander("📖 HOW TO USE", expanded=False):
     ⚠️ Only risk what you can afford to lose  
     """)
 
-st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v4.0")
+st.caption("⚠️ Educational only. Not financial advice. Edge Score ≠ win probability. v4.1")
