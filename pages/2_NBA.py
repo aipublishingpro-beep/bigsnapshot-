@@ -36,7 +36,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "4.6"
+VERSION = "4.8"
 LEAGUE_AVG_TOTAL = 225  # NBA league average total
 
 # ============================================================
@@ -144,8 +144,6 @@ STAR_TIERS = {
     "Victor Wembanyama": 2, "Evan Mobley": 2, "LaMelo Ball": 2, "Cade Cunningham": 2,
     "Tyrese Maxey": 2, "Bam Adebayo": 2, "Karl-Anthony Towns": 2,
 }
-
-THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5, 250.5, 255.5]
 
 # ============================================================
 # FETCH FUNCTIONS
@@ -472,11 +470,18 @@ with st.sidebar:
 
 ---
 ### Pace Guide
-| Pace | Label | Action |
+| Pace | Label | Totals |
 |------|-------|--------|
-| >5.0 | 🔥 FAST | Lean YES |
-| 4.2-5.0 | ⚖️ AVG | Wait |
-| <4.2 | 🐢 SLOW | Lean NO |
+| <4.2 | 🐢 SLOW | NO |
+| 4.2-4.8 | ⚖️ AVG | Wait |
+| 4.8-5.2 | 🔥 FAST | YES |
+| >5.2 | 🚀 SHOOTOUT | YES |
+
+---
+### How to Trade
+1. Check projection
+2. Click TOTALS
+3. Pick threshold on Kalshi
 """)
     st.divider()
     st.caption(f"v{VERSION} NBA EDGE")
@@ -583,17 +588,9 @@ if live_games:
         
         lead_display = f"+{edge['lead']}" if edge['lead'] > 0 else str(edge['lead'])
         leader = g['home'] if edge['lead'] > 0 else g['away'] if edge['lead'] < 0 else "TIED"
-        
-        # Find safe NO/YES thresholds
         proj = edge['proj_total']
-        no_idx = next((i for i, t in enumerate(THRESHOLDS) if t > proj), len(THRESHOLDS)-1)
-        safe_no = THRESHOLDS[min(no_idx + 1, len(THRESHOLDS)-1)]
-        yes_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < proj), 0)
-        safe_yes = THRESHOLDS[max(yes_idx - 1, 0)]
         
-        no_cushion = safe_no - proj
-        yes_cushion = proj - safe_yes
-        
+        # Show projection and pace - user picks threshold on Kalshi
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #444;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -608,20 +605,16 @@ if live_games:
                 Edge: <strong style="color: #fff;">{leader}</strong> ({lead_display}) • {edge['pace_label']} ({edge['pace']:.2f}/min)
             </div>
             <div style="color: #888; font-size: 0.85em; margin-top: 6px;">
-                Proj: <b style="color:#fff">{proj}</b> | 
-                <span style="color:#22c55e">NO {safe_no} (+{no_cushion:.0f})</span> | 
-                <span style="color:#f97316">YES {safe_yes} (+{yes_cushion:.0f})</span>
+                Projected Total: <b style="color:#fff">{proj}</b> — Pick threshold on Kalshi
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        bc1, bc2, bc3 = st.columns(3)
+        bc1, bc2 = st.columns(2)
         with bc1:
             st.link_button(f"🎯 {edge['pick']} ML", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
         with bc2:
-            st.link_button(f"⬇️ NO {safe_no}", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
-        with bc3:
-            st.link_button(f"⬆️ YES {safe_yes}", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
+            st.link_button(f"📊 TOTALS", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
         
         st.markdown("---")
 else:
@@ -630,23 +623,20 @@ else:
 st.divider()
 
 # ============================================================
-# 🎯 CUSHION SCANNER
+# 🎯 PROJECTION SCANNER (was Cushion Scanner)
 # ============================================================
-st.subheader("🎯 CUSHION SCANNER")
-st.caption("Find safe NO/YES totals in live games")
+st.subheader("🎯 PROJECTION SCANNER")
+st.caption("Track projected totals - pick your threshold on Kalshi")
 
-cs1, cs2 = st.columns([1, 1])
-cush_min = cs1.selectbox("Min minutes", [6, 9, 12, 15, 18], index=0, key="cush_min")
-cush_side = cs2.selectbox("Side", ["NO", "YES"], key="cush_side")
+proj_min = st.selectbox("Min minutes", [6, 9, 12, 15, 18], index=0, key="proj_min")
 
-cush_results = []
+proj_results = []
 for g in live_games:
     mins = g['minutes_played']
     total = g['total_score']
-    if mins < cush_min or mins <= 0: continue
+    if mins < proj_min or mins <= 0: continue
     
     pace = total / mins
-    remaining_min = max(48 - mins, 1)
     
     # Use blended projection
     if mins >= 8:
@@ -657,116 +647,38 @@ for g in live_games:
         projected_final = round(((pace * 0.3) + ((LEAGUE_AVG_TOTAL / 48) * 0.7)) * 48)
     projected_final = max(185, min(265, projected_final))
     
-    if cush_side == "NO":
-        base_idx = next((i for i, t in enumerate(THRESHOLDS) if t > projected_final), len(THRESHOLDS)-1)
-        safe_idx = min(base_idx + 1, len(THRESHOLDS) - 1)
-        safe_line = THRESHOLDS[safe_idx]
-        cushion = safe_line - projected_final
+    if pace < 4.2:
+        pace_status, pace_color, rec = "🐢 SLOW", "#00ff00", "Lean NO (Under)"
+    elif pace < 4.8:
+        pace_status, pace_color, rec = "⚖️ AVG", "#ffff00", "Wait"
+    elif pace < 5.2:
+        pace_status, pace_color, rec = "🔥 FAST", "#ff8800", "Lean YES (Over)"
     else:
-        base_idx = next((i for i in range(len(THRESHOLDS)-1, -1, -1) if THRESHOLDS[i] < projected_final), 0)
-        safe_idx = max(base_idx - 1, 0)
-        safe_line = THRESHOLDS[safe_idx]
-        cushion = projected_final - safe_line
+        pace_status, pace_color, rec = "🚀 SHOOTOUT", "#ff0000", "Lean YES (Over)"
     
-    if cushion < 6: continue
-    
-    if cush_side == "NO":
-        if pace < 4.2:
-            pace_status, pace_color = "✅ SLOW", "#00ff00"
-        elif pace < 4.8:
-            pace_status, pace_color = "⚠️ AVG", "#ffff00"
-        else:
-            pace_status, pace_color = "❌ FAST", "#ff0000"
-    else:
-        if pace > 5.0:
-            pace_status, pace_color = "✅ FAST", "#00ff00"
-        elif pace > 4.5:
-            pace_status, pace_color = "⚠️ AVG", "#ffff00"
-        else:
-            pace_status, pace_color = "❌ SLOW", "#ff0000"
-    
-    cush_results.append({
+    proj_results.append({
         'away': g['away'], 'home': g['home'],
         'total': total, 'mins': mins, 'pace': pace,
         'pace_status': pace_status, 'pace_color': pace_color,
-        'projected': projected_final, 'cushion': cushion,
-        'safe_line': safe_line, 'period': g['period'], 'clock': g['clock']
+        'projected': projected_final, 'rec': rec,
+        'period': g['period'], 'clock': g['clock']
     })
 
-cush_results.sort(key=lambda x: x['cushion'], reverse=True)
+proj_results.sort(key=lambda x: x['pace'])
 
-if cush_results:
-    for r in cush_results:
+if proj_results:
+    for r in proj_results:
         st.markdown(f"""<div style="background:#0f172a;padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:3px solid {r['pace_color']}">
         <b style="color:#fff">{r['away']} @ {r['home']}</b> 
         <span style="color:#888">Q{r['period']} {r['clock']} • {r['total']}pts/{r['mins']:.0f}min</span>
-        <span style="color:#888">Proj: <b style="color:#fff">{r['projected']}</b></span>
-        <span style="background:#ff8800;color:#000;padding:2px 8px;border-radius:4px;font-weight:bold;margin-left:8px">🎯 {r['safe_line']}</span>
-        <span style="color:#00ff00;font-weight:bold;margin-left:8px">+{r['cushion']:.0f}</span>
-        <span style="color:{r['pace_color']};margin-left:8px">{r['pace_status']}</span>
+        <span style="color:{r['pace_color']};font-weight:bold;margin-left:8px">{r['pace']:.2f}/min {r['pace_status']}</span>
+        <span style="color:#888;margin-left:8px">Proj: <b style="color:#fff">{r['projected']}</b></span>
+        <span style="color:#aaa;margin-left:8px">→ {r['rec']}</span>
         </div>""", unsafe_allow_html=True)
         
-        st.link_button(f"BUY {cush_side} {r['safe_line']}", get_kalshi_totals_link(r['away'], r['home']), use_container_width=True)
+        st.link_button(f"📊 OPEN TOTALS", get_kalshi_totals_link(r['away'], r['home']), use_container_width=True)
 else:
-    st.info(f"No {cush_side} opportunities with 6+ cushion yet")
-
-st.divider()
-
-# ============================================================
-# 🔥 PACE SCANNER
-# ============================================================
-st.subheader("🔥 PACE SCANNER")
-st.caption("Track scoring pace for live games")
-
-pace_data = []
-for g in live_games:
-    mins = g['minutes_played']
-    if mins >= 6:
-        pace = round(g['total_score'] / mins, 2)
-        
-        # Use blended projection
-        if mins >= 8:
-            weight = min(1.0, (mins - 8) / 16)
-            blended_pace = (pace * weight) + ((LEAGUE_AVG_TOTAL / 48) * (1 - weight))
-            proj = round(blended_pace * 48)
-        else:
-            proj = round(((pace * 0.3) + ((LEAGUE_AVG_TOTAL / 48) * 0.7)) * 48)
-        proj = max(185, min(265, proj))
-        
-        pace_data.append({
-            "away": g['away'], "home": g['home'],
-            "pace": pace, "proj": proj,
-            "total": g['total_score'], "mins": mins,
-            "period": g['period'], "clock": g['clock']
-        })
-
-pace_data.sort(key=lambda x: x['pace'])
-
-if pace_data:
-    for p in pace_data:
-        if p['pace'] < 4.2:
-            lbl, clr = "🐢 SLOW", "#00ff00"
-            rec = "Lean NO"
-        elif p['pace'] < 4.8:
-            lbl, clr = "⚖️ AVG", "#ffff00"
-            rec = "Wait"
-        elif p['pace'] < 5.2:
-            lbl, clr = "🔥 FAST", "#ff8800"
-            rec = "Lean YES"
-        else:
-            lbl, clr = "🚀 SHOOTOUT", "#ff0000"
-            rec = "Lean YES"
-        
-        st.markdown(f"""<div style="background:#0f172a;padding:8px 12px;margin-bottom:4px;border-radius:6px;border-left:3px solid {clr}">
-        <b style="color:#fff">{p['away']} @ {p['home']}</b>
-        <span style="color:#666;margin-left:10px">Q{p['period']} {p['clock']}</span>
-        <span style="color:#888;margin-left:10px">{p['total']}pts/{p['mins']:.0f}min</span>
-        <span style="color:{clr};font-weight:bold;margin-left:10px">{p['pace']:.2f}/min {lbl}</span>
-        <span style="color:#888;margin-left:10px">Proj: <b style="color:#fff">{p['proj']}</b></span>
-        <span style="color:#aaa;margin-left:10px">→ {rec}</span>
-        </div>""", unsafe_allow_html=True)
-else:
-    st.info("No games with 6+ minutes played yet")
+    st.info(f"No games with {proj_min}+ minutes played yet")
 
 st.divider()
 
@@ -826,12 +738,6 @@ with st.expander("📖 HOW TO USE", expanded=False):
 | **<50** | ⚪ WEAK | Skip |
 
 ---
-### Cushion Scanner
-- **+10 or more** = Very safe
-- **+6 to +9** = Good buffer
-- **Below +6** = Not shown (too risky)
-
----
 ### Pace Guide
 | Pace | Label | Totals Lean |
 |------|-------|-------------|
@@ -839,6 +745,14 @@ with st.expander("📖 HOW TO USE", expanded=False):
 | 4.2-4.8 | ⚖️ AVG | Wait |
 | 4.8-5.2 | 🔥 FAST | YES (Over) |
 | >5.2 | 🚀 SHOOTOUT | YES (Over) |
+
+---
+### How to Use Projections
+1. Check projected total in app
+2. Click TOTALS button to go to Kalshi
+3. Pick a threshold ABOVE projection for NO
+4. Pick a threshold BELOW projection for YES
+5. The bigger the gap, the safer the bet
 
 ---
 ⚠️ Edge Score ≠ Win Probability  
