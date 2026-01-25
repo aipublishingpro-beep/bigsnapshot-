@@ -2,82 +2,111 @@ import streamlit as st
 
 st.set_page_config(page_title="BigSnapshot", page_icon="🎯", layout="wide")
 
-# ============================================================
-# GA4 ANALYTICS - SERVER SIDE
-# ============================================================
-import uuid
-import requests as req_ga
+import streamlit.components.v1 as components
+components.html("""
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-1T35YHHYBC', { send_page_view: true });
+</script>
+""", height=0)
 
-def send_ga4_event(page_title, page_path):
-    try:
-        url = f"https://www.google-analytics.com/mp/collect?measurement_id=G-NQKY5VQ376&api_secret=n4oBJjH7RXi3dA7aQo2CZA"
-        payload = {"client_id": str(uuid.uuid4()), "events": [{"name": "page_view", "params": {"page_title": page_title, "page_location": f"https://bigsnapshot.streamlit.app{page_path}"}}]}
-        req_ga.post(url, json=payload, timeout=2)
-    except: pass
-
-send_ga4_event("Home", "/")
+from streamlit_js_eval import streamlit_js_eval
 
 # ============================================================
-# COOKIE AUTH SETUP
+# 🔐 AUTH BOOTSTRAP — READ FROM LOCALSTORAGE ON EVERY LOAD
 # ============================================================
-import extra_streamlit_components as stx
-from datetime import datetime, timedelta
-
-cookie_manager = stx.CookieManager()
-
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.user_type = None
 
-# Check for existing cookie
-saved_auth = cookie_manager.get("authenticated")
-if saved_auth == "true":
+stored_auth = streamlit_js_eval(
+    js_expressions="localStorage.getItem('bigsnapshot_auth')",
+    key="auth_bootstrap_home"
+)
+
+if stored_auth and stored_auth not in ["", "null", None]:
     st.session_state.authenticated = True
-    st.session_state.user_type = "Paid Subscriber"
+    st.session_state.user_type = stored_auth
 
 # ============================================================
-# 🔐 PASSWORD & STRIPE CONFIG
+# PASSWORD CONFIG
 # ============================================================
-VALID_PASSWORD = "snapcrackle2026"
+VALID_PASSWORDS = {
+    "WILLIE1228": "Owner",
+    "SNAPCRACKLE2026": "Paid Subscriber",
+}
+
+# ============================================================
+# STRIPE CONFIG
+# ============================================================
 STRIPE_LINK = "https://buy.stripe.com/14A00lcgHe9oaIodx65Rm00"
+ACCESS_PASSWORD = "SNAPCRACKLE2026"
+PAID_TOKEN = "thankyou"
 
 # ============================================================
-# MOBILE CSS
+# DETECT STRIPE REDIRECT
+# ============================================================
+query_params = st.query_params
+from_payment = query_params.get("paid") == PAID_TOKEN
+
+# ============================================================
+# CUSTOM CSS
 # ============================================================
 st.markdown("""
 <style>
-@media (max-width: 768px) {
-    .stColumns > div { flex: 1 1 100% !important; min-width: 100% !important; }
-    [data-testid="stMetricValue"] { font-size: 1.2rem !important; }
-    [data-testid="stMetricLabel"] { font-size: 0.8rem !important; }
-    h1 { font-size: 1.5rem !important; }
-    h2 { font-size: 1.2rem !important; }
-    h3 { font-size: 1rem !important; }
-    button { padding: 8px 12px !important; font-size: 0.85em !important; }
-}
-[data-testid="stSidebar"] { display: none; }
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stApp {background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%);}
+    @media (max-width: 768px) {
+        h1 {font-size: 36px !important;}
+        h2 {font-size: 22px !important;}
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# CHECK IF COMING FROM STRIPE PAYMENT
-# ============================================================
-from_payment = st.query_params.get("paid") == "thankyou"
-
-# ============================================================
-# NOT LOGGED IN → SHOW MARKETING LANDING PAGE
+# LOGGED OUT — MARKETING LANDING PAGE
 # ============================================================
 if not st.session_state.authenticated:
     
-    # ============ HERO SECTION ============
+    # ============ HERO ============
     st.markdown("""
     <div style="text-align: center; padding: 60px 20px 30px 20px;">
-        <div style="font-size: 70px; margin-bottom: 15px;">🎯</div>
+        <div style="font-size: 70px; margin-bottom: 15px;">📊</div>
         <h1 style="font-size: 52px; font-weight: 800; color: #fff; margin-bottom: 10px;">BigSnapshot</h1>
         <p style="color: #888; font-size: 20px; margin-bottom: 10px;">Prediction Market Edge Finder</p>
         <p style="color: #555; font-size: 14px;">Structural analysis for Kalshi markets</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # ============ FREE TEMP BUTTON ============
+    st.markdown("""
+    <div style="text-align: center; margin: 20px 0 30px 0;">
+        <p style="color: #f97316; font-size: 16px; font-weight: 600; margin-bottom: 12px;">🌡️ Want to see it in action first?</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("🌡️ TRY TEMP EDGE FINDER FREE", use_container_width=True, type="secondary"):
+            st.switch_page("pages/5_Temp.py")
+    
+    st.markdown("""
+    <style>
+    div[data-testid="stButton"] button[kind="secondary"] {
+        background: linear-gradient(135deg, #3a2a1a 0%, #4a3a2a 100%) !important;
+        border: 2px solid #f97316 !important;
+        color: #f97316 !important;
+        font-weight: 700 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
     
     # ============ VALUE PROP ============
     st.markdown("""
@@ -91,258 +120,239 @@ if not st.session_state.authenticated:
     </div>
     """, unsafe_allow_html=True)
     
-    # ============ FREE TEMP BUTTON (COSTCO CHICKEN) ============
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown("""
-        <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #3a2a1a 0%, #4a3a2a 100%); border-radius: 16px; border: 2px solid #f97316;">
-            <div style="font-size: 50px; margin-bottom: 10px;">🌡️</div>
-            <h3 style="color: #f97316; margin-bottom: 10px;">Try It Free</h3>
-            <p style="color: #ccc; font-size: 14px; margin-bottom: 15px;">See how we detect edge in temperature markets — no signup required.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("🌡️ TRY TEMP EDGE FINDER FREE", use_container_width=True, type="secondary", key="free_temp"):
-            st.switch_page("pages/5_Temp.py")
-    
-    # ============ LIVE TOOLS SECTION ============
-    st.markdown("---")
+    # ============ FEWER BAD DECISIONS ============
     st.markdown("""
-    <div style="text-align: center; margin-bottom: 20px;">
-        <h2 style="color: #fff; font-size: 24px;">🔴 LIVE TOOLS</h2>
-        <p style="color: #888;">Available now for subscribers</p>
+    <div style="text-align: center; padding: 30px 20px; max-width: 600px; margin: 0 auto;">
+        <p style="color: #888; font-size: 1.1em; line-height: 1.8;">
+            You don't need more action.<br>
+            You need <span style="color: #fff; font-weight: bold;">fewer bad decisions</span>.
+        </p>
+        <p style="color: #888; font-size: 1em; margin-top: 15px;">
+            BigSnapshot doesn't tell you what to bet. It helps you make fewer bad decisions.
+        </p>
+        <p style="color: #fff; font-weight: bold; font-size: 1.3em; margin-top: 20px;">That's where real edge comes from.</p>
     </div>
     """, unsafe_allow_html=True)
     
-    live_col1, live_col2, live_col3 = st.columns(3)
-    
-    with live_col1:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #1a2a1a 0%, #2a3a2a 100%); border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #22c55e; height: 180px;">
-            <div style="font-size: 40px; margin-bottom: 8px;">🏀</div>
-            <h4 style="color: #22c55e; margin-bottom: 4px;">NBA</h4>
-            <span style="background: #22c55e; color: #000; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;">LIVE</span>
-            <p style="color: #888; font-size: 12px; margin-top: 8px;">Live edge monitor, factor alignment, totals projections</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with live_col2:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #1a2a1a 0%, #2a3a2a 100%); border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #22c55e; height: 180px;">
-            <div style="font-size: 40px; margin-bottom: 8px;">🏈</div>
-            <h4 style="color: #22c55e; margin-bottom: 4px;">NFL</h4>
-            <span style="background: #22c55e; color: #000; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;">LIVE</span>
-            <p style="color: #888; font-size: 12px; margin-top: 8px;">Playoff edge finder with live scoring</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with live_col3:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #1a2a1a 0%, #2a3a2a 100%); border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #22c55e; height: 180px;">
-            <div style="font-size: 40px; margin-bottom: 8px;">🏒</div>
-            <h4 style="color: #22c55e; margin-bottom: 4px;">NHL</h4>
-            <span style="background: #22c55e; color: #000; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;">LIVE</span>
-            <p style="color: #888; font-size: 12px; margin-top: 8px;">Hockey edge finder with live updates</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # ============ COMING SOON SECTION ============
-    st.markdown("---")
-    st.markdown("""
-    <div style="text-align: center; margin-bottom: 20px;">
-        <h2 style="color: #fff; font-size: 24px;">🔜 COMING SOON</h2>
-        <p style="color: #888;">More markets in development</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    soon_col1, soon_col2, soon_col3, soon_col4 = st.columns(4)
-    
-    with soon_col1:
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 15px; text-align: center; border: 1px solid #444; height: 120px;">
-            <div style="font-size: 30px; margin-bottom: 5px;">⚾</div>
-            <h4 style="color: #888; margin-bottom: 2px; font-size: 14px;">MLB</h4>
-            <span style="color: #666; font-size: 10px;">March 2026</span>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with soon_col2:
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 15px; text-align: center; border: 1px solid #444; height: 120px;">
-            <div style="font-size: 30px; margin-bottom: 5px;">🎓</div>
-            <h4 style="color: #888; margin-bottom: 2px; font-size: 14px;">NCAA</h4>
-            <span style="color: #666; font-size: 10px;">March 2026</span>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with soon_col3:
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 15px; text-align: center; border: 1px solid #444; height: 120px;">
-            <div style="font-size: 30px; margin-bottom: 5px;">⚽</div>
-            <h4 style="color: #888; margin-bottom: 2px; font-size: 14px;">Soccer</h4>
-            <span style="color: #666; font-size: 10px;">Q2 2026</span>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with soon_col4:
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 15px; text-align: center; border: 1px solid #444; height: 120px;">
-            <div style="font-size: 30px; margin-bottom: 5px;">📊</div>
-            <h4 style="color: #888; margin-bottom: 2px; font-size: 14px;">Economics</h4>
-            <span style="color: #666; font-size: 10px;">Q2 2026</span>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # ============ STRIPE PAYMENT SECTION ============
-    st.markdown("---")
-    
-    if from_payment:
-        st.markdown("""
-        <div style="max-width: 500px; margin: 30px auto; padding: 30px; background: linear-gradient(135deg, #1a3a2a 0%, #2a4a3a 100%); border-radius: 16px; border: 2px solid #22c55e; text-align: center;">
-            <p style="color: #22c55e; font-size: 24px; font-weight: 700; margin-bottom: 15px;">✅ Payment Successful!</p>
-            <p style="color: #ccc; font-size: 16px; margin-bottom: 20px;">Your access password is:</p>
-            <code style="background: #000; color: #22c55e; padding: 15px 30px; border-radius: 8px; font-size: 24px; font-weight: bold; display: inline-block;">snapcrackle2026</code>
-            <p style="color: #888; font-size: 14px; margin-top: 20px;">Enter this password below to unlock all tools.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
+    # ============ STRIPE BUTTON ============
+    if not from_payment:
         st.markdown(f"""
-        <div style="max-width: 500px; margin: 30px auto; padding: 30px; background: linear-gradient(135deg, #1a3a2a 0%, #2a4a3a 100%); border-radius: 16px; border: 1px solid #3a5a4a; text-align: center;">
-            <p style="color: #22c55e; font-size: 18px; font-weight: 700; margin-bottom: 10px;">🔓 Private Early Access</p>
-            <p style="color: #ccc; font-size: 14px; margin-bottom: 20px;">
-                Get full access to all prediction market edge tools.<br><strong>$49.99 one-time</strong>. Refund available if not a fit.
-            </p>
-            <a href="{STRIPE_LINK}" target="_blank" style="display: inline-block; background: #22c55e; color: #000; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 16px;">
-                🔓 Unlock All Tools – $49.99
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{STRIPE_LINK}" target="_blank">
+                <button style="background-color:#22c55e; color:black; padding:16px 40px; border:none; border-radius:10px; font-size:18px; font-weight:700; cursor:pointer;">
+                    🔓 Unlock All Tools – $49.99
+                </button>
             </a>
-            <p style="color: #666; font-size: 12px; margin-top: 15px;">Secure payment via Stripe</p>
+            <p style="color: #888; font-size: 13px; margin-top: 12px;">One-time payment. Refund available if not a fit.</p>
         </div>
         """, unsafe_allow_html=True)
     
-    # ============ PASSWORD LOGIN ============
+    # ============ PASSWORD REVEAL AFTER PAYMENT ============
+    if from_payment:
+        st.markdown(f"""
+        <div style="max-width: 500px; margin: 30px auto; padding: 25px;
+                    background: linear-gradient(135deg, #1a3a2a 0%, #2a4a3a 100%);
+                    border-radius: 16px; border: 2px solid #22c55e; text-align: center;">
+            <p style="color: #22c55e; font-size: 20px; font-weight: 700; margin-bottom: 15px;">✅ Payment Received!</p>
+            <p style="color: #ccc; font-size: 14px; margin-bottom: 15px;">Your access password is:</p>
+            <code style="background: #111; color: #22c55e; padding: 12px 24px; border-radius: 8px; font-size: 18px; font-weight: bold; display: inline-block;">{ACCESS_PASSWORD}</code>
+            <p style="color: #888; font-size: 12px; margin-top: 15px;">Enter this password below to unlock all tools.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
     st.markdown("---")
+    
+    # ============ LIVE TOOLS PREVIEW ============
+    st.markdown("### 🔥 Live Tools")
+    
     st.markdown("""
-    <div style="text-align: center; margin-bottom: 15px;">
-        <p style="color: #888; font-size: 14px;">Already have a password?</p>
+    <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
+            <div style="font-size: 50px; margin-bottom: 10px;">🏀</div>
+            <h3 style="color: #4ade80; margin-bottom: 5px;">NBA</h3>
+            <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">LIVE</span>
+        </div>
+        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
+            <div style="font-size: 50px; margin-bottom: 10px;">🏈</div>
+            <h3 style="color: #4ade80; margin-bottom: 5px;">NFL</h3>
+            <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">LIVE</span>
+        </div>
+        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
+            <div style="font-size: 50px; margin-bottom: 10px;">🏒</div>
+            <h3 style="color: #4ade80; margin-bottom: 5px;">NHL</h3>
+            <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">LIVE</span>
+        </div>
+        <div style="background: linear-gradient(135deg, #3a2a1a 0%, #4a3a2a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #f97316;">
+            <div style="font-size: 50px; margin-bottom: 10px;">🌡️</div>
+            <h3 style="color: #f97316; margin-bottom: 5px;">Temp</h3>
+            <span style="background:#f97316;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
+        </div>
+        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
+            <div style="font-size: 50px; margin-bottom: 10px;">📈</div>
+            <h3 style="color: #4ade80; margin-bottom: 5px;">Economics</h3>
+            <span style="background:#fbbf24;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">NEW</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # ============ COMING SOON ============
+    st.markdown("### 🚧 Coming Soon")
+    
+    st.markdown("""
+    <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #1a1a2a 0%, #2a2a3a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 1px solid #444; opacity: 0.7;">
+            <div style="font-size: 50px; margin-bottom: 10px;">⚾</div>
+            <h3 style="color: #888; margin-bottom: 5px;">MLB</h3>
+            <span style="background:#555;color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">SOON</span>
+        </div>
+        <div style="background: linear-gradient(135deg, #1a1a2a 0%, #2a2a3a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 1px solid #444; opacity: 0.7;">
+            <div style="font-size: 50px; margin-bottom: 10px;">⚽</div>
+            <h3 style="color: #888; margin-bottom: 5px;">Soccer</h3>
+            <span style="background:#555;color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">SOON</span>
+        </div>
+        <div style="background: linear-gradient(135deg, #1a1a2a 0%, #2a2a3a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 1px solid #444; opacity: 0.7;">
+            <div style="font-size: 50px; margin-bottom: 10px;">🏛️</div>
+            <h3 style="color: #888; margin-bottom: 5px;">Politics</h3>
+            <span style="background:#555;color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">SOON</span>
+        </div>
+        <div style="background: linear-gradient(135deg, #1a1a2a 0%, #2a2a3a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 1px solid #444; opacity: 0.7;">
+            <div style="font-size: 50px; margin-bottom: 10px;">🎬</div>
+            <h3 style="color: #888; margin-bottom: 5px;">Entertainment</h3>
+            <span style="background:#555;color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">SOON</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # ============ SECOND CTA ============
+    st.markdown(f"""
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="{STRIPE_LINK}" target="_blank">
+            <button style="background-color:#22c55e; color:black; padding:16px 40px; border:none; border-radius:10px; font-size:18px; font-weight:700; cursor:pointer;">
+                🔓 Unlock All Tools – $49.99
+            </button>
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # ============ PASSWORD ENTRY ============
+    st.markdown("""
+    <div style="max-width: 400px; margin: 30px auto; text-align: center;">
+        <p style="color: #888; font-size: 14px; margin-bottom: 15px;">
+            Already paid? Enter your password below:
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
-        password = st.text_input("Enter password", type="password", key="login_password", label_visibility="collapsed", placeholder="Enter password...")
-        if st.button("🔓 LOGIN", use_container_width=True, type="primary"):
-            if password.lower() == VALID_PASSWORD.lower() or password.upper() == "WILLIE1228":
-                cookie_manager.set("authenticated", "true", expires_at=datetime.now() + timedelta(days=30))
+        password_input = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter password")
+        if st.button("🔓 UNLOCK", use_container_width=True, type="primary"):
+            if password_input.upper() in VALID_PASSWORDS:
+                user_type = VALID_PASSWORDS[password_input.upper()]
+                streamlit_js_eval(
+                    js_expressions=f"localStorage.setItem('bigsnapshot_auth', '{user_type}')",
+                    key="set_auth_main"
+                )
                 st.session_state.authenticated = True
-                st.session_state.user_type = "Owner" if password.upper() == "WILLIE1228" else "Paid Subscriber"
+                st.session_state.user_type = user_type
                 st.rerun()
             else:
-                st.error("Invalid password")
+                st.error("❌ Invalid password")
     
-    # ============ FOOTER ============
-    st.markdown("---")
+    # ============ REFUND POLICY FOOTER ============
     st.markdown("""
-    <div style="text-align: center; padding: 20px;">
-        <p style="color: #666; font-size: 12px;">
-            © 2026 BigSnapshot | Built for Kalshi traders<br>
-            <span style="color: #555;">Educational tool only. Not financial advice. Trade responsibly.</span>
+    <div style="text-align: center; padding: 40px 20px; margin-top: 20px;">
+        <p style="color: #888; font-size: 13px; margin-bottom: 15px;">
+            <strong>💳 Refund Policy:</strong> Not satisfied? Email aipublishingpro@gmail.com within 7 days for a full refund. No questions asked.
+        </p>
+        <p style="color: #555; font-size: 12px;">
+            ⚠️ For entertainment only. Not financial advice.<br>
+            📧 aipublishingpro@gmail.com
+        </p>
+        <p style="color: #444; font-size: 11px; margin-top: 10px;">
+            Questions or feedback? Email aipublishingpro@gmail.com
         </p>
     </div>
     """, unsafe_allow_html=True)
 
 # ============================================================
-# LOGGED IN → SHOW APP HUB
+# LOGGED IN — APP HUB
 # ============================================================
 else:
     st.markdown("""
-    <div style="text-align: center; padding: 30px 20px;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🎯</div>
-        <h1 style="font-size: 36px; color: #fff; margin-bottom: 5px;">BigSnapshot</h1>
-        <p style="color: #22c55e; font-size: 14px;">✅ Logged in as {}</p>
+    <div style="text-align: center; padding: 40px 20px;">
+        <div style="font-size: 60px; margin-bottom: 15px;">📊</div>
+        <h1 style="font-size: 42px; font-weight: 800; color: #fff; margin-bottom: 10px;">BigSnapshot</h1>
+        <p style="color: #4ade80; font-size: 16px;">✅ Logged in as {}</p>
     </div>
-    """.format(st.session_state.user_type or "Subscriber"), unsafe_allow_html=True)
+    """.format(st.session_state.user_type), unsafe_allow_html=True)
     
-    st.markdown("---")
-    st.markdown("""
-    <div style="text-align: center; margin-bottom: 20px;">
-        <h2 style="color: #fff; font-size: 24px;">SELECT A TOOL</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("### 🔥 Your Tools")
     
-    # Tool buttons
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #1a2a1a 0%, #2a3a2a 100%); border-radius: 12px; padding: 25px; text-align: center; border: 1px solid #22c55e;">
+        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 25px; text-align: center; border: 2px solid #22c55e;">
             <div style="font-size: 50px; margin-bottom: 10px;">🏀</div>
-            <h3 style="color: #22c55e; margin-bottom: 5px;">NBA</h3>
-            <p style="color: #888; font-size: 12px;">Live edge monitor & totals</p>
+            <h3 style="color: #4ade80;">NBA</h3>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Open NBA", use_container_width=True, key="btn_nba"):
+        if st.button("Open NBA", use_container_width=True, key="nba_btn"):
             st.switch_page("pages/2_NBA.py")
     
     with col2:
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #1a2a1a 0%, #2a3a2a 100%); border-radius: 12px; padding: 25px; text-align: center; border: 1px solid #22c55e;">
+        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 25px; text-align: center; border: 2px solid #22c55e;">
             <div style="font-size: 50px; margin-bottom: 10px;">🏈</div>
-            <h3 style="color: #22c55e; margin-bottom: 5px;">NFL</h3>
-            <p style="color: #888; font-size: 12px;">Playoff edge finder</p>
+            <h3 style="color: #4ade80;">NFL</h3>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Open NFL", use_container_width=True, key="btn_nfl"):
-            st.switch_page("pages/1_NFL.py")
+        if st.button("Open NFL", use_container_width=True, key="nfl_btn"):
+            st.switch_page("pages/3_NFL.py")
     
     with col3:
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #1a2a1a 0%, #2a3a2a 100%); border-radius: 12px; padding: 25px; text-align: center; border: 1px solid #22c55e;">
+        <div style="background: linear-gradient(135deg, #2a3a2a 0%, #3a4a3a 100%); border-radius: 16px; padding: 25px; text-align: center; border: 2px solid #22c55e;">
             <div style="font-size: 50px; margin-bottom: 10px;">🏒</div>
-            <h3 style="color: #22c55e; margin-bottom: 5px;">NHL</h3>
-            <p style="color: #888; font-size: 12px;">Hockey edge finder</p>
+            <h3 style="color: #4ade80;">NHL</h3>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Open NHL", use_container_width=True, key="btn_nhl"):
-            st.switch_page("pages/3_NHL.py")
-    
-    st.markdown("---")
-    
-    col4, col5 = st.columns(2)
+        if st.button("Open NHL", use_container_width=True, key="nhl_btn"):
+            st.switch_page("pages/4_NHL.py")
     
     with col4:
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #2a2a1a 0%, #3a3a2a 100%); border-radius: 12px; padding: 25px; text-align: center; border: 1px solid #f97316;">
+        <div style="background: linear-gradient(135deg, #3a2a1a 0%, #4a3a2a 100%); border-radius: 16px; padding: 25px; text-align: center; border: 2px solid #f97316;">
             <div style="font-size: 50px; margin-bottom: 10px;">🌡️</div>
-            <h3 style="color: #f97316; margin-bottom: 5px;">TEMP</h3>
-            <p style="color: #888; font-size: 12px;">Temperature edge finder</p>
+            <h3 style="color: #f97316;">Temp</h3>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Open Temp", use_container_width=True, key="btn_temp"):
+        if st.button("Open Temp", use_container_width=True, key="temp_btn"):
             st.switch_page("pages/5_Temp.py")
     
-    with col5:
-        st.markdown("""
-        <div style="background: #1a1a2e; border-radius: 12px; padding: 25px; text-align: center; border: 1px solid #444;">
-            <div style="font-size: 50px; margin-bottom: 10px;">⚾</div>
-            <h3 style="color: #888; margin-bottom: 5px;">MLB</h3>
-            <p style="color: #666; font-size: 12px;">Coming March 2026</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Logout
     st.markdown("---")
+    
+    # ============ LOGOUT BUTTON ============
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         if st.button("🚪 Logout", use_container_width=True):
-            cookie_manager.delete("authenticated")
+            streamlit_js_eval(
+                js_expressions="localStorage.removeItem('bigsnapshot_auth')",
+                key="clear_auth"
+            )
             st.session_state.authenticated = False
             st.session_state.user_type = None
             st.rerun()
     
     st.markdown("""
-    <div style="text-align: center; padding: 20px;">
-        <p style="color: #666; font-size: 12px;">
-            © 2026 BigSnapshot | Educational tool only. Not financial advice.
+    <div style="text-align: center; padding: 40px 20px;">
+        <p style="color: #555; font-size: 12px;">
+            ⚠️ For entertainment only. Not financial advice.
         </p>
     </div>
     """, unsafe_allow_html=True)
