@@ -104,6 +104,17 @@ TEAM_ABBREVS = {
     "Utah Jazz": "Utah", "Washington Wizards": "Washington"
 }
 
+KALSHI_ABBREVS = {
+    "Atlanta": "ATL", "Boston": "BOS", "Brooklyn": "BKN", "Charlotte": "CHA",
+    "Chicago": "CHI", "Cleveland": "CLE", "Dallas": "DAL", "Denver": "DEN",
+    "Detroit": "DET", "Golden State": "GSW", "Houston": "HOU", "Indiana": "IND",
+    "LA Clippers": "LAC", "LA Lakers": "LAL", "Memphis": "MEM", "Miami": "MIA",
+    "Milwaukee": "MIL", "Minnesota": "MIN", "New Orleans": "NOP", "New York": "NYK",
+    "Oklahoma City": "OKC", "Orlando": "ORL", "Philadelphia": "PHI", "Phoenix": "PHX",
+    "Portland": "POR", "Sacramento": "SAC", "San Antonio": "SAS", "Toronto": "TOR",
+    "Utah": "UTA", "Washington": "WAS"
+}
+
 STAR_PLAYERS = {
     "Boston": ["Jayson Tatum", "Jaylen Brown"],
     "Cleveland": ["Donovan Mitchell", "Darius Garland", "Evan Mobley"],
@@ -161,24 +172,122 @@ H2H_EDGES = {
 
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5, 250.5, 255.5]
 
-POSITIONS_FILE = "nba_positions.json"
-
-def load_positions():
+# ============================================================
+# KALSHI API FUNCTIONS
+# ============================================================
+@st.cache_data(ttl=24)
+def fetch_kalshi_prices():
+    """Fetch current Kalshi NBA ML prices - REAL TIME (24s refresh)"""
+    prices = {}
+    today = datetime.now(eastern).strftime('%y%b%d').upper()
+    
     try:
-        if os.path.exists(POSITIONS_FILE):
-            with open(POSITIONS_FILE, 'r') as f:
-                return json.load(f)
-    except: pass
-    return []
+        # Kalshi trading API endpoint
+        url = "https://trading-api.kalshi.com/trade-api/v2/markets"
+        params = {"series_ticker": "KXNBA", "status": "open", "limit": 100}
+        
+        resp = requests.get(url, params=params, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            for market in data.get("markets", []):
+                ticker = market.get("ticker", "")
+                # Format: KXNBA-25JAN26-BOS
+                if today in ticker:
+                    team_abbrev = ticker.split("-")[-1]
+                    yes_price = market.get("yes_ask", 0) or market.get("last_price", 0)
+                    no_price = market.get("no_ask", 0)
+                    if yes_price:
+                        prices[team_abbrev] = {
+                            "yes": round(yes_price * 100) if yes_price < 1 else yes_price,
+                            "no": round(no_price * 100) if no_price and no_price < 1 else no_price,
+                            "ticker": ticker
+                        }
+    except Exception as e:
+        pass
+    
+    return prices
 
-def save_positions(positions):
+@st.cache_data(ttl=300)
+def fetch_vegas_odds():
+    """Fetch Vegas odds from the-odds-api.com"""
+    odds = {}
+    
+    # You can get a free API key at https://the-odds-api.com
+    # Free tier: 500 requests/month
+    API_KEY = os.environ.get("ODDS_API_KEY", "")
+    
+    if not API_KEY:
+        return odds
+    
     try:
-        with open(POSITIONS_FILE, 'w') as f:
-            json.dump(positions, f, indent=2)
-    except: pass
+        url = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds/"
+        params = {
+            "apiKey": API_KEY,
+            "regions": "us",
+            "markets": "spreads,h2h",
+            "oddsFormat": "american"
+        }
+        
+        resp = requests.get(url, params=params, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            for game in data:
+                home = game.get("home_team", "")
+                away = game.get("away_team", "")
+                home_key = TEAM_ABBREVS.get(home, home)
+                away_key = TEAM_ABBREVS.get(away, away)
+                
+                for bookmaker in game.get("bookmakers", []):
+                    if bookmaker.get("key") in ["fanduel", "draftkings", "betmgm"]:
+                        for market in bookmaker.get("markets", []):
+                            if market.get("key") == "spreads":
+                                for outcome in market.get("outcomes", []):
+                                    team = TEAM_ABBREVS.get(outcome.get("name", ""), "")
+                                    spread = outcome.get("point", 0)
+                                    if team:
+                                        odds[team] = {"spread": spread, "source": bookmaker.get("key")}
+                        break
+    except:
+        pass
+    
+    return odds
 
-if "positions" not in st.session_state:
-    st.session_state.positions = load_positions()
+def estimate_spread_from_stats(away, home):
+    """Estimate spread from team stats when Vegas API unavailable"""
+    home_stats = TEAM_STATS.get(home, {"net": 0})
+    away_stats = TEAM_STATS.get(away, {"net": 0})
+    
+    # Home court = ~3 points
+    # Net rating difference correlates to spread
+    net_diff = home_stats.get("net", 0) - away_stats.get("net", 0)
+    estimated_spread = round((net_diff * 0.5) + 3, 1)
+    
+    return estimated_spread
+
+def spread_to_implied_prob(spread):
+    """Convert point spread to implied win probability"""
+    # Rough conversion: each point ≈ 2.5-3% win probability
+    # Home team at -3 ≈ 62%, -5 ≈ 67%, -7 ≈ 72%, -10 ≈ 78%
+    if spread <= -10:
+        return 78
+    elif spread <= -7:
+        return 72 + ((-7 - spread) * 2)
+    elif spread <= -5:
+        return 67 + ((-5 - spread) * 2.5)
+    elif spread <= -3:
+        return 62 + ((-3 - spread) * 2.5)
+    elif spread <= 0:
+        return 50 + (abs(spread) * 4)
+    elif spread <= 3:
+        return 50 - (spread * 4)
+    elif spread <= 5:
+        return 38 - ((spread - 3) * 2.5)
+    elif spread <= 7:
+        return 33 - ((spread - 5) * 2.5)
+    elif spread <= 10:
+        return 28 - ((spread - 7) * 2)
+    else:
+        return 22
 
 # ============================================================
 # FETCH FUNCTIONS
@@ -310,7 +419,6 @@ def calc_pregame_edge(away, home, injuries, b2b_teams):
     home_stars = STAR_PLAYERS.get(home, [])
     away_stars = STAR_PLAYERS.get(away, [])
     
-    # Build list of OUT player names
     home_out_names = []
     for inj in home_injuries:
         if isinstance(inj, dict):
@@ -329,7 +437,6 @@ def calc_pregame_edge(away, home, injuries, b2b_teams):
         else:
             away_out_names.append(str(inj).lower())
     
-    # Check if stars are out
     for star in home_stars:
         if any(star.lower() in name for name in home_out_names):
             tier = STAR_TIERS.get(star, 1)
@@ -387,11 +494,9 @@ def calc_pregame_edge(away, home, injuries, b2b_teams):
         away_pts += 1.5
         factors_away.append("🛫 Elite Road")
     
-    # Base score with net rating influence
     base = 50 + (net_gap * 1.5)
     base = max(25, min(75, base))
     
-    # Apply factor points
     score = base + home_pts - away_pts
     score = max(10, min(90, score))
     
@@ -410,17 +515,13 @@ def calc_live_edge(game, injuries, b2b_teams):
     
     lead = home_score - away_score
     
-    # Start with pregame edge
     pick, pregame_score, factors = calc_pregame_edge(away, home, injuries, b2b_teams)
     
-    # Calculate pace
     pace = round(total / minutes, 2) if minutes > 0 else 0
     pace_label = "🔥 FAST" if pace > 5.0 else "⚖️ AVG" if pace > 4.2 else "🐢 SLOW"
     
-    # Live adjustments
     live_adj = 0
     
-    # Lead factor
     if abs(lead) >= 20:
         live_adj = 25 if lead > 0 else -25
     elif abs(lead) >= 15:
@@ -430,7 +531,6 @@ def calc_live_edge(game, injuries, b2b_teams):
     elif abs(lead) >= 5:
         live_adj = 6 if lead > 0 else -6
     
-    # Quarter context
     if period == 4:
         if abs(lead) >= 10:
             live_adj += 15 if lead > 0 else -15
@@ -439,17 +539,14 @@ def calc_live_edge(game, injuries, b2b_teams):
     elif period == 3 and abs(lead) >= 15:
         live_adj += 8 if lead > 0 else -8
     
-    # Pace adjustment
     if pace > 5.0 and abs(lead) >= 10:
         live_adj -= 4 if lead > 0 else 4
     elif pace < 4.2 and abs(lead) >= 10:
         live_adj += 3 if lead > 0 else -3
     
-    # Calculate final score
     final_score = pregame_score + live_adj if pick == home else (100 - pregame_score) + live_adj
     final_score = max(10, min(95, final_score))
     
-    # Determine pick
     if lead > 0:
         live_pick = home
     elif lead < 0:
@@ -457,7 +554,6 @@ def calc_live_edge(game, injuries, b2b_teams):
     else:
         live_pick = pick
     
-    # Project total
     if minutes >= 6:
         proj_total = round((total / minutes) * 48)
     else:
@@ -477,33 +573,13 @@ def calc_live_edge(game, injuries, b2b_teams):
 # KALSHI LINKS
 # ============================================================
 def get_kalshi_ml_link(team):
-    team_map = {
-        "Atlanta": "ATL", "Boston": "BOS", "Brooklyn": "BKN", "Charlotte": "CHA",
-        "Chicago": "CHI", "Cleveland": "CLE", "Dallas": "DAL", "Denver": "DEN",
-        "Detroit": "DET", "Golden State": "GSW", "Houston": "HOU", "Indiana": "IND",
-        "LA Clippers": "LAC", "LA Lakers": "LAL", "Memphis": "MEM", "Miami": "MIA",
-        "Milwaukee": "MIL", "Minnesota": "MIN", "New Orleans": "NOP", "New York": "NYK",
-        "Oklahoma City": "OKC", "Orlando": "ORL", "Philadelphia": "PHI", "Phoenix": "PHX",
-        "Portland": "POR", "Sacramento": "SAC", "San Antonio": "SAS", "Toronto": "TOR",
-        "Utah": "UTA", "Washington": "WAS"
-    }
-    abbrev = team_map.get(team, "")
+    abbrev = KALSHI_ABBREVS.get(team, "")
     today = datetime.now(eastern).strftime('%y%b%d').upper()
     return f"https://kalshi.com/markets/kxnba/nba-regular-season-games?ticker=KXNBA-{today}-{abbrev}"
 
 def get_kalshi_totals_link(away, home):
-    team_map = {
-        "Atlanta": "ATL", "Boston": "BOS", "Brooklyn": "BKN", "Charlotte": "CHA",
-        "Chicago": "CHI", "Cleveland": "CLE", "Dallas": "DAL", "Denver": "DEN",
-        "Detroit": "DET", "Golden State": "GSW", "Houston": "HOU", "Indiana": "IND",
-        "LA Clippers": "LAC", "LA Lakers": "LAL", "Memphis": "MEM", "Miami": "MIA",
-        "Milwaukee": "MIL", "Minnesota": "MIN", "New Orleans": "NOP", "New York": "NYK",
-        "Oklahoma City": "OKC", "Orlando": "ORL", "Philadelphia": "PHI", "Phoenix": "PHX",
-        "Portland": "POR", "Sacramento": "SAC", "San Antonio": "SAS", "Toronto": "TOR",
-        "Utah": "UTA", "Washington": "WAS"
-    }
-    away_abbrev = team_map.get(away, "")
-    home_abbrev = team_map.get(home, "")
+    away_abbrev = KALSHI_ABBREVS.get(away, "")
+    home_abbrev = KALSHI_ABBREVS.get(home, "")
     today = datetime.now(eastern).strftime('%y%b%d').upper()
     return f"https://kalshi.com/markets/kxnbao/nba-total-regular-season-game-points?ticker=KXNBAO-{today}-{away_abbrev}{home_abbrev}"
 
@@ -511,52 +587,43 @@ def get_kalshi_totals_link(away, home):
 # SIDEBAR LEGEND
 # ============================================================
 with st.sidebar:
-    st.header("📖 ALIGNMENT GUIDE")
+    st.header("📖 EDGE GUIDE")
     st.markdown("""
-### How To Read Scores
+### Price Gap Signals
 
-| Score | Label | Action |
-|-------|-------|--------|
-| **70+** | 🟢 STRONG | Best bets |
-| **60-69** | 🟢 GOOD | Worth considering |
-| **50-59** | 🟡 MODERATE | Wait for live |
-| **<50** | ⚪ WEAK | Skip |
-
----
-
-### Injury Impact
-
-| Stars | Impact |
-|-------|--------|
-| ⭐⭐⭐ | MVP = +5 |
-| ⭐⭐ | All-Star = +3 |
-| ⭐ | Starter = +1 |
+| Gap | Signal | Action |
+|-----|--------|--------|
+| **+5¢+** | 🟢 STRONG | Buy now |
+| **+3-4¢** | 🟢 VALUE | Good entry |
+| **+1-2¢** | 🟡 THIN | Risky |
+| **0 or -** | ⚪ NONE | Skip |
 
 ---
 
-### Pace Guide
+### Edge Score Guide
 
-| Pace | Label | Action |
-|------|-------|--------|
-| <4.5 | 🐢 SLOW | Buy NO |
-| 4.5-4.8 | ⚖️ AVG | Wait |
-| 4.8-5.2 | 🔥 FAST | Buy YES |
-| >5.2 | 🚀 SHOOTOUT | Buy YES |
-
----
-
-### Cushion Guide
-
-**+10+** = Very safe  
-**+6-9** = Safe  
-**<+6** = Risky
+| Score | Label | Meaning |
+|-------|-------|---------|
+| **70+** | STRONG | Many factors aligned |
+| **60-69** | GOOD | Worth watching |
+| **50-59** | MODERATE | Mixed signals |
+| **<50** | WEAK | Factors oppose |
 
 ---
 
-*We show the edge — you make the call.*
+### The Formula
+
+**GAP = Vegas Implied % - Kalshi Price**
+
+Vegas says 68% → Kalshi at 63¢  
+GAP = +5¢ = 🟢 BUY
+
+---
+
+*We find the gap — you make the call.*
 """)
     st.divider()
-    st.caption("v4.5 NBA EDGE")
+    st.caption("v5.0 NBA EDGE")
 
 # ============================================================
 # FETCH DATA
@@ -564,6 +631,8 @@ with st.sidebar:
 games = fetch_games()
 injuries = fetch_injuries()
 b2b_teams = fetch_yesterday_teams()
+kalshi_prices = fetch_kalshi_prices()
+vegas_odds = fetch_vegas_odds()
 
 # Get today's teams
 today_teams = set()
@@ -580,14 +649,159 @@ final_games = [g for g in games if g['status'] == 'STATUS_FINAL']
 # UI HEADER
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v4.5 • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s")
+st.caption(f"v5.0 • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s")
 
 # Stats row
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Today's Games", len(games))
 c2.metric("Live Now", len(live_games))
 c3.metric("B2B Teams", len(b2b_teams & today_teams))
-c4.metric("Final", len(final_games))
+c4.metric("Kalshi Prices", len(kalshi_prices))
+
+st.divider()
+
+# ============================================================
+# 💰 MISPRICE SCANNER (NEW!)
+# ============================================================
+st.subheader("💰 MISPRICE SCANNER")
+st.markdown("*Compare Kalshi prices to Vegas implied probability. GAP = your edge.*")
+
+misprice_data = []
+
+for g in scheduled_games:
+    away, home = g['away'], g['home']
+    
+    # Get Kalshi prices
+    home_abbrev = KALSHI_ABBREVS.get(home, "")
+    away_abbrev = KALSHI_ABBREVS.get(away, "")
+    
+    home_kalshi = kalshi_prices.get(home_abbrev, {}).get("yes", None)
+    away_kalshi = kalshi_prices.get(away_abbrev, {}).get("yes", None)
+    
+    # Get Vegas spread (or estimate)
+    home_spread = vegas_odds.get(home, {}).get("spread", None)
+    if home_spread is None:
+        home_spread = -estimate_spread_from_stats(away, home)
+        vegas_source = "EST"
+    else:
+        vegas_source = "VEGAS"
+    
+    # Calculate implied probabilities
+    home_implied = spread_to_implied_prob(home_spread)
+    away_implied = 100 - home_implied
+    
+    # Calculate gaps
+    if home_kalshi:
+        home_gap = home_implied - home_kalshi
+    else:
+        home_gap = None
+    
+    if away_kalshi:
+        away_gap = away_implied - away_kalshi
+    else:
+        away_gap = None
+    
+    misprice_data.append({
+        "away": away,
+        "home": home,
+        "home_spread": home_spread,
+        "vegas_source": vegas_source,
+        "home_implied": home_implied,
+        "away_implied": away_implied,
+        "home_kalshi": home_kalshi,
+        "away_kalshi": away_kalshi,
+        "home_gap": home_gap,
+        "away_gap": away_gap
+    })
+
+# Sort by best gap opportunity
+def best_gap(m):
+    gaps = [g for g in [m['home_gap'], m['away_gap']] if g is not None]
+    return max(gaps) if gaps else -999
+
+misprice_data.sort(key=best_gap, reverse=True)
+
+if misprice_data:
+    for m in misprice_data:
+        # Determine best pick
+        home_gap = m['home_gap'] or 0
+        away_gap = m['away_gap'] or 0
+        
+        if home_gap >= away_gap and home_gap > 0:
+            best_pick = m['home']
+            best_gap_val = home_gap
+            best_kalshi = m['home_kalshi']
+            best_implied = m['home_implied']
+        elif away_gap > home_gap and away_gap > 0:
+            best_pick = m['away']
+            best_gap_val = away_gap
+            best_kalshi = m['away_kalshi']
+            best_implied = m['away_implied']
+        else:
+            best_pick = None
+            best_gap_val = max(home_gap, away_gap)
+            best_kalshi = None
+            best_implied = None
+        
+        # Signal and color
+        if best_gap_val >= 5:
+            signal = "🟢 STRONG"
+            border_color = "#22c55e"
+        elif best_gap_val >= 3:
+            signal = "🟢 VALUE"
+            border_color = "#22c55e"
+        elif best_gap_val >= 1:
+            signal = "🟡 THIN"
+            border_color = "#eab308"
+        else:
+            signal = "⚪ NO EDGE"
+            border_color = "#444"
+        
+        # Format spread display
+        spread_display = f"{m['home']} {m['home_spread']:+.1f}" if m['home_spread'] <= 0 else f"{m['away']} {-m['home_spread']:+.1f}"
+        
+        # Build display
+        home_price_display = f"{m['home_kalshi']}¢" if m['home_kalshi'] else "—"
+        away_price_display = f"{m['away_kalshi']}¢" if m['away_kalshi'] else "—"
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid {border_color};">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="color: #fff; font-size: 1.1em; font-weight: 600;">{m['away']} @ {m['home']}</span>
+                <span style="color: {border_color}; font-weight: 600;">{signal}</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                <div style="text-align: center;">
+                    <div style="color: #888; font-size: 0.75em;">SPREAD</div>
+                    <div style="color: #fff; font-weight: 600;">{spread_display}</div>
+                    <div style="color: #666; font-size: 0.7em;">{m['vegas_source']}</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="color: #888; font-size: 0.75em;">IMPLIED</div>
+                    <div style="color: #fff;">{m['home'][:3]} {m['home_implied']}%</div>
+                    <div style="color: #aaa;">{m['away'][:3]} {m['away_implied']}%</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="color: #888; font-size: 0.75em;">KALSHI</div>
+                    <div style="color: #fff;">{m['home'][:3]} {home_price_display}</div>
+                    <div style="color: #aaa;">{m['away'][:3]} {away_price_display}</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="color: #888; font-size: 0.75em;">GAP</div>
+                    <div style="color: {'#22c55e' if (m['home_gap'] or 0) > 0 else '#888'};">{m['home'][:3]} {'+' + str(m['home_gap']) + '¢' if m['home_gap'] and m['home_gap'] > 0 else '—'}</div>
+                    <div style="color: {'#22c55e' if (m['away_gap'] or 0) > 0 else '#888'};">{m['away'][:3]} {'+' + str(m['away_gap']) + '¢' if m['away_gap'] and m['away_gap'] > 0 else '—'}</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if best_pick and best_gap_val >= 3:
+            st.link_button(f"🎯 BUY {best_pick} YES @ {best_kalshi}¢", get_kalshi_ml_link(best_pick), use_container_width=True)
+        
+        st.markdown("")
+
+else:
+    st.info("No scheduled games found")
 
 st.divider()
 
@@ -652,9 +866,8 @@ st.divider()
 # ============================================================
 if live_games:
     st.subheader("🔴 LIVE EDGE MONITOR")
-    st.markdown("*Real-time edge updates every 24 seconds. We show the edge — you make the call.*")
+    st.markdown("*Real-time edge updates every 24 seconds.*")
     
-    # Sort by edge score
     live_with_edge = []
     for g in live_games:
         edge = calc_live_edge(g, injuries, b2b_teams)
@@ -664,7 +877,6 @@ if live_games:
     for g, edge in live_with_edge:
         mins = g['minutes_played']
         
-        # Status labels
         if mins < 6:
             status_label = "⏳ TOO EARLY"
             status_color = "#888"
@@ -684,7 +896,6 @@ if live_games:
         lead_display = f"+{edge['lead']}" if edge['lead'] > 0 else str(edge['lead'])
         leader = g['home'] if edge['lead'] > 0 else g['away'] if edge['lead'] < 0 else "TIED"
         
-        # Safe thresholds
         safe_no = edge['proj_total'] + 12
         safe_yes = edge['proj_total'] - 8
         
@@ -849,109 +1060,161 @@ else:
 st.divider()
 
 # ============================================================
-# 🎯 PRE-GAME ALIGNMENT
-# ============================================================
-if scheduled_games:
-    st.subheader("🎯 PRE-GAME ALIGNMENT")
-    st.markdown("*Look for **70+** scores with multiple factors. Higher = more factors favor that side.*")
-    
-    games_with_edge = []
-    for g in scheduled_games:
-        pick, score, factors = calc_pregame_edge(g['away'], g['home'], injuries, b2b_teams)
-        games_with_edge.append((g, pick, score, factors))
-    games_with_edge.sort(key=lambda x: x[2], reverse=True)
-    
-    for g, pick, score, factors in games_with_edge:
-        if score >= 70:
-            score_color = "#22c55e"
-            tier = "🟢 STRONG"
-            border_color = "#22c55e"
-        elif score >= 60:
-            score_color = "#22c55e"
-            tier = "🟢 GOOD"
-            border_color = "#22c55e"
-        elif score >= 50:
-            score_color = "#eab308"
-            tier = "🟡 MODERATE"
-            border_color = "#eab308"
-        else:
-            score_color = "#888"
-            tier = "⚪ WEAK"
-            border_color = "#444"
-        
-        st.markdown(f"""
-        <div style="background: #1e1e2e; border-radius: 10px; padding: 14px; margin-bottom: 10px; border-left: 4px solid {border_color};">
-            <div style="display: flex; justify-content: space-between;">
-                <span style="color: #fff; font-weight: 600;">{g['away']} @ {g['home']}</span>
-                <span style="color: {score_color}; font-weight: 600;">{tier} {score}/100</span>
-            </div>
-            <div style="color: #888; font-size: 0.85em; margin-top: 4px;">
-                Edge: <strong style="color: #fff;">{pick}</strong> • {' • '.join(factors[:3]) if factors else 'No strong factors'}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-st.divider()
-
-# ============================================================
 # 📖 HOW TO USE
 # ============================================================
-with st.expander("📖 HOW TO USE", expanded=False):
+with st.expander("📖 HOW TO USE THIS APP", expanded=False):
     st.markdown("""
-### Edge Score Guide
+## 💰 MISPRICE SCANNER (Pre-Game)
 
-| Score | Label | Action |
-|-------|-------|--------|
-| **70+** | 🟢 STRONG | Best opportunities |
-| **60-69** | 🟢 GOOD | Worth considering |
-| **50-59** | 🟡 MODERATE | Wait for live |
-| **<50** | ⚪ WEAK | Skip |
+**The Core Formula:**
+```
+GAP = Vegas Implied % - Kalshi Price
+```
 
----
+Vegas says team has 68% chance → Kalshi selling at 63¢ → GAP = +5¢ = BUY
 
-### Injury Impact
+| Gap | Signal | Action |
+|-----|--------|--------|
+| **+5¢+** | 🟢 STRONG | Best edge — buy now |
+| **+3-4¢** | 🟢 VALUE | Good entry — worth it |
+| **+1-2¢** | 🟡 THIN | Small edge — risky |
+| **0 or -** | ⚪ NONE | No edge — skip |
 
-| Stars | Tier | Impact |
-|-------|------|--------|
-| ⭐⭐⭐ | MVP | +5 to opponent |
-| ⭐⭐ | All-Star | +3 to opponent |
-| ⭐ | Starter | +1 to opponent |
-
----
-
-### Live Timing Guide
-
-| Quarter | Lead | Conviction |
-|---------|------|------------|
-| Q1 | Any | 🔴 LOW — don't enter |
-| Q2 | 10+ | 🟡 MEDIUM — if 🐢 SLOW |
-| Q3 | 12+ | 🟢 GOOD — sweet spot |
-| Q4 | 15+ | 🟢🟢 HIGH — price may be high |
+**Why This Works:**
+- Vegas lines set by sharps betting real money
+- Kalshi prices set by recreational traders
+- Injuries + news create LAG = your edge
+- Buy the gap, sell +3¢ for profit
 
 ---
 
-### Pace Guide
+## 🔴 LIVE EDGE MONITOR (In-Game)
 
-| Pace | Label | Action |
-|------|-------|--------|
-| <4.5 | 🐢 SLOW | Buy NO |
-| 4.5-4.8 | ⚖️ AVG | Wait |
-| 4.8-5.2 | 🔥 FAST | Buy YES |
-| >5.2 | 🚀 SHOOTOUT | Buy YES |
+Real-time tracking every 24 seconds. Shows:
+- Current score and lead
+- Pace (points per minute)
+- Projected total
+- Safe NO/YES thresholds
+
+| Score | Label | Meaning |
+|-------|-------|---------|
+| **70+** | STRONG | Many factors aligned |
+| **60-69** | GOOD | Worth considering |
+| **50-59** | MODERATE | Mixed signals |
+| **<50** | WEAK | Skip |
+
+**Live Timing:**
+- Q1: ❌ Too early — don't enter
+- Q2 with 10+ lead: 🟡 Medium — watch pace
+- Q3 with 12+ lead: 🟢 Good — sweet spot
+- Q4 with 15+ lead: 🟢🟢 High — price may be high
 
 ---
 
-### Cushion Scanner
+## 🎯 CUSHION SCANNER (In-Game Totals)
 
-- **+10+** = Very safe threshold
-- **+6-9** = Safe threshold
-- **<+6** = Not shown (risky)
+Finds safe over/under thresholds with buffer room.
+
+**Cushion = Safe Line - Projected Total**
+
+| Cushion | Safety |
+|---------|--------|
+| **+10+** | Very safe |
+| **+6-9** | Safe |
+| **<+6** | Not shown (risky) |
+
+**Pace Alignment for NO bets:**
+- 🐢 SLOW (<4.5/min) = ✅ Good for NO
+- ⚖️ AVG (4.5-4.8) = ⚠️ Wait
+- 🔥 FAST (>4.8) = ❌ Bad for NO
+
+**Pace Alignment for YES bets:**
+- 🚀 SHOOTOUT (>5.2) = ✅ Best for YES
+- 🔥 FAST (4.8-5.2) = ✅ Good for YES
+- ⚖️ AVG (4.5-4.8) = ⚠️ Wait
+- 🐢 SLOW (<4.5) = ❌ Bad for YES
 
 ---
 
-⚠️ Edge Score ≠ Win Probability  
-⚠️ This is NOT a predictive model  
-⚠️ Only risk what you can afford to lose
+## 🔥 PACE SCANNER (In-Game Totals)
+
+Shows real-time scoring pace for all live games.
+
+**Pace = Total Points ÷ Minutes Played**
+
+| Pace | Label | Projected | Action |
+|------|-------|-----------|--------|
+| <4.5 | 🐢 SLOW | ~216 | Buy NO |
+| 4.5-4.8 | ⚖️ AVG | ~220-230 | Wait |
+| 4.8-5.2 | 🔥 FAST | ~230-250 | Buy YES |
+| >5.2 | 🚀 SHOOTOUT | ~250+ | Buy YES |
+
+---
+
+## 🏥 INJURY IMPACT
+
+Star players missing = edge for opponent
+
+| Tier | Examples | Impact |
+|------|----------|--------|
+| ⭐⭐⭐ MVP | Jokic, SGA, Giannis | +5 to opponent |
+| ⭐⭐ All-Star | AD, Brunson, Haliburton | +3 to opponent |
+| ⭐ Starter | Role players | +1 to opponent |
+
+---
+
+## 🏨 B2B (Back-to-Back)
+
+Teams playing second night of back-to-back = fatigued
+
+- B2B team gets -4 adjustment
+- Opponent gets +4 boost
+- Check B2B section for today's tired teams
+
+---
+
+## ⚡ REAL-TIME DATA
+
+| Data | Refresh Rate |
+|------|--------------|
+| Game scores | 24 seconds |
+| Kalshi prices | 24 seconds |
+| Vegas odds | 5 minutes |
+| Injuries | 5 minutes |
+
+---
+
+## 🎯 THE WORKFLOW
+
+**Pre-Game:**
+1. Check Misprice Scanner for +3¢+ gaps
+2. Check Injury Report for star absences
+3. Note B2B teams
+4. Buy mispriced favorites
+
+**In-Game:**
+1. Wait for 6+ minutes played
+2. Check Pace Scanner for slow/fast games
+3. Use Cushion Scanner for safe totals
+4. Live Edge Monitor for ML opportunities
+
+**The Scalp:**
+- Buy at gap price
+- Sell at +3¢ profit
+- Repeat
+
+---
+
+⚠️ **DISCLAIMER**
+
+This tool shows edges — you make the call.
+
+- Edge Score ≠ Win Probability
+- This is NOT a predictive model
+- Past performance ≠ future results
+- Only risk what you can afford to lose
+- Educational purposes only
+- Not financial advice
 """)
 
-st.caption("⚠️ Educational only. Not financial advice. v4.5")
+st.caption("⚠️ Educational only. Not financial advice. v5.0")
