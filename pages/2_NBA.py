@@ -36,7 +36,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "4.9"
+VERSION = "5.0"
 LEAGUE_AVG_TOTAL = 225  # NBA league average total
 
 # ============================================================
@@ -747,36 +747,95 @@ st.divider()
 # ============================================================
 # 📖 HOW TO USE
 # ============================================================
-with st.expander("📖 HOW TO USE", expanded=False):
+with st.expander("📖 HOW TO USE THIS APP", expanded=False):
     st.markdown("""
-### Edge Score Guide
-| Score | Label | Action |
-|-------|-------|--------|
-| **70+** | 🟢 STRONG | Best opportunities |
-| **60-69** | 🟢 GOOD | Worth considering |
-| **50-59** | 🟡 MODERATE | Wait for live edge |
-| **<50** | ⚪ WEAK | Skip |
+## 🏀 NBA EDGE FINDER GUIDE
+
+### What This App Does
+Finds betting edges for NBA games on Kalshi prediction markets. Tracks live scores, calculates projections, and recommends ML picks and totals directions.
 
 ---
-### Pace Guide
-| Pace | Label | Totals Lean |
-|------|-------|-------------|
-| <4.2 | 🐢 SLOW | NO (Under) |
+
+### 🏥 INJURY REPORT
+Shows star players who are OUT or DOUBTFUL for today's games.
+- ⭐⭐⭐ = MVP-level (Jokic, SGA, Giannis) — huge impact
+- ⭐⭐ = All-Star level (Brunson, Mitchell) — big impact  
+- ⭐ = Quality starter — moderate impact
+
+**How to use:** If a star is OUT, the opposing team gets an edge boost.
+
+---
+
+### 🔴 LIVE EDGE MONITOR
+Real-time tracking of games in progress. Updates every 24 seconds.
+
+**Edge Score (0-100):**
+| Score | Label | What to Do |
+|-------|-------|------------|
+| 70+ | 🟢 STRONG | Best opportunities |
+| 60-69 | 🟢 GOOD | Worth considering |
+| 50-59 | 🟡 MODERATE | Wait for bigger lead |
+| <50 | ⚪ WEAK | Skip |
+
+**Pace Label:**
+| Pace | Label | Totals Direction |
+|------|-------|------------------|
+| <4.2 pts/min | 🐢 SLOW | Buy NO (Under) |
 | 4.2-4.8 | ⚖️ AVG | Wait |
-| 4.8-5.2 | 🔥 FAST | YES (Over) |
-| >5.2 | 🚀 SHOOTOUT | YES (Over) |
+| 4.8-5.2 | 🔥 FAST | Buy YES (Over) |
+| >5.2 | 🚀 SHOOTOUT | Buy YES (Over) |
+
+**Projected Total:** Our estimate of final combined score based on current pace blended with league average (225).
+
+**Totals Recommendation:**
+- **NO (Under)** = Game is slow, pick a threshold ABOVE the projection
+- **YES (Over)** = Game is fast, pick a threshold BELOW the projection
+- **WAIT** = Pace is neutral, don't bet totals yet
+
+**Buttons:**
+- 🎯 ML = Moneyline (who wins)
+- ⬇️ BUY NO = Opens Kalshi totals page, pick threshold ABOVE projection
+- ⬆️ BUY YES = Opens Kalshi totals page, pick threshold BELOW projection
 
 ---
-### How to Use Projections
-1. Check projected total in app
-2. Click TOTALS button to go to Kalshi
-3. Pick a threshold ABOVE projection for NO
-4. Pick a threshold BELOW projection for YES
-5. The bigger the gap, the safer the bet
+
+### 🎯 PROJECTION SCANNER
+Quick view of all live games with pace and projection data.
+
+**How to read:**
+- `5.43/min 🔥 FAST` = Scoring pace per minute
+- `Proj: 261` = Projected final total
+- `→ Lean YES (Over)` = Recommended direction
+
+**How to trade:**
+1. Find a game with clear pace direction (SLOW or FAST)
+2. Note the projection number
+3. Click BUY NO or BUY YES
+4. On Kalshi, pick a threshold with cushion:
+   - For NO: pick threshold 5-10 points ABOVE projection
+   - For YES: pick threshold 5-10 points BELOW projection
 
 ---
-⚠️ Edge Score ≠ Win Probability  
-⚠️ Only risk what you can afford to lose
+
+### 🎯 PRE-GAME ALIGNMENT
+Shows scheduled games ranked by edge strength BEFORE tip-off.
+
+**Factors that boost edge:**
+- 😴 Back-to-back (B2B) = Team played yesterday, fatigued
+- 🏥 Star injuries = Key player OUT
+- 📊 Net rating gap = Better team by stats
+- 🏠 Home court = +2.5 boost
+
+**How to use:** Look for 70+ scores with multiple factors aligned.
+
+---
+
+### ⚠️ IMPORTANT REMINDERS
+- Edge Score ≠ Win Probability
+- Projection is an ESTIMATE, not a guarantee
+- Always pick thresholds with CUSHION (5-10 pts buffer)
+- Only risk what you can afford to lose
+- This is educational, not financial advice
 """)
 
 st.caption(f"⚠️ Educational only. Not financial advice. v{VERSION}")
