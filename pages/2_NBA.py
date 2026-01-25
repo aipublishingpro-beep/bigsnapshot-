@@ -20,7 +20,7 @@ import pytz
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
-VERSION = "5.3"
+VERSION = "5.4-debug"
 
 # ============================================================
 # KALSHI API AUTH (FIXED - uses bracket notation)
@@ -86,16 +86,27 @@ def fetch_kalshi_nba_prices():
         headers = get_kalshi_headers("GET", full_path)
         
         if not headers:
-            return {}, "No headers - check secrets"
+            return {}, "No headers - check secrets", []
         
         url = f"https://api.elections.kalshi.com{full_path}"
         resp = requests.get(url, headers=headers, timeout=10)
         
         if resp.status_code != 200:
-            return {}, f"API returned {resp.status_code}: {resp.text[:200]}"
+            return {}, f"API returned {resp.status_code}: {resp.text[:200]}", []
         
         data = resp.json()
         markets = data.get("markets", [])
+        
+        # Store raw for debug
+        raw_markets = []
+        for m in markets[:10]:  # First 10 for debug
+            raw_markets.append({
+                "ticker": m.get("ticker", ""),
+                "title": m.get("title", ""),
+                "yes_ask": m.get("yes_ask"),
+                "yes_bid": m.get("yes_bid"),
+                "last_price": m.get("last_price")
+            })
         
         prices = {}
         for m in markets:
@@ -113,9 +124,9 @@ def fetch_kalshi_nba_prices():
                         prices[team_name] = yes_ask
                         break
         
-        return prices, f"✅ Loaded {len(prices)} prices"
+        return prices, f"✅ Loaded {len(prices)} prices from {len(markets)} markets", raw_markets
     except Exception as e:
-        return {}, f"Exception: {str(e)[:200]}"
+        return {}, f"Exception: {str(e)[:200]}", []
 
 # ============================================================
 # TEAM DATA
@@ -481,7 +492,7 @@ with st.sidebar:
 games = fetch_games()
 injuries = fetch_injuries()
 b2b_teams = fetch_yesterday_teams()
-kalshi_prices, kalshi_debug = fetch_kalshi_nba_prices()
+kalshi_prices, kalshi_debug, raw_markets = fetch_kalshi_nba_prices()
 
 today_teams = set()
 for g in games:
@@ -511,6 +522,10 @@ with st.expander("🔧 Kalshi API Debug"):
     st.write(f"**Prices loaded:** {len(kalshi_prices)}")
     if kalshi_prices:
         st.json(kalshi_prices)
+    if raw_markets:
+        st.write("**Raw markets from API (first 10):**")
+        for m in raw_markets:
+            st.write(f"- {m['ticker']}: {m['title']} | yes_ask={m['yes_ask']} yes_bid={m['yes_bid']} last={m['last_price']}")
 
 st.divider()
 
