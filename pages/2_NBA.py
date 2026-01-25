@@ -189,12 +189,20 @@ def fetch_games():
                     completed_quarters = (period - 1) * 12
                     if clock:
                         try:
-                            parts = clock.split(":")
-                            mins_left = int(parts[0])
-                            minutes_played = completed_quarters + (12 - mins_left)
+                            if ":" in clock:
+                                # Format: "11:23" or "1:45"
+                                parts = clock.split(":")
+                                mins_left = int(parts[0])
+                                secs_left = float(parts[1]) if len(parts) > 1 else 0
+                            else:
+                                # Format: "23.7" (under 1 minute, just seconds)
+                                mins_left = 0
+                                secs_left = float(clock)
+                            minutes_played = completed_quarters + (12 - mins_left - secs_left/60)
                         except:
                             minutes_played = completed_quarters
                 else:
+                    # Overtime
                     minutes_played = 48 + (period - 4) * 5
             
             games.append({
