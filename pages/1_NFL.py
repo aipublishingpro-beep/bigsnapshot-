@@ -252,12 +252,29 @@ def render_football_field(ball_yard, down, distance, possession_team, away_team,
     away_code = KALSHI_CODES.get(away_team, away_team[:3].upper() if away_team else "AWY")
     home_code = KALSHI_CODES.get(home_team, home_team[:3].upper() if home_team else "HME")
     
-    # Check for incomplete pass
+    # Check for play type from last play
+    play_status_html = ""
     is_incomplete = False
     if last_play:
         play_text = (last_play.get("text", "") or "").lower()
-        if "incomplete" in play_text or "intercepted" in play_text:
+        if "incomplete" in play_text:
             is_incomplete = True
+            play_status_html = '<div style="position:absolute;left:50%;top:15%;transform:translateX(-50%);background:#ff4444;color:#fff;padding:2px 10px;border-radius:4px;font-size:12px;font-weight:bold;z-index:10">✕ INCOMPLETE</div>'
+        elif "intercepted" in play_text:
+            is_incomplete = True
+            play_status_html = '<div style="position:absolute;left:50%;top:15%;transform:translateX(-50%);background:#ff4444;color:#fff;padding:2px 10px;border-radius:4px;font-size:12px;font-weight:bold;z-index:10">✕ INTERCEPTED</div>'
+        elif "pass" in play_text and ("to" in play_text or "for" in play_text) and "incomplete" not in play_text and "sacked" not in play_text:
+            play_status_html = '<div style="position:absolute;left:50%;top:15%;transform:translateX(-50%);background:#22c55e;color:#fff;padding:2px 10px;border-radius:4px;font-size:12px;font-weight:bold;z-index:10">✓ COMPLETE</div>'
+        elif "sacked" in play_text:
+            play_status_html = '<div style="position:absolute;left:50%;top:15%;transform:translateX(-50%);background:#ff8800;color:#fff;padding:2px 10px;border-radius:4px;font-size:12px;font-weight:bold;z-index:10">⚠ SACK</div>'
+        elif "touchdown" in play_text:
+            play_status_html = '<div style="position:absolute;left:50%;top:15%;transform:translateX(-50%);background:#ffd700;color:#000;padding:2px 10px;border-radius:4px;font-size:12px;font-weight:bold;z-index:10">🏈 TOUCHDOWN</div>'
+        elif "field goal" in play_text and ("good" in play_text or "made" in play_text):
+            play_status_html = '<div style="position:absolute;left:50%;top:15%;transform:translateX(-50%);background:#22c55e;color:#fff;padding:2px 10px;border-radius:4px;font-size:12px;font-weight:bold;z-index:10">🥅 FIELD GOAL</div>'
+        elif "punt" in play_text:
+            play_status_html = '<div style="position:absolute;left:50%;top:15%;transform:translateX(-50%);background:#666;color:#fff;padding:2px 10px;border-radius:4px;font-size:12px;font-weight:bold;z-index:10">📤 PUNT</div>'
+        elif "rush" in play_text or "ran " in play_text:
+            play_status_html = '<div style="position:absolute;left:50%;top:15%;transform:translateX(-50%);background:#3b82f6;color:#fff;padding:2px 10px;border-radius:4px;font-size:12px;font-weight:bold;z-index:10">🏃 RUSH</div>'
     
     # Build display elements based on mode
     if display_mode == "scoring":
@@ -284,11 +301,9 @@ def render_football_field(ball_yard, down, distance, possession_team, away_team,
         
         # Determine attack direction and arrow
         if possession_team == home_team:
-            # Home team attacks LEFT (toward away endzone at 0)
             poss_display = f"{poss_code} Ball"
             direction_arrow = "←"
         elif possession_team == away_team:
-            # Away team attacks RIGHT (toward home endzone at 100)
             poss_display = f"{poss_code} Ball"
             direction_arrow = "→"
         else:
@@ -320,10 +335,10 @@ def render_football_field(ball_yard, down, distance, possession_team, away_team,
     # X marker for incomplete pass (slightly ahead of ball where it was thrown)
     if is_incomplete and direction_arrow:
         if direction_arrow == "→":
-            x_pct = min(ball_pct + 12, 85)
+            x_pct = min(ball_pct + 15, 85)
         else:
-            x_pct = max(ball_pct - 12, 15)
-        x_html = f'<div style="position:absolute;left:{x_pct}%;top:50%;transform:translate(-50%,-50%);color:#ff4444;font-size:18px;font-weight:bold;text-shadow:0 0 6px #000">✕</div>'
+            x_pct = max(ball_pct - 15, 15)
+        x_html = f'<div style="position:absolute;left:{x_pct}%;top:50%;transform:translate(-50%,-50%);color:#ff4444;font-size:22px;font-weight:bold;text-shadow:0 0 6px #000">✕</div>'
     else:
         x_html = ""
     
@@ -333,7 +348,8 @@ def render_football_field(ball_yard, down, distance, possession_team, away_team,
 <div style="display:flex;justify-content:space-between;margin-bottom:8px">
 <span style="color:#aaa">{ball_loc}</span>
 <span style="color:#fff;font-weight:bold">{situation}</span></div>
-<div style="position:relative;height:60px;background:linear-gradient(90deg,#8B0000 0%,#8B0000 10%,#228B22 10%,#228B22 90%,#00008B 90%,#00008B 100%);border-radius:8px;overflow:hidden">
+<div style="position:relative;height:70px;background:linear-gradient(90deg,#8B0000 0%,#8B0000 10%,#228B22 10%,#228B22 90%,#00008B 90%,#00008B 100%);border-radius:8px;overflow:hidden">
+{play_status_html}
 <div style="position:absolute;left:10%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.3)"></div>
 <div style="position:absolute;left:18%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.2)"></div>
 <div style="position:absolute;left:26%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.2)"></div>
@@ -345,11 +361,11 @@ def render_football_field(ball_yard, down, distance, possession_team, away_team,
 <div style="position:absolute;left:74%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.2)"></div>
 <div style="position:absolute;left:82%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.2)"></div>
 <div style="position:absolute;left:90%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.3)"></div>
-<div style="position:absolute;left:{ball_pct}%;top:50%;transform:translate(-50%,-50%);{ball_style}">🏈</div>
+<div style="position:absolute;left:{ball_pct}%;top:60%;transform:translate(-50%,-50%);{ball_style}">🏈</div>
 {arrow_html}
 {x_html}
-<div style="position:absolute;left:5%;top:50%;transform:translate(-50%,-50%);color:#fff;font-weight:bold;font-size:14px">{away_code}</div>
-<div style="position:absolute;left:95%;top:50%;transform:translate(-50%,-50%);color:#fff;font-weight:bold;font-size:14px">{home_code}</div></div>
+<div style="position:absolute;left:5%;top:60%;transform:translate(-50%,-50%);color:#fff;font-weight:bold;font-size:14px">{away_code}</div>
+<div style="position:absolute;left:95%;top:60%;transform:translate(-50%,-50%);color:#fff;font-weight:bold;font-size:14px">{home_code}</div></div>
 <div style="display:flex;justify-content:space-between;margin-top:5px;color:#888;font-size:11px">
 <span>← {away_code} EZ</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>40</span><span>30</span><span>20</span><span>10</span><span>{home_code} EZ →</span></div></div>"""
 
@@ -832,34 +848,12 @@ if live_games:
         )
         st.markdown(field_html, unsafe_allow_html=True)
         
-        # Last play info with completion status
+        # Last play text (badge is now on field)
         last_play = g.get('last_play', {})
         if last_play and last_play.get('text'):
             play_text = last_play.get('text', '')[:120]
-            play_lower = play_text.lower()
-            
-            # Check for pass completion status
-            if "incomplete" in play_lower:
-                status_badge = '<span style="background:#ff4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">✕ INCOMPLETE</span>'
-            elif "intercepted" in play_lower:
-                status_badge = '<span style="background:#ff4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">✕ INTERCEPTED</span>'
-            elif "pass" in play_lower and ("to" in play_lower or "for" in play_lower) and "incomplete" not in play_lower:
-                status_badge = '<span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">✓ COMPLETE</span>'
-            elif "sacked" in play_lower:
-                status_badge = '<span style="background:#ff8800;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">⚠ SACK</span>'
-            elif "touchdown" in play_lower:
-                status_badge = '<span style="background:#ffd700;color:#000;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">🏈 TOUCHDOWN</span>'
-            elif "field goal" in play_lower:
-                status_badge = '<span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">🥅 FIELD GOAL</span>'
-            elif "punt" in play_lower:
-                status_badge = '<span style="background:#666;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">📤 PUNT</span>'
-            elif "rush" in play_lower or "ran" in play_lower:
-                status_badge = '<span style="background:#3b82f6;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:8px">🏃 RUSH</span>'
-            else:
-                status_badge = ''
-            
             st.markdown(f"""<div style="background:#0a0a15;padding:8px 12px;border-radius:6px;margin-bottom:8px;border-left:3px solid #444">
-                {status_badge}<span style="color:#888;font-size:0.85em">{play_text}...</span>
+                <span style="color:#888;font-size:0.85em">📺 {play_text}...</span>
             </div>""", unsafe_allow_html=True)
         
         # Totals projection
