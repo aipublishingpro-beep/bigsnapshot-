@@ -44,11 +44,82 @@ if not st.session_state.authenticated:
 import requests
 import json
 import os
+import base64
 from datetime import datetime, timedelta
 import pytz
 
+# Try to import cryptography for Kalshi API auth
+try:
+    from cryptography.hazmat.primitives import serialization, hashes
+    from cryptography.hazmat.primitives.asymmetric import padding, ec
+    from cryptography.hazmat.backends import default_backend
+    CRYPTO_AVAILABLE = True
+except ImportError:
+    CRYPTO_AVAILABLE = False
+
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
+
+# ============================================================
+# KALSHI API AUTHENTICATION
+# ============================================================
+def get_kalshi_credentials():
+    """Load Kalshi API credentials from Streamlit secrets - OWNER ONLY"""
+    # Only load keys if owner mode is active
+    query_params = st.query_params
+    is_owner = query_params.get("mode") == "owner"
+    
+    if not is_owner:
+        return None, None  # Public users don't get API access
+    
+    try:
+        api_key = st.secrets["KALSHI_API_KEY"]
+        private_key = st.secrets["KALSHI_PRIVATE_KEY"]
+        return api_key, private_key
+    except (KeyError, FileNotFoundError):
+        return None, None
+
+def create_kalshi_signature(private_key_pem, timestamp, method, path):
+    """Create signature for Kalshi API authentication"""
+    if not CRYPTO_AVAILABLE:
+        return None
+    try:
+        private_key = serialization.load_pem_private_key(
+            private_key_pem.encode(), password=None, backend=default_backend()
+        )
+        message = f"{timestamp}{method}{path}".encode()
+        
+        # Try EC signing first (newer keys), fall back to RSA
+        try:
+            signature = private_key.sign(message, ec.ECDSA(hashes.SHA256()))
+        except:
+            signature = private_key.sign(
+                message,
+                padding.PKCS1v15(),
+                hashes.SHA256()
+            )
+        return base64.b64encode(signature).decode()
+    except Exception as e:
+        return None
+
+def get_kalshi_headers(method, path):
+    """Get authenticated headers for Kalshi API"""
+    api_key, private_key = get_kalshi_credentials()
+    if not api_key or not private_key:
+        return None
+    
+    timestamp = str(int(datetime.now().timestamp() * 1000))
+    signature = create_kalshi_signature(private_key, timestamp, method, path)
+    
+    if not signature:
+        return None
+    
+    return {
+        "KALSHI-ACCESS-KEY": api_key,
+        "KALSHI-ACCESS-SIGNATURE": signature,
+        "KALSHI-ACCESS-TIMESTAMP": timestamp,
+        "Content-Type": "application/json"
+    }
 
 # Check for owner mode
 query_params = st.query_params
@@ -182,11 +253,59 @@ def fetch_kalshi_prices():
     errors = []
     today = datetime.now(eastern).strftime('%y%b%d').upper()
     
-    # Try multiple Kalshi API endpoints
+    # Try authenticated API first
+    api_key, private_key = get_kalshi_credentials()
+    
+    if api_key and private_key and CRYPTO_AVAILABLE:
+        try:
+            base_url = "https://api.elections.kalshi.com"
+            path = "/trade-api/v2/markets?series_ticker=KXNBA&status=open&limit=100"
+            headers = get_kalshi_headers("GET", path)
+            
+            if headers:
+                resp = requests.get(f"{base_url}{path}", headers=headers, timeout=10)
+                
+                if resp.status_code == 200:
+                    data = resp.json()
+                    markets = data.get("markets", [])
+                    
+                    for market in markets:
+                        ticker = market.get("ticker", "")
+                        if today in ticker:
+                            parts = ticker.split("-")
+                            if len(parts) >= 3:
+                                team_abbrev = parts[-1]
+                                # Get prices - Kalshi uses different field names
+                                yes_price = (market.get("yes_ask") or market.get("yes_bid") or 
+                                            market.get("last_price") or market.get("yes_price") or
+                                            market.get("latest_yes_price") or market.get("close_price"))
+                                no_price = market.get("no_ask") or market.get("no_bid") or market.get("no_price")
+                                
+                                if yes_price:
+                                    # Convert to cents if in decimal
+                                    if yes_price <= 1:
+                                        yes_price = round(yes_price * 100)
+                                    if no_price and no_price <= 1:
+                                        no_price = round(no_price * 100)
+                                    
+                                    prices[team_abbrev] = {
+                                        "yes": int(yes_price),
+                                        "no": int(no_price) if no_price else None,
+                                        "ticker": ticker
+                                    }
+                    
+                    if prices:
+                        return prices
+                else:
+                    errors.append(f"Auth API: {resp.status_code}")
+        except Exception as e:
+            errors.append(f"Auth API: {str(e)[:50]}")
+    else:
+        errors.append("No API keys or crypto not available")
+    
+    # Fallback: Try unauthenticated endpoints
     endpoints = [
-        "https://api.kalshi.com/trade-api/v2/markets",
-        "https://trading-api.kalshi.com/trade-api/v2/markets",
-        "https://api.elections.kalshi.com/trade-api/v2/markets"
+        "https://api.elections.kalshi.com/trade-api/v2/markets",
     ]
     
     for url in endpoints:
@@ -200,19 +319,16 @@ def fetch_kalshi_prices():
                 
                 for market in markets:
                     ticker = market.get("ticker", "")
-                    # Format: KXNBA-25JAN26-BOS
                     if today in ticker:
                         parts = ticker.split("-")
                         if len(parts) >= 3:
                             team_abbrev = parts[-1]
-                            # Try different price fields Kalshi might use
                             yes_price = (market.get("yes_ask") or market.get("yes_bid") or 
                                         market.get("last_price") or market.get("latest_yes_price") or
                                         market.get("yes_price") or market.get("close_price"))
                             no_price = market.get("no_ask") or market.get("no_bid") or market.get("no_price")
                             
                             if yes_price:
-                                # Convert to cents if in decimal
                                 if yes_price <= 1:
                                     yes_price = round(yes_price * 100)
                                 if no_price and no_price <= 1:
@@ -225,7 +341,7 @@ def fetch_kalshi_prices():
                                 }
                 
                 if prices:
-                    return prices  # Found prices, exit
+                    return prices
                     
             else:
                 errors.append(f"{url}: {resp.status_code}")
@@ -655,7 +771,7 @@ GAP = +5¢ = 🟢 BUY
 *We find the gap — you make the call.*
 """)
     st.divider()
-    st.caption("v5.0 NBA EDGE")
+    st.caption("v5.3 NBA EDGE")
 
 # ============================================================
 # FETCH DATA
@@ -689,7 +805,7 @@ final_games = [g for g in games if g['status'] == 'STATUS_FINAL']
 # UI HEADER
 # ============================================================
 st.title("🏀 NBA EDGE FINDER")
-st.caption(f"v5.1 • {now.strftime('%b %d, %Y %I:%M %p ET')} • ⚡ REAL-TIME: Scores + Kalshi every 24s")
+st.caption(f"v5.3 • {now.strftime('%b %d, %Y %I:%M %p ET')} • ⚡ REAL-TIME: Scores + Kalshi every 24s")
 
 # Stats row
 c1, c2, c3, c4 = st.columns(4)
@@ -712,8 +828,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Show Kalshi API status
+api_key, private_key = get_kalshi_credentials()
+has_keys = bool(api_key and private_key)
+
 if not kalshi_prices:
-    st.warning("⚠️ Kalshi API not returning prices. Enter manually below or check back later.")
+    if is_owner and has_keys:
+        st.warning("⚠️ Kalshi API keys found but not returning prices. Check debug info.")
+    elif is_owner and not has_keys:
+        st.warning("⚠️ Owner mode but no API keys found. Add KALSHI_API_KEY and KALSHI_PRIVATE_KEY to Streamlit secrets.")
+    else:
+        # Public users - just show manual input option
+        st.info("📝 Enter Kalshi prices manually below to see edge opportunities.")
     
     # Helpful links
     st.markdown("""
@@ -723,9 +848,12 @@ if not kalshi_prices:
     </div>
     """, unsafe_allow_html=True)
     
-    # Show debug info if available
-    if 'kalshi_errors' in st.session_state:
-        with st.expander("🔧 Debug Info"):
+    # Show debug info if available - OWNER ONLY
+    if is_owner and 'kalshi_errors' in st.session_state:
+        with st.expander("🔧 Debug Info (Owner Only)"):
+            st.write(f"**API Keys Loaded:** {'✅ Yes' if has_keys else '❌ No'}")
+            st.write(f"**Crypto Available:** {'✅ Yes' if CRYPTO_AVAILABLE else '❌ No'}")
+            st.write("**Errors:**")
             for err in st.session_state.get('kalshi_errors', []):
                 st.code(err)
     
@@ -768,10 +896,15 @@ if not kalshi_prices:
         if st.button("🔄 RECALCULATE EDGES", use_container_width=True):
             st.rerun()
 else:
-    st.success(f"✅ Kalshi API connected — {len(kalshi_prices)} prices loaded")
-    with st.expander("📊 Raw Kalshi Prices"):
-        for abbrev, data in kalshi_prices.items():
-            st.write(f"{abbrev}: {data['yes']}¢ YES")
+    if is_owner:
+        key_status = "🔐 Owner Mode" if has_keys else "🔓 Manual"
+    else:
+        key_status = "📝 Manual"
+    st.success(f"✅ Kalshi prices loaded ({key_status}) — {len(kalshi_prices)} markets")
+    if is_owner:
+        with st.expander("📊 Raw Kalshi Prices (Owner Only)"):
+            for abbrev, data in kalshi_prices.items():
+                st.write(f"{abbrev}: {data['yes']}¢ YES")
 
 misprice_data = []
 
@@ -1357,4 +1490,4 @@ This tool shows edges — you make the call.
 - Not financial advice
 """)
 
-st.caption("⚠️ Educational only. Not financial advice. v5.1")
+st.caption("⚠️ Educational only. Not financial advice. v5.3")
