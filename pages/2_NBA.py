@@ -20,7 +20,7 @@ import pytz
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
-VERSION = "5.6-debug"
+VERSION = "5.7"
 
 # ============================================================
 # KALSHI API AUTH (FIXED - uses bracket notation)
@@ -79,64 +79,64 @@ def get_kalshi_headers(method, path):
 def fetch_kalshi_nba_prices():
     """Fetch NBA ML markets from Kalshi"""
     try:
-        # Get ALL open markets
-        path = "/trade-api/v2/markets"
-        params = f"?status=open&limit=1000"
-        full_path = path + params
-        
-        headers = get_kalshi_headers("GET", full_path)
+        headers = get_kalshi_headers("GET", "/trade-api/v2/events")
         
         if not headers:
             return {}, "No headers - check secrets", []
         
-        url = f"https://api.elections.kalshi.com{full_path}"
+        # Try events endpoint with NBA filter
+        url = "https://api.elections.kalshi.com/trade-api/v2/events?status=open&limit=200&series_ticker=KXNBA"
         resp = requests.get(url, headers=headers, timeout=15)
         
-        if resp.status_code != 200:
-            return {}, f"API returned {resp.status_code}: {resp.text[:200]}", []
-        
-        data = resp.json()
-        markets = data.get("markets", [])
-        
-        # Show ALL "to beat" markets for debug
-        beat_markets = [m for m in markets if "to beat" in m.get("title", "").lower()]
-        
-        # Store raw for debug
         raw_markets = []
-        for m in beat_markets[:20]:
-            raw_markets.append({
-                "ticker": m.get("ticker", ""),
-                "title": m.get("title", ""),
-                "yes_ask": m.get("yes_ask"),
-                "yes_bid": m.get("yes_bid"),
-                "last_price": m.get("last_price")
-            })
         
-        # Also look for basketball-related keywords
-        basketball_markets = [m for m in markets if any(word in m.get("title", "").lower() for word in ["basketball", "celtics", "lakers", "warriors", "heat", "bucks", "knicks", "nets", "bulls", "cavs", "cavaliers", "thunder", "nuggets", "suns", "mavericks", "grizzlies", "timberwolves", "kings", "pistons", "rockets", "spurs", "hawks", "hornets", "magic", "pacers", "wizards", "raptors", "76ers", "sixers", "clippers", "pelicans", "blazers", "jazz"])]
-        
-        for m in basketball_markets[:10]:
-            if m not in raw_markets[:20]:
+        if resp.status_code == 200:
+            data = resp.json()
+            events = data.get("events", [])
+            for e in events[:10]:
                 raw_markets.append({
-                    "ticker": m.get("ticker", ""),
-                    "title": m.get("title", ""),
-                    "yes_ask": m.get("yes_ask"),
-                    "yes_bid": m.get("yes_bid"),
-                    "last_price": m.get("last_price")
+                    "ticker": e.get("event_ticker", ""),
+                    "title": e.get("title", ""),
+                    "category": e.get("category", ""),
+                    "sub_title": e.get("sub_title", "")
                 })
         
+        # Now try markets with different series tickers
+        series_to_try = ["KXNBA", "NBA", "NBAML", "KXNBAML"]
+        all_markets = []
+        
+        for series in series_to_try:
+            try:
+                path = f"/trade-api/v2/markets?series_ticker={series}&status=open&limit=200"
+                mheaders = get_kalshi_headers("GET", path)
+                murl = f"https://api.elections.kalshi.com{path}"
+                mresp = requests.get(murl, headers=mheaders, timeout=10)
+                if mresp.status_code == 200:
+                    mdata = mresp.json()
+                    mkts = mdata.get("markets", [])
+                    for m in mkts[:5]:
+                        raw_markets.append({
+                            "ticker": m.get("ticker", ""),
+                            "title": m.get("title", ""),
+                            "series": series,
+                            "yes_ask": m.get("yes_ask")
+                        })
+                    all_markets.extend(mkts)
+            except:
+                pass
+        
+        # Parse prices from all found markets
         prices = {}
-        for m in beat_markets:
+        for m in all_markets:
             title = m.get("title", "")
             yes_ask = m.get("yes_ask", 0) or m.get("last_price", 0) or 0
             
-            # Parse "Team A to beat Team B" format
-            team = title.split(" to beat ")[0].strip()
-            team = team.replace("Will the ", "").replace("Will ", "").strip()
-            if yes_ask and yes_ask > 0:
+            if " to beat " in title.lower() and yes_ask > 0:
+                team = title.split(" to beat ")[0].strip()
+                team = team.replace("Will the ", "").replace("Will ", "").strip()
                 prices[team] = yes_ask
         
-        return prices, f"✅ Found {len(beat_markets)} 'to beat' markets, {len(basketball_markets)} basketball, loaded {len(prices)} prices. Total markets: {len(markets)}", raw_markets
+        return prices, f"✅ Found {len(all_markets)} markets from series search", raw_markets
     except Exception as e:
         return {}, f"Exception: {str(e)[:200]}", []
 
