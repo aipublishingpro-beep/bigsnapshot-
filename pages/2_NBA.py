@@ -14,7 +14,7 @@ import pytz
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
-VERSION = "6.0"
+VERSION = "6.1"
 
 # ============================================================
 # TEAM DATA
@@ -494,22 +494,101 @@ else:
 st.divider()
 
 # ============================================================
-# 📅 SCHEDULED GAMES
+# 🎯 PRE-GAME ALIGNMENT
 # ============================================================
 if scheduled_games:
-    st.subheader("📅 SCHEDULED GAMES")
+    st.subheader("🎯 PRE-GAME ALIGNMENT")
+    
     for g in scheduled_games:
-        home_stats = TEAM_STATS.get(g['home'], {})
-        away_stats = TEAM_STATS.get(g['away'], {})
+        home, away = g['home'], g['away']
+        home_stats = TEAM_STATS.get(home, {})
+        away_stats = TEAM_STATS.get(away, {})
+        
+        # Calculate factors
+        factors = []
+        score = 50  # Start neutral
+        
+        # 1. Net Rating Gap
         home_net = home_stats.get("net", 0)
         away_net = away_stats.get("net", 0)
+        net_gap = home_net - away_net
+        if net_gap > 5:
+            factors.append(f"✅ {home} net rating +{net_gap:.1f}")
+            score += 8
+        elif net_gap < -5:
+            factors.append(f"✅ {away} net rating +{abs(net_gap):.1f}")
+            score -= 8
+        
+        # 2. Home Court
+        factors.append(f"✅ {home} home court +3")
+        score += 5
+        
+        # 3. B2B fatigue
+        if away in b2b_teams:
+            factors.append(f"✅ {away} B2B fatigue")
+            score += 6
+        if home in b2b_teams:
+            factors.append(f"⚠️ {home} B2B fatigue")
+            score -= 6
+        
+        # 4. Tier matchup
+        home_tier = home_stats.get("tier", "mid")
+        away_tier = away_stats.get("tier", "mid")
+        tier_order = {"elite": 4, "good": 3, "mid": 2, "weak": 1}
+        tier_gap = tier_order.get(home_tier, 2) - tier_order.get(away_tier, 2)
+        if tier_gap >= 2:
+            factors.append(f"✅ {home} tier advantage ({home_tier} vs {away_tier})")
+            score += 7
+        elif tier_gap <= -2:
+            factors.append(f"✅ {away} tier advantage ({away_tier} vs {home_tier})")
+            score -= 7
+        
+        # 5. Star injuries
+        for team, team_injuries in injuries.items():
+            if team not in [home, away]: continue
+            for inj in team_injuries:
+                name = inj.get("name", "")
+                status = str(inj.get("status", "")).upper()
+                tier = STAR_TIERS.get(name, 0)
+                if tier >= 2 and ("OUT" in status or "DOUBT" in status):
+                    if team == home:
+                        factors.append(f"⚠️ {home} missing {name}")
+                        score -= (tier * 3)
+                    else:
+                        factors.append(f"✅ {away} missing {name}")
+                        score += (tier * 3)
+        
+        score = max(20, min(80, score))
+        pick = home if score >= 50 else away
+        
+        if score >= 65:
+            signal, color = "🟢 STRONG", "#22c55e"
+        elif score >= 55:
+            signal, color = "🟢 LEAN", "#4ade80"
+        elif score <= 35:
+            signal, color = "🔴 FADE", "#ef4444"
+        elif score <= 45:
+            signal, color = "🟡 SLIGHT", "#eab308"
+        else:
+            signal, color = "⚪ TOSS-UP", "#888"
         
         st.markdown(f"""
-        <div style="background: #0f172a; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
-            <span style="color: #fff; font-weight: 600;">{g['away']} @ {g['home']}</span>
-            <span style="color: #888; margin-left: 15px;">Net: {g['home']} ({home_net:+.1f}) vs {g['away']} ({away_net:+.1f})</span>
+        <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 4px solid {color};">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="color: #fff; font-size: 1.2em; font-weight: 700;">{away} @ {home}</span>
+                <span style="color: {color}; font-weight: 700;">{signal} {pick} ({score})</span>
+            </div>
+            <div style="color: #aaa; font-size: 0.9em;">
+                {"<br>".join(factors[:5])}
+            </div>
         </div>
         """, unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.link_button(f"🎯 {home} ML", get_kalshi_ml_link(home), use_container_width=True)
+        with col2:
+            st.link_button(f"🎯 {away} ML", get_kalshi_ml_link(away), use_container_width=True)
 
 st.divider()
 st.caption(f"⚠️ Educational only. Not financial advice. v{VERSION}")
