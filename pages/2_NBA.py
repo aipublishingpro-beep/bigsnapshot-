@@ -429,8 +429,24 @@ def calc_live_edge(game, injuries, b2b_teams):
 # ============================================================
 # KALSHI LINK
 # ============================================================
-def get_kalshi_link():
-    return "https://kalshi.com/markets/kxnba"
+# ============================================================
+# KALSHI LINKS
+# ============================================================
+def get_kalshi_ml_link(away, home):
+    """Build correct Kalshi ML market URL"""
+    away_code = KALSHI_CODES.get(away, "XXX").lower()
+    home_code = KALSHI_CODES.get(home, "XXX").lower()
+    date_str = datetime.now(eastern).strftime('%y%b%d').lower()
+    ticker = f"kxnbagame-{date_str}{away_code}{home_code}"
+    return f"https://kalshi.com/markets/kxnbagame/professional-basketball-game/{ticker}"
+
+def get_kalshi_totals_link(away, home):
+    """Build correct Kalshi totals market URL"""
+    away_code = KALSHI_CODES.get(away, "XXX").lower()
+    home_code = KALSHI_CODES.get(home, "XXX").lower()
+    date_str = datetime.now(eastern).strftime('%y%b%d').lower()
+    ticker = f"kxnbatotal-{date_str}{away_code}{home_code}"
+    return f"https://kalshi.com/markets/kxnbatotal/pro-basketball-total-points/{ticker}"
 
 # ============================================================
 # SIDEBAR LEGEND
@@ -601,11 +617,11 @@ if live_games:
         
         bc1, bc2, bc3 = st.columns(3)
         with bc1:
-            st.link_button(f"🎯 {edge['pick']} ML", get_kalshi_link(), use_container_width=True)
+            st.link_button(f"🎯 {edge['pick']} ML", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
         with bc2:
-            st.link_button(f"⬇️ NO {safe_no}", get_kalshi_link(), use_container_width=True)
+            st.link_button(f"⬇️ NO {safe_no}", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
         with bc3:
-            st.link_button(f"⬆️ YES {safe_yes}", get_kalshi_link(), use_container_width=True)
+            st.link_button(f"⬆️ YES {safe_yes}", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
         
         st.markdown("---")
 else:
@@ -690,7 +706,7 @@ if cush_results:
         <span style="color:{r['pace_color']};margin-left:8px">{r['pace_status']}</span>
         </div>""", unsafe_allow_html=True)
         
-        st.link_button(f"BUY {cush_side} {r['safe_line']}", get_kalshi_link(), use_container_width=True)
+        st.link_button(f"BUY {cush_side} {r['safe_line']}", get_kalshi_totals_link(r['away'], r['home']), use_container_width=True)
 else:
     st.info(f"No {cush_side} opportunities with 6+ cushion yet")
 
@@ -792,7 +808,7 @@ if scheduled_games:
         </div>
         """, unsafe_allow_html=True)
         
-        st.link_button(f"🎯 BUY {pick} ML", get_kalshi_link(), use_container_width=True)
+        st.link_button(f"🎯 BUY {pick} ML", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
 
 st.divider()
 
