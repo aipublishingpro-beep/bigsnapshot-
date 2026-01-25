@@ -20,7 +20,7 @@ import pytz
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
-VERSION = "5.2-debug"
+VERSION = "5.3"
 
 # ============================================================
 # KALSHI API AUTH (FIXED - uses bracket notation)
@@ -88,7 +88,7 @@ def fetch_kalshi_nba_prices():
         if not headers:
             return {}, "No headers - check secrets"
         
-        url = f"https://trading-api.kalshi.com{full_path}"
+        url = f"https://api.elections.kalshi.com{full_path}"
         resp = requests.get(url, headers=headers, timeout=10)
         
         if resp.status_code != 200:
