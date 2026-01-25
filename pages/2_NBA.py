@@ -20,7 +20,7 @@ import pytz
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
-VERSION = "5.7"
+VERSION = "5.8"
 
 # ============================================================
 # KALSHI API AUTH (FIXED - uses bracket notation)
@@ -537,7 +537,7 @@ with st.expander("🔧 Kalshi API Debug"):
     if raw_markets:
         st.write("**Raw markets from API (first 10):**")
         for m in raw_markets:
-            st.write(f"- {m['ticker']}: {m['title']} | yes_ask={m['yes_ask']} yes_bid={m['yes_bid']} last={m['last_price']}")
+            st.write(f"- {m}")
 
 st.divider()
 
