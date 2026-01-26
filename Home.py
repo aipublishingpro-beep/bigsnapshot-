@@ -13,6 +13,50 @@ components.html("""
 </script>
 """, height=0)
 
+import os
+import json
+from datetime import datetime
+import pytz
+
+EMAIL_LOG_FILE = "email_signups.json"
+
+def load_emails():
+    try:
+        if os.path.exists(EMAIL_LOG_FILE):
+            with open(EMAIL_LOG_FILE, 'r') as f:
+                return json.load(f)
+    except:
+        pass
+    return []
+
+def save_email(email):
+    try:
+        emails = load_emails()
+        eastern = pytz.timezone('US/Eastern')
+        now = datetime.now(eastern)
+        existing = [e for e in emails if e.get('email', '').lower() == email.lower()]
+        if not existing:
+            emails.append({
+                "email": email,
+                "timestamp": now.strftime("%Y-%m-%d %H:%M:%S ET"),
+                "source": "bigsnapshot_home"
+            })
+            with open(EMAIL_LOG_FILE, 'w') as f:
+                json.dump(emails, f, indent=2)
+        return True
+    except:
+        return False
+
+def is_valid_email(email):
+    if not email:
+        return False
+    email = email.strip()
+    if "@" not in email or "." not in email:
+        return False
+    if len(email) < 5:
+        return False
+    return True
+
 # ============================================================
 # MOBILE CSS
 # ============================================================
@@ -31,185 +75,198 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# HERO SECTION
+# CHECK AUTH STATE
 # ============================================================
-st.markdown("""
-<div style="text-align: center; padding: 40px 20px 20px 20px;">
-    <div style="font-size: 70px; margin-bottom: 15px;">🎯</div>
-    <h1 style="font-size: 52px; font-weight: 800; color: #fff; margin-bottom: 10px;">BigSnapshot</h1>
-    <p style="color: #888; font-size: 20px; margin-bottom: 10px;">Prediction Market Edge Finder</p>
-    <p style="color: #555; font-size: 14px;">Structural analysis for Kalshi markets</p>
-</div>
-""", unsafe_allow_html=True)
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 
 # ============================================================
-# FREE SEASON BANNER
+# NOT AUTHENTICATED - SHOW EMAIL GATE
 # ============================================================
-st.markdown("""
-<div style="text-align: center; padding: 20px; margin: 20px auto; max-width: 800px; background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; border: 2px solid #22c55e;">
-    <h2 style="color: #4ade80; margin-bottom: 10px;">🎉 FREE FOR 2025-26 SEASON</h2>
-    <p style="color: #ccc; font-size: 16px; margin-bottom: 10px;">
-        All tools are <strong>100% free</strong> while we build proof, gather feedback, and refine our edge-finding systems.
-    </p>
-    <p style="color: #f97316; font-size: 13px;">
-        ⚠️ We reserve the right to implement paid subscriptions at any time.
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# VALUE PROP
-# ============================================================
-st.markdown("""
-<div style="text-align: center; padding: 20px; max-width: 700px; margin: 0 auto;">
-    <h2 style="color: #fff; font-size: 28px; margin-bottom: 15px;">Stop Switching Tabs. Start Making Cleaner Decisions.</h2>
-    <p style="color: #888; font-size: 16px; line-height: 1.6;">
-        BigSnapshot is a decision-compression tool for serious prediction market traders. 
-        It pulls the signals that matter into one screen—so you spend less time hunting and more time deciding.
-    </p>
-    <p style="color: #666; font-size: 14px; margin-top: 15px;">No hype. No picks shoved in your face. Just clarity.</p>
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("---")
-
-# ============================================================
-# LIVE TOOLS - ALL FREE
-# ============================================================
-st.markdown("### 🔥 Live Tools — All Free")
-
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    if st.button("🏀 NBA Edge", use_container_width=True, type="primary"):
-        st.switch_page("pages/2_NBA.py")
-    if st.button("🏈 NFL Edge", use_container_width=True, type="primary"):
-        st.switch_page("pages/1_NFL.py")
-with col2:
-    if st.button("🏒 NHL Edge", use_container_width=True, type="primary"):
-        st.switch_page("pages/3_NHL.py")
-    if st.button("⚽ Soccer Edge", use_container_width=True, type="primary"):
-        st.switch_page("pages/8_Soccer.py")
-with col3:
-    if st.button("🎓 NCAA Edge", use_container_width=True, type="primary"):
-        st.switch_page("pages/7_NCAA.py")
-    if st.button("🌡️ Temp Edge", use_container_width=True, type="primary"):
-        st.switch_page("pages/5_Temp.py")
-with col4:
-    if st.button("📊 Economics", use_container_width=True, type="primary"):
-        st.switch_page("pages/9_Economics.py")
-
-# ============================================================
-# TOOL CARDS (VISUAL)
-# ============================================================
-st.markdown("""
-<div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
-        <div style="font-size: 50px;">🏀</div>
-        <h3 style="color: #4ade80; margin: 0;">NBA</h3>
-        <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
+if not st.session_state.authenticated:
+    
+    # HERO
+    st.markdown("""
+    <div style="text-align: center; padding: 40px 20px 20px 20px;">
+        <div style="font-size: 70px; margin-bottom: 15px;">🎯</div>
+        <h1 style="font-size: 52px; font-weight: 800; color: #fff; margin-bottom: 10px;">BigSnapshot</h1>
+        <p style="color: #888; font-size: 20px; margin-bottom: 10px;">Prediction Market Edge Finder</p>
+        <p style="color: #555; font-size: 14px;">Structural analysis for Kalshi markets</p>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
-        <div style="font-size: 50px;">🏈</div>
-        <h3 style="color: #4ade80; margin: 0;">NFL</h3>
-        <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
+    """, unsafe_allow_html=True)
+    
+    # FREE BANNER
+    st.markdown("""
+    <div style="text-align: center; padding: 20px; margin: 20px auto; max-width: 800px; background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; border: 2px solid #22c55e;">
+        <h2 style="color: #4ade80; margin-bottom: 10px;">🎉 FREE FOR 2025-26 SEASON</h2>
+        <p style="color: #ccc; font-size: 16px; margin-bottom: 10px;">
+            All tools are <strong>100% free</strong> while we build proof and refine our edge-finding systems.
+        </p>
+        <p style="color: #f97316; font-size: 13px;">
+            ⚠️ We reserve the right to implement paid subscriptions at any time.
+        </p>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
-        <div style="font-size: 50px;">🏒</div>
-        <h3 style="color: #4ade80; margin: 0;">NHL</h3>
-        <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
+    """, unsafe_allow_html=True)
+    
+    # TOOL CARDS PREVIEW
+    st.markdown("### 🔥 What You Get — Free")
+    st.markdown("""
+    <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 15px;">
+        <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 12px; padding: 15px; width: 100px; text-align: center; border: 1px solid #22c55e;">
+            <div style="font-size: 30px;">🏀</div>
+            <p style="color: #4ade80; margin: 5px 0 0 0; font-size: 12px;">NBA</p>
+        </div>
+        <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 12px; padding: 15px; width: 100px; text-align: center; border: 1px solid #22c55e;">
+            <div style="font-size: 30px;">🏈</div>
+            <p style="color: #4ade80; margin: 5px 0 0 0; font-size: 12px;">NFL</p>
+        </div>
+        <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 12px; padding: 15px; width: 100px; text-align: center; border: 1px solid #22c55e;">
+            <div style="font-size: 30px;">🏒</div>
+            <p style="color: #4ade80; margin: 5px 0 0 0; font-size: 12px;">NHL</p>
+        </div>
+        <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 12px; padding: 15px; width: 100px; text-align: center; border: 1px solid #22c55e;">
+            <div style="font-size: 30px;">🎓</div>
+            <p style="color: #4ade80; margin: 5px 0 0 0; font-size: 12px;">NCAA</p>
+        </div>
+        <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 12px; padding: 15px; width: 100px; text-align: center; border: 1px solid #22c55e;">
+            <div style="font-size: 30px;">⚽</div>
+            <p style="color: #4ade80; margin: 5px 0 0 0; font-size: 12px;">Soccer</p>
+        </div>
+        <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 12px; padding: 15px; width: 100px; text-align: center; border: 1px solid #22c55e;">
+            <div style="font-size: 30px;">🌡️</div>
+            <p style="color: #4ade80; margin: 5px 0 0 0; font-size: 12px;">Temp</p>
+        </div>
+        <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 12px; padding: 15px; width: 100px; text-align: center; border: 1px solid #22c55e;">
+            <div style="font-size: 30px;">📊</div>
+            <p style="color: #4ade80; margin: 5px 0 0 0; font-size: 12px;">Econ</p>
+        </div>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
-        <div style="font-size: 50px;">🎓</div>
-        <h3 style="color: #4ade80; margin: 0;">NCAA</h3>
-        <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # EMAIL GATE
+    st.markdown("""
+    <div style="text-align: center; padding: 20px;">
+        <h2 style="color: #fff; margin-bottom: 10px;">🔓 Enter Email to Unlock</h2>
+        <p style="color: #4ade80; font-size: 16px; font-weight: 600; margin-bottom: 8px;">✓ No credit card required</p>
+        <p style="color: #ccc; font-size: 14px;">✓ No payment info &nbsp;•&nbsp; ✓ No spam &nbsp;•&nbsp; ✓ Instant access</p>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
-        <div style="font-size: 50px;">⚽</div>
-        <h3 style="color: #4ade80; margin: 0;">Soccer</h3>
-        <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        email = st.text_input("Your Email", placeholder="you@example.com", label_visibility="collapsed")
+        
+        if st.button("🔓 UNLOCK FREE ACCESS", use_container_width=True, type="primary"):
+            if is_valid_email(email):
+                save_email(email)
+                st.session_state.authenticated = True
+                st.session_state.user_email = email
+                st.session_state.user_type = "Free User"
+                st.rerun()
+            else:
+                st.error("Please enter a valid email address")
+        
+        st.markdown("""
+        <p style="color: #666; font-size: 11px; text-align: center; margin-top: 15px;">
+            We'll only email you for major updates.<br>
+            Questions? <a href="mailto:aipublishingpro@gmail.com" style="color: #4ade80;">aipublishingpro@gmail.com</a>
+        </p>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # VALUE PROP
+    st.markdown("""
+    <div style="text-align: center; padding: 20px; max-width: 700px; margin: 0 auto;">
+        <h3 style="color: #fff; margin-bottom: 15px;">Why BigSnapshot?</h3>
+        <p style="color: #888; font-size: 16px; line-height: 1.6;">
+            Stop switching tabs. We pull live ESPN data, Vegas odds, and Kalshi prices into one screen — so you spend less time hunting and more time deciding.
+        </p>
+        <p style="color: #4ade80; font-size: 14px; margin-top: 15px;">
+            Fewer bad decisions = Fewer bad trades. That's the edge.
+        </p>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
-        <div style="font-size: 50px;">🌡️</div>
-        <h3 style="color: #4ade80; margin: 0;">Temp</h3>
-        <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
+    """, unsafe_allow_html=True)
+    
+    # FOOTER
+    st.markdown("""
+    <div style="text-align: center; padding: 30px 20px;">
+        <p style="color: #555; font-size: 12px;">
+            ⚠️ For entertainment and educational purposes only. Not financial advice.
+        </p>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
-        <div style="font-size: 50px;">📊</div>
-        <h3 style="color: #4ade80; margin: 0;">Econ</h3>
-        <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 # ============================================================
-# IN DEVELOPMENT NOTICE
+# AUTHENTICATED - SHOW FULL APP
 # ============================================================
-st.markdown("""
-<div style="text-align: center; padding: 15px; margin: 20px auto; max-width: 600px; background: #1a1a2a; border-radius: 12px; border: 1px solid #3b82f6;">
-    <p style="color: #60a5fa; font-size: 14px; margin: 0;">
-        🔧 <strong>Note:</strong> NHL, Soccer, and Economics are in continued development. Features may change as we refine the edge-finding algorithms.
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# EMAIL SIGNUP
-# ============================================================
-st.markdown("""
-<div style="text-align: center; padding: 25px; margin: 20px auto; max-width: 600px; background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; border: 2px solid #22c55e;">
-    <h3 style="color: #4ade80; margin: 0 0 10px 0;">📧 Get Notified</h3>
-    <p style="color: #ccc; font-size: 14px; margin: 0 0 15px 0;">
-        Want updates when we add features or launch paid plans?<br>
-        <span style="color: #888; font-size: 12px;">We'll only email you for major updates. No spam.</span>
-    </p>
-    <a href="https://docs.google.com/forms/d/e/1FAIpQLSfBcRg-QSB1E150zW2TSIkaPEFkJFGB4xqyZszfEqvtzn_wAw/viewform" target="_blank" style="display: inline-block; background: #22c55e; color: black; padding: 12px 30px; border-radius: 8px; font-weight: 700; text-decoration: none; font-size: 16px;">
-        ✉️ Sign Up for Updates
-    </a>
-    <p style="color: #666; font-size: 11px; margin: 15px 0 0 0;">
-        Questions? Contact: <a href="mailto:aipublishingpro@gmail.com" style="color: #4ade80;">aipublishingpro@gmail.com</a>
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("---")
-
-# ============================================================
-# COMING SOON
-# ============================================================
-st.markdown("### 🚧 Coming Soon")
-st.markdown("""
-<div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; padding: 20px;">
-    <div style="background: #1a1a2a; border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px dashed #444;">
-        <div style="font-size: 50px; margin-bottom: 10px;">⚾</div>
-        <h3 style="color: #888; margin-bottom: 5px;">MLB</h3>
+else:
+    st.markdown("""
+    <div style="text-align: center; padding: 30px 20px 15px 20px;">
+        <div style="font-size: 50px; margin-bottom: 10px;">🎯</div>
+        <h1 style="font-size: 42px; font-weight: 800; color: #fff; margin-bottom: 5px;">BigSnapshot</h1>
+        <p style="color: #888; font-size: 16px;">Prediction Market Edge Finder</p>
     </div>
-    <div style="background: #1a1a2a; border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px dashed #444;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🏛️</div>
-        <h3 style="color: #888; margin-bottom: 5px;">Politics</h3>
+    """, unsafe_allow_html=True)
+    
+    # Free banner
+    st.markdown("""
+    <div style="text-align: center; padding: 15px; margin: 10px auto 20px auto; max-width: 700px; background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 12px; border: 1px solid #22c55e;">
+        <p style="color: #4ade80; font-size: 14px; margin: 0;">
+            🎉 <strong>FREE FOR 2025-26 SEASON</strong> — All tools unlocked
+        </p>
     </div>
-    <div style="background: #1a1a2a; border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px dashed #444;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🎬</div>
-        <h3 style="color: #888; margin-bottom: 5px;">Entertainment</h3>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("### 🔥 Live Tools — All Free")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        if st.button("🏀 NBA Edge", use_container_width=True, type="primary"):
+            st.switch_page("pages/2_NBA.py")
+        if st.button("🏈 NFL Edge", use_container_width=True, type="primary"):
+            st.switch_page("pages/1_NFL.py")
+    with col2:
+        if st.button("🏒 NHL Edge", use_container_width=True, type="primary"):
+            st.switch_page("pages/3_NHL.py")
+        if st.button("⚽ Soccer Edge", use_container_width=True, type="primary"):
+            st.switch_page("pages/8_Soccer.py")
+    with col3:
+        if st.button("🎓 NCAA Edge", use_container_width=True, type="primary"):
+            st.switch_page("pages/7_NCAA.py")
+        if st.button("🌡️ Temp Edge", use_container_width=True, type="primary"):
+            st.switch_page("pages/5_Temp.py")
+    with col4:
+        if st.button("📊 Economics", use_container_width=True, type="primary"):
+            st.switch_page("pages/9_Economics.py")
+    
+    # Dev notice
+    st.markdown("""
+    <div style="text-align: center; padding: 12px; margin: 20px auto; max-width: 600px; background: #1a1a2a; border-radius: 10px; border: 1px solid #3b82f6;">
+        <p style="color: #60a5fa; font-size: 13px; margin: 0;">
+            🔧 NHL, Soccer, Economics in continued development
+        </p>
     </div>
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("---")
-
-# ============================================================
-# FOOTER
-# ============================================================
-st.markdown("""
-<div style="text-align: center; padding: 30px 20px;">
-    <p style="color: #888; font-size: 16px; margin-bottom: 15px;">
-        Fewer bad decisions = Fewer bad trades.<br>
-        <span style="color: #4ade80;">That's the edge.</span>
-    </p>
-    <p style="color: #f97316; font-size: 13px; margin-bottom: 15px;">
-        ⚠️ Free during beta. We reserve the right to implement paid subscriptions at any time.
-    </p>
-    <p style="color: #555; font-size: 12px;">
-        ⚠️ For entertainment and educational purposes only. Not financial advice.
-    </p>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Coming Soon
+    st.markdown("### 🚧 Coming Soon")
+    st.markdown("⚾ MLB • 🏛️ Politics • 🎬 Entertainment")
+    
+    st.markdown("---")
+    
+    # Footer
+    st.markdown("""
+    <div style="text-align: center; padding: 20px;">
+        <p style="color: #f97316; font-size: 12px; margin-bottom: 10px;">
+            ⚠️ Free during beta. We reserve the right to implement paid subscriptions at any time.
+        </p>
+        <p style="color: #555; font-size: 11px;">
+            ⚠️ For entertainment and educational purposes only. Not financial advice.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
