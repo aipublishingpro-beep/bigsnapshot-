@@ -145,34 +145,28 @@ if not st.session_state.authenticated:
     
     st.markdown("---")
     
-    # EMAIL GATE - GOOGLE FORM EMBED
+    # EMAIL GATE - CLEAN INPUT
     st.markdown("""
     <div style="text-align: center; padding: 20px;">
         <h2 style="color: #fff; margin-bottom: 10px;">🔓 Enter Email to Unlock</h2>
         <p style="color: #4ade80; font-size: 16px; font-weight: 600; margin-bottom: 8px;">✓ No credit card required</p>
-        <p style="color: #ccc; font-size: 14px;">✓ No payment info &nbsp;•&nbsp; ✓ No spam &nbsp;•&nbsp; ✓ Instant access</p>
+        <p style="color: #ccc; font-size: 14px;">✓ No payment info • ✓ No spam • ✓ Instant access</p>
     </div>
     """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # Embed Google Form
-        st.components.v1.iframe(
-            "https://docs.google.com/forms/d/e/1FAIpQLSfBcRg-QSB1E150zW2TSIkaPEFkJFGB4xqyZszfEqvtzn_wAw/viewform?embedded=true",
-            height=320,
-            scrolling=False
-        )
+        email = st.text_input("Your Email", placeholder="you@example.com", label_visibility="collapsed")
         
-        st.markdown("""
-        <p style="color: #888; font-size: 12px; text-align: center; margin-top: 10px;">
-            After submitting, click the button below to enter
-        </p>
-        """, unsafe_allow_html=True)
-        
-        if st.button("✅ I SUBMITTED MY EMAIL — LET ME IN", use_container_width=True, type="primary"):
-            st.session_state.authenticated = True
-            st.session_state.user_type = "Free User"
-            st.rerun()
+        if st.button("🔓 UNLOCK FREE ACCESS", use_container_width=True, type="primary"):
+            if is_valid_email(email):
+                save_email(email)
+                st.session_state.authenticated = True
+                st.session_state.user_email = email
+                st.session_state.user_type = "Free User"
+                st.rerun()
+            else:
+                st.error("Please enter a valid email address")
         
         st.markdown("""
         <p style="color: #666; font-size: 11px; text-align: center; margin-top: 15px;">
