@@ -32,4 +32,5 @@ with col4:
         st.switch_page("pages/9_Economics.py")
 
 st.markdown("---")
+st.markdown("📧 **Comments or suggestions?** aipublishingpro@gmail.com")
 st.caption("© 2026 BigSnapshot. All rights reserved.")
