@@ -351,16 +351,12 @@ def fetch_kalshi_totals():
 def fetch_kalshi_ml():
     """Fetch Kalshi ML markets to compare with Vegas
     
-    KALSHI MARKET STRUCTURE FOR NBA:
-    - Ticker format: KXNBAGAME-{DATE}{AWAY}{HOME}
-    - The market asks: "Will [AWAY] win?"
-    - YES = Away team wins
-    - NO = Home team wins
-    - yes_bid = price to buy YES = implied prob away wins
-    - no_bid = price to buy NO = implied prob home wins
-    
-    IMPORTANT: We need yes_ask (best offer) not yes_bid (best bid)
-    But API gives us yes_bid/no_bid which are what buyers pay
+    KALSHI MARKET STRUCTURE FOR NBA (UPDATED):
+    - Ticker format: KXNBAGAME-{DATE}{AWAY}{HOME}-{TEAM}
+    - Example: KXNBAGAME-26JAN26INDATL-ATL means "Will Atlanta win?"
+    - The -ATL suffix tells us which team YES represents
+    - YES = the team in the suffix wins
+    - NO = the other team wins
     """
     url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNBAGAME&status=open&limit=200"
     try:
@@ -371,27 +367,32 @@ def fetch_kalshi_ml():
             ticker = m.get("ticker", "")
             if "KXNBAGAME-" not in ticker:
                 continue
+            
+            # Parse ticker - format: KXNBAGAME-{DATE}{AWAY}{HOME}-{TEAM_CODE}
+            # Example: KXNBAGAME-26JAN26INDATL-ATL
             parts = ticker.replace("KXNBAGAME-", "")
-            if len(parts) >= 13:
-                date_part = parts[:7]
-                teams_part = parts[7:]
-                away_code = teams_part[:3]
-                home_code = teams_part[3:6]
+            
+            # Split by last hyphen to get team code
+            if "-" in parts:
+                main_part, yes_team_code = parts.rsplit("-", 1)
+            else:
+                continue  # Skip malformed tickers
+            
+            if len(main_part) >= 13:
+                date_part = main_part[:7]  # 26JAN26
+                teams_part = main_part[7:]  # INDATL
+                away_code = teams_part[:3]  # IND
+                home_code = teams_part[3:6]  # ATL
                 game_key = f"{away_code}@{home_code}"
                 
-                # Get subtitle to confirm which team YES represents
-                subtitle = m.get("subtitle", "")  # e.g., "Golden State to win"
-                
-                # Kalshi prices - need to use yes_ask/no_ask for true market price
-                # But API might only give bid, so use last_price or calculate mid
+                # Get prices
                 yes_bid = m.get("yes_bid", 0) or 0
                 yes_ask = m.get("yes_ask", 0) or 0
                 no_bid = m.get("no_bid", 0) or 0
                 no_ask = m.get("no_ask", 0) or 0
                 last_price = m.get("last_price", 0) or 0
                 
-                # Best estimate of true market price:
-                # Use mid-point if both bid/ask available, else use last_price, else use bid
+                # Best estimate of YES price
                 if yes_bid > 0 and yes_ask > 0:
                     yes_price = (yes_bid + yes_ask) / 2
                 elif last_price > 0:
@@ -401,28 +402,30 @@ def fetch_kalshi_ml():
                 else:
                     yes_price = 50
                 
-                # For Kalshi NBA markets:
-                # The ticker has AWAY then HOME
-                # YES = AWAY team wins (the team listed first in subtitle)
-                # So if subtitle says "Golden State to win" and GSW is away, YES = GSW wins
-                
-                # away_implied = YES price (away team winning)
-                # home_implied = 100 - YES price (home team winning)
-                away_implied = yes_price
-                home_implied = 100 - yes_price
+                # CRITICAL: YES = the team in the suffix (yes_team_code)
+                # Determine which team YES represents
+                if yes_team_code.upper() == home_code.upper():
+                    # YES = home team wins
+                    home_implied = yes_price
+                    away_implied = 100 - yes_price
+                else:
+                    # YES = away team wins
+                    away_implied = yes_price
+                    home_implied = 100 - yes_price
                 
                 markets[game_key] = {
                     "away_code": away_code, 
                     "home_code": home_code,
+                    "yes_team_code": yes_team_code,
                     "ticker": ticker,
-                    "subtitle": subtitle,
                     "yes_bid": yes_bid,
                     "yes_ask": yes_ask,
                     "no_bid": no_bid,
                     "no_ask": no_ask,
                     "last_price": last_price,
-                    "away_implied": away_implied,  # YES price = away wins
-                    "home_implied": home_implied,  # 100 - YES = home wins
+                    "yes_price": yes_price,
+                    "away_implied": away_implied,
+                    "home_implied": home_implied,
                 }
         return markets
     except Exception as e:
@@ -634,6 +637,7 @@ def calc_live_edge_with_vegas(game, injuries, b2b_teams, kalshi_ml):
     # ============================================================
     # VEGAS IMPLIED PROBABILITY (from ESPN)
     # ESPN homeML/awayML are American odds
+    # If ML not available, use spread (each point ≈ 3% probability)
     # ============================================================
     vegas = game.get('vegas_odds', {})
     vegas_home_implied = None
@@ -642,8 +646,10 @@ def calc_live_edge_with_vegas(game, injuries, b2b_teams, kalshi_ml):
     
     # Try moneyline first (most accurate)
     if vegas.get('homeML') and vegas.get('awayML'):
-        vegas_home_implied = american_to_implied_prob(vegas['homeML']) * 100
-        vegas_away_implied = american_to_implied_prob(vegas['awayML']) * 100
+        home_ml = vegas['homeML']
+        away_ml = vegas['awayML']
+        vegas_home_implied = american_to_implied_prob(home_ml) * 100
+        vegas_away_implied = american_to_implied_prob(away_ml) * 100
         # Normalize to remove vig (they won't sum to 100)
         total = vegas_home_implied + vegas_away_implied
         if total > 0:
@@ -651,9 +657,14 @@ def calc_live_edge_with_vegas(game, injuries, b2b_teams, kalshi_ml):
             vegas_away_implied = (vegas_away_implied / total) * 100
     elif vegas_spread is not None:
         # Fallback to spread conversion
+        # Spread is from home team perspective (negative = home favored)
+        # Rule of thumb: each point of spread ≈ 2.5-3% win probability
         try:
             spread_val = float(vegas_spread)
-            vegas_home_implied = spread_to_implied_prob(spread_val, home=True)
+            # Negative spread = home favored
+            # -5.5 spread → home is ~66% favorite
+            vegas_home_implied = 50 - (spread_val * 2.8)  # 2.8% per point
+            vegas_home_implied = max(10, min(90, vegas_home_implied))
             vegas_away_implied = 100 - vegas_home_implied
         except:
             pass
