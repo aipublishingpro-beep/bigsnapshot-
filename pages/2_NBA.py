@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "8.5"
+VERSION = "8.6"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -250,143 +250,115 @@ def fetch_plays(game_id):
         return plays[-10:], poss_team_id, last_play
     except: return [], "", None
 
-def get_play_icon_text(play_type, score_value, text):
-    play_lower = play_type.lower() if play_type else ""
-    text_lower = text.lower() if text else ""
-    if score_value == 3 or "3pt" in text_lower:
-        return "🏀 3PT MADE", "#22c55e"
+def get_last_play_text(last_play):
+    if not last_play:
+        return "", "#888"
+    play_type = last_play.get("play_type", "").lower()
+    score_value = last_play.get("score_value", 0)
+    text = last_play.get("text", "").lower()
+    
+    if score_value == 3 or "3pt" in text:
+        return "3PT MADE", "#22c55e"
     elif score_value == 2:
-        if "dunk" in text_lower:
-            return "🏀 DUNK", "#22c55e"
-        elif "layup" in text_lower:
-            return "🏀 LAYUP", "#22c55e"
-        return "🏀 2PT MADE", "#22c55e"
+        if "dunk" in text:
+            return "DUNK", "#22c55e"
+        elif "layup" in text:
+            return "LAYUP", "#22c55e"
+        return "2PT MADE", "#22c55e"
     elif score_value == 1:
-        return "🏀 FREE THROW", "#22c55e"
-    elif "miss" in play_lower or "missed" in text_lower:
-        if "3pt" in text_lower:
-            return "❌ 3PT MISS", "#ef4444"
-        return "❌ MISSED", "#ef4444"
-    elif "block" in play_lower:
-        return "🚫 BLOCKED", "#f97316"
-    elif "rebound" in play_lower:
-        return "📥 REBOUND", "#3b82f6"
-    elif "turnover" in play_lower or "steal" in play_lower:
-        return "🔄 TURNOVER", "#f97316"
-    elif "foul" in play_lower:
-        return "🚨 FOUL", "#eab308"
-    elif "timeout" in play_lower:
-        return "⏸️ TIMEOUT", "#a855f7"
+        return "FREE THROW", "#22c55e"
+    elif "miss" in play_type or "missed" in text:
+        return "MISSED", "#ef4444"
+    elif "block" in play_type:
+        return "BLOCKED", "#f97316"
+    elif "rebound" in play_type:
+        return "REBOUND", "#3b82f6"
+    elif "turnover" in play_type or "steal" in play_type:
+        return "TURNOVER", "#f97316"
+    elif "foul" in play_type:
+        return "FOUL", "#eab308"
     return "", "#888"
 
 def render_nba_court(away, home, away_score, home_score, possession, period, clock, last_play=None, score_flash=None):
-    away_color, home_color = TEAM_COLORS.get(away, "#666"), TEAM_COLORS.get(home, "#666")
-    away_code, home_code = KALSHI_CODES.get(away, "AWY"), KALSHI_CODES.get(home, "HME")
-    poss_away = "visible" if possession == away else "hidden"
-    poss_home = "visible" if possession == home else "hidden"
+    away_color = TEAM_COLORS.get(away, "#666")
+    home_color = TEAM_COLORS.get(home, "#666")
+    away_code = KALSHI_CODES.get(away, "AWY")
+    home_code = KALSHI_CODES.get(home, "HME")
+    
+    # Possession indicators
+    poss_away_opacity = "1" if possession == away else "0"
+    poss_home_opacity = "1" if possession == home else "0"
+    
+    # Period text
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
     
-    # Determine arrow direction (points toward basket being attacked)
-    # Team with possession attacks OPPOSITE basket
-    # Away team bench is left, attacks right basket
-    # Home team bench is right, attacks left basket
+    # Arrow direction (points toward basket being attacked)
     if possession == away:
-        arrow_x1, arrow_x2 = 220, 280  # Arrow pointing right (away attacks right)
-        arrow_vis = "visible"
+        arrow_points = "280,140 300,130 300,150"  # Right arrow
+        arrow_opacity = "1"
     elif possession == home:
-        arrow_x1, arrow_x2 = 280, 220  # Arrow pointing left (home attacks left)
-        arrow_vis = "visible"
+        arrow_points = "220,140 200,130 200,150"  # Left arrow
+        arrow_opacity = "1"
     else:
-        arrow_x1, arrow_x2 = 250, 250
-        arrow_vis = "hidden"
+        arrow_points = "250,140 250,140 250,140"
+        arrow_opacity = "0"
     
-    # Score flash animation
-    # Away team scores on RIGHT basket (home's basket)
-    # Home team scores on LEFT basket (away's basket)
-    left_flash = "visible" if score_flash == home else "hidden"
-    right_flash = "visible" if score_flash == away else "hidden"
+    # Score flash (green circle at basket)
+    left_flash_opacity = "0.7" if score_flash == home else "0"
+    right_flash_opacity = "0.7" if score_flash == away else "0"
     
-    # Last play overlay text
-    play_text, play_color = "", "#888"
-    if last_play:
-        play_text, play_color = get_play_icon_text(
-            last_play.get("play_type", ""),
-            last_play.get("score_value", 0),
-            last_play.get("text", "")
-        )
+    # Last play text
+    play_text, play_color = get_last_play_text(last_play)
+    play_box_opacity = "1" if play_text else "0"
     
-    return f'''<svg viewBox="0 0 500 320" style="width:100%;max-width:500px;background:#1a1a2e;border-radius:12px;">
-        <defs>
-            <filter id="glow">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-        </defs>
-        <style>
-            @keyframes pulse {{
-                0%, 100% {{ opacity: 0; transform: scale(1); }}
-                50% {{ opacity: 1; transform: scale(1.5); }}
-            }}
-            @keyframes fadeSlide {{
-                0% {{ opacity: 0; transform: translateY(-10px); }}
-                20% {{ opacity: 1; transform: translateY(0); }}
-                80% {{ opacity: 1; transform: translateY(0); }}
-                100% {{ opacity: 0.7; transform: translateY(0); }}
-            }}
-            .score-flash {{ animation: pulse 1.5s ease-in-out; }}
-            .play-text {{ animation: fadeSlide 3s ease-in-out; }}
-        </style>
-        
-        <!-- Court base -->
+    svg = f'''<svg viewBox="0 0 500 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:500px;background:#1a1a2e;border-radius:12px;">
+        <!-- Court -->
         <rect x="20" y="20" width="460" height="240" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/>
         <circle cx="250" cy="140" r="40" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="250" cy="140" r="4" fill="#fff"/>
         <line x1="250" y1="20" x2="250" y2="260" stroke="#fff" stroke-width="2"/>
         
-        <!-- Left side (Away team's basket - Home scores here) -->
+        <!-- Left side -->
         <path d="M 20 60 Q 120 140 20 220" fill="none" stroke="#fff" stroke-width="2"/>
         <rect x="20" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="100" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="40" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
         
-        <!-- Left basket score flash (Home scores here) -->
-        <circle cx="40" cy="140" r="20" fill="#22c55e" opacity="0" visibility="{left_flash}" class="score-flash" filter="url(#glow)"/>
+        <!-- Left basket flash -->
+        <circle cx="40" cy="140" r="25" fill="#22c55e" opacity="{left_flash_opacity}"/>
         
-        <!-- Right side (Home team's basket - Away scores here) -->
+        <!-- Right side -->
         <path d="M 480 60 Q 380 140 480 220" fill="none" stroke="#fff" stroke-width="2"/>
         <rect x="400" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="400" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="460" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
         
-        <!-- Right basket score flash (Away scores here) -->
-        <circle cx="460" cy="140" r="20" fill="#22c55e" opacity="0" visibility="{right_flash}" class="score-flash" filter="url(#glow)"/>
+        <!-- Right basket flash -->
+        <circle cx="460" cy="140" r="25" fill="#22c55e" opacity="{right_flash_opacity}"/>
         
         <!-- Possession Arrow -->
-        <line x1="{arrow_x1}" y1="140" x2="{arrow_x2}" y2="140" stroke="#ffd700" stroke-width="4" visibility="{arrow_vis}" marker-end="url(#arrowhead)"/>
-        <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill="#ffd700"/>
-            </marker>
-        </defs>
+        <polygon points="{arrow_points}" fill="#ffd700" opacity="{arrow_opacity}"/>
         
         <!-- Last Play Overlay -->
-        <rect x="150" y="45" width="200" height="35" rx="8" fill="#000000aa" visibility="{'visible' if play_text else 'hidden'}" class="play-text"/>
-        <text x="250" y="68" fill="{play_color}" font-size="16" font-weight="bold" text-anchor="middle" visibility="{'visible' if play_text else 'hidden'}" class="play-text">{play_text}</text>
+        <rect x="175" y="45" width="150" height="30" rx="6" fill="#000000" opacity="{play_box_opacity}"/>
+        <text x="250" y="66" fill="{play_color}" font-size="14" font-weight="bold" text-anchor="middle" opacity="{play_box_opacity}">{play_text}</text>
         
-        <!-- Team boxes -->
+        <!-- Away Team Box -->
         <rect x="60" y="270" width="80" height="40" fill="{away_color}" rx="6"/>
         <text x="100" y="290" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text>
         <text x="100" y="305" fill="#fff" font-size="12" text-anchor="middle">{away_score}</text>
-        <circle cx="145" cy="290" r="8" fill="#ffd700" visibility="{poss_away}"/>
+        <circle cx="145" cy="290" r="8" fill="#ffd700" opacity="{poss_away_opacity}"/>
         
+        <!-- Home Team Box -->
         <rect x="360" y="270" width="80" height="40" fill="{home_color}" rx="6"/>
         <text x="400" y="290" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text>
         <text x="400" y="305" fill="#fff" font-size="12" text-anchor="middle">{home_score}</text>
-        <circle cx="355" cy="290" r="8" fill="#ffd700" visibility="{poss_home}"/>
+        <circle cx="355" cy="290" r="8" fill="#ffd700" opacity="{poss_home_opacity}"/>
         
-        <!-- Period/Clock -->
+        <!-- Clock -->
         <text x="250" y="295" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text>
     </svg>'''
+    return svg
 
 def get_play_icon(play_type, score_value):
     play_lower = play_type.lower() if play_type else ""
@@ -580,7 +552,6 @@ if live_games:
         # Determine if last play was a score and which team scored
         score_flash = None
         if last_play and last_play.get("score_value", 0) > 0:
-            # Find which team scored from play data
             scoring_team_id = last_play.get("team_id", "")
             for tn, c in KALSHI_CODES.items():
                 if c.lower() in str(scoring_team_id).lower():
@@ -590,7 +561,8 @@ if live_games:
         st.markdown(f"### {away} @ {home}")
         col1, col2 = st.columns([1, 1])
         with col1:
-            st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock'], last_play, score_flash), unsafe_allow_html=True)
+            court_svg = render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock'], last_play, score_flash)
+            st.markdown(court_svg, unsafe_allow_html=True)
         with col2:
             st.markdown("**📋 LAST 10 PLAYS**")
             for p in reversed(plays):
@@ -870,108 +842,36 @@ with st.expander("📖 HOW TO USE THIS APP", expanded=False):
 ## 🎯 QUICK START GUIDE
 
 ### What This App Does
-This app finds **mispricings** between Vegas odds and Kalshi prediction markets. When Vegas says a team has 65% chance to win but Kalshi prices them at 55¢, that's a 10% edge — you buy on Kalshi.
-
----
+This app finds **mispricings** between Vegas odds and Kalshi prediction markets.
 
 ### 📍 SECTION GUIDE
 
-| Section | What It Does | When To Use |
-|---------|--------------|-------------|
-| 💰 **Mispricing Alert** | Shows Vegas vs Kalshi gaps ≥5% | Check before games start |
-| 🎮 **Live Edge Monitor** | Court, scores, play-by-play, totals projections | During live games |
-| 🎯 **Cushion Scanner** | Finds safe totals bets with buffer from projection | Mid-game (Q2+) |
-| 📈 **Pace Scanner** | Shows scoring pace (SLOW/FAST) for all live games | Mid-game totals |
-| 🎯 **Pre-Game Alignment** | Model picks for scheduled games | Before tipoff |
-| 🏥 **Injury Report** | Star player injuries affecting today's games | Pre-game research |
-| 📊 **Position Tracker** | Track your bets, see live P&L | All day |
+| Section | What It Does |
+|---------|--------------|
+| 💰 **Mispricing Alert** | Shows Vegas vs Kalshi gaps ≥5% |
+| 🎮 **Live Edge Monitor** | Court, scores, play-by-play |
+| 🎯 **Cushion Scanner** | Finds safe totals bets |
+| 📈 **Pace Scanner** | Shows scoring pace |
+| 🎯 **Pre-Game Alignment** | Model picks for scheduled games |
+| 🏥 **Injury Report** | Star player injuries |
+| 📊 **Position Tracker** | Track your bets |
 
----
+### 🆕 COURT FEATURES (v8.6)
 
-### 🚦 SIGNAL LABELS
-
-| Label | Meaning | Action |
-|-------|---------|--------|
-| 🔥 **STRONG** | 10%+ edge | High confidence bet |
-| 🟢 **GOOD** | 7-10% edge | Solid bet |
-| 🟡 **EDGE** | 5-7% edge | Smaller position |
-| 🟡 **NEUTRAL** | <5% edge | Wait / Skip |
-
----
-
-### 📊 PACE LABELS (Totals)
-
-| Label | Pace | Totals Strategy |
-|-------|------|-----------------|
-| 🐢 **SLOW** | <4.2 pts/min | Lean UNDER / BUY NO |
-| ⚖️ **AVG** | 4.2-4.5 pts/min | Wait for clarity |
-| 🔥 **FAST** | 4.5-5.0 pts/min | Lean OVER / BUY YES |
-| 💥 **SHOOTOUT** | >5.0 pts/min | Strong OVER / BUY YES |
-
----
+- **Shot Flash** — Green glow at basket when a team scores
+- **Possession Arrow** — Yellow arrow shows attack direction
+- **Last Play Overlay** — Shows "3PT MADE" or "MISSED" on court
 
 ### 💰 HOW TO BET ON KALSHI
 
-1. **YES** = You think the event WILL happen (team wins, total goes OVER)
-2. **NO** = You think the event WON'T happen (team loses, total stays UNDER)
-3. **Price** = Cost in cents (50¢ = 50% implied probability)
-4. **Profit** = 100¢ - Price (buy at 40¢, win 60¢ profit)
-
----
-
-### ⚡ QUICK WORKFLOW
-
-**Pre-Game:**
-1. Check **Mispricing Alert** for edges
-2. Click **➕ ADD ALL** to track all picks
-3. Review **Injury Report** for context
-4. Click **🎯 BUY** buttons to go to Kalshi
-
-**Live Games:**
-1. Watch **Live Edge Monitor** for score + pace
-2. Use **Cushion Scanner** to find safe totals (6+ cushion)
-3. Check **Pace Scanner** — SLOW pace = NO value, FAST = YES value
-4. Buy when projection + cushion aligns with pace
-
-**Position Tracking:**
-1. Use **➕ ADD ALL** or individual ➕ buttons
-2. Or manually add via **➕ ADD NEW POSITION** form
-3. See live game status in tracker
-4. Click **🗑️ CLEAR ALL** to reset
-
----
-
-### ⭐ STAR PLAYER TIERS
-
-| Tier | Impact | Examples |
-|------|--------|----------|
-| ⭐⭐⭐ | +5 pts swing | Jokic, SGA, Giannis, LeBron, Curry |
-| ⭐⭐ | +3 pts swing | Tatum, AD, Booker, Brunson |
-| ⭐ | +1 pt swing | Role players |
-
----
-
-### 🧠 PRO TIPS
-
-1. **Bigger cushion = safer but lower payout** — find your balance
-2. **Pace is more predictive than score** — trust pace over leads
-3. **Q2+ data is more reliable** — early Q1 is volatile
-4. **B2B (back-to-back) matters** — tired teams underperform
-5. **Check injuries before betting** — one star out = huge swing
-
----
-
-### 🆕 COURT FEATURES (v8.5)
-
-1. **Shot Flash** — Green pulse at basket when a team scores
-2. **Possession Arrow** — Yellow arrow shows direction of attack
-3. **Last Play Overlay** — Shows "🏀 3PT MADE" or "❌ MISSED" on court
-
----
+1. **YES** = Team wins / total goes OVER
+2. **NO** = Team loses / total stays UNDER
+3. **Price** = Cost in cents (50¢ = 50% implied)
+4. **Profit** = 100¢ - Price
 
 ### ⚠️ DISCLAIMER
 
-This app is for **educational purposes only**. Not financial advice. Past performance doesn't guarantee future results. Only bet what you can afford to lose.
+Educational purposes only. Not financial advice. Only bet what you can afford to lose.
 
 **Stay small. Stay quiet. Win.**
 """)
