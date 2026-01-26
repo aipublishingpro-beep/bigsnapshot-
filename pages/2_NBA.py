@@ -829,7 +829,7 @@ st.divider()
 # 🎯 PRE-GAME ALIGNMENT (SPECULATIVE)
 # ============================================================
 if scheduled_games:
-    with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=False):
+    with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
         st.caption("⚠️ Pre-game picks are speculative. Live edges are more reliable.")
         
         for g in scheduled_games:
