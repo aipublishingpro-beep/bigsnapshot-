@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "8.6"
+VERSION = "8.8"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -279,73 +279,34 @@ def get_last_play_text(last_play):
         return "FOUL", "#eab308"
     return "", "#888"
 
-def render_nba_court(away, home, away_score, home_score, possession, period, clock, last_play=None, score_flash=None):
-    away_color = TEAM_COLORS.get(away, "#666")
-    home_color = TEAM_COLORS.get(home, "#666")
-    away_code = KALSHI_CODES.get(away, "AWY")
-    home_code = KALSHI_CODES.get(home, "HME")
+def render_nba_court(away, home, away_score, home_score, possession, period, clock):
+    away_color, home_color = TEAM_COLORS.get(away, "#666"), TEAM_COLORS.get(home, "#666")
+    away_code, home_code = KALSHI_CODES.get(away, "AWY"), KALSHI_CODES.get(home, "HME")
+    poss_away = "visible" if possession == away else "hidden"
+    poss_home = "visible" if possession == home else "hidden"
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
-    
-    # Possession indicators
-    poss_away = "#ffd700" if possession == away else "transparent"
-    poss_home = "#ffd700" if possession == home else "transparent"
-    
-    # Arrow direction
-    if possession == away:
-        arrow_html = '<div style="position:absolute;left:56%;top:44%;font-size:24px;color:#ffd700;">→</div>'
-    elif possession == home:
-        arrow_html = '<div style="position:absolute;left:40%;top:44%;font-size:24px;color:#ffd700;">←</div>'
-    else:
-        arrow_html = ''
-    
-    # Score flash
-    left_flash = "box-shadow:0 0 20px 10px #22c55e;" if score_flash == home else ""
-    right_flash = "box-shadow:0 0 20px 10px #22c55e;" if score_flash == away else ""
-    
-    # Last play text
-    play_text, play_color = get_last_play_text(last_play)
-    play_html = f'<div style="position:absolute;top:15%;left:50%;transform:translateX(-50%);background:#000c;padding:6px 16px;border-radius:6px;color:{play_color};font-weight:bold;font-size:14px;">{play_text}</div>' if play_text else ''
-    
-    html = f'''
-    <div style="position:relative;width:100%;max-width:500px;height:320px;background:#1a1a2e;border-radius:12px;font-family:sans-serif;">
-        <!-- Court -->
-        <div style="position:absolute;left:4%;top:6%;width:92%;height:75%;background:#2d4a22;border:2px solid #fff;border-radius:8px;"></div>
-        <!-- Center circle -->
-        <div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:80px;height:80px;border:2px solid #fff;border-radius:50%;"></div>
-        <div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:8px;height:8px;background:#fff;border-radius:50%;"></div>
-        <!-- Center line -->
-        <div style="position:absolute;left:50%;top:6%;width:2px;height:75%;background:#fff;"></div>
-        <!-- Left key -->
-        <div style="position:absolute;left:4%;top:25%;width:16%;height:38%;border:2px solid #fff;border-left:none;"></div>
-        <div style="position:absolute;left:17%;top:35%;width:24px;height:24px;border:2px solid #fff;border-radius:50%;"></div>
-        <!-- Left basket -->
-        <div style="position:absolute;left:6%;top:42%;width:16px;height:16px;border:3px solid #ff6b35;border-radius:50%;{left_flash}"></div>
-        <!-- Right key -->
-        <div style="position:absolute;right:4%;top:25%;width:16%;height:38%;border:2px solid #fff;border-right:none;"></div>
-        <div style="position:absolute;right:17%;top:35%;width:24px;height:24px;border:2px solid #fff;border-radius:50%;"></div>
-        <!-- Right basket -->
-        <div style="position:absolute;right:6%;top:42%;width:16px;height:16px;border:3px solid #ff6b35;border-radius:50%;{right_flash}"></div>
-        <!-- Possession Arrow -->
-        {arrow_html}
-        <!-- Last Play -->
-        {play_html}
-        <!-- Away Team Box -->
-        <div style="position:absolute;left:12%;bottom:5%;width:80px;height:40px;background:{away_color};border-radius:6px;text-align:center;padding-top:6px;">
-            <div style="color:#fff;font-weight:bold;font-size:14px;">{away_code}</div>
-            <div style="color:#fff;font-size:12px;">{away_score}</div>
-        </div>
-        <div style="position:absolute;left:calc(12% + 85px);bottom:calc(5% + 15px);width:16px;height:16px;background:{poss_away};border-radius:50%;"></div>
-        <!-- Home Team Box -->
-        <div style="position:absolute;right:12%;bottom:5%;width:80px;height:40px;background:{home_color};border-radius:6px;text-align:center;padding-top:6px;">
-            <div style="color:#fff;font-weight:bold;font-size:14px;">{home_code}</div>
-            <div style="color:#fff;font-size:12px;">{home_score}</div>
-        </div>
-        <div style="position:absolute;right:calc(12% + 85px);bottom:calc(5% + 15px);width:16px;height:16px;background:{poss_home};border-radius:50%;"></div>
-        <!-- Clock -->
-        <div style="position:absolute;left:50%;bottom:8%;transform:translateX(-50%);color:#fff;font-size:16px;font-weight:bold;">{period_text} {clock}</div>
-    </div>
-    '''
-    return html
+    return f'''<svg viewBox="0 0 500 320" style="width:100%;max-width:500px;background:#1a1a2e;border-radius:12px;">
+        <rect x="20" y="20" width="460" height="240" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/>
+        <circle cx="250" cy="140" r="40" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="140" r="4" fill="#fff"/>
+        <line x1="250" y1="20" x2="250" y2="260" stroke="#fff" stroke-width="2"/>
+        <path d="M 20 60 Q 120 140 20 220" fill="none" stroke="#fff" stroke-width="2"/>
+        <rect x="20" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
+        <circle cx="100" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
+        <circle cx="40" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
+        <path d="M 480 60 Q 380 140 480 220" fill="none" stroke="#fff" stroke-width="2"/>
+        <rect x="400" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
+        <circle cx="400" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
+        <circle cx="460" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
+        <rect x="60" y="270" width="80" height="40" fill="{away_color}" rx="6"/>
+        <text x="100" y="290" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text>
+        <text x="100" y="305" fill="#fff" font-size="12" text-anchor="middle">{away_score}</text>
+        <circle cx="145" cy="290" r="8" fill="#ffd700" visibility="{poss_away}"/>
+        <rect x="360" y="270" width="80" height="40" fill="{home_color}" rx="6"/>
+        <text x="400" y="290" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text>
+        <text x="400" y="305" fill="#fff" font-size="12" text-anchor="middle">{home_score}</text>
+        <circle cx="355" cy="290" r="8" fill="#ffd700" visibility="{poss_home}"/>
+        <text x="250" y="295" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text>
+    </svg>'''
 
 def get_play_icon(play_type, score_value):
     play_lower = play_type.lower() if play_type else ""
@@ -548,8 +509,8 @@ if live_games:
         st.markdown(f"### {away} @ {home}")
         col1, col2 = st.columns([1, 1])
         with col1:
-            court_svg = render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock'], last_play, score_flash)
-            st.markdown(court_svg, unsafe_allow_html=True)
+            court_html = render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock'], last_play, score_flash)
+            components.html(court_html, height=340)
         with col2:
             st.markdown("**📋 LAST 10 PLAYS**")
             for p in reversed(plays):
