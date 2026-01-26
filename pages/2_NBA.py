@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "8.6"
+VERSION = "8.7"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -298,15 +298,15 @@ def render_nba_court(away, home, away_score, home_score, possession, period, clo
 <circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/>
 <circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
 <circle cx="465" cy="120" r="18" fill="#22c55e" opacity="{flash_home_opacity}"/>
-<rect x="50" y="230" width="70" height="35" fill="{away_color}" rx="5"/>
-<text x="85" y="250" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">{away_code}</text>
-<text x="85" y="262" fill="#fff" font-size="10" text-anchor="middle">{away_score}</text>
-<circle cx="125" cy="248" r="6" fill="#ffd700" visibility="{poss_away}"/>
-<rect x="380" y="230" width="70" height="35" fill="{home_color}" rx="5"/>
-<text x="415" y="250" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">{home_code}</text>
-<text x="415" y="262" fill="#fff" font-size="10" text-anchor="middle">{home_score}</text>
-<circle cx="375" cy="248" r="6" fill="#ffd700" visibility="{poss_home}"/>
-<text x="250" y="252" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{period_text} {clock}</text>
+<rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/>
+<text x="85" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text>
+<text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text>
+<circle cx="135" cy="252" r="8" fill="#ffd700" visibility="{poss_away}"/>
+<rect x="370" y="228" width="90" height="48" fill="{home_color}" rx="6"/>
+<text x="415" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text>
+<text x="415" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{home_score}</text>
+<circle cx="365" cy="252" r="8" fill="#ffd700" visibility="{poss_home}"/>
+<text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text>
 </svg>
 <div style="background:#0f172a;padding:8px;border-radius:6px;margin-top:5px;text-align:center;">
 <span style="color:{play_color};font-size:12px;">{play_text if play_text else "Waiting for play..."}</span>
