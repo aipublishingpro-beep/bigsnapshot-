@@ -835,38 +835,30 @@ if mispricings:
         status_text = f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "Scheduled"
         spread_text = f"Spread: {mp['vegas_spread']}" if mp['vegas_spread'] else ""
         
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #1a1a2e 0%, #0f172a 100%); border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 2px solid {edge_color};">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <span style="color: #fff; font-size: 1.2em; font-weight: 600;">{g['away']} @ {g['home']}</span>
-                    <span style="color: #888; margin-left: 12px;">{status_text}</span>
-                </div>
-                <span style="color: {edge_color}; font-weight: bold; font-size: 1.1em;">{edge_label}</span>
-            </div>
-            
-            <div style="margin-top: 12px; padding: 12px; background: #0f172a; border-radius: 8px;">
-                <div style="color: #fff; font-size: 1.3em; font-weight: bold; margin-bottom: 8px;">
-                    📈 BUY <span style="color: {edge_color};">{mp['team']}</span> on Kalshi
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 8px;">
-                    <div style="text-align: center;">
-                        <div style="color: #888; font-size: 0.8em;">Vegas ({mp['provider']})</div>
-                        <div style="color: #fff; font-size: 1.2em; font-weight: bold;">{mp['vegas_prob']:.0f}%</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <div style="color: #888; font-size: 0.8em;">Kalshi Price</div>
-                        <div style="color: #fff; font-size: 1.2em; font-weight: bold;">{mp['kalshi_prob']:.0f}¢</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <div style="color: #888; font-size: 0.8em;">MISPRICING</div>
-                        <div style="color: {edge_color}; font-size: 1.2em; font-weight: bold;">+{mp['gap']:.0f}%</div>
-                    </div>
-                </div>
-                <div style="color: #666; font-size: 0.85em; margin-top: 8px; text-align: center;">{spread_text}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # Use columns for cleaner display
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"**{g['away']} @ {g['home']}** • {status_text}")
+        with col2:
+            st.markdown(f"<span style='color:{edge_color};font-weight:bold'>{edge_label}</span>", unsafe_allow_html=True)
+        
+        # Main recommendation box
+        st.markdown(f"""<div style="background:#0f172a;padding:16px;border-radius:10px;border:2px solid {edge_color};margin-bottom:8px">
+<div style="color:#fff;font-size:1.3em;font-weight:bold;margin-bottom:12px">📈 BUY {mp['team']} on Kalshi</div>
+<table style="width:100%;text-align:center;color:#fff">
+<tr style="color:#888;font-size:0.85em">
+<td>Vegas ({mp['provider']})</td>
+<td>Kalshi Price</td>
+<td>MISPRICING</td>
+</tr>
+<tr style="font-size:1.3em;font-weight:bold">
+<td>{mp['vegas_prob']:.0f}%</td>
+<td>{mp['kalshi_prob']:.0f}¢</td>
+<td style="color:{edge_color}">+{mp['gap']:.0f}%</td>
+</tr>
+</table>
+<div style="color:#666;font-size:0.85em;margin-top:8px;text-align:center">{spread_text}</div>
+</div>""", unsafe_allow_html=True)
         
         bc1, bc2, bc3 = st.columns(3)
         with bc1:
