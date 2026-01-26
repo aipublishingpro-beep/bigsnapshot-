@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "8.3"
+VERSION = "8.4"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -640,20 +640,70 @@ with st.expander("➕ ADD NEW POSITION", expanded=False):
 
 if st.session_state.positions:
     st.markdown("---")
-    for pos in st.session_state.positions:
+    for idx, pos in enumerate(st.session_state.positions):
         current = next((g for g in games if f"{g['away']}@{g['home']}" == pos['game']), None)
-        pc1, pc2, pc3, pc4, pc5 = st.columns([2.5, 1.5, 1.5, 1.5, 1])
-        with pc1:
-            st.markdown(f"**{pos['game']}**")
-            if current:
-                if current['period'] > 0: st.caption(f"🔴 LIVE Q{current['period']} {current['clock']} | {current['away_score']}-{current['home_score']}")
-                elif current['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: st.caption(f"✅ FINAL {current['away_score']}-{current['home_score']}")
-                else: st.caption("⏳ Scheduled")
-        with pc2: st.write(f"🎯 {pos['pick']} {pos['type']}" if pos['type']=="ML" else f"📊 {pos['pick']} {pos['line']}")
-        with pc3: st.write(f"{pos.get('contracts',10)} @ {pos.get('price',50)}¢"); st.caption(f"${pos.get('price',50)*pos.get('contracts',10)/100:.2f}")
-        with pc4: st.link_button("🔗 Kalshi", pos['link'], use_container_width=True)
-        with pc5:
-            if st.button("🗑️", key=f"del_{pos['id']}"): remove_position(pos['id']); st.rerun()
+        
+        # Check if this position is being edited
+        edit_key = f"editing_{pos['id']}"
+        is_editing = st.session_state.get(edit_key, False)
+        
+        if is_editing:
+            # EDIT MODE
+            st.markdown(f"**✏️ Editing: {pos['game']}**")
+            ec1, ec2 = st.columns(2)
+            with ec1:
+                new_type = st.selectbox("Bet Type", ["ML", "Totals"], index=0 if pos['type']=="ML" else 1, key=f"edit_type_{pos['id']}")
+            with ec2:
+                if new_type == "ML":
+                    parts = pos['game'].split("@")
+                    new_pick = st.selectbox("Pick", [parts[0], parts[1]], index=[parts[0], parts[1]].index(pos['pick']) if pos['pick'] in parts else 0, key=f"edit_pick_{pos['id']}")
+                    new_line = "-"
+                else:
+                    new_pick = st.selectbox("Pick", ["YES", "NO"], index=0 if pos.get('pick','YES')=="YES" else 1, key=f"edit_pick_{pos['id']}")
+                    new_line = st.selectbox("Line", THRESHOLDS, index=THRESHOLDS.index(float(pos['line'])) if pos['line'] != "-" and float(pos['line']) in THRESHOLDS else 3, key=f"edit_line_{pos['id']}")
+            
+            ec3, ec4 = st.columns(2)
+            with ec3:
+                new_price = st.number_input("Entry Price (¢)", 1, 99, pos.get('price', 50), key=f"edit_price_{pos['id']}")
+            with ec4:
+                new_contracts = st.number_input("Contracts", 1, 10000, pos.get('contracts', 10), key=f"edit_contracts_{pos['id']}")
+            
+            ec5, ec6, ec7 = st.columns(3)
+            with ec5:
+                if st.button("💾 SAVE", key=f"save_{pos['id']}", use_container_width=True):
+                    st.session_state.positions[idx]['type'] = new_type
+                    st.session_state.positions[idx]['pick'] = new_pick
+                    st.session_state.positions[idx]['line'] = str(new_line) if new_type == "Totals" else "-"
+                    st.session_state.positions[idx]['price'] = new_price
+                    st.session_state.positions[idx]['contracts'] = new_contracts
+                    st.session_state[edit_key] = False
+                    st.rerun()
+            with ec6:
+                if st.button("❌ CANCEL", key=f"cancel_{pos['id']}", use_container_width=True):
+                    st.session_state[edit_key] = False
+                    st.rerun()
+            with ec7:
+                cost = new_price * new_contracts / 100
+                st.metric("Cost", f"${cost:.2f}")
+            st.markdown("---")
+        else:
+            # VIEW MODE
+            pc1, pc2, pc3, pc4, pc5, pc6 = st.columns([2.2, 1.3, 1.3, 1.2, 1, 1])
+            with pc1:
+                st.markdown(f"**{pos['game']}**")
+                if current:
+                    if current['period'] > 0: st.caption(f"🔴 LIVE Q{current['period']} {current['clock']} | {current['away_score']}-{current['home_score']}")
+                    elif current['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: st.caption(f"✅ FINAL {current['away_score']}-{current['home_score']}")
+                    else: st.caption("⏳ Scheduled")
+            with pc2: st.write(f"🎯 {pos['pick']} {pos['type']}" if pos['type']=="ML" else f"📊 {pos['pick']} {pos['line']}")
+            with pc3: st.write(f"{pos.get('contracts',10)} @ {pos.get('price',50)}¢"); st.caption(f"${pos.get('price',50)*pos.get('contracts',10)/100:.2f}")
+            with pc4: st.link_button("🔗 Kalshi", pos['link'], use_container_width=True)
+            with pc5:
+                if st.button("✏️", key=f"edit_{pos['id']}", help="Edit position"):
+                    st.session_state[edit_key] = True
+                    st.rerun()
+            with pc6:
+                if st.button("🗑️", key=f"del_{pos['id']}"): remove_position(pos['id']); st.rerun()
     
     st.markdown("---")
     if st.button("🗑️ CLEAR ALL POSITIONS", use_container_width=True, type="primary"):
