@@ -367,28 +367,28 @@ def calc_pregame_edge(away, home, injuries, b2b_teams):
     return pick, score
 
 # ============================================================
-# KALSHI LINKS
+# KALSHI LINKS (CORRECT FORMAT - UPPERCASE)
 # ============================================================
 def get_kalshi_ml_link(away, home):
-    away_code = KALSHI_CODES.get(away, "XXX").lower()
-    home_code = KALSHI_CODES.get(home, "XXX").lower()
-    date_str = datetime.now(eastern).strftime('%y%b%d').lower()
-    return f"https://kalshi.com/markets/kxnbagame/professional-basketball-game/kxnbagame-{date_str}{away_code}{home_code}"
+    away_code = KALSHI_CODES.get(away, "XXX").upper()
+    home_code = KALSHI_CODES.get(home, "XXX").upper()
+    date_str = datetime.now(eastern).strftime('%y%b%d').upper()
+    ticker = f"KXNBAGAME-{date_str}{away_code}{home_code}"
+    return f"https://kalshi.com/markets/KXNBAGAME/{ticker}"
 
 def get_kalshi_totals_link(away, home):
-    away_code = KALSHI_CODES.get(away, "XXX").lower()
-    home_code = KALSHI_CODES.get(home, "XXX").lower()
-    date_str = datetime.now(eastern).strftime('%y%b%d').lower()
-    return f"https://kalshi.com/markets/kxnbatotal/pro-basketball-total-points/kxnbatotal-{date_str}{away_code}{home_code}"
+    away_code = KALSHI_CODES.get(away, "XXX").upper()
+    home_code = KALSHI_CODES.get(home, "XXX").upper()
+    date_str = datetime.now(eastern).strftime('%y%b%d').upper()
+    ticker = f"KXNBATOTAL-{date_str}{away_code}{home_code}"
+    return f"https://kalshi.com/markets/KXNBATOTAL/{ticker}"
 
-def get_kalshi_spread_link(away, home, line=1.5):
-    away_code = KALSHI_CODES.get(away, "XXX").lower()
-    home_code = KALSHI_CODES.get(home, "XXX").lower()
-    date_str = datetime.now(eastern).strftime('%y%b%d').lower()
-    if line > 0:
-        return f"https://kalshi.com/markets/kxnbasprd/pro-basketball-spread/kxnbasprd-{date_str}{home_code}{away_code}ovr{abs(line)}"
-    else:
-        return f"https://kalshi.com/markets/kxnbasprd/pro-basketball-spread/kxnbasprd-{date_str}{away_code}{home_code}ovr{abs(line)}"
+def get_kalshi_spread_link(away, home):
+    away_code = KALSHI_CODES.get(away, "XXX").upper()
+    home_code = KALSHI_CODES.get(home, "XXX").upper()
+    date_str = datetime.now(eastern).strftime('%y%b%d').upper()
+    ticker = f"KXNBASPREAD-{date_str}{away_code}{home_code}"
+    return f"https://kalshi.com/markets/KXNBASPREAD/{ticker}"
 
 # ============================================================
 # POSITION TRACKER FUNCTIONS
@@ -568,18 +568,16 @@ if live_games:
         """, unsafe_allow_html=True)
         
         # Buttons row
-        bc1, bc2, bc3, bc4, bc5, bc6 = st.columns(6)
+        bc1, bc2, bc3, bc4, bc5 = st.columns(5)
         with bc1:
             st.link_button("🎯 ML", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
         with bc2:
-            st.link_button("+1.5", get_kalshi_spread_link(g['away'], g['home'], 1.5), use_container_width=True)
+            st.link_button("📊 SPREAD", get_kalshi_spread_link(g['away'], g['home']), use_container_width=True)
         with bc3:
-            st.link_button("-1.5", get_kalshi_spread_link(g['away'], g['home'], -1.5), use_container_width=True)
-        with bc4:
             st.link_button("⬇️ NO", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
-        with bc5:
+        with bc4:
             st.link_button("⬆️ YES", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
-        with bc6:
+        with bc5:
             if st.button("➕ Track", key=f"add_live_{game_key}"):
                 add_position(game_key, edge['pick'], "ML", get_kalshi_ml_link(g['away'], g['home']))
                 st.rerun()
@@ -716,13 +714,12 @@ if scheduled_games:
             </div>
             """, unsafe_allow_html=True)
             
-            cols = st.columns(6)
+            cols = st.columns(5)
             cols[0].link_button(f"🎯 {pick}", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
-            cols[1].link_button("+1.5", get_kalshi_spread_link(g['away'], g['home'], 1.5), use_container_width=True)
-            cols[2].link_button("-1.5", get_kalshi_spread_link(g['away'], g['home'], -1.5), use_container_width=True)
-            cols[3].link_button("Over", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
-            cols[4].link_button("Under", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
-            if cols[5].button("➕", key=f"add_pre_{game_key}"):
+            cols[1].link_button("📊 SPREAD", get_kalshi_spread_link(g['away'], g['home']), use_container_width=True)
+            cols[2].link_button("⬆️ Over", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
+            cols[3].link_button("⬇️ Under", get_kalshi_totals_link(g['away'], g['home']), use_container_width=True)
+            if cols[4].button("➕", key=f"add_pre_{game_key}"):
                 add_position(game_key, pick, "ML", get_kalshi_ml_link(g['away'], g['home']))
                 st.rerun()
 
