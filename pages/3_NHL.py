@@ -18,21 +18,10 @@ def send_ga4_event(page_title, page_path):
 send_ga4_event("NHL Edge Finder", "/NHL")
 
 # ============================================================
-# COOKIE AUTH CHECK
+# 🔐 AUTH CHECK (FREE SEASON - PASS-THROUGH)
 # ============================================================
-import extra_streamlit_components as stx
-
-cookie_manager = stx.CookieManager()
-
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-saved_auth = cookie_manager.get("authenticated")
-if saved_auth == "true":
-    st.session_state.authenticated = True
-
-if not st.session_state.authenticated:
-    st.switch_page("Home.py")
+from auth import require_auth
+require_auth()
 
 # ============================================================
 # IMPORTS
@@ -46,7 +35,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "18.4"
+VERSION = "18.5"
 
 # ============================================================
 # STRONG PICKS SYSTEM
