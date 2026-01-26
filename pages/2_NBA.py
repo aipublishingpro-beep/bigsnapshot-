@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "8.9"
+VERSION = "9.1"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -480,17 +480,56 @@ if live_games:
             pace_label, pace_color = get_pace_label(pace)
             lead = g['home_score'] - g['away_score']
             leader = home if g['home_score'] > g['away_score'] else away
+            kalshi_link = get_kalshi_game_link(away, home)
             
             st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> {total} pts in {mins} min • <b>Pace:</b> <span style='color:{pace_color}'>{pace_label}</span> ({pace:.1f}/min)<br><b>Projection:</b> {proj} pts • <b>Lead:</b> {leader} +{abs(lead)}</div>", unsafe_allow_html=True)
             
-            safe_no = next((t for t in sorted(THRESHOLDS, reverse=True) if t >= proj + 8), None)
-            safe_yes = next((t for t in sorted(THRESHOLDS) if t <= proj - 6), None)
+            # MONEYLINE RECOMMENDATION
+            away_code, home_code = KALSHI_CODES.get(away, "XXX"), KALSHI_CODES.get(home, "XXX")
+            kalshi_data = kalshi_ml.get(away_code + "@" + home_code, {})
+            
+            st.markdown("**🎯 MONEYLINE**")
+            if abs(lead) >= 10:
+                ml_pick = leader
+                ml_confidence = "🔥 STRONG" if abs(lead) >= 15 else "🟢 GOOD"
+                # Determine YES/NO for the leader
+                if kalshi_data:
+                    if leader == home:
+                        ml_action = "YES" if kalshi_data.get('yes_team_code', '').upper() == home_code.upper() else "NO"
+                    else:
+                        ml_action = "YES" if kalshi_data.get('yes_team_code', '').upper() == away_code.upper() else "NO"
+                    st.link_button(f"{ml_confidence} BUY {ml_action} ({ml_pick} ML) • Lead +{abs(lead)}", kalshi_link, use_container_width=True)
+                else:
+                    st.link_button(f"{ml_confidence} {ml_pick} ML • Lead +{abs(lead)}", kalshi_link, use_container_width=True)
+            else:
+                st.caption(f"⏳ Wait for larger lead (currently {leader} +{abs(lead)})")
+            
+            # TOTALS RECOMMENDATIONS - Multiple levels with cushion
+            st.markdown("**📊 TOTALS**")
+            
+            # Find YES opportunities (lines BELOW projection)
+            yes_lines = [(t, proj - t) for t in sorted(THRESHOLDS) if proj - t >= 6]
+            # Find NO opportunities (lines ABOVE projection)  
+            no_lines = [(t, t - proj) for t in sorted(THRESHOLDS, reverse=True) if t - proj >= 6]
             
             tc1, tc2 = st.columns(2)
-            if safe_no:
-                with tc1: st.link_button(f"🔴 BUY NO {safe_no}", get_kalshi_game_link(away, home), use_container_width=True)
-            if safe_yes:
-                with tc2: st.link_button(f"🟢 BUY YES {safe_yes}", get_kalshi_game_link(away, home), use_container_width=True)
+            with tc1:
+                st.markdown("<span style='color:#22c55e;font-weight:bold'>🟢 YES (Over)</span>", unsafe_allow_html=True)
+                if yes_lines:
+                    for line, cushion in yes_lines[:3]:  # Show top 3
+                        safety = "🔥" if cushion >= 15 else ("✅" if cushion >= 10 else "🟡")
+                        st.link_button(f"{safety} YES {line} (+{int(cushion)} cushion)", kalshi_link, use_container_width=True)
+                else:
+                    st.caption("No safe YES lines (need 6+ cushion)")
+            
+            with tc2:
+                st.markdown("<span style='color:#ef4444;font-weight:bold'>🔴 NO (Under)</span>", unsafe_allow_html=True)
+                if no_lines:
+                    for line, cushion in no_lines[:3]:  # Show top 3
+                        safety = "🔥" if cushion >= 15 else ("✅" if cushion >= 10 else "🟡")
+                        st.link_button(f"{safety} NO {line} (+{int(cushion)} cushion)", kalshi_link, use_container_width=True)
+                else:
+                    st.caption("No safe NO lines (need 6+ cushion)")
         else:
             st.caption("⏳ Waiting for 6+ minutes...")
         
@@ -542,14 +581,24 @@ for g in games:
 
 cushion_data.sort(key=lambda x: x['cushion'], reverse=True)
 if cushion_data:
-    for cd in cushion_data[:10]:
+    # Show more results if specific game selected
+    max_results = 20 if selected_game != "All Games" else 10
+    for cd in cushion_data[:max_results]:
         cc1, cc2, cc3, cc4 = st.columns([3, 1, 1, 2])
-        with cc1: st.markdown(f"**{cd['game']}** • {cd['status']}")
+        with cc1: 
+            st.markdown(f"**{cd['game']}** • {cd['status']}")
+            if cd['mins'] > 0:
+                st.caption(f"{cd['pace']} • {cd['mins']} min played")
         with cc2: st.write(f"Proj: {cd['proj']} | Line: {cd['line']}")
-        with cc3: st.markdown(f"<span style='color:#22c55e;font-weight:bold'>+{round(cd['cushion'])}</span>", unsafe_allow_html=True)
+        with cc3: 
+            cushion_color = "#22c55e" if cd['cushion'] >= 6 else ("#eab308" if cd['cushion'] >= 0 else "#ef4444")
+            st.markdown(f"<span style='color:{cushion_color};font-weight:bold'>{'+' if cd['cushion'] >= 0 else ''}{round(cd['cushion'])}</span>", unsafe_allow_html=True)
         with cc4: st.link_button(f"BUY {'NO' if 'NO' in side_choice else 'YES'} {cd['line']}", cd['link'], use_container_width=True)
 else:
-    st.info("No cushion opportunities found")
+    if selected_game != "All Games":
+        st.info(f"Select a side and see all lines for {selected_game}")
+    else:
+        st.info("No cushion opportunities found (need 6+ cushion)")
 
 st.divider()
 
