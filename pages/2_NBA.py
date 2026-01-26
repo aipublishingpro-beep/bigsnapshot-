@@ -308,9 +308,6 @@ def render_nba_court(away, home, away_score, home_score, possession, period, clo
 <circle cx="365" cy="252" r="8" fill="#ffd700" visibility="{poss_home}"/>
 <text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text>
 </svg>
-<div style="background:#0f172a;padding:8px;border-radius:6px;margin-top:5px;text-align:center;">
-<span style="color:{play_color};font-size:12px;">{play_text if play_text else "Waiting for play..."}</span>
-</div>
 </div>'''
     return svg
 
