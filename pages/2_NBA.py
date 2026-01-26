@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "8.4"
+VERSION = "8.5"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -228,44 +228,163 @@ def fetch_yesterday_teams():
 
 @st.cache_data(ttl=30)
 def fetch_plays(game_id):
-    if not game_id: return [], ""
+    if not game_id: return [], "", None
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={game_id}"
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
-        plays = [{"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0),
-            "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0),
-            "play_type": p.get("type", {}).get("text", "")} for p in data.get("plays", [])[-15:]]
+        plays = []
+        for p in data.get("plays", [])[-15:]:
+            play_data = {
+                "text": p.get("text", ""),
+                "period": p.get("period", {}).get("number", 0),
+                "clock": p.get("clock", {}).get("displayValue", ""),
+                "score_value": p.get("scoreValue", 0),
+                "play_type": p.get("type", {}).get("text", ""),
+                "team_id": p.get("team", {}).get("id", ""),
+                "scoring_play": p.get("scoringPlay", False)
+            }
+            plays.append(play_data)
         poss_team_id = data.get("situation", {}).get("possession", "")
-        return plays[-10:], poss_team_id
-    except: return [], ""
+        last_play = plays[-1] if plays else None
+        return plays[-10:], poss_team_id, last_play
+    except: return [], "", None
 
-def render_nba_court(away, home, away_score, home_score, possession, period, clock):
+def get_play_icon_text(play_type, score_value, text):
+    play_lower = play_type.lower() if play_type else ""
+    text_lower = text.lower() if text else ""
+    if score_value == 3 or "3pt" in text_lower:
+        return "🏀 3PT MADE", "#22c55e"
+    elif score_value == 2:
+        if "dunk" in text_lower:
+            return "🏀 DUNK", "#22c55e"
+        elif "layup" in text_lower:
+            return "🏀 LAYUP", "#22c55e"
+        return "🏀 2PT MADE", "#22c55e"
+    elif score_value == 1:
+        return "🏀 FREE THROW", "#22c55e"
+    elif "miss" in play_lower or "missed" in text_lower:
+        if "3pt" in text_lower:
+            return "❌ 3PT MISS", "#ef4444"
+        return "❌ MISSED", "#ef4444"
+    elif "block" in play_lower:
+        return "🚫 BLOCKED", "#f97316"
+    elif "rebound" in play_lower:
+        return "📥 REBOUND", "#3b82f6"
+    elif "turnover" in play_lower or "steal" in play_lower:
+        return "🔄 TURNOVER", "#f97316"
+    elif "foul" in play_lower:
+        return "🚨 FOUL", "#eab308"
+    elif "timeout" in play_lower:
+        return "⏸️ TIMEOUT", "#a855f7"
+    return "", "#888"
+
+def render_nba_court(away, home, away_score, home_score, possession, period, clock, last_play=None, score_flash=None):
     away_color, home_color = TEAM_COLORS.get(away, "#666"), TEAM_COLORS.get(home, "#666")
     away_code, home_code = KALSHI_CODES.get(away, "AWY"), KALSHI_CODES.get(home, "HME")
     poss_away = "visible" if possession == away else "hidden"
     poss_home = "visible" if possession == home else "hidden"
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
+    
+    # Determine arrow direction (points toward basket being attacked)
+    # Team with possession attacks OPPOSITE basket
+    # Away team bench is left, attacks right basket
+    # Home team bench is right, attacks left basket
+    if possession == away:
+        arrow_x1, arrow_x2 = 220, 280  # Arrow pointing right (away attacks right)
+        arrow_vis = "visible"
+    elif possession == home:
+        arrow_x1, arrow_x2 = 280, 220  # Arrow pointing left (home attacks left)
+        arrow_vis = "visible"
+    else:
+        arrow_x1, arrow_x2 = 250, 250
+        arrow_vis = "hidden"
+    
+    # Score flash animation
+    # Away team scores on RIGHT basket (home's basket)
+    # Home team scores on LEFT basket (away's basket)
+    left_flash = "visible" if score_flash == home else "hidden"
+    right_flash = "visible" if score_flash == away else "hidden"
+    
+    # Last play overlay text
+    play_text, play_color = "", "#888"
+    if last_play:
+        play_text, play_color = get_play_icon_text(
+            last_play.get("play_type", ""),
+            last_play.get("score_value", 0),
+            last_play.get("text", "")
+        )
+    
     return f'''<svg viewBox="0 0 500 320" style="width:100%;max-width:500px;background:#1a1a2e;border-radius:12px;">
+        <defs>
+            <filter id="glow">
+                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+        </defs>
+        <style>
+            @keyframes pulse {{
+                0%, 100% {{ opacity: 0; transform: scale(1); }}
+                50% {{ opacity: 1; transform: scale(1.5); }}
+            }}
+            @keyframes fadeSlide {{
+                0% {{ opacity: 0; transform: translateY(-10px); }}
+                20% {{ opacity: 1; transform: translateY(0); }}
+                80% {{ opacity: 1; transform: translateY(0); }}
+                100% {{ opacity: 0.7; transform: translateY(0); }}
+            }}
+            .score-flash {{ animation: pulse 1.5s ease-in-out; }}
+            .play-text {{ animation: fadeSlide 3s ease-in-out; }}
+        </style>
+        
+        <!-- Court base -->
         <rect x="20" y="20" width="460" height="240" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/>
-        <circle cx="250" cy="140" r="40" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="140" r="4" fill="#fff"/>
+        <circle cx="250" cy="140" r="40" fill="none" stroke="#fff" stroke-width="2"/>
+        <circle cx="250" cy="140" r="4" fill="#fff"/>
         <line x1="250" y1="20" x2="250" y2="260" stroke="#fff" stroke-width="2"/>
+        
+        <!-- Left side (Away team's basket - Home scores here) -->
         <path d="M 20 60 Q 120 140 20 220" fill="none" stroke="#fff" stroke-width="2"/>
         <rect x="20" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="100" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="40" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
+        
+        <!-- Left basket score flash (Home scores here) -->
+        <circle cx="40" cy="140" r="20" fill="#22c55e" opacity="0" visibility="{left_flash}" class="score-flash" filter="url(#glow)"/>
+        
+        <!-- Right side (Home team's basket - Away scores here) -->
         <path d="M 480 60 Q 380 140 480 220" fill="none" stroke="#fff" stroke-width="2"/>
         <rect x="400" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="400" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="460" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
+        
+        <!-- Right basket score flash (Away scores here) -->
+        <circle cx="460" cy="140" r="20" fill="#22c55e" opacity="0" visibility="{right_flash}" class="score-flash" filter="url(#glow)"/>
+        
+        <!-- Possession Arrow -->
+        <line x1="{arrow_x1}" y1="140" x2="{arrow_x2}" y2="140" stroke="#ffd700" stroke-width="4" visibility="{arrow_vis}" marker-end="url(#arrowhead)"/>
+        <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#ffd700"/>
+            </marker>
+        </defs>
+        
+        <!-- Last Play Overlay -->
+        <rect x="150" y="45" width="200" height="35" rx="8" fill="#000000aa" visibility="{'visible' if play_text else 'hidden'}" class="play-text"/>
+        <text x="250" y="68" fill="{play_color}" font-size="16" font-weight="bold" text-anchor="middle" visibility="{'visible' if play_text else 'hidden'}" class="play-text">{play_text}</text>
+        
+        <!-- Team boxes -->
         <rect x="60" y="270" width="80" height="40" fill="{away_color}" rx="6"/>
         <text x="100" y="290" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text>
         <text x="100" y="305" fill="#fff" font-size="12" text-anchor="middle">{away_score}</text>
         <circle cx="145" cy="290" r="8" fill="#ffd700" visibility="{poss_away}"/>
+        
         <rect x="360" y="270" width="80" height="40" fill="{home_color}" rx="6"/>
         <text x="400" y="290" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text>
         <text x="400" y="305" fill="#fff" font-size="12" text-anchor="middle">{home_score}</text>
         <circle cx="355" cy="290" r="8" fill="#ffd700" visibility="{poss_home}"/>
+        
+        <!-- Period/Clock -->
         <text x="250" y="295" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text>
     </svg>'''
 
@@ -335,6 +454,11 @@ final_games = [g for g in games if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_
 st.title("🏀 BIGSNAPSHOT NBA EDGE FINDER")
 st.caption(f"v{VERSION} • {now.strftime('%b %d, %Y %I:%M %p ET')} • Vegas vs Kalshi Mispricing Detector")
 
+# FREE BANNER
+st.markdown("""<div style="background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%); padding: 12px 20px; border-radius: 10px; margin-bottom: 16px; text-align: center;">
+<span style="color: white; font-size: 1.1em; font-weight: bold;">🎁 FREE for the 2025-26 Season! Building proof before paid launch.</span>
+</div>""", unsafe_allow_html=True)
+
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Today's Games", len(games))
 c2.metric("Live Now", len(live_games))
@@ -386,7 +510,6 @@ for g in games:
 mispricings.sort(key=lambda x: x['edge'], reverse=True)
 
 if mispricings:
-    # ADD ALL BUTTON
     mp_col1, mp_col2 = st.columns([3, 1])
     with mp_col1:
         st.success(f"🔥 {len(mispricings)} mispricing opportunities found!")
@@ -445,12 +568,29 @@ st.subheader("🎮 LIVE EDGE MONITOR")
 if live_games:
     for g in live_games:
         away, home, total, mins, game_id = g['away'], g['home'], g['total_score'], g['minutes_played'], g['game_id']
-        plays, poss_team_id = fetch_plays(game_id)
-        possession = next((tn for tn, c in KALSHI_CODES.items() if c.lower() in str(poss_team_id).lower()), "")
+        plays, poss_team_id, last_play = fetch_plays(game_id)
+        
+        # Determine possession team name
+        possession = ""
+        for tn, c in KALSHI_CODES.items():
+            if c.lower() in str(poss_team_id).lower():
+                possession = tn
+                break
+        
+        # Determine if last play was a score and which team scored
+        score_flash = None
+        if last_play and last_play.get("score_value", 0) > 0:
+            # Find which team scored from play data
+            scoring_team_id = last_play.get("team_id", "")
+            for tn, c in KALSHI_CODES.items():
+                if c.lower() in str(scoring_team_id).lower():
+                    score_flash = tn
+                    break
         
         st.markdown(f"### {away} @ {home}")
         col1, col2 = st.columns([1, 1])
-        with col1: st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock']), unsafe_allow_html=True)
+        with col1:
+            st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock'], last_play, score_flash), unsafe_allow_html=True)
         with col2:
             st.markdown("**📋 LAST 10 PLAYS**")
             for p in reversed(plays):
@@ -643,12 +783,10 @@ if st.session_state.positions:
     for idx, pos in enumerate(st.session_state.positions):
         current = next((g for g in games if f"{g['away']}@{g['home']}" == pos['game']), None)
         
-        # Check if this position is being edited
         edit_key = f"editing_{pos['id']}"
         is_editing = st.session_state.get(edit_key, False)
         
         if is_editing:
-            # EDIT MODE
             st.markdown(f"**✏️ Editing: {pos['game']}**")
             ec1, ec2 = st.columns(2)
             with ec1:
@@ -687,7 +825,6 @@ if st.session_state.positions:
                 st.metric("Cost", f"${cost:.2f}")
             st.markdown("---")
         else:
-            # VIEW MODE
             pc1, pc2, pc3, pc4, pc5, pc6 = st.columns([2.2, 1.3, 1.3, 1.2, 1, 1])
             with pc1:
                 st.markdown(f"**{pos['game']}**")
@@ -821,6 +958,14 @@ This app finds **mispricings** between Vegas odds and Kalshi prediction markets.
 3. **Q2+ data is more reliable** — early Q1 is volatile
 4. **B2B (back-to-back) matters** — tired teams underperform
 5. **Check injuries before betting** — one star out = huge swing
+
+---
+
+### 🆕 COURT FEATURES (v8.5)
+
+1. **Shot Flash** — Green pulse at basket when a team scores
+2. **Possession Arrow** — Yellow arrow shows direction of attack
+3. **Last Play Overlay** — Shows "🏀 3PT MADE" or "❌ MISSED" on court
 
 ---
 
