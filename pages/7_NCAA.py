@@ -27,14 +27,13 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.2"
-LEAGUE_AVG_TOTAL = 145  # NCAA average
+VERSION = "10.3"
+LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
 if 'positions' not in st.session_state:
     st.session_state.positions = []
 
-# NCAA uses various abbreviations - common ones
 TEAM_COLORS = {
     "DUKE": "#003087", "UNC": "#7BAFD4", "KANSAS": "#0051BA", "KENTUCKY": "#0033A0",
     "UCLA": "#2D68C4", "GONZ": "#002967", "ARIZ": "#CC0033", "PURDUE": "#CEB888",
@@ -47,7 +46,6 @@ TEAM_COLORS = {
     "OKLA": "#841617", "TEXTECH": "#CC0000", "TCU": "#4D1979", "OKST": "#FF7300",
 }
 
-# Power conferences for edge calculation
 POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC", "Big East"}
 HIGH_MAJOR = {"American Athletic", "Mountain West", "Atlantic 10", "West Coast", "Missouri Valley"}
 
@@ -98,7 +96,6 @@ def fetch_espn_games():
             clock = event.get("status", {}).get("displayClock", "")
             game_id = event.get("id", "")
             
-            # Calculate minutes played (NCAA = 20 min halves)
             minutes_played = 0
             if period > 0:
                 if period <= 2:
@@ -117,7 +114,6 @@ def fetch_espn_games():
                     else:
                         minutes_played = completed_halves
                 else:
-                    # Overtime (5 min periods)
                     minutes_played = 40 + (period - 2) * 5
             
             odds_data = comp.get("odds", [])
@@ -128,7 +124,6 @@ def fetch_espn_games():
                     "homeML": odds.get("homeTeamOdds", {}).get("moneyLine"),
                     "awayML": odds.get("awayTeamOdds", {}).get("moneyLine")}
             
-            # Get game date and time
             game_date = event.get("date", "")
             game_time_str = ""
             game_datetime_str = ""
@@ -137,7 +132,7 @@ def fetch_espn_games():
                     game_dt = datetime.fromisoformat(game_date.replace("Z", "+00:00"))
                     game_dt_eastern = game_dt.astimezone(eastern)
                     game_time_str = game_dt_eastern.strftime("%I:%M %p ET")
-                    game_datetime_str = game_dt_eastern.strftime("%b %d, %I:%M %p ET")  # "Jan 26, 07:00 PM ET"
+                    game_datetime_str = game_dt_eastern.strftime("%b %d, %I:%M %p ET")
                 except:
                     game_time_str = ""
                     game_datetime_str = ""
@@ -172,10 +167,7 @@ def fetch_kalshi_ml():
             if "KXNCAAMBGAME-" not in ticker: continue
             yes_bid, yes_ask = m.get("yes_bid", 0) or 0, m.get("yes_ask", 0) or 0
             yes_price = yes_ask if yes_ask > 0 else (yes_bid if yes_bid > 0 else 50)
-            markets[ticker] = {
-                "ticker": ticker, "yes_bid": yes_bid, "yes_ask": yes_ask,
-                "yes_price": yes_price
-            }
+            markets[ticker] = {"ticker": ticker, "yes_bid": yes_bid, "yes_ask": yes_ask, "yes_price": yes_price}
         return markets
     except Exception as e:
         st.error("Kalshi ML fetch error: " + str(e))
@@ -214,7 +206,6 @@ def fetch_plays(game_id):
         return [], ""
 
 def render_ncaa_court(away_abbrev, home_abbrev, away_score, home_score, possession, period, clock):
-    """Render NCAA court SVG"""
     away_color = TEAM_COLORS.get(away_abbrev, "#666666")
     home_color = TEAM_COLORS.get(home_abbrev, "#666666")
     poss_away = "visible" if possession == away_abbrev else "hidden"
@@ -266,7 +257,6 @@ def get_kalshi_game_link(away_abbrev, home_abbrev):
     return f"https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game/{ticker.lower()}"
 
 def calc_projection(total_score, minutes_played):
-    """NCAA uses 40 minute games"""
     if minutes_played >= 5:
         pace = total_score / minutes_played
         weight = min(1.0, (minutes_played - 5) / 15)
@@ -275,7 +265,6 @@ def calc_projection(total_score, minutes_played):
     return LEAGUE_AVG_TOTAL
 
 def get_pace_label(pace):
-    # NCAA pace thresholds (lower than NBA)
     if pace < 3.2: return "🐢 SLOW", "#22c55e"
     elif pace < 3.5: return "⚖️ AVG", "#eab308"
     elif pace < 3.8: return "🔥 FAST", "#f97316"
@@ -288,24 +277,18 @@ def get_conference_tier(conf_name):
     return 3
 
 def calc_pregame_edge(g, b2b_teams):
-    """Calculate pregame edge for NCAA"""
     away_abbrev, home_abbrev = g['away_abbrev'], g['home_abbrev']
     away_conf, home_conf = g.get('away_conf', ''), g.get('home_conf', '')
     away_record, home_record = g.get('away_record', ''), g.get('home_record', '')
     
-    # Start at 50 (neutral)
     score = 50
-    
-    # Home court advantage (+3)
     score += 3
     
-    # Conference tier comparison
     home_tier = get_conference_tier(home_conf)
     away_tier = get_conference_tier(away_conf)
     if home_tier < away_tier: score += 5
     elif away_tier < home_tier: score -= 5
     
-    # Record comparison
     try:
         h_wins, h_losses = map(int, home_record.split("-")[:2]) if home_record else (0, 0)
         a_wins, a_losses = map(int, away_record.split("-")[:2]) if away_record else (0, 0)
@@ -314,7 +297,6 @@ def calc_pregame_edge(g, b2b_teams):
         score += (h_pct - a_pct) * 20
     except: pass
     
-    # B2B fatigue
     if away_abbrev in b2b_teams: score += 4
     if home_abbrev in b2b_teams: score -= 4
     
@@ -373,7 +355,6 @@ for g in games:
         except: continue
     else: continue
     
-    # Use pregame edge as proxy for Kalshi pricing
     edge_score = calc_pregame_edge(g, b2b_teams)
     kalshi_home_prob = edge_score
     kalshi_away_prob = 100 - edge_score
@@ -413,7 +394,7 @@ if mispricings:
             st.toast(f"✅ Added {added} positions!")
             st.rerun()
     
-    for mp in mispricings[:10]:  # Show top 10
+    for mp in mispricings[:10]:
         g = mp['game']
         game_key = f"{g['away_abbrev']}@{g['home_abbrev']}"
         edge_color = "#ff6b6b" if mp['edge'] >= 10 else ("#22c55e" if mp['edge'] >= 7 else "#eab308")
@@ -478,7 +459,6 @@ if live_games:
             else:
                 st.caption("Waiting for plays...")
         
-        # Projection stats (only shown after 5 minutes for NCAA)
         if mins >= 5:
             proj = calc_projection(total, mins)
             pace = total / mins if mins > 0 else 0
@@ -489,16 +469,14 @@ if live_games:
             
             st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> {total} pts in {mins} min • <b>Pace:</b> <span style='color:{pace_color}'>{pace_label}</span> ({pace:.1f}/min)<br><b>Projection:</b> {proj} pts • <b>Lead:</b> {leader} +{abs(lead)}</div>", unsafe_allow_html=True)
             
-            # MONEYLINE RECOMMENDATION
             st.markdown("**🎯 MONEYLINE**")
-            if abs(lead) >= 8:  # NCAA uses lower threshold
+            if abs(lead) >= 8:
                 ml_pick = leader
                 ml_confidence = "🔥 STRONG" if abs(lead) >= 12 else "🟢 GOOD"
                 st.link_button(f"{ml_confidence} BUY YES ({ml_pick} ML) • Lead +{abs(lead)}", kalshi_link, use_container_width=True)
             else:
                 st.caption(f"⏳ Wait for larger lead (currently {leader} +{abs(lead)})")
             
-            # TOTALS RECOMMENDATIONS
             st.markdown("**📊 TOTALS**")
             
             yes_lines = [(t, proj - t) for t in sorted(THRESHOLDS) if proj - t >= 6]
@@ -616,7 +594,7 @@ else:
 st.divider()
 
 # ============================================================
-# PRE-GAME ALIGNMENT
+# PRE-GAME ALIGNMENT (FIXED)
 # ============================================================
 with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
     st.caption("Model prediction for scheduled games • Click ➕ to add to tracker")
@@ -650,18 +628,25 @@ with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
                     st.rerun()
             st.markdown("---")
         
-        for p in all_picks[:20]:  # Show first 20
+        for p in all_picks[:20]:
             pg1, pg2, pg3, pg4 = st.columns([2.5, 1, 2, 1])
             game_datetime = next((g.get('game_datetime', '') for g in scheduled_games if g['away_abbrev'] == p['away_abbrev'] and g['home_abbrev'] == p['home_abbrev']), '')
-            with pg1: st.markdown(f"**{p['away_abbrev']} @ {p['home_abbrev']}**"); st.caption(game_datetime) if game_datetime else None
-            with pg2: st.markdown(f"<span style='color:{p['edge_color']}'>{p['edge_label']}</span>", unsafe_allow_html=True)
+            with pg1:
+                st.markdown(f"**{p['away_abbrev']} @ {p['home_abbrev']}**")
+                if game_datetime:
+                    st.caption(game_datetime)
+            with pg2:
+                st.markdown(f"<span style='color:{p['edge_color']}'>{p['edge_label']}</span>", unsafe_allow_html=True)
             with pg3:
-                if p['pick'] != "WAIT": st.link_button(f"🎯 {p['pick']} ML", get_kalshi_game_link(p['away_abbrev'], p['home_abbrev']), use_container_width=True)
-                else: st.caption("Wait for better edge")
+                if p['pick'] != "WAIT":
+                    st.link_button(f"🎯 {p['pick']} ML", get_kalshi_game_link(p['away_abbrev'], p['home_abbrev']), use_container_width=True)
+                else:
+                    st.caption("Wait for better edge")
             with pg4:
                 if p['pick'] != "WAIT":
                     game_key = f"{p['away_abbrev']}@{p['home_abbrev']}"
-                    if any(pos['game'] == game_key for pos in st.session_state.positions): st.caption("✅ Tracked")
+                    if any(pos['game'] == game_key for pos in st.session_state.positions):
+                        st.caption("✅ Tracked")
                     elif st.button("➕", key=f"quick_{p['away_abbrev']}_{p['home_abbrev']}"):
                         st.session_state.positions.append({"game": game_key, "pick": p['pick'], "type": "ML", "line": "-",
                             "price": 50, "contracts": 10, "link": get_kalshi_game_link(p['away_abbrev'], p['home_abbrev']), "id": str(uuid.uuid4())[:8]})
@@ -706,12 +691,12 @@ with st.expander("➕ ADD NEW POSITION", expanded=False):
                     "pick": pick if "ML" in bet_type else pick.split()[0], "type": "ML" if "ML" in bet_type else "Totals",
                     "line": "-" if "ML" in bet_type else str(line), "price": entry_price, "contracts": contracts,
                     "link": get_kalshi_game_link(sel_game[1], sel_game[2]), "id": str(uuid.uuid4())[:8]})
-                st.success("Added!"); st.rerun()
+                st.success("Added!")
+                st.rerun()
 
 if st.session_state.positions:
     st.markdown("---")
     for idx, pos in enumerate(st.session_state.positions):
-        # Find current game data
         current = next((g for g in games if f"{g['away_abbrev']}@{g['home_abbrev']}" == pos['game']), None)
         
         edit_key = f"editing_{pos['id']}"
@@ -763,21 +748,30 @@ if st.session_state.positions:
                     if current['period'] > 0:
                         period_label = f"H{current['period']}" if current['period'] <= 2 else f"OT{current['period']-2}"
                         st.caption(f"🔴 LIVE {period_label} {current['clock']} | {current['away_score']}-{current['home_score']}")
-                    elif current['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: st.caption(f"✅ FINAL {current['away_score']}-{current['home_score']}")
-                    else: st.caption("⏳ Scheduled")
-            with pc2: st.write(f"🎯 {pos['pick']} {pos['type']}" if pos['type']=="ML" else f"📊 {pos['pick']} {pos['line']}")
-            with pc3: st.write(f"{pos.get('contracts',10)} @ {pos.get('price',50)}¢"); st.caption(f"${pos.get('price',50)*pos.get('contracts',10)/100:.2f}")
-            with pc4: st.link_button("🔗 Kalshi", pos['link'], use_container_width=True)
+                    elif current['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']:
+                        st.caption(f"✅ FINAL {current['away_score']}-{current['home_score']}")
+                    else:
+                        st.caption("⏳ Scheduled")
+            with pc2:
+                st.write(f"🎯 {pos['pick']} {pos['type']}" if pos['type']=="ML" else f"📊 {pos['pick']} {pos['line']}")
+            with pc3:
+                st.write(f"{pos.get('contracts',10)} @ {pos.get('price',50)}¢")
+                st.caption(f"${pos.get('price',50)*pos.get('contracts',10)/100:.2f}")
+            with pc4:
+                st.link_button("🔗 Kalshi", pos['link'], use_container_width=True)
             with pc5:
                 if st.button("✏️", key=f"edit_{pos['id']}", help="Edit position"):
                     st.session_state[edit_key] = True
                     st.rerun()
             with pc6:
-                if st.button("🗑️", key=f"del_{pos['id']}"): remove_position(pos['id']); st.rerun()
+                if st.button("🗑️", key=f"del_{pos['id']}"):
+                    remove_position(pos['id'])
+                    st.rerun()
     
     st.markdown("---")
     if st.button("🗑️ CLEAR ALL POSITIONS", use_container_width=True, type="primary"):
-        st.session_state.positions = []; st.rerun()
+        st.session_state.positions = []
+        st.rerun()
 else:
     st.caption("No positions tracked yet. Use ➕ ADD ALL buttons above or add manually.")
 
@@ -787,7 +781,7 @@ st.divider()
 # ALL GAMES TODAY
 # ============================================================
 st.subheader("📋 ALL GAMES TODAY")
-for g in games[:30]:  # Show first 30
+for g in games[:30]:
     if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']:
         status, color = f"FINAL: {g['away_score']}-{g['home_score']}", "#666"
     elif g['period'] > 0:
