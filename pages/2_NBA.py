@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "8.7"
+VERSION = "8.9"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -240,47 +240,13 @@ def fetch_plays(game_id):
         return plays[-10:], poss_team_id
     except: return [], ""
 
-def render_nba_court(away, home, away_score, home_score, possession, period, clock, last_play=None):
+def render_nba_court(away, home, away_score, home_score, possession, period, clock):
+    """Render NBA court SVG - NO last play text, just the court with scores and possession"""
     away_color, home_color = TEAM_COLORS.get(away, "#666"), TEAM_COLORS.get(home, "#666")
     away_code, home_code = KALSHI_CODES.get(away, "AWY"), KALSHI_CODES.get(home, "HME")
     poss_away = "visible" if possession == away else "hidden"
     poss_home = "visible" if possession == home else "hidden"
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
-    
-    # Possession arrow direction
-    if possession == away:
-        arrow_x, arrow_dir = 430, "➡"
-    elif possession == home:
-        arrow_x, arrow_dir = 70, "⬅"
-    else:
-        arrow_x, arrow_dir = 250, ""
-    
-    # Score flash and last play indicator
-    flash_away_opacity = "0"
-    flash_home_opacity = "0"
-    play_text = ""
-    play_color = "#888"
-    
-    if last_play:
-        play_text = last_play.get('text', '')[:45]
-        score_val = last_play.get('score_value', 0)
-        play_type = (last_play.get('play_type', '') or '').lower()
-        
-        if score_val > 0 or 'made' in play_type:
-            play_color = "#22c55e"
-            # Away team scores on home's basket (right side)
-            if any(x in play_text.lower() for x in [away.lower(), away_code.lower()]):
-                flash_home_opacity = "0.8"
-            else:
-                flash_away_opacity = "0.8"
-        elif 'miss' in play_type or 'block' in play_type:
-            play_color = "#ef4444"
-        elif 'rebound' in play_type:
-            play_color = "#3b82f6"
-        elif 'turnover' in play_type or 'steal' in play_type:
-            play_color = "#f97316"
-        elif 'foul' in play_type:
-            play_color = "#eab308"
     
     svg = f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;">
 <svg viewBox="0 0 500 280" style="width:100%;max-width:500px;">
@@ -292,12 +258,10 @@ def render_nba_court(away, home, away_score, home_score, possession, period, clo
 <rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/>
 <circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/>
 <circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
-<circle cx="35" cy="120" r="18" fill="#22c55e" opacity="{flash_away_opacity}"/>
 <path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/>
 <rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/>
 <circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/>
 <circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
-<circle cx="465" cy="120" r="18" fill="#22c55e" opacity="{flash_home_opacity}"/>
 <rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/>
 <text x="85" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text>
 <text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text>
@@ -428,7 +392,6 @@ for g in games:
 mispricings.sort(key=lambda x: x['edge'], reverse=True)
 
 if mispricings:
-    # ADD ALL BUTTON
     mp_col1, mp_col2 = st.columns([3, 1])
     with mp_col1:
         st.success(f"🔥 {len(mispricings)} mispricing opportunities found!")
@@ -490,32 +453,47 @@ if live_games:
         plays, poss_team_id = fetch_plays(game_id)
         possession = next((tn for tn, c in KALSHI_CODES.items() if c.lower() in str(poss_team_id).lower()), "")
         
-        # Get last play for court visualization
-        last_play = plays[-1] if plays else None
-        
         st.markdown(f"### {away} @ {home}")
-        col1, col2 = st.columns([1, 1])
-        with col1: st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock'], last_play), unsafe_allow_html=True)
-        with col2:
-            st.markdown("**📋 LAST 10 PLAYS**")
-            for p in reversed(plays):
-                icon, color = get_play_icon(p['play_type'], p['score_value'])
-                st.markdown(f"<div style='padding:4px 8px;margin:2px 0;background:#1e1e2e;border-radius:4px;border-left:3px solid {color}'><span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {p['text'][:60]}</div>", unsafe_allow_html=True)
-            if not plays: st.caption("Waiting for plays...")
         
+        # Two columns: Court | Play-by-play
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            # Court visualization only - no last play text here
+            st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock']), unsafe_allow_html=True)
+        
+        with col2:
+            # Play-by-play feed - THIS is the only place plays are shown
+            st.markdown("**📋 LAST 10 PLAYS**")
+            if plays:
+                for p in reversed(plays):
+                    icon, color = get_play_icon(p['play_type'], p['score_value'])
+                    play_text = p['text'][:60] if p['text'] else "Play"
+                    st.markdown(f"<div style='padding:4px 8px;margin:2px 0;background:#1e1e2e;border-radius:4px;border-left:3px solid {color}'><span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
+            else:
+                st.caption("Waiting for plays...")
+        
+        # Projection stats (only shown after 6 minutes)
         if mins >= 6:
-            proj, pace = calc_projection(total, mins), total / mins if mins > 0 else 0
+            proj = calc_projection(total, mins)
+            pace = total / mins if mins > 0 else 0
             pace_label, pace_color = get_pace_label(pace)
-            lead, leader = g['home_score'] - g['away_score'], home if g['home_score'] > g['away_score'] else away
+            lead = g['home_score'] - g['away_score']
+            leader = home if g['home_score'] > g['away_score'] else away
+            
             st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> {total} pts in {mins} min • <b>Pace:</b> <span style='color:{pace_color}'>{pace_label}</span> ({pace:.1f}/min)<br><b>Projection:</b> {proj} pts • <b>Lead:</b> {leader} +{abs(lead)}</div>", unsafe_allow_html=True)
+            
             safe_no = next((t for t in sorted(THRESHOLDS, reverse=True) if t >= proj + 8), None)
             safe_yes = next((t for t in sorted(THRESHOLDS) if t <= proj - 6), None)
+            
             tc1, tc2 = st.columns(2)
             if safe_no:
                 with tc1: st.link_button(f"🔴 BUY NO {safe_no}", get_kalshi_game_link(away, home), use_container_width=True)
             if safe_yes:
                 with tc2: st.link_button(f"🟢 BUY YES {safe_yes}", get_kalshi_game_link(away, home), use_container_width=True)
-        else: st.caption("⏳ Waiting for 6+ minutes...")
+        else:
+            st.caption("⏳ Waiting for 6+ minutes...")
+        
         st.divider()
 else:
     st.info("No live games right now")
@@ -688,12 +666,10 @@ if st.session_state.positions:
     for idx, pos in enumerate(st.session_state.positions):
         current = next((g for g in games if f"{g['away']}@{g['home']}" == pos['game']), None)
         
-        # Check if this position is being edited
         edit_key = f"editing_{pos['id']}"
         is_editing = st.session_state.get(edit_key, False)
         
         if is_editing:
-            # EDIT MODE
             st.markdown(f"**✏️ Editing: {pos['game']}**")
             ec1, ec2 = st.columns(2)
             with ec1:
@@ -732,7 +708,6 @@ if st.session_state.positions:
                 st.metric("Cost", f"${cost:.2f}")
             st.markdown("---")
         else:
-            # VIEW MODE
             pc1, pc2, pc3, pc4, pc5, pc6 = st.columns([2.2, 1.3, 1.3, 1.2, 1, 1])
             with pc1:
                 st.markdown(f"**{pos['game']}**")
