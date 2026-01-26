@@ -31,6 +31,9 @@ with col4:
     if st.button("📊 Economics", use_container_width=True):
         st.switch_page("pages/9_Economics.py")
 
+st.markdown("### 🚧 Coming Soon")
+st.markdown("⚾ **MLB**")
+
 st.markdown("---")
 st.markdown("📧 **Comments or suggestions?** aipublishingpro@gmail.com")
 st.caption("⚠️ For educational and entertainment purposes only. This is not financial advice. We are not responsible for any betting or trading decisions you make.")
