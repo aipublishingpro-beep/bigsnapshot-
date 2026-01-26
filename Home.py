@@ -36,5 +36,5 @@ st.markdown("⚾ **MLB**")
 
 st.markdown("---")
 st.markdown("📧 **Comments or suggestions?** aipublishingpro@gmail.com")
-st.caption("⚠️ For educational and entertainment purposes only. This is not financial advice. We are not responsible for any betting or trading decisions you make.")
+st.caption("⚠️ For educational and entertainment purposes only. This is not financial advice. We are not responsible for any betting or trading decisions you make. We reserve the right to change to a paid subscription model at any time.")
 st.caption("© 2026 BigSnapshot. All rights reserved.")
