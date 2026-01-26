@@ -834,6 +834,55 @@ c2.metric("Live Now", len(live_games))
 c3.metric("Scheduled", len(scheduled_games))
 c4.metric("Final", len(final_games))
 
+# ============================================================
+# 🔍 DEBUG: RAW DATA VERIFICATION (ALWAYS VISIBLE)
+# ============================================================
+with st.expander("🔍 DEBUG: Click to verify raw API data", expanded=False):
+    st.warning("Use this to cross-check against Kalshi website!")
+    
+    for g in games:
+        if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']:
+            continue
+            
+        away, home = g['away'], g['home']
+        away_code = KALSHI_CODES.get(away, "XXX")
+        home_code = KALSHI_CODES.get(home, "XXX")
+        kalshi_key = f"{away_code}@{home_code}"
+        kalshi_data = kalshi_ml.get(kalshi_key, {})
+        vegas = g.get('vegas_odds', {})
+        
+        st.markdown(f"### {away} @ {home}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**ESPN/Vegas Raw:**")
+            st.code(f"""Spread: {vegas.get('spread')}
+Home ML: {vegas.get('homeML')}
+Away ML: {vegas.get('awayML')}
+Provider: {vegas.get('provider')}""")
+            
+            if vegas.get('homeML') and vegas.get('awayML'):
+                home_imp = american_to_implied_prob(vegas['homeML']) * 100
+                away_imp = american_to_implied_prob(vegas['awayML']) * 100
+                total = home_imp + away_imp
+                home_imp_norm = (home_imp / total) * 100
+                away_imp_norm = (away_imp / total) * 100
+                st.success(f"Vegas: {home} = {home_imp_norm:.1f}% | {away} = {away_imp_norm:.1f}%")
+        
+        with col2:
+            st.markdown("**Kalshi Raw:**")
+            st.code(f"""Ticker: {kalshi_data.get('ticker', 'NOT FOUND')}
+Subtitle: {kalshi_data.get('subtitle', 'N/A')}
+YES bid: {kalshi_data.get('yes_bid')}¢
+YES ask: {kalshi_data.get('yes_ask')}¢
+NO bid: {kalshi_data.get('no_bid')}¢
+Last: {kalshi_data.get('last_price')}¢""")
+            
+            if kalshi_data.get('away_implied'):
+                st.success(f"Kalshi: {home} (NO) = {kalshi_data.get('home_implied'):.1f}% | {away} (YES) = {kalshi_data.get('away_implied'):.1f}%")
+        
+        st.divider()
+
 st.divider()
 
 # ============================================================
@@ -848,39 +897,39 @@ for g in games:
         continue
     edge = calc_live_edge_with_vegas(g, injuries, b2b_teams, kalshi_ml)
     
-    # Check for significant mispricings
-    if edge['kalshi_home_implied'] and edge['vegas_home_implied']:
-        home_gap = abs(edge['vegas_home_implied'] - edge['kalshi_home_implied'])
-        away_gap = abs(edge['vegas_away_implied'] - edge['kalshi_away_implied'])
+    # Only show mispricings where we have BOTH Vegas and Kalshi data
+    if edge['kalshi_home_implied'] is None or edge['vegas_home_implied'] is None:
+        continue
+    
+    # Check for significant mispricings (Vegas vs Kalshi gap)
+    # Edge = Vegas implied - Kalshi implied
+    # Positive = Kalshi underpricing that team
+    home_gap = edge['vegas_edge_home'] if edge['vegas_edge_home'] else 0
+    away_gap = edge['vegas_edge_away'] if edge['vegas_edge_away'] else 0
+    
+    # Find the better mispricing
+    if home_gap >= 5 or away_gap >= 5:
+        if home_gap >= away_gap:
+            mispriced_team = g['home']
+            vegas_prob = edge['vegas_home_implied']
+            kalshi_prob = edge['kalshi_home_implied']
+            gap = home_gap
+        else:
+            mispriced_team = g['away']
+            vegas_prob = edge['vegas_away_implied']
+            kalshi_prob = edge['kalshi_away_implied']
+            gap = away_gap
         
-        if home_gap >= 5 or away_gap >= 5:
-            # Determine which side is mispriced
-            if edge['vegas_home_implied'] > edge['kalshi_home_implied']:
-                # Vegas thinks home is more likely, Kalshi underpricing home
-                mispriced_team = g['home']
-                mispriced_side = "HOME"
-                vegas_prob = edge['vegas_home_implied']
-                kalshi_prob = edge['kalshi_home_implied']
-                gap = vegas_prob - kalshi_prob
-            else:
-                # Vegas thinks away is more likely, Kalshi underpricing away
-                mispriced_team = g['away']
-                mispriced_side = "AWAY"
-                vegas_prob = edge['vegas_away_implied']
-                kalshi_prob = edge['kalshi_away_implied']
-                gap = vegas_prob - kalshi_prob
-            
-            if gap >= 5:
-                mispricings.append({
-                    'game': g,
-                    'team': mispriced_team,
-                    'side': mispriced_side,
-                    'vegas_prob': vegas_prob,
-                    'kalshi_prob': kalshi_prob,
-                    'gap': gap,
-                    'vegas_spread': edge['vegas_spread'],
-                    'provider': edge['vegas_provider']
-                })
+        mispricings.append({
+            'game': g,
+            'team': mispriced_team,
+            'vegas_prob': vegas_prob,
+            'kalshi_prob': kalshi_prob,
+            'gap': gap,
+            'vegas_spread': edge['vegas_spread'],
+            'provider': edge['vegas_provider'],
+            'kalshi_subtitle': edge.get('kalshi_subtitle', '')
+        })
 
 mispricings.sort(key=lambda x: x['gap'], reverse=True)
 
@@ -902,6 +951,19 @@ if mispricings:
         status_text = f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "Scheduled"
         spread_text = f"Spread: {mp['vegas_spread']}" if mp['vegas_spread'] else ""
         
+        # CRITICAL: Determine YES or NO for Kalshi
+        # Kalshi NBA: YES = AWAY wins, NO = HOME wins
+        if mp['team'] == g['home']:
+            kalshi_action = "NO"
+            kalshi_color = "#ef4444"  # Red for NO
+            # For home team, kalshi price should be home_implied (100 - yes_price)
+            kalshi_price_display = mp['kalshi_prob']
+        else:
+            kalshi_action = "YES"
+            kalshi_color = "#22c55e"  # Green for YES
+            # For away team, kalshi price is away_implied (yes_price)
+            kalshi_price_display = mp['kalshi_prob']
+        
         # Use columns for cleaner display
         col1, col2 = st.columns([3, 1])
         with col1:
@@ -909,35 +971,86 @@ if mispricings:
         with col2:
             st.markdown(f"<span style='color:{edge_color};font-weight:bold'>{edge_label}</span>", unsafe_allow_html=True)
         
-        # Main recommendation box
+        # Main recommendation box with CLEAR YES/NO instruction
         st.markdown(f"""<div style="background:#0f172a;padding:16px;border-radius:10px;border:2px solid {edge_color};margin-bottom:8px">
-<div style="color:#fff;font-size:1.3em;font-weight:bold;margin-bottom:12px">📈 BUY {mp['team']} on Kalshi</div>
+<div style="color:#fff;font-size:1.4em;font-weight:bold;margin-bottom:8px">
+🎯 BUY <span style="color:{kalshi_color};background:{kalshi_color}22;padding:4px 12px;border-radius:6px">{kalshi_action}</span> on Kalshi
+</div>
+<div style="color:#aaa;font-size:0.95em;margin-bottom:12px">{kalshi_action} = {mp['team']} wins</div>
 <table style="width:100%;text-align:center;color:#fff">
 <tr style="color:#888;font-size:0.85em">
-<td>Vegas ({mp['provider']})</td>
-<td>Kalshi Price</td>
-<td>MISPRICING</td>
+<td>Vegas says {mp['team']}</td>
+<td>Kalshi {kalshi_action} price</td>
+<td>EDGE</td>
 </tr>
 <tr style="font-size:1.3em;font-weight:bold">
 <td>{mp['vegas_prob']:.0f}%</td>
-<td>{mp['kalshi_prob']:.0f}¢</td>
+<td>{kalshi_price_display:.0f}¢</td>
 <td style="color:{edge_color}">+{mp['gap']:.0f}%</td>
 </tr>
 </table>
+<div style="color:#888;font-size:0.9em;margin-top:10px;padding:8px;background:#1a2744;border-radius:6px">
+💡 Vegas thinks {mp['team']} has {mp['vegas_prob']:.0f}% chance, but Kalshi only prices it at {kalshi_price_display:.0f}¢
+</div>
 <div style="color:#666;font-size:0.85em;margin-top:8px;text-align:center">{spread_text}</div>
 </div>""", unsafe_allow_html=True)
         
         bc1, bc2, bc3 = st.columns(3)
         with bc1:
-            st.link_button(f"🎯 BUY {mp['team']}", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
+            st.link_button(f"🎯 BUY {kalshi_action} ({mp['team']})", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
         with bc2:
             st.link_button("📊 SPREAD", get_kalshi_spread_link(g['away'], g['home']), use_container_width=True)
         with bc3:
             if st.button("➕ Track", key=f"mp_{game_key}"):
-                add_position(game_key, mp['team'], "ML", "-", get_kalshi_ml_link(g['away'], g['home']))
+                add_position(game_key, f"{kalshi_action} ({mp['team']})", "ML", "-", get_kalshi_ml_link(g['away'], g['home']))
                 st.rerun()
 else:
     st.info("🔍 No significant mispricings detected (need 5%+ gap between Vegas & Kalshi)")
+
+st.divider()
+
+# ============================================================
+# 🔍 DEBUG: RAW DATA VERIFICATION
+# ============================================================
+with st.expander("🔍 DEBUG: Raw Data Verification (Click to verify data accuracy)", expanded=False):
+    st.caption("Use this to verify the app is pulling correct data from APIs")
+    
+    for g in games[:5]:  # Show first 5 games
+        away, home = g['away'], g['home']
+        away_code = KALSHI_CODES.get(away, "XXX")
+        home_code = KALSHI_CODES.get(home, "XXX")
+        kalshi_key = f"{away_code}@{home_code}"
+        kalshi_data = kalshi_ml.get(kalshi_key, {})
+        vegas = g.get('vegas_odds', {})
+        
+        st.markdown(f"### {away} @ {home}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**ESPN/Vegas Raw Data:**")
+            st.write(f"- Spread: {vegas.get('spread')}")
+            st.write(f"- Over/Under: {vegas.get('overUnder')}")
+            st.write(f"- Home ML: {vegas.get('homeML')}")
+            st.write(f"- Away ML: {vegas.get('awayML')}")
+            st.write(f"- Provider: {vegas.get('provider')}")
+            if vegas.get('homeML'):
+                home_imp = american_to_implied_prob(vegas['homeML']) * 100
+                away_imp = american_to_implied_prob(vegas['awayML']) * 100
+                st.write(f"- **Vegas Home Implied: {home_imp:.1f}%**")
+                st.write(f"- **Vegas Away Implied: {away_imp:.1f}%**")
+        
+        with col2:
+            st.markdown("**Kalshi Raw Data:**")
+            st.write(f"- Ticker: {kalshi_data.get('ticker', 'NOT FOUND')}")
+            st.write(f"- Subtitle: {kalshi_data.get('subtitle', 'N/A')}")
+            st.write(f"- YES bid: {kalshi_data.get('yes_bid')}¢")
+            st.write(f"- YES ask: {kalshi_data.get('yes_ask')}¢")
+            st.write(f"- NO bid: {kalshi_data.get('no_bid')}¢")
+            st.write(f"- Last price: {kalshi_data.get('last_price')}¢")
+            st.write(f"- **Away Implied ({away}): {kalshi_data.get('away_implied', 'N/A')}%**")
+            st.write(f"- **Home Implied ({home}): {kalshi_data.get('home_implied', 'N/A')}%**")
+        
+        st.markdown("---")
 
 st.divider()
 
