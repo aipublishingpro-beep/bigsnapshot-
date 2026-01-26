@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "7.8"
+VERSION = "7.9"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -841,24 +841,114 @@ st.divider()
 # ============================================================
 st.subheader("📊 POSITION TRACKER")
 
+# Get today's games for dropdown
+today_games = [(f"{g['away']} @ {g['home']}", g['away'], g['home']) for g in games]
+
+with st.expander("➕ ADD NEW POSITION", expanded=False):
+    if today_games:
+        ac1, ac2 = st.columns(2)
+        with ac1:
+            game_selection = st.selectbox("Select Game", [g[0] for g in today_games], key="add_game")
+            selected_game = next((g for g in today_games if g[0] == game_selection), None)
+        with ac2:
+            bet_type = st.selectbox("Bet Type", ["ML (Moneyline)", "Totals (Over/Under)"], key="add_type")
+        
+        ac3, ac4 = st.columns(2)
+        with ac3:
+            if bet_type == "ML (Moneyline)":
+                if selected_game:
+                    pick_options = [selected_game[1], selected_game[2]]  # away, home
+                    pick = st.selectbox("Pick (Team to Win)", pick_options, key="add_pick")
+                else:
+                    pick = st.text_input("Pick", key="add_pick_text")
+            else:
+                pick = st.selectbox("Pick", ["YES (Over)", "NO (Under)"], key="add_totals_pick")
+        with ac4:
+            if bet_type == "Totals (Over/Under)":
+                line = st.selectbox("Line", THRESHOLDS, key="add_line")
+            else:
+                line = "-"
+        
+        ac5, ac6, ac7 = st.columns(3)
+        with ac5:
+            entry_price = st.number_input("Entry Price (¢)", min_value=1, max_value=99, value=50, key="add_price")
+        with ac6:
+            contracts = st.number_input("Contracts", min_value=1, max_value=10000, value=10, key="add_contracts")
+        with ac7:
+            cost = entry_price * contracts / 100
+            potential = contracts - cost
+            st.metric("Cost", f"${cost:.2f}")
+            st.caption(f"Win: +${potential:.2f}")
+        
+        if st.button("✅ ADD POSITION", use_container_width=True, key="add_pos_btn"):
+            if selected_game:
+                game_key = f"{selected_game[1]}@{selected_game[2]}"
+                link = get_kalshi_game_link(selected_game[1], selected_game[2])
+                
+                if bet_type == "ML (Moneyline)":
+                    pick_display = pick
+                    line_display = "-"
+                    type_display = "ML"
+                else:
+                    pick_display = pick.split(" ")[0]  # YES or NO
+                    line_display = str(line)
+                    type_display = "Totals"
+                
+                pos = {
+                    "game": game_key,
+                    "pick": pick_display,
+                    "type": type_display,
+                    "line": line_display,
+                    "price": entry_price,
+                    "contracts": contracts,
+                    "link": link,
+                    "id": str(uuid.uuid4())[:8]
+                }
+                st.session_state.positions.append(pos)
+                st.success(f"Added: {game_key} • {pick_display} {type_display} {line_display} • {contracts} @ {entry_price}¢")
+                st.rerun()
+    else:
+        st.warning("No games today to track")
+
+# Display existing positions
 if st.session_state.positions:
+    st.markdown("---")
     for pos in st.session_state.positions:
-        pc1, pc2, pc3, pc4 = st.columns([3, 2, 2, 1])
+        # Find current game status
+        current_game = next((g for g in games if f"{g['away']}@{g['home']}" == pos['game']), None)
+        
+        pc1, pc2, pc3, pc4, pc5 = st.columns([2.5, 1.5, 1.5, 1.5, 1])
         with pc1:
-            st.write(f"**{pos['game']}**")
+            st.markdown(f"**{pos['game']}**")
+            if current_game:
+                if current_game['period'] > 0:
+                    st.caption(f"🔴 LIVE Q{current_game['period']} {current_game['clock']} | {current_game['away_score']}-{current_game['home_score']}")
+                elif current_game['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']:
+                    st.caption(f"✅ FINAL {current_game['away_score']}-{current_game['home_score']}")
+                else:
+                    st.caption("⏳ Scheduled")
         with pc2:
-            st.write(f"{pos['pick']} {pos['type']}")
+            if pos['type'] == "ML":
+                st.write(f"🎯 {pos['pick']} ML")
+            else:
+                st.write(f"📊 {pos['pick']} {pos['line']}")
         with pc3:
-            st.link_button("🔗 Buy", pos['link'], use_container_width=True)
+            st.write(f"{pos['contracts']} @ {pos['price']}¢")
+            cost = pos['price'] * pos['contracts'] / 100
+            st.caption(f"Cost: ${cost:.2f}")
         with pc4:
-            if st.button("❌", key=f"del_{pos['id']}"):
+            st.link_button("🔗 Kalshi", pos['link'], use_container_width=True)
+        with pc5:
+            if st.button("🗑️", key=f"del_{pos['id']}"):
                 remove_position(pos['id'])
                 st.rerun()
-    if st.button("🗑️ Clear All"):
+    
+    st.markdown("---")
+    if st.button("🗑️ Clear All Positions", use_container_width=True):
         st.session_state.positions = []
         st.rerun()
 else:
-    st.caption("No positions tracked yet")
+    st.caption("No positions tracked yet. Click ➕ ADD NEW POSITION above.")
 
 st.divider()
 
