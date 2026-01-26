@@ -284,81 +284,68 @@ def render_nba_court(away, home, away_score, home_score, possession, period, clo
     home_color = TEAM_COLORS.get(home, "#666")
     away_code = KALSHI_CODES.get(away, "AWY")
     home_code = KALSHI_CODES.get(home, "HME")
-    
-    # Possession indicators
-    poss_away_opacity = "1" if possession == away else "0"
-    poss_home_opacity = "1" if possession == home else "0"
-    
-    # Period text
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
     
-    # Arrow direction (points toward basket being attacked)
-    if possession == away:
-        arrow_points = "280,140 300,130 300,150"  # Right arrow
-        arrow_opacity = "1"
-    elif possession == home:
-        arrow_points = "220,140 200,130 200,150"  # Left arrow
-        arrow_opacity = "1"
-    else:
-        arrow_points = "250,140 250,140 250,140"
-        arrow_opacity = "0"
+    # Possession indicators
+    poss_away = "#ffd700" if possession == away else "transparent"
+    poss_home = "#ffd700" if possession == home else "transparent"
     
-    # Score flash (green circle at basket)
-    left_flash_opacity = "0.7" if score_flash == home else "0"
-    right_flash_opacity = "0.7" if score_flash == away else "0"
+    # Arrow direction
+    if possession == away:
+        arrow_html = '<div style="position:absolute;left:56%;top:44%;font-size:24px;color:#ffd700;">→</div>'
+    elif possession == home:
+        arrow_html = '<div style="position:absolute;left:40%;top:44%;font-size:24px;color:#ffd700;">←</div>'
+    else:
+        arrow_html = ''
+    
+    # Score flash
+    left_flash = "box-shadow:0 0 20px 10px #22c55e;" if score_flash == home else ""
+    right_flash = "box-shadow:0 0 20px 10px #22c55e;" if score_flash == away else ""
     
     # Last play text
     play_text, play_color = get_last_play_text(last_play)
-    play_box_opacity = "1" if play_text else "0"
+    play_html = f'<div style="position:absolute;top:15%;left:50%;transform:translateX(-50%);background:#000c;padding:6px 16px;border-radius:6px;color:{play_color};font-weight:bold;font-size:14px;">{play_text}</div>' if play_text else ''
     
-    svg = f'''<svg viewBox="0 0 500 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:500px;background:#1a1a2e;border-radius:12px;">
+    html = f'''
+    <div style="position:relative;width:100%;max-width:500px;height:320px;background:#1a1a2e;border-radius:12px;font-family:sans-serif;">
         <!-- Court -->
-        <rect x="20" y="20" width="460" height="240" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/>
-        <circle cx="250" cy="140" r="40" fill="none" stroke="#fff" stroke-width="2"/>
-        <circle cx="250" cy="140" r="4" fill="#fff"/>
-        <line x1="250" y1="20" x2="250" y2="260" stroke="#fff" stroke-width="2"/>
-        
-        <!-- Left side -->
-        <path d="M 20 60 Q 120 140 20 220" fill="none" stroke="#fff" stroke-width="2"/>
-        <rect x="20" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
-        <circle cx="100" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
-        <circle cx="40" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
-        
-        <!-- Left basket flash -->
-        <circle cx="40" cy="140" r="25" fill="#22c55e" opacity="{left_flash_opacity}"/>
-        
-        <!-- Right side -->
-        <path d="M 480 60 Q 380 140 480 220" fill="none" stroke="#fff" stroke-width="2"/>
-        <rect x="400" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
-        <circle cx="400" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
-        <circle cx="460" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
-        
-        <!-- Right basket flash -->
-        <circle cx="460" cy="140" r="25" fill="#22c55e" opacity="{right_flash_opacity}"/>
-        
+        <div style="position:absolute;left:4%;top:6%;width:92%;height:75%;background:#2d4a22;border:2px solid #fff;border-radius:8px;"></div>
+        <!-- Center circle -->
+        <div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:80px;height:80px;border:2px solid #fff;border-radius:50%;"></div>
+        <div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:8px;height:8px;background:#fff;border-radius:50%;"></div>
+        <!-- Center line -->
+        <div style="position:absolute;left:50%;top:6%;width:2px;height:75%;background:#fff;"></div>
+        <!-- Left key -->
+        <div style="position:absolute;left:4%;top:25%;width:16%;height:38%;border:2px solid #fff;border-left:none;"></div>
+        <div style="position:absolute;left:17%;top:35%;width:24px;height:24px;border:2px solid #fff;border-radius:50%;"></div>
+        <!-- Left basket -->
+        <div style="position:absolute;left:6%;top:42%;width:16px;height:16px;border:3px solid #ff6b35;border-radius:50%;{left_flash}"></div>
+        <!-- Right key -->
+        <div style="position:absolute;right:4%;top:25%;width:16%;height:38%;border:2px solid #fff;border-right:none;"></div>
+        <div style="position:absolute;right:17%;top:35%;width:24px;height:24px;border:2px solid #fff;border-radius:50%;"></div>
+        <!-- Right basket -->
+        <div style="position:absolute;right:6%;top:42%;width:16px;height:16px;border:3px solid #ff6b35;border-radius:50%;{right_flash}"></div>
         <!-- Possession Arrow -->
-        <polygon points="{arrow_points}" fill="#ffd700" opacity="{arrow_opacity}"/>
-        
-        <!-- Last Play Overlay -->
-        <rect x="175" y="45" width="150" height="30" rx="6" fill="#000000" opacity="{play_box_opacity}"/>
-        <text x="250" y="66" fill="{play_color}" font-size="14" font-weight="bold" text-anchor="middle" opacity="{play_box_opacity}">{play_text}</text>
-        
+        {arrow_html}
+        <!-- Last Play -->
+        {play_html}
         <!-- Away Team Box -->
-        <rect x="60" y="270" width="80" height="40" fill="{away_color}" rx="6"/>
-        <text x="100" y="290" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text>
-        <text x="100" y="305" fill="#fff" font-size="12" text-anchor="middle">{away_score}</text>
-        <circle cx="145" cy="290" r="8" fill="#ffd700" opacity="{poss_away_opacity}"/>
-        
+        <div style="position:absolute;left:12%;bottom:5%;width:80px;height:40px;background:{away_color};border-radius:6px;text-align:center;padding-top:6px;">
+            <div style="color:#fff;font-weight:bold;font-size:14px;">{away_code}</div>
+            <div style="color:#fff;font-size:12px;">{away_score}</div>
+        </div>
+        <div style="position:absolute;left:calc(12% + 85px);bottom:calc(5% + 15px);width:16px;height:16px;background:{poss_away};border-radius:50%;"></div>
         <!-- Home Team Box -->
-        <rect x="360" y="270" width="80" height="40" fill="{home_color}" rx="6"/>
-        <text x="400" y="290" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text>
-        <text x="400" y="305" fill="#fff" font-size="12" text-anchor="middle">{home_score}</text>
-        <circle cx="355" cy="290" r="8" fill="#ffd700" opacity="{poss_home_opacity}"/>
-        
+        <div style="position:absolute;right:12%;bottom:5%;width:80px;height:40px;background:{home_color};border-radius:6px;text-align:center;padding-top:6px;">
+            <div style="color:#fff;font-weight:bold;font-size:14px;">{home_code}</div>
+            <div style="color:#fff;font-size:12px;">{home_score}</div>
+        </div>
+        <div style="position:absolute;right:calc(12% + 85px);bottom:calc(5% + 15px);width:16px;height:16px;background:{poss_home};border-radius:50%;"></div>
         <!-- Clock -->
-        <text x="250" y="295" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text>
-    </svg>'''
-    return svg
+        <div style="position:absolute;left:50%;bottom:8%;transform:translateX(-50%);color:#fff;font-size:16px;font-weight:bold;">{period_text} {clock}</div>
+    </div>
+    '''
+    return html
 
 def get_play_icon(play_type, score_value):
     play_lower = play_type.lower() if play_type else ""
