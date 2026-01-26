@@ -408,4 +408,7 @@ Economics markets have **unique risks:**
 # ============================================================
 # FOOTER
 # ============================================================
-st.markdown('<div style="text-align: center; color: #666; font-size: 0.75rem; padding: 20px;"><p>Economic data from <strong>FRED®</strong>, Federal Reserve Bank of St. Louis</p><p><a href="https://fred.stlouisfed.org/">https://fred.stlouisfed.org/</a></p><p style="margin-top: 10px;">© 2025 BigSnapshot | <a href="https://bigsnapshot.com">bigsnapshot.com</a></p></div>', unsafe_allow_html=True)
+
+st.markdown('<div style="text-align: center; color: #666; font-size: 0.75rem; padding: 20px;"><p>Economic data from <strong>FRED®</strong>, Federal Reserve Bank of St. Louis</p><p><a href="https://fred.stlouisfed.org/">https://fred.stlouisfed.org/</a></p><p style="margin-top: 10px;">© 2026 BigSnapshot | <a href="https://bigsnapshot.com">bigsnapshot.com</a></p></div>', unsafe_allow_html=True)
+
+st.caption("⚠️ Educational only. Not financial advice. v2.1")
