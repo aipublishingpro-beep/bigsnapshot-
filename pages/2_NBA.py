@@ -502,21 +502,43 @@ else:
 # CUSHION SCANNER
 # ============================================================
 st.subheader("🎯 CUSHION SCANNER (Totals)")
-min_mins = st.selectbox("Minimum minutes:", [6, 9, 12, 15, 18], index=1, key="cush_mins")
-side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
+
+# Game filter dropdown - show all today's games
+all_game_options = ["All Games"] + [f"{g['away']} @ {g['home']}" for g in games]
+cush_col1, cush_col2, cush_col3 = st.columns(3)
+with cush_col1:
+    selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
+with cush_col2:
+    min_mins = st.selectbox("Min minutes:", [0, 6, 9, 12, 15, 18], index=0, key="cush_mins")
+with cush_col3:
+    side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
 
 cushion_data = []
-for g in live_games:
+for g in games:
+    # Skip final games
+    if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: continue
+    # Filter by selected game
+    game_name = f"{g['away']} @ {g['home']}"
+    if selected_game != "All Games" and game_name != selected_game: continue
+    # Filter by minutes (0 = show all including scheduled)
     if g['minutes_played'] < min_mins: continue
+    
     total, mins = g['total_score'], g['minutes_played']
-    proj, pace = calc_projection(total, mins), total / mins if mins > 0 else 0
-    pace_label, pace_color = get_pace_label(pace)
+    # For scheduled games or games with 0 minutes, use league average
+    if mins < 1:
+        proj = LEAGUE_AVG_TOTAL
+        pace_label, pace_color = "⏳ PRE", "#888"
+    else:
+        proj = calc_projection(total, mins)
+        pace = total / mins
+        pace_label, pace_color = get_pace_label(pace)
+    
     for thresh in THRESHOLDS:
         cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
-        if cushion >= 6:
-            cushion_data.append({"game": f"{g['away']} @ {g['home']}", "status": f"Q{g['period']} {g['clock']}",
+        if cushion >= 6 or (selected_game != "All Games"):  # Show all lines for single game selection
+            cushion_data.append({"game": game_name, "status": f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "Scheduled",
                 "proj": proj, "line": thresh, "cushion": cushion, "pace": pace_label,
-                "link": get_kalshi_game_link(g['away'], g['home'])})
+                "link": get_kalshi_game_link(g['away'], g['home']), "mins": mins})
 
 cushion_data.sort(key=lambda x: x['cushion'], reverse=True)
 if cushion_data:
