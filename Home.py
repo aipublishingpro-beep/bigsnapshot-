@@ -145,7 +145,7 @@ if not st.session_state.authenticated:
     
     st.markdown("---")
     
-    # EMAIL GATE
+    # EMAIL GATE - GOOGLE FORM EMBED
     st.markdown("""
     <div style="text-align: center; padding: 20px;">
         <h2 style="color: #fff; margin-bottom: 10px;">🔓 Enter Email to Unlock</h2>
@@ -156,21 +156,26 @@ if not st.session_state.authenticated:
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        email = st.text_input("Your Email", placeholder="you@example.com", label_visibility="collapsed")
+        # Embed Google Form
+        st.components.v1.iframe(
+            "https://docs.google.com/forms/d/e/1FAIpQLSfBcRg-QSB1E150zW2TSIkaPEFkJFGB4xqyZszfEqvtzn_wAw/viewform?embedded=true",
+            height=320,
+            scrolling=False
+        )
         
-        if st.button("🔓 UNLOCK FREE ACCESS", use_container_width=True, type="primary"):
-            if is_valid_email(email):
-                save_email(email)
-                st.session_state.authenticated = True
-                st.session_state.user_email = email
-                st.session_state.user_type = "Free User"
-                st.rerun()
-            else:
-                st.error("Please enter a valid email address")
+        st.markdown("""
+        <p style="color: #888; font-size: 12px; text-align: center; margin-top: 10px;">
+            After submitting, click the button below to enter
+        </p>
+        """, unsafe_allow_html=True)
+        
+        if st.button("✅ I SUBMITTED MY EMAIL — LET ME IN", use_container_width=True, type="primary"):
+            st.session_state.authenticated = True
+            st.session_state.user_type = "Free User"
+            st.rerun()
         
         st.markdown("""
         <p style="color: #666; font-size: 11px; text-align: center; margin-top: 15px;">
-            We'll only email you for major updates.<br>
             Questions? <a href="mailto:aipublishingpro@gmail.com" style="color: #4ade80;">aipublishingpro@gmail.com</a>
         </p>
         """, unsafe_allow_html=True)
