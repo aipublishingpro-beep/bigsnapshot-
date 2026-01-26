@@ -34,7 +34,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "7.2"
+VERSION = "7.3"
 LEAGUE_AVG_TOTAL = 225
 
 # ============================================================
@@ -71,45 +71,54 @@ KALSHI_CODES = {
     "Utah": "UTA", "Washington": "WAS"
 }
 
-# Reverse lookup
 KALSHI_TO_TEAM = {v: k for k, v in KALSHI_CODES.items()}
 
-# TEAM_STATS - UPDATED FOR 2025-26 SEASON (as of Jan 26, 2026)
-# Net ratings estimated from win% differential: (W-L)/(W+L) * 15
-TEAM_STATS = {
-    "Oklahoma City": {"net": 12.0, "pace": 98.8, "tier": "elite"},    # 37-9
-    "Detroit": {"net": 10.5, "pace": 99.5, "tier": "elite"},          # 32-11
-    "San Antonio": {"net": 8.5, "pace": 99.2, "tier": "elite"},       # 31-14
-    "Denver": {"net": 7.8, "pace": 98.5, "tier": "elite"},            # 31-15
-    "Boston": {"net": 5.5, "pace": 99.8, "tier": "good"},             # 28-17
-    "Toronto": {"net": 4.8, "pace": 97.8, "tier": "good"},            # 28-19
-    "Houston": {"net": 5.2, "pace": 99.5, "tier": "good"},            # 27-16
-    "LA Lakers": {"net": 4.5, "pace": 98.5, "tier": "good"},          # 27-17
-    "Phoenix": {"net": 4.0, "pace": 98.2, "tier": "good"},            # 27-18
-    "Minnesota": {"net": 4.0, "pace": 98.2, "tier": "good"},          # 27-18
-    "New York": {"net": 4.0, "pace": 97.5, "tier": "good"},           # 27-18
-    "Cleveland": {"net": 3.5, "pace": 97.2, "tier": "good"},          # 27-20
-    "Golden State": {"net": 2.0, "pace": 100.2, "tier": "mid"},       # 25-21
-    "Philadelphia": {"net": 2.5, "pace": 97.5, "tier": "mid"},        # 24-20
-    "Miami": {"net": 1.5, "pace": 97.2, "tier": "mid"},               # 24-22
-    "Chicago": {"net": 1.0, "pace": 98.8, "tier": "mid"},             # 23-22
-    "Portland": {"net": 0.0, "pace": 98.8, "tier": "mid"},            # 23-23
-    "Orlando": {"net": 1.2, "pace": 96.8, "tier": "mid"},             # 23-21
-    "Atlanta": {"net": -1.5, "pace": 100.5, "tier": "mid"},           # 22-25
-    "LA Clippers": {"net": -2.0, "pace": 97.8, "tier": "weak"},       # 20-24
-    "Dallas": {"net": -3.5, "pace": 99.0, "tier": "weak"},            # 19-27
-    "Memphis": {"net": -4.0, "pace": 99.8, "tier": "weak"},           # 18-25
-    "Milwaukee": {"net": -4.5, "pace": 98.8, "tier": "weak"},         # 18-26
-    "Charlotte": {"net": -5.5, "pace": 99.5, "tier": "weak"},         # 18-28
-    "Utah": {"net": -7.0, "pace": 98.5, "tier": "weak"},              # 15-31
-    "Sacramento": {"net": -9.5, "pace": 100.5, "tier": "tank"},       # 12-34
-    "Brooklyn": {"net": -8.5, "pace": 98.2, "tier": "tank"},          # 12-31
-    "Indiana": {"net": -10.5, "pace": 102.5, "tier": "tank"},         # 11-35
-    "New Orleans": {"net": -11.0, "pace": 99.0, "tier": "tank"},      # 11-36
-    "Washington": {"net": -11.5, "pace": 100.8, "tier": "tank"},      # 10-34
+# Team colors for court visualization
+TEAM_COLORS = {
+    "Atlanta": "#E03A3E", "Boston": "#007A33", "Brooklyn": "#000000", "Charlotte": "#1D1160",
+    "Chicago": "#CE1141", "Cleveland": "#860038", "Dallas": "#00538C", "Denver": "#0E2240",
+    "Detroit": "#C8102E", "Golden State": "#1D428A", "Houston": "#CE1141", "Indiana": "#002D62",
+    "LA Clippers": "#C8102E", "LA Lakers": "#552583", "Memphis": "#5D76A9", "Miami": "#98002E",
+    "Milwaukee": "#00471B", "Minnesota": "#0C2340", "New Orleans": "#0C2340", "New York": "#006BB6",
+    "Oklahoma City": "#007AC1", "Orlando": "#0077C0", "Philadelphia": "#006BB6", "Phoenix": "#1D1160",
+    "Portland": "#E03A3E", "Sacramento": "#5A2D81", "San Antonio": "#C4CED4", "Toronto": "#CE1141",
+    "Utah": "#002B5C", "Washington": "#002B5C"
 }
 
-# STAR_PLAYERS - UPDATED FOR 2025-26 SEASON (post-trades)
+# TEAM_STATS - UPDATED FOR 2025-26 SEASON (as of Jan 26, 2026)
+TEAM_STATS = {
+    "Oklahoma City": {"net": 12.0, "pace": 98.8, "tier": "elite"},
+    "Detroit": {"net": 10.5, "pace": 99.5, "tier": "elite"},
+    "San Antonio": {"net": 8.5, "pace": 99.2, "tier": "elite"},
+    "Denver": {"net": 7.8, "pace": 98.5, "tier": "elite"},
+    "Boston": {"net": 5.5, "pace": 99.8, "tier": "good"},
+    "Toronto": {"net": 4.8, "pace": 97.8, "tier": "good"},
+    "Houston": {"net": 5.2, "pace": 99.5, "tier": "good"},
+    "LA Lakers": {"net": 4.5, "pace": 98.5, "tier": "good"},
+    "Phoenix": {"net": 4.0, "pace": 98.2, "tier": "good"},
+    "Minnesota": {"net": 4.0, "pace": 98.2, "tier": "good"},
+    "New York": {"net": 4.0, "pace": 97.5, "tier": "good"},
+    "Cleveland": {"net": 3.5, "pace": 97.2, "tier": "good"},
+    "Golden State": {"net": 2.0, "pace": 100.2, "tier": "mid"},
+    "Philadelphia": {"net": 2.5, "pace": 97.5, "tier": "mid"},
+    "Miami": {"net": 1.5, "pace": 97.2, "tier": "mid"},
+    "Chicago": {"net": 1.0, "pace": 98.8, "tier": "mid"},
+    "Portland": {"net": 0.0, "pace": 98.8, "tier": "mid"},
+    "Orlando": {"net": 1.2, "pace": 96.8, "tier": "mid"},
+    "Atlanta": {"net": -1.5, "pace": 100.5, "tier": "mid"},
+    "LA Clippers": {"net": -2.0, "pace": 97.8, "tier": "weak"},
+    "Dallas": {"net": -3.5, "pace": 99.0, "tier": "weak"},
+    "Memphis": {"net": -4.0, "pace": 99.8, "tier": "weak"},
+    "Milwaukee": {"net": -4.5, "pace": 98.8, "tier": "weak"},
+    "Charlotte": {"net": -5.5, "pace": 99.5, "tier": "weak"},
+    "Utah": {"net": -7.0, "pace": 98.5, "tier": "weak"},
+    "Sacramento": {"net": -9.5, "pace": 100.5, "tier": "tank"},
+    "Brooklyn": {"net": -8.5, "pace": 98.2, "tier": "tank"},
+    "Indiana": {"net": -10.5, "pace": 102.5, "tier": "tank"},
+    "New Orleans": {"net": -11.0, "pace": 99.0, "tier": "tank"},
+    "Washington": {"net": -11.5, "pace": 100.8, "tier": "tank"},
+}
+
 STAR_PLAYERS = {
     "Boston": ["Jayson Tatum", "Jaylen Brown", "Derrick White"],
     "Cleveland": ["Donovan Mitchell", "Darius Garland", "Evan Mobley"],
@@ -122,22 +131,22 @@ STAR_PLAYERS = {
     "Phoenix": ["Kevin Durant", "Devin Booker", "Bradley Beal"],
     "LA Lakers": ["LeBron James", "Anthony Davis"],
     "Golden State": ["Stephen Curry", "Draymond Green"],
-    "Miami": ["Bam Adebayo", "Tyler Herro"],  # Jimmy Butler injured
+    "Miami": ["Bam Adebayo", "Tyler Herro"],
     "Philadelphia": ["Joel Embiid", "Tyrese Maxey", "Paul George"],
-    "LA Clippers": ["James Harden", "Norman Powell"],  # Kawhi out
+    "LA Clippers": ["James Harden", "Norman Powell"],
     "Memphis": ["Ja Morant", "Jaren Jackson Jr"],
     "New Orleans": ["Zion Williamson", "Brandon Ingram"],
-    "Sacramento": ["Domantas Sabonis", "Keegan Murray"],  # De'Aaron Fox traded
-    "Indiana": ["Pascal Siakam", "Bennedict Mathurin"],  # Haliburton injured
+    "Sacramento": ["Domantas Sabonis", "Keegan Murray"],
+    "Indiana": ["Pascal Siakam", "Bennedict Mathurin"],
     "Orlando": ["Paolo Banchero", "Franz Wagner"],
     "Houston": ["Jalen Green", "Alperen Sengun", "Fred VanVleet"],
-    "Atlanta": ["Jalen Johnson", "Onyeka Okongwu", "CJ McCollum"],  # Trae Young traded
+    "Atlanta": ["Jalen Johnson", "Onyeka Okongwu", "CJ McCollum"],
     "Chicago": ["Zach LaVine", "Coby White"],
     "Charlotte": ["LaMelo Ball", "Brandon Miller"],
     "Detroit": ["Cade Cunningham", "Jalen Duren"],
     "Toronto": ["Scottie Barnes", "RJ Barrett", "Brandon Ingram"],
     "Brooklyn": ["Cam Thomas", "Dennis Schroder"],
-    "San Antonio": ["Victor Wembanyama", "De'Aaron Fox", "Stephon Castle"],  # Fox acquired
+    "San Antonio": ["Victor Wembanyama", "De'Aaron Fox", "Stephon Castle"],
     "Utah": ["Lauri Markkanen", "Collin Sexton"],
     "Portland": ["Anfernee Simons", "Deni Avdija", "Scoot Henderson"],
     "Washington": ["Jordan Poole", "Kyle Kuzma", "Khris Middleton"],
@@ -188,6 +197,7 @@ def fetch_espn_games():
             status = event.get("status", {}).get("type", {}).get("name", "STATUS_SCHEDULED")
             period = event.get("status", {}).get("period", 0)
             clock = event.get("status", {}).get("displayClock", "")
+            game_id = event.get("id", "")
             
             minutes_played = 0
             if period > 0:
@@ -208,20 +218,79 @@ def fetch_espn_games():
                 else:
                     minutes_played = 48 + (period - 4) * 5
             
+            # Get possession info from situation if available
+            situation = comp.get("situation", {})
+            possession = situation.get("possession", "")
+            last_play = situation.get("lastPlay", {}).get("text", "")
+            
             games.append({
                 "away": away_team, "home": home_team,
                 "away_score": away_score, "home_score": home_score,
                 "status": status, "period": period, "clock": clock,
-                "minutes_played": minutes_played, "total_score": home_score + away_score
+                "minutes_played": minutes_played, "total_score": home_score + away_score,
+                "game_id": game_id, "possession": possession, "last_play": last_play
             })
         return games
     except Exception as e:
         st.error(f"ESPN fetch error: {e}")
         return []
 
+@st.cache_data(ttl=15)
+def fetch_play_by_play(game_id):
+    """Fetch play-by-play for a specific game"""
+    if not game_id:
+        return []
+    url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={game_id}"
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        plays = []
+        
+        # Get plays from the plays array
+        all_plays = data.get("plays", [])
+        
+        # Get last 10 plays (most recent first)
+        recent_plays = all_plays[-10:] if len(all_plays) > 10 else all_plays
+        recent_plays.reverse()
+        
+        for play in recent_plays:
+            play_text = play.get("text", "")
+            period = play.get("period", {}).get("number", 0)
+            clock = play.get("clock", {}).get("displayValue", "")
+            score_value = play.get("scoreValue", 0)
+            team = play.get("team", {}).get("displayName", "")
+            team_abbrev = TEAM_ABBREVS.get(team, team)
+            
+            # Determine play type for coloring
+            play_type = "neutral"
+            if score_value > 0:
+                play_type = "score"
+            elif "MISS" in play_text.upper() or "MISSED" in play_text.upper():
+                play_type = "miss"
+            elif "REBOUND" in play_text.upper():
+                play_type = "rebound"
+            elif "TURNOVER" in play_text.upper() or "STEAL" in play_text.upper():
+                play_type = "turnover"
+            elif "FOUL" in play_text.upper():
+                play_type = "foul"
+            elif "TIMEOUT" in play_text.upper():
+                play_type = "timeout"
+            
+            plays.append({
+                "text": play_text,
+                "period": period,
+                "clock": clock,
+                "team": team_abbrev,
+                "score_value": score_value,
+                "play_type": play_type
+            })
+        
+        return plays
+    except Exception as e:
+        return []
+
 @st.cache_data(ttl=60)
 def fetch_kalshi_totals():
-    """Fetch real Kalshi totals brackets"""
     url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNBATOTAL&status=open&limit=200"
     try:
         resp = requests.get(url, timeout=10)
@@ -229,51 +298,35 @@ def fetch_kalshi_totals():
         markets = {}
         for m in data.get("markets", []):
             ticker = m.get("ticker", "")
-            # Parse ticker: KXNBATOTAL-26JAN26PORBOS
             if "KXNBATOTAL-" not in ticker:
                 continue
-            
-            # Extract game info
             parts = ticker.replace("KXNBATOTAL-", "")
-            # Format: 26JAN26PORBOS
             if len(parts) >= 13:
-                date_part = parts[:7]  # 26JAN26
-                teams_part = parts[7:]  # PORBOS
+                date_part = parts[:7]
+                teams_part = parts[7:]
                 away_code = teams_part[:3]
                 home_code = teams_part[3:6]
-                
                 game_key = f"{away_code}@{home_code}"
-                
-                # Get threshold from subtitle or title
                 subtitle = m.get("subtitle", "")
-                # Format: "Over 224.5 points scored"
                 threshold = None
                 if "Over " in subtitle:
                     try:
                         threshold = float(subtitle.split("Over ")[1].split(" ")[0])
                     except:
                         pass
-                
                 if threshold:
                     if game_key not in markets:
                         markets[game_key] = {
-                            "away_code": away_code,
-                            "home_code": home_code,
-                            "date": date_part,
-                            "thresholds": [],
+                            "away_code": away_code, "home_code": home_code,
+                            "date": date_part, "thresholds": [],
                             "ticker_base": f"KXNBATOTAL-{date_part}{away_code}{home_code}"
                         }
                     markets[game_key]["thresholds"].append({
-                        "line": threshold,
-                        "ticker": ticker,
-                        "yes_price": m.get("yes_bid", 50),
-                        "no_price": m.get("no_bid", 50)
+                        "line": threshold, "ticker": ticker,
+                        "yes_price": m.get("yes_bid", 50), "no_price": m.get("no_bid", 50)
                     })
-        
-        # Sort thresholds for each game
         for game_key in markets:
             markets[game_key]["thresholds"].sort(key=lambda x: x["line"])
-        
         return markets
     except Exception as e:
         st.error(f"Kalshi fetch error: {e}")
@@ -320,6 +373,107 @@ def fetch_yesterday_teams():
         return set()
 
 # ============================================================
+# NBA COURT SVG
+# ============================================================
+def render_nba_court(away, home, away_score, home_score, possession, period, clock, last_play=""):
+    """Render NBA half-court SVG with game info"""
+    away_color = TEAM_COLORS.get(away, "#666")
+    home_color = TEAM_COLORS.get(home, "#666")
+    away_code = KALSHI_CODES.get(away, "AWY")
+    home_code = KALSHI_CODES.get(home, "HME")
+    
+    # Determine which side has possession
+    poss_away = "visible" if possession == away else "hidden"
+    poss_home = "visible" if possession == home else "hidden"
+    
+    svg = f'''
+    <svg viewBox="0 0 500 320" style="width:100%;max-width:500px;background:#1a1a2e;border-radius:12px;">
+        <!-- Court outline -->
+        <rect x="20" y="20" width="460" height="240" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/>
+        
+        <!-- Center circle -->
+        <circle cx="250" cy="140" r="40" fill="none" stroke="#fff" stroke-width="2"/>
+        <circle cx="250" cy="140" r="4" fill="#fff"/>
+        
+        <!-- Center line -->
+        <line x1="250" y1="20" x2="250" y2="260" stroke="#fff" stroke-width="2"/>
+        
+        <!-- Left three-point arc -->
+        <path d="M 20 60 Q 120 140 20 220" fill="none" stroke="#fff" stroke-width="2"/>
+        <line x1="20" y1="60" x2="60" y2="60" stroke="#fff" stroke-width="2"/>
+        <line x1="20" y1="220" x2="60" y2="220" stroke="#fff" stroke-width="2"/>
+        
+        <!-- Left paint -->
+        <rect x="20" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
+        <circle cx="100" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
+        
+        <!-- Left basket -->
+        <line x1="30" y1="125" x2="30" y2="155" stroke="#fff" stroke-width="3"/>
+        <circle cx="40" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
+        
+        <!-- Right three-point arc -->
+        <path d="M 480 60 Q 380 140 480 220" fill="none" stroke="#fff" stroke-width="2"/>
+        <line x1="480" y1="60" x2="440" y2="60" stroke="#fff" stroke-width="2"/>
+        <line x1="480" y1="220" x2="440" y2="220" stroke="#fff" stroke-width="2"/>
+        
+        <!-- Right paint -->
+        <rect x="400" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
+        <circle cx="400" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
+        
+        <!-- Right basket -->
+        <line x1="470" y1="125" x2="470" y2="155" stroke="#fff" stroke-width="3"/>
+        <circle cx="460" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
+        
+        <!-- Away team (left side) -->
+        <rect x="60" y="270" width="80" height="35" fill="{away_color}" rx="6"/>
+        <text x="100" y="293" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{away_code}</text>
+        <text x="100" y="300" fill="#fff" font-size="10" text-anchor="middle" dy="8">{away_score}</text>
+        
+        <!-- Home team (right side) -->
+        <rect x="360" y="270" width="80" height="35" fill="{home_color}" rx="6"/>
+        <text x="400" y="293" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{home_code}</text>
+        <text x="400" y="300" fill="#fff" font-size="10" text-anchor="middle" dy="8">{home_score}</text>
+        
+        <!-- Possession indicators -->
+        <circle cx="145" cy="287" r="8" fill="#ffd700" visibility="{poss_away}"/>
+        <text x="145" y="291" fill="#000" font-size="10" font-weight="bold" text-anchor="middle" visibility="{poss_away}">●</text>
+        
+        <circle cx="355" cy="287" r="8" fill="#ffd700" visibility="{poss_home}"/>
+        <text x="355" y="291" fill="#000" font-size="10" font-weight="bold" text-anchor="middle" visibility="{poss_home}">●</text>
+        
+        <!-- Game clock -->
+        <rect x="200" y="270" width="100" height="35" fill="#0f172a" rx="6" stroke="#444"/>
+        <text x="250" y="285" fill="#ff6b6b" font-size="11" font-weight="bold" text-anchor="middle">Q{period}</text>
+        <text x="250" y="300" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">{clock}</text>
+    </svg>
+    '''
+    return svg
+
+def get_play_color(play_type):
+    colors = {
+        "score": "#22c55e",
+        "miss": "#ef4444",
+        "rebound": "#3b82f6",
+        "turnover": "#f97316",
+        "foul": "#eab308",
+        "timeout": "#8b5cf6",
+        "neutral": "#94a3b8"
+    }
+    return colors.get(play_type, "#94a3b8")
+
+def get_play_icon(play_type):
+    icons = {
+        "score": "🏀",
+        "miss": "❌",
+        "rebound": "📥",
+        "turnover": "🔄",
+        "foul": "🚨",
+        "timeout": "⏸️",
+        "neutral": "▶️"
+    }
+    return icons.get(play_type, "▶️")
+
+# ============================================================
 # HELPER FUNCTIONS
 # ============================================================
 def get_injury_names(team_injuries):
@@ -332,10 +486,8 @@ def get_injury_names(team_injuries):
     return names
 
 def calc_projection(game):
-    """Calculate projected total based on current pace"""
     mins = game['minutes_played']
     total = game['total_score']
-    
     if mins >= 8:
         pace = total / mins
         weight = min(1.0, (mins - 8) / 16)
@@ -346,19 +498,14 @@ def calc_projection(game):
         proj = round(((pace * 0.3) + ((LEAGUE_AVG_TOTAL / 48) * 0.7)) * 48)
     else:
         proj = LEAGUE_AVG_TOTAL
-    
     return max(185, min(280, proj))
 
 def get_pace_info(game):
-    """Get pace label and value"""
     mins = game['minutes_played']
     total = game['total_score']
-    
     if mins <= 0:
         return 0, "⏳ WAITING", "#888"
-    
     pace = round(total / mins, 2)
-    
     if pace > 5.2:
         return pace, "🚀 SHOOTOUT", "#ff0000"
     elif pace > 4.8:
@@ -369,30 +516,22 @@ def get_pace_info(game):
         return pace, "🐢 SLOW", "#00ff00"
 
 def find_recommended_bracket(thresholds, projection, bet_type, cushion_levels=2):
-    """Find recommended bracket with cushion built in"""
     if not thresholds:
         return None, None, None
-    
     lines = [t["line"] for t in thresholds]
-    
     if bet_type == "NO":
-        # For NO (under): find threshold above projection, then go higher for cushion
         above = [l for l in lines if l > projection]
         if not above:
             return None, None, None
-        # Get 1-2 levels above the tight line
         tight_idx = lines.index(above[0])
         rec_idx = min(tight_idx + cushion_levels, len(lines) - 1)
         rec_line = lines[rec_idx]
         cushion = rec_line - projection
         return rec_line, cushion, thresholds[rec_idx]
-    
-    else:  # YES
-        # For YES (over): find threshold below projection, then go lower for cushion
+    else:
         below = [l for l in lines if l < projection]
         if not below:
             return None, None, None
-        # Get 1-2 levels below the tight line
         tight_idx = lines.index(below[-1])
         rec_idx = max(tight_idx - cushion_levels, 0)
         rec_line = lines[rec_idx]
@@ -402,15 +541,11 @@ def find_recommended_bracket(thresholds, projection, bet_type, cushion_levels=2)
 def calc_live_edge(game, injuries, b2b_teams):
     away, home = game['away'], game['home']
     lead = game['home_score'] - game['away_score']
-    
-    # Base from net rating
     home_net = TEAM_STATS.get(home, {}).get("net", 0)
     away_net = TEAM_STATS.get(away, {}).get("net", 0)
     base = 50 + ((home_net - away_net) * 1.5) + 2.5
-    
     if away in b2b_teams: base += 3
     if home in b2b_teams: base -= 2
-    
     home_out = get_injury_names(injuries.get(home, []))
     away_out = get_injury_names(injuries.get(away, []))
     for star in STAR_PLAYERS.get(home, []):
@@ -419,27 +554,21 @@ def calc_live_edge(game, injuries, b2b_teams):
     for star in STAR_PLAYERS.get(away, []):
         if any(star.lower() in n for n in away_out):
             base += STAR_TIERS.get(star, 1) * 2
-    
-    # Live adjustments
     mins = game['minutes_played']
-    period = game['period']
     live_adj = 0
     if abs(lead) >= 20: live_adj = 25 if lead > 0 else -25
     elif abs(lead) >= 15: live_adj = 18 if lead > 0 else -18
     elif abs(lead) >= 10: live_adj = 12 if lead > 0 else -12
     elif abs(lead) >= 5: live_adj = 6 if lead > 0 else -6
-    
-    if period == 4:
+    if game['period'] == 4:
         if abs(lead) >= 10: live_adj += 15 if lead > 0 else -15
         elif abs(lead) >= 5: live_adj += 8 if lead > 0 else -8
-    
     final_score = max(15, min(92, base + live_adj))
     live_pick = home if lead > 0 else away if lead < 0 else (home if base >= 50 else away)
-    
     return {"pick": live_pick, "score": int(final_score), "lead": lead}
 
 # ============================================================
-# KALSHI LINKS (CORRECT FORMAT - UPPERCASE)
+# KALSHI LINKS
 # ============================================================
 def get_kalshi_ml_link(away, home):
     away_code = KALSHI_CODES.get(away, "XXX").upper()
@@ -499,15 +628,15 @@ with st.sidebar:
 | >5.2 | 🚀 SHOOTOUT | BUY YES |
 
 ---
-### Cushion Guide
-We recommend **1-2 levels** above/below projection for safety.
-
-| Bet | Cushion |
-|-----|---------|
-| NO | Threshold ABOVE proj |
-| YES | Threshold BELOW proj |
-
-Bigger cushion = safer bet, lower payout.
+### Play-by-Play Icons
+| Icon | Play Type |
+|------|-----------|
+| 🏀 | Score |
+| ❌ | Miss |
+| 📥 | Rebound |
+| 🔄 | Turnover |
+| 🚨 | Foul |
+| ⏸️ | Timeout |
 """)
     st.divider()
     st.caption(f"v{VERSION} BIGSNAPSHOT")
@@ -582,11 +711,11 @@ else:
 st.divider()
 
 # ============================================================
-# 🔴 LIVE EDGE MONITOR
+# 🔴 LIVE EDGE MONITOR WITH COURT & PLAY-BY-PLAY
 # ============================================================
 if live_games:
     st.subheader("🔴 LIVE EDGE MONITOR")
-    st.caption("Real-time ML edges • Updates every 24 seconds")
+    st.caption("Real-time ML edges with court visualization • Updates every 24 seconds")
     
     for g in sorted(live_games, key=lambda x: calc_live_edge(x, injuries, b2b_teams)['score'], reverse=True):
         edge = calc_live_edge(g, injuries, b2b_teams)
@@ -607,22 +736,58 @@ if live_games:
         lead_display = f"+{edge['lead']}" if edge['lead'] > 0 else str(edge['lead'])
         leader = g['home'] if edge['lead'] > 0 else g['away'] if edge['lead'] < 0 else "TIED"
         
+        # Game header
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); border-radius: 12px; padding: 16px; margin-bottom: 8px; border: 1px solid #444;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span style="color: #fff; font-size: 1.1em; font-weight: 600;">{g['away']} @ {g['home']}</span>
-                <span style="color: #ff6b6b; font-size: 0.9em;">Q{g['period']} {g['clock']}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #fff; font-size: 1.4em; font-weight: 700;">{g['away_score']} - {g['home_score']}</span>
+                <span style="color: #fff; font-size: 1.2em; font-weight: 600;">{g['away']} @ {g['home']}</span>
                 <span style="color: {status_color}; font-weight: 600;">{status_label}</span>
             </div>
-            <div style="color: #aaa; font-size: 0.9em; margin-top: 6px;">
-                Edge: <strong style="color: #fff;">{leader}</strong> ({lead_display})
+            <div style="color: #aaa; font-size: 0.9em;">
+                Edge: <strong style="color: #fff;">{leader}</strong> ({lead_display}) • {mins:.0f} min played
             </div>
         </div>
         """, unsafe_allow_html=True)
         
+        # Court and Play-by-Play columns
+        court_col, pbp_col = st.columns([1, 1])
+        
+        with court_col:
+            # Render court
+            court_svg = render_nba_court(
+                g['away'], g['home'],
+                g['away_score'], g['home_score'],
+                g.get('possession', ''),
+                g['period'], g['clock'],
+                g.get('last_play', '')
+            )
+            st.markdown(court_svg, unsafe_allow_html=True)
+        
+        with pbp_col:
+            # Play-by-play
+            st.markdown("**📋 LAST 10 PLAYS**")
+            plays = fetch_play_by_play(g.get('game_id', ''))
+            
+            if plays:
+                for play in plays[:10]:
+                    icon = get_play_icon(play['play_type'])
+                    color = get_play_color(play['play_type'])
+                    team_display = play['team'][:3].upper() if play['team'] else ""
+                    
+                    # Truncate long play text
+                    play_text = play['text']
+                    if len(play_text) > 45:
+                        play_text = play_text[:42] + "..."
+                    
+                    st.markdown(f"""<div style="background:#0f172a;padding:6px 10px;margin-bottom:4px;border-radius:6px;border-left:3px solid {color};font-size:0.85em">
+                        <span style="color:#888">Q{play['period']} {play['clock']}</span>
+                        <span style="color:{color};margin-left:8px">{icon}</span>
+                        <span style="color:#fff;margin-left:4px">{play_text}</span>
+                    </div>""", unsafe_allow_html=True)
+            else:
+                st.caption("Play-by-play loading...")
+        
+        # Action buttons
         bc1, bc2, bc3, bc4 = st.columns(4)
         with bc1:
             st.link_button(f"🎯 {edge['pick']} ML", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
@@ -641,7 +806,7 @@ else:
 st.divider()
 
 # ============================================================
-# 🎯 CUSHION SCANNER (TOTALS WITH REAL KALSHI BRACKETS)
+# 🎯 CUSHION SCANNER
 # ============================================================
 st.subheader("🎯 CUSHION SCANNER")
 st.caption("Totals recommendations with built-in safety cushion • Uses real Kalshi brackets")
@@ -653,21 +818,15 @@ for g in live_games:
     mins = g['minutes_played']
     if mins < cushion_min:
         continue
-    
     away_code = KALSHI_CODES.get(g['away'], "XXX")
     home_code = KALSHI_CODES.get(g['home'], "XXX")
     game_key_kalshi = f"{away_code}@{home_code}"
-    
     kalshi_data = kalshi_totals.get(game_key_kalshi, {})
     thresholds = kalshi_data.get("thresholds", [])
-    
     if not thresholds:
         continue
-    
     projection = calc_projection(g)
     pace_val, pace_label, pace_color = get_pace_info(g)
-    
-    # Determine bet direction based on pace
     if pace_val < 4.2:
         bet_type = "NO"
         rec_line, cushion, bracket_data = find_recommended_bracket(thresholds, projection, "NO", 2)
@@ -677,32 +836,22 @@ for g in live_games:
     else:
         bet_type = None
         rec_line, cushion, bracket_data = None, None, None
-    
     cushion_results.append({
-        'game': g,
-        'away': g['away'],
-        'home': g['home'],
-        'projection': projection,
-        'pace_val': pace_val,
-        'pace_label': pace_label,
-        'pace_color': pace_color,
-        'bet_type': bet_type,
-        'rec_line': rec_line,
-        'cushion': cushion,
-        'bracket_data': bracket_data,
+        'game': g, 'away': g['away'], 'home': g['home'],
+        'projection': projection, 'pace_val': pace_val,
+        'pace_label': pace_label, 'pace_color': pace_color,
+        'bet_type': bet_type, 'rec_line': rec_line,
+        'cushion': cushion, 'bracket_data': bracket_data,
         'thresholds': thresholds
     })
 
-# Sort by cushion (biggest first for actionable, then others)
 cushion_results.sort(key=lambda x: (x['cushion'] or 0), reverse=True)
 
 if cushion_results:
     for r in cushion_results:
         g = r['game']
         game_key = f"{r['away']}@{r['home']}"
-        
         if r['bet_type'] and r['rec_line'] and r['cushion']:
-            # Actionable recommendation
             if r['bet_type'] == "NO":
                 rec_text = f"BUY NO @ {r['rec_line']}"
                 rec_explain = f"Pace is SLOW → Game likely stays UNDER {r['rec_line']}"
@@ -711,7 +860,6 @@ if cushion_results:
                 rec_text = f"BUY YES @ {r['rec_line']}"
                 rec_explain = f"Pace is FAST → Game likely goes OVER {r['rec_line']}"
                 btn_color = "#f97316"
-            
             st.markdown(f"""<div style="background:#0f172a;padding:14px;margin-bottom:8px;border-radius:10px;border-left:4px solid {btn_color}">
                 <div style="display:flex;justify-content:space-between;align-items:center">
                     <b style="color:#fff;font-size:1.1em">{r['away']} @ {r['home']}</b>
@@ -727,7 +875,6 @@ if cushion_results:
                     <div style="color:#fff;margin-top:6px">Cushion: <b style="color:{btn_color}">+{r['cushion']:.1f}</b> points of safety</div>
                 </div>
             </div>""", unsafe_allow_html=True)
-            
             b1, b2, b3 = st.columns(3)
             with b1:
                 st.link_button(f"🎯 {rec_text}", get_kalshi_totals_link(r['away'], r['home']), use_container_width=True)
@@ -738,7 +885,6 @@ if cushion_results:
                     add_position(game_key, r['bet_type'], "TOTAL", r['rec_line'], get_kalshi_totals_link(r['away'], r['home']))
                     st.rerun()
         else:
-            # Neutral pace - no recommendation
             st.markdown(f"""<div style="background:#0f172a;padding:14px;margin-bottom:8px;border-radius:10px;border-left:4px solid #888">
                 <div style="display:flex;justify-content:space-between;align-items:center">
                     <b style="color:#fff;font-size:1.1em">{r['away']} @ {r['home']}</b>
@@ -752,7 +898,6 @@ if cushion_results:
                     <div style="color:#888;font-size:1em">⏳ WAIT — Pace is neutral, no clear edge</div>
                 </div>
             </div>""", unsafe_allow_html=True)
-        
         st.markdown("")
 else:
     st.info(f"No games with {cushion_min}+ minutes played yet")
@@ -760,7 +905,7 @@ else:
 st.divider()
 
 # ============================================================
-# 📊 PACE SCANNER (VISUAL OVERVIEW)
+# 📊 PACE SCANNER
 # ============================================================
 st.subheader("📊 PACE SCANNER")
 st.caption("Quick visual of all live game paces")
@@ -770,16 +915,13 @@ for g in live_games:
     mins = g['minutes_played']
     if mins < 3:
         continue
-    
     projection = calc_projection(g)
     pace_val, pace_label, pace_color = get_pace_info(g)
-    
     pace_results.append({
         'away': g['away'], 'home': g['home'],
         'total': g['total_score'], 'mins': mins,
         'pace_val': pace_val, 'pace_label': pace_label, 'pace_color': pace_color,
-        'projection': projection,
-        'period': g['period'], 'clock': g['clock']
+        'projection': projection, 'period': g['period'], 'clock': g['clock']
     })
 
 pace_results.sort(key=lambda x: x['pace_val'])
@@ -816,7 +958,6 @@ if st.session_state.positions:
             if st.button("❌", key=f"del_{pos['id']}"):
                 remove_position(pos['id'])
                 st.rerun()
-    
     if st.button("🗑️ Clear All Positions"):
         clear_all_positions()
         st.rerun()
@@ -826,27 +967,22 @@ else:
 st.divider()
 
 # ============================================================
-# 🎯 PRE-GAME ALIGNMENT (SPECULATIVE)
+# 🎯 PRE-GAME ALIGNMENT
 # ============================================================
 if scheduled_games:
     with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
         st.caption("⚠️ Pre-game picks are speculative. Live edges are more reliable.")
-        
         for g in scheduled_games:
             away, home = g['away'], g['home']
             game_key = f"{away}@{home}"
-            
             home_net = TEAM_STATS.get(home, {}).get("net", 0)
             away_net = TEAM_STATS.get(away, {}).get("net", 0)
             base = 50 + ((home_net - away_net) * 1.5) + 2.5
-            
             if away in b2b_teams: base += 3
             if home in b2b_teams: base -= 2
-            
             base = max(15, min(85, base))
             pick = home if base >= 50 else away
             score = int(base) if base >= 50 else int(100 - base)
-            
             if score >= 70:
                 score_color, border_color = "#22c55e", "#22c55e"
             elif score >= 60:
@@ -855,10 +991,8 @@ if scheduled_games:
                 score_color, border_color = "#eab308", "#eab308"
             else:
                 score_color, border_color = "#888", "#444"
-            
             b2b_away = "😴" if away in b2b_teams else ""
             b2b_home = "😴" if home in b2b_teams else ""
-            
             st.markdown(f"""
             <div style="background: #1e1e2e; border-radius: 10px; padding: 14px; margin-bottom: 10px; border-left: 4px solid {border_color};">
                 <div style="display: flex; justify-content: space-between;">
@@ -867,7 +1001,6 @@ if scheduled_games:
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
             cols = st.columns(4)
             cols[0].link_button(f"🎯 {pick}", get_kalshi_ml_link(away, home), use_container_width=True)
             cols[1].link_button("📊 SPREAD", get_kalshi_spread_link(away, home), use_container_width=True)
@@ -885,9 +1018,10 @@ with st.expander("📖 HOW TO USE BIGSNAPSHOT NBA EDGE FINDER", expanded=False):
     st.markdown(f"""
 ## 🏀 BIGSNAPSHOT v{VERSION}
 
-### Focus: LIVE EDGES + CUSHION SCANNER
-
-Pre-game picks are speculative. **Real edges appear during live games.**
+### NEW IN v7.3: COURT + PLAY-BY-PLAY
+- Live NBA court visualization showing score and possession
+- Real-time play-by-play feed (last 10 plays)
+- Color-coded plays: 🏀 Score, ❌ Miss, 📥 Rebound, 🔄 Turnover, 🚨 Foul, ⏸️ Timeout
 
 ---
 
@@ -903,22 +1037,11 @@ Pre-game picks are speculative. **Real edges appear during live games.**
 ---
 
 ### 🎯 CUSHION SCANNER (Totals)
-This is where we protect you with **built-in cushion**.
-
 | Pace | Direction | Recommendation |
 |------|-----------|----------------|
 | 🐢 SLOW (<4.2) | Under | BUY NO @ threshold ABOVE projection |
 | 🔥 FAST (>4.8) | Over | BUY YES @ threshold BELOW projection |
 | ⚖️ AVG | Neutral | WAIT |
-
-**Cushion = safety buffer.** We recommend 1-2 levels away from tight line.
-
-Example: Proj=222, SLOW pace → BUY NO @ 230.5 (+8.5 cushion)
-
----
-
-### 📊 PACE SCANNER
-Quick visual of all game paces. Use to spot opportunities.
 
 ---
 
