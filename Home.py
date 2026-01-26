@@ -1,55 +1,35 @@
 import streamlit as st
-import requests
 
 st.set_page_config(page_title="BigSnapshot", page_icon="📊", layout="wide")
 
-WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzXhJVMpddiC63nLx2NDdwBAz8zTAktK0RvfcUVFs0yWDGeWJX-VbM3rfXZWyoBZYDcVQ/exec"
-
-def check_auth():
-    return st.session_state.get("authenticated", False)
-
-def set_auth():
-    st.session_state["authenticated"] = True
-
-# Email gate
-if not check_auth():
-    st.title("📊 Welcome to BigSnapshot")
-    st.subheader("Free Prediction Market Edge Finders")
-    st.write("Enter your email to access all tools:")
-    
-    email = st.text_input("Your Email", placeholder="you@example.com")
-    
-    if st.button("Access Free Tools", type="primary"):
-        if email and "@" in email:
-            try:
-                requests.post(WEBHOOK_URL, json={"email": email}, timeout=10)
-            except:
-                pass  # Still let them in even if webhook fails
-            set_auth()
-            st.rerun()
-        else:
-            st.error("Please enter a valid email address.")
-    
-    st.stop()
-
-# Main content (only shows after email entry)
 st.title("📊 BigSnapshot Edge Finders")
 st.success("Welcome! Choose a tool from the sidebar.")
 
-st.markdown("### Available Tools")
-col1, col2, col3 = st.columns(3)
+st.markdown("### 🔥 Live Tools")
+
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.markdown("#### 🏀 NBA")
-    st.write("Player props & game predictions")
-    
+    if st.button("🏀 NBA", use_container_width=True):
+        st.switch_page("pages/2_NBA.py")
+    if st.button("🏈 NFL", use_container_width=True):
+        st.switch_page("pages/1_NFL.py")
+
 with col2:
-    st.markdown("#### 🏈 NFL")
-    st.write("Game spreads & totals analysis")
-    
+    if st.button("🏒 NHL", use_container_width=True):
+        st.switch_page("pages/3_NHL.py")
+    if st.button("🌡️ Temp", use_container_width=True):
+        st.switch_page("pages/5_Temp.py")
+
 with col3:
-    st.markdown("#### 🏒 NHL")
-    st.write("Puck line & goal predictions")
+    if st.button("🎓 NCAA", use_container_width=True):
+        st.switch_page("pages/7_NCAA.py")
+    if st.button("⚽ Soccer", use_container_width=True):
+        st.switch_page("pages/8_Soccer.py")
+
+with col4:
+    if st.button("📊 Economics", use_container_width=True):
+        st.switch_page("pages/9_Economics.py")
 
 st.markdown("---")
 st.caption("© 2026 BigSnapshot. All rights reserved.")
