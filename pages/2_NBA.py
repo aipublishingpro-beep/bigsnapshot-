@@ -3,18 +3,11 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="BigSnapshot NBA Edge Finder", page_icon="🏀", layout="wide")
 
-# ============================================================
-# AUTH
-# ============================================================
 from auth import require_auth
 require_auth()
 
-# Auto-refresh every 24 seconds
 st_autorefresh(interval=24000, key="datarefresh")
 
-# ============================================================
-# GA4 ANALYTICS
-# ============================================================
 import uuid
 import requests as req_ga
 
@@ -34,18 +27,12 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "7.3"
+VERSION = "7.4"
 LEAGUE_AVG_TOTAL = 225
 
-# ============================================================
-# INITIALIZE SESSION STATE
-# ============================================================
 if 'positions' not in st.session_state:
     st.session_state.positions = []
 
-# ============================================================
-# TEAM DATA
-# ============================================================
 TEAM_ABBREVS = {
     "Atlanta Hawks": "Atlanta", "Boston Celtics": "Boston", "Brooklyn Nets": "Brooklyn",
     "Charlotte Hornets": "Charlotte", "Chicago Bulls": "Chicago", "Cleveland Cavaliers": "Cleveland",
@@ -73,7 +60,6 @@ KALSHI_CODES = {
 
 KALSHI_TO_TEAM = {v: k for k, v in KALSHI_CODES.items()}
 
-# Team colors for court visualization
 TEAM_COLORS = {
     "Atlanta": "#E03A3E", "Boston": "#007A33", "Brooklyn": "#000000", "Charlotte": "#1D1160",
     "Chicago": "#CE1141", "Cleveland": "#860038", "Dallas": "#00538C", "Denver": "#0E2240",
@@ -85,7 +71,6 @@ TEAM_COLORS = {
     "Utah": "#002B5C", "Washington": "#002B5C"
 }
 
-# TEAM_STATS - UPDATED FOR 2025-26 SEASON (as of Jan 26, 2026)
 TEAM_STATS = {
     "Oklahoma City": {"net": 12.0, "pace": 98.8, "tier": "elite"},
     "Detroit": {"net": 10.5, "pace": 99.5, "tier": "elite"},
@@ -165,6 +150,34 @@ STAR_TIERS = {
 }
 
 # ============================================================
+# VEGAS ODDS CONVERSION
+# ============================================================
+def american_to_implied_prob(odds):
+    """Convert American odds to implied probability"""
+    if odds is None:
+        return None
+    if odds > 0:
+        return 100 / (odds + 100)
+    else:
+        return abs(odds) / (abs(odds) + 100)
+
+def decimal_to_implied_prob(decimal_odds):
+    """Convert decimal odds to implied probability"""
+    if decimal_odds is None or decimal_odds <= 1:
+        return None
+    return 1 / decimal_odds
+
+def spread_to_implied_prob(spread, home=True):
+    """Convert point spread to rough implied ML probability
+    Rule of thumb: Each point of spread ≈ 3% win probability"""
+    base = 50
+    adj = spread * 3
+    if home:
+        return min(95, max(5, base - adj))
+    else:
+        return min(95, max(5, base + adj))
+
+# ============================================================
 # FETCH FUNCTIONS
 # ============================================================
 @st.cache_data(ttl=30)
@@ -218,17 +231,30 @@ def fetch_espn_games():
                 else:
                     minutes_played = 48 + (period - 4) * 5
             
-            # Get possession info from situation if available
             situation = comp.get("situation", {})
             possession = situation.get("possession", "")
             last_play = situation.get("lastPlay", {}).get("text", "")
+            
+            # Extract odds from ESPN
+            odds_data = comp.get("odds", [{}])
+            vegas_odds = {}
+            if odds_data:
+                odds = odds_data[0] if isinstance(odds_data, list) else odds_data
+                vegas_odds = {
+                    "spread": odds.get("spread"),
+                    "overUnder": odds.get("overUnder"),
+                    "homeML": odds.get("homeTeamOdds", {}).get("moneyLine"),
+                    "awayML": odds.get("awayTeamOdds", {}).get("moneyLine"),
+                    "provider": odds.get("provider", {}).get("name", "Unknown")
+                }
             
             games.append({
                 "away": away_team, "home": home_team,
                 "away_score": away_score, "home_score": home_score,
                 "status": status, "period": period, "clock": clock,
                 "minutes_played": minutes_played, "total_score": home_score + away_score,
-                "game_id": game_id, "possession": possession, "last_play": last_play
+                "game_id": game_id, "possession": possession, "last_play": last_play,
+                "vegas_odds": vegas_odds
             })
         return games
     except Exception as e:
@@ -237,7 +263,6 @@ def fetch_espn_games():
 
 @st.cache_data(ttl=15)
 def fetch_play_by_play(game_id):
-    """Fetch play-by-play for a specific game"""
     if not game_id:
         return []
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={game_id}"
@@ -245,11 +270,7 @@ def fetch_play_by_play(game_id):
         resp = requests.get(url, timeout=10)
         data = resp.json()
         plays = []
-        
-        # Get plays from the plays array
         all_plays = data.get("plays", [])
-        
-        # Get last 10 plays (most recent first)
         recent_plays = all_plays[-10:] if len(all_plays) > 10 else all_plays
         recent_plays.reverse()
         
@@ -261,7 +282,6 @@ def fetch_play_by_play(game_id):
             team = play.get("team", {}).get("displayName", "")
             team_abbrev = TEAM_ABBREVS.get(team, team)
             
-            # Determine play type for coloring
             play_type = "neutral"
             if score_value > 0:
                 play_type = "score"
@@ -277,16 +297,11 @@ def fetch_play_by_play(game_id):
                 play_type = "timeout"
             
             plays.append({
-                "text": play_text,
-                "period": period,
-                "clock": clock,
-                "team": team_abbrev,
-                "score_value": score_value,
-                "play_type": play_type
+                "text": play_text, "period": period, "clock": clock,
+                "team": team_abbrev, "score_value": score_value, "play_type": play_type
             })
-        
         return plays
-    except Exception as e:
+    except:
         return []
 
 @st.cache_data(ttl=60)
@@ -330,6 +345,43 @@ def fetch_kalshi_totals():
         return markets
     except Exception as e:
         st.error(f"Kalshi fetch error: {e}")
+        return {}
+
+@st.cache_data(ttl=60)
+def fetch_kalshi_ml():
+    """Fetch Kalshi ML markets to compare with Vegas"""
+    url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNBAGAME&status=open&limit=200"
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        markets = {}
+        for m in data.get("markets", []):
+            ticker = m.get("ticker", "")
+            if "KXNBAGAME-" not in ticker:
+                continue
+            parts = ticker.replace("KXNBAGAME-", "")
+            if len(parts) >= 13:
+                date_part = parts[:7]
+                teams_part = parts[7:]
+                away_code = teams_part[:3]
+                home_code = teams_part[3:6]
+                game_key = f"{away_code}@{home_code}"
+                
+                # Get the team being bet on from subtitle
+                subtitle = m.get("subtitle", "")
+                yes_price = m.get("yes_bid", 50)
+                no_price = m.get("no_bid", 50)
+                
+                markets[game_key] = {
+                    "away_code": away_code, "home_code": home_code,
+                    "ticker": ticker,
+                    "yes_price": yes_price,  # YES = home team wins
+                    "no_price": no_price,    # NO = away team wins
+                    "home_implied": yes_price,  # Kalshi YES = home win
+                    "away_implied": 100 - yes_price
+                }
+        return markets
+    except:
         return {}
 
 @st.cache_data(ttl=300)
@@ -376,72 +428,41 @@ def fetch_yesterday_teams():
 # NBA COURT SVG
 # ============================================================
 def render_nba_court(away, home, away_score, home_score, possession, period, clock, last_play=""):
-    """Render NBA half-court SVG with game info"""
     away_color = TEAM_COLORS.get(away, "#666")
     home_color = TEAM_COLORS.get(home, "#666")
     away_code = KALSHI_CODES.get(away, "AWY")
     home_code = KALSHI_CODES.get(home, "HME")
-    
-    # Determine which side has possession
     poss_away = "visible" if possession == away else "hidden"
     poss_home = "visible" if possession == home else "hidden"
     
     svg = f'''
     <svg viewBox="0 0 500 320" style="width:100%;max-width:500px;background:#1a1a2e;border-radius:12px;">
-        <!-- Court outline -->
         <rect x="20" y="20" width="460" height="240" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/>
-        
-        <!-- Center circle -->
         <circle cx="250" cy="140" r="40" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="250" cy="140" r="4" fill="#fff"/>
-        
-        <!-- Center line -->
         <line x1="250" y1="20" x2="250" y2="260" stroke="#fff" stroke-width="2"/>
-        
-        <!-- Left three-point arc -->
         <path d="M 20 60 Q 120 140 20 220" fill="none" stroke="#fff" stroke-width="2"/>
         <line x1="20" y1="60" x2="60" y2="60" stroke="#fff" stroke-width="2"/>
         <line x1="20" y1="220" x2="60" y2="220" stroke="#fff" stroke-width="2"/>
-        
-        <!-- Left paint -->
         <rect x="20" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="100" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
-        
-        <!-- Left basket -->
         <line x1="30" y1="125" x2="30" y2="155" stroke="#fff" stroke-width="3"/>
         <circle cx="40" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
-        
-        <!-- Right three-point arc -->
         <path d="M 480 60 Q 380 140 480 220" fill="none" stroke="#fff" stroke-width="2"/>
         <line x1="480" y1="60" x2="440" y2="60" stroke="#fff" stroke-width="2"/>
         <line x1="480" y1="220" x2="440" y2="220" stroke="#fff" stroke-width="2"/>
-        
-        <!-- Right paint -->
         <rect x="400" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
         <circle cx="400" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
-        
-        <!-- Right basket -->
         <line x1="470" y1="125" x2="470" y2="155" stroke="#fff" stroke-width="3"/>
         <circle cx="460" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
-        
-        <!-- Away team (left side) -->
         <rect x="60" y="270" width="80" height="35" fill="{away_color}" rx="6"/>
         <text x="100" y="293" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{away_code}</text>
         <text x="100" y="300" fill="#fff" font-size="10" text-anchor="middle" dy="8">{away_score}</text>
-        
-        <!-- Home team (right side) -->
         <rect x="360" y="270" width="80" height="35" fill="{home_color}" rx="6"/>
         <text x="400" y="293" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{home_code}</text>
         <text x="400" y="300" fill="#fff" font-size="10" text-anchor="middle" dy="8">{home_score}</text>
-        
-        <!-- Possession indicators -->
         <circle cx="145" cy="287" r="8" fill="#ffd700" visibility="{poss_away}"/>
-        <text x="145" y="291" fill="#000" font-size="10" font-weight="bold" text-anchor="middle" visibility="{poss_away}">●</text>
-        
         <circle cx="355" cy="287" r="8" fill="#ffd700" visibility="{poss_home}"/>
-        <text x="355" y="291" fill="#000" font-size="10" font-weight="bold" text-anchor="middle" visibility="{poss_home}">●</text>
-        
-        <!-- Game clock -->
         <rect x="200" y="270" width="100" height="35" fill="#0f172a" rx="6" stroke="#444"/>
         <text x="250" y="285" fill="#ff6b6b" font-size="11" font-weight="bold" text-anchor="middle">Q{period}</text>
         <text x="250" y="300" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">{clock}</text>
@@ -450,27 +471,11 @@ def render_nba_court(away, home, away_score, home_score, possession, period, clo
     return svg
 
 def get_play_color(play_type):
-    colors = {
-        "score": "#22c55e",
-        "miss": "#ef4444",
-        "rebound": "#3b82f6",
-        "turnover": "#f97316",
-        "foul": "#eab308",
-        "timeout": "#8b5cf6",
-        "neutral": "#94a3b8"
-    }
+    colors = {"score": "#22c55e", "miss": "#ef4444", "rebound": "#3b82f6", "turnover": "#f97316", "foul": "#eab308", "timeout": "#8b5cf6", "neutral": "#94a3b8"}
     return colors.get(play_type, "#94a3b8")
 
 def get_play_icon(play_type):
-    icons = {
-        "score": "🏀",
-        "miss": "❌",
-        "rebound": "📥",
-        "turnover": "🔄",
-        "foul": "🚨",
-        "timeout": "⏸️",
-        "neutral": "▶️"
-    }
+    icons = {"score": "🏀", "miss": "❌", "rebound": "📥", "turnover": "🔄", "foul": "🚨", "timeout": "⏸️", "neutral": "▶️"}
     return icons.get(play_type, "▶️")
 
 # ============================================================
@@ -538,14 +543,19 @@ def find_recommended_bracket(thresholds, projection, bet_type, cushion_levels=2)
         cushion = projection - rec_line
         return rec_line, cushion, thresholds[rec_idx]
 
-def calc_live_edge(game, injuries, b2b_teams):
+def calc_live_edge_with_vegas(game, injuries, b2b_teams, kalshi_ml):
+    """Calculate edge comparing our model to BOTH Vegas and Kalshi"""
     away, home = game['away'], game['home']
     lead = game['home_score'] - game['away_score']
+    
+    # Our model probability (same as before)
     home_net = TEAM_STATS.get(home, {}).get("net", 0)
     away_net = TEAM_STATS.get(away, {}).get("net", 0)
     base = 50 + ((home_net - away_net) * 1.5) + 2.5
+    
     if away in b2b_teams: base += 3
     if home in b2b_teams: base -= 2
+    
     home_out = get_injury_names(injuries.get(home, []))
     away_out = get_injury_names(injuries.get(away, []))
     for star in STAR_PLAYERS.get(home, []):
@@ -554,18 +564,96 @@ def calc_live_edge(game, injuries, b2b_teams):
     for star in STAR_PLAYERS.get(away, []):
         if any(star.lower() in n for n in away_out):
             base += STAR_TIERS.get(star, 1) * 2
+    
     mins = game['minutes_played']
     live_adj = 0
     if abs(lead) >= 20: live_adj = 25 if lead > 0 else -25
     elif abs(lead) >= 15: live_adj = 18 if lead > 0 else -18
     elif abs(lead) >= 10: live_adj = 12 if lead > 0 else -12
     elif abs(lead) >= 5: live_adj = 6 if lead > 0 else -6
+    
     if game['period'] == 4:
         if abs(lead) >= 10: live_adj += 15 if lead > 0 else -15
         elif abs(lead) >= 5: live_adj += 8 if lead > 0 else -8
-    final_score = max(15, min(92, base + live_adj))
-    live_pick = home if lead > 0 else away if lead < 0 else (home if base >= 50 else away)
-    return {"pick": live_pick, "score": int(final_score), "lead": lead}
+    
+    our_home_prob = max(5, min(95, base + live_adj))
+    our_away_prob = 100 - our_home_prob
+    
+    # Vegas implied probability
+    vegas = game.get('vegas_odds', {})
+    vegas_home_implied = None
+    vegas_away_implied = None
+    vegas_spread = vegas.get('spread')
+    
+    if vegas.get('homeML'):
+        vegas_home_implied = american_to_implied_prob(vegas['homeML']) * 100
+        vegas_away_implied = 100 - vegas_home_implied
+    elif vegas_spread is not None:
+        vegas_home_implied = spread_to_implied_prob(float(vegas_spread), home=True)
+        vegas_away_implied = 100 - vegas_home_implied
+    
+    # Kalshi implied probability
+    away_code = KALSHI_CODES.get(away, "XXX")
+    home_code = KALSHI_CODES.get(home, "XXX")
+    kalshi_key = f"{away_code}@{home_code}"
+    kalshi_data = kalshi_ml.get(kalshi_key, {})
+    
+    kalshi_home_implied = kalshi_data.get('home_implied')
+    kalshi_away_implied = kalshi_data.get('away_implied')
+    
+    # Calculate edges
+    vegas_edge_home = None
+    vegas_edge_away = None
+    kalshi_edge_home = None
+    kalshi_edge_away = None
+    
+    if vegas_home_implied:
+        vegas_edge_home = our_home_prob - vegas_home_implied
+        vegas_edge_away = our_away_prob - vegas_away_implied
+    
+    if kalshi_home_implied:
+        kalshi_edge_home = our_home_prob - kalshi_home_implied
+        kalshi_edge_away = our_away_prob - kalshi_away_implied
+    
+    # Determine best pick
+    live_pick = home if our_home_prob >= 50 else away
+    model_score = int(our_home_prob) if live_pick == home else int(our_away_prob)
+    
+    # Find best mispricing
+    best_edge = 0
+    best_pick = live_pick
+    edge_source = "MODEL"
+    
+    if kalshi_edge_home and kalshi_edge_home > 5:
+        if kalshi_edge_home > best_edge:
+            best_edge = kalshi_edge_home
+            best_pick = home
+            edge_source = "KALSHI"
+    if kalshi_edge_away and kalshi_edge_away > 5:
+        if kalshi_edge_away > best_edge:
+            best_edge = kalshi_edge_away
+            best_pick = away
+            edge_source = "KALSHI"
+    
+    return {
+        "pick": best_pick,
+        "score": model_score,
+        "lead": lead,
+        "our_home_prob": our_home_prob,
+        "our_away_prob": our_away_prob,
+        "vegas_home_implied": vegas_home_implied,
+        "vegas_away_implied": vegas_away_implied,
+        "kalshi_home_implied": kalshi_home_implied,
+        "kalshi_away_implied": kalshi_away_implied,
+        "vegas_edge_home": vegas_edge_home,
+        "vegas_edge_away": vegas_edge_away,
+        "kalshi_edge_home": kalshi_edge_home,
+        "kalshi_edge_away": kalshi_edge_away,
+        "best_edge": best_edge,
+        "edge_source": edge_source,
+        "vegas_spread": vegas_spread,
+        "vegas_provider": vegas.get('provider', 'Unknown')
+    }
 
 # ============================================================
 # KALSHI LINKS
@@ -610,33 +698,41 @@ def clear_all_positions():
 with st.sidebar:
     st.header("📖 BIGSNAPSHOT EDGE GUIDE")
     st.markdown("""
+### 🆕 v7.4: MISPRICING DETECTOR
+
+**True Edge Formula:**
+```
+Your Model: 65%
+Kalshi Price: 52¢
+EDGE: +13% → BUY
+```
+
+---
+
+### Edge Thresholds
+| Edge | Label | Action |
+|------|-------|--------|
+| **+10%+** | 🔥 STRONG | Best value |
+| **+5-10%** | 🟢 GOOD | Worth it |
+| **<5%** | ⚪ NO EDGE | Skip |
+
+---
+
 ### ML Score Guide
 | Score | Label | Action |
 |-------|-------|--------|
 | **70+** | 🟢 STRONG | Best edge |
 | **60-69** | 🟢 GOOD | Worth it |
 | **50-59** | 🟡 MODERATE | Wait |
-| **<50** | ⚪ WEAK | Skip |
 
 ---
+
 ### Pace Guide (Totals)
 | Pace | Label | Bet |
 |------|-------|-----|
 | <4.2 | 🐢 SLOW | BUY NO |
 | 4.2-4.8 | ⚖️ AVG | WAIT |
-| 4.8-5.2 | 🔥 FAST | BUY YES |
-| >5.2 | 🚀 SHOOTOUT | BUY YES |
-
----
-### Play-by-Play Icons
-| Icon | Play Type |
-|------|-----------|
-| 🏀 | Score |
-| ❌ | Miss |
-| 📥 | Rebound |
-| 🔄 | Turnover |
-| 🚨 | Foul |
-| ⏸️ | Timeout |
+| >4.8 | 🔥 FAST | BUY YES |
 """)
     st.divider()
     st.caption(f"v{VERSION} BIGSNAPSHOT")
@@ -646,6 +742,7 @@ with st.sidebar:
 # ============================================================
 games = fetch_espn_games()
 kalshi_totals = fetch_kalshi_totals()
+kalshi_ml = fetch_kalshi_ml()
 injuries = fetch_injuries()
 b2b_teams = fetch_yesterday_teams()
 
@@ -662,13 +759,126 @@ final_games = [g for g in games if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_
 # HEADER
 # ============================================================
 st.title("🏀 BIGSNAPSHOT NBA EDGE FINDER")
-st.caption(f"v{VERSION} • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s")
+st.caption(f"v{VERSION} • {now.strftime('%b %d, %Y %I:%M %p ET')} • Auto-refresh: 24s • **NEW: Vegas vs Kalshi Mispricing**")
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Today's Games", len(games))
 c2.metric("Live Now", len(live_games))
 c3.metric("Scheduled", len(scheduled_games))
 c4.metric("Final", len(final_games))
+
+st.divider()
+
+# ============================================================
+# 💰 MISPRICING ALERT (NEW!)
+# ============================================================
+st.subheader("💰 MISPRICING ALERT")
+st.caption("Vegas vs Kalshi comparison • Real edges where markets disagree")
+
+mispricings = []
+for g in games:
+    if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']:
+        continue
+    edge = calc_live_edge_with_vegas(g, injuries, b2b_teams, kalshi_ml)
+    
+    # Check for significant mispricings
+    if edge['kalshi_home_implied'] and edge['vegas_home_implied']:
+        home_gap = abs(edge['vegas_home_implied'] - edge['kalshi_home_implied'])
+        away_gap = abs(edge['vegas_away_implied'] - edge['kalshi_away_implied'])
+        
+        if home_gap >= 5 or away_gap >= 5:
+            # Determine which side is mispriced
+            if edge['vegas_home_implied'] > edge['kalshi_home_implied']:
+                # Vegas thinks home is more likely, Kalshi underpricing home
+                mispriced_team = g['home']
+                mispriced_side = "HOME"
+                vegas_prob = edge['vegas_home_implied']
+                kalshi_prob = edge['kalshi_home_implied']
+                gap = vegas_prob - kalshi_prob
+            else:
+                # Vegas thinks away is more likely, Kalshi underpricing away
+                mispriced_team = g['away']
+                mispriced_side = "AWAY"
+                vegas_prob = edge['vegas_away_implied']
+                kalshi_prob = edge['kalshi_away_implied']
+                gap = vegas_prob - kalshi_prob
+            
+            if gap >= 5:
+                mispricings.append({
+                    'game': g,
+                    'team': mispriced_team,
+                    'side': mispriced_side,
+                    'vegas_prob': vegas_prob,
+                    'kalshi_prob': kalshi_prob,
+                    'gap': gap,
+                    'vegas_spread': edge['vegas_spread'],
+                    'provider': edge['vegas_provider']
+                })
+
+mispricings.sort(key=lambda x: x['gap'], reverse=True)
+
+if mispricings:
+    for mp in mispricings:
+        g = mp['game']
+        game_key = f"{g['away']}@{g['home']}"
+        
+        if mp['gap'] >= 10:
+            edge_color = "#ff6b6b"
+            edge_label = "🔥 STRONG EDGE"
+        elif mp['gap'] >= 7:
+            edge_color = "#22c55e"
+            edge_label = "🟢 GOOD EDGE"
+        else:
+            edge_color = "#eab308"
+            edge_label = "🟡 EDGE"
+        
+        status_text = f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "Scheduled"
+        spread_text = f"Spread: {mp['vegas_spread']}" if mp['vegas_spread'] else ""
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #1a1a2e 0%, #0f172a 100%); border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 2px solid {edge_color};">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <span style="color: #fff; font-size: 1.2em; font-weight: 600;">{g['away']} @ {g['home']}</span>
+                    <span style="color: #888; margin-left: 12px;">{status_text}</span>
+                </div>
+                <span style="color: {edge_color}; font-weight: bold; font-size: 1.1em;">{edge_label}</span>
+            </div>
+            
+            <div style="margin-top: 12px; padding: 12px; background: #0f172a; border-radius: 8px;">
+                <div style="color: #fff; font-size: 1.3em; font-weight: bold; margin-bottom: 8px;">
+                    📈 BUY <span style="color: {edge_color};">{mp['team']}</span> on Kalshi
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 8px;">
+                    <div style="text-align: center;">
+                        <div style="color: #888; font-size: 0.8em;">Vegas ({mp['provider']})</div>
+                        <div style="color: #fff; font-size: 1.2em; font-weight: bold;">{mp['vegas_prob']:.0f}%</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="color: #888; font-size: 0.8em;">Kalshi Price</div>
+                        <div style="color: #fff; font-size: 1.2em; font-weight: bold;">{mp['kalshi_prob']:.0f}¢</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="color: #888; font-size: 0.8em;">MISPRICING</div>
+                        <div style="color: {edge_color}; font-size: 1.2em; font-weight: bold;">+{mp['gap']:.0f}%</div>
+                    </div>
+                </div>
+                <div style="color: #666; font-size: 0.85em; margin-top: 8px; text-align: center;">{spread_text}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        bc1, bc2, bc3 = st.columns(3)
+        with bc1:
+            st.link_button(f"🎯 BUY {mp['team']}", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
+        with bc2:
+            st.link_button("📊 SPREAD", get_kalshi_spread_link(g['away'], g['home']), use_container_width=True)
+        with bc3:
+            if st.button("➕ Track", key=f"mp_{game_key}"):
+                add_position(game_key, mp['team'], "ML", "-", get_kalshi_ml_link(g['away'], g['home']))
+                st.rerun()
+else:
+    st.info("🔍 No significant mispricings detected (need 5%+ gap between Vegas & Kalshi)")
 
 st.divider()
 
@@ -711,14 +921,14 @@ else:
 st.divider()
 
 # ============================================================
-# 🔴 LIVE EDGE MONITOR WITH COURT & PLAY-BY-PLAY
+# 🔴 LIVE EDGE MONITOR
 # ============================================================
 if live_games:
     st.subheader("🔴 LIVE EDGE MONITOR")
-    st.caption("Real-time ML edges with court visualization • Updates every 24 seconds")
+    st.caption("Real-time ML edges with Vegas comparison • Updates every 24 seconds")
     
-    for g in sorted(live_games, key=lambda x: calc_live_edge(x, injuries, b2b_teams)['score'], reverse=True):
-        edge = calc_live_edge(g, injuries, b2b_teams)
+    for g in sorted(live_games, key=lambda x: calc_live_edge_with_vegas(x, injuries, b2b_teams, kalshi_ml)['score'], reverse=True):
+        edge = calc_live_edge_with_vegas(g, injuries, b2b_teams, kalshi_ml)
         mins = g['minutes_played']
         game_key = f"{g['away']}@{g['home']}"
         
@@ -726,6 +936,10 @@ if live_games:
             status_label, status_color = "⏳ TOO EARLY", "#888"
         elif abs(edge['lead']) < 3:
             status_label, status_color = "⚖️ TOO CLOSE", "#ffa500"
+        elif edge['best_edge'] >= 10:
+            status_label, status_color = f"🔥 +{edge['best_edge']:.0f}% EDGE", "#ff6b6b"
+        elif edge['best_edge'] >= 5:
+            status_label, status_color = f"🟢 +{edge['best_edge']:.0f}% EDGE", "#22c55e"
         elif edge['score'] >= 70:
             status_label, status_color = f"🟢 STRONG {edge['score']}", "#22c55e"
         elif edge['score'] >= 60:
@@ -736,7 +950,11 @@ if live_games:
         lead_display = f"+{edge['lead']}" if edge['lead'] > 0 else str(edge['lead'])
         leader = g['home'] if edge['lead'] > 0 else g['away'] if edge['lead'] < 0 else "TIED"
         
-        # Game header
+        # Build odds comparison text
+        odds_text = ""
+        if edge['vegas_home_implied'] and edge['kalshi_home_implied']:
+            odds_text = f"Vegas: {g['home']} {edge['vegas_home_implied']:.0f}% | Kalshi: {edge['kalshi_home_implied']:.0f}¢"
+        
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); border-radius: 12px; padding: 16px; margin-bottom: 8px; border: 1px solid #444;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -744,41 +962,27 @@ if live_games:
                 <span style="color: {status_color}; font-weight: 600;">{status_label}</span>
             </div>
             <div style="color: #aaa; font-size: 0.9em;">
-                Edge: <strong style="color: #fff;">{leader}</strong> ({lead_display}) • {mins:.0f} min played
+                Lead: <strong style="color: #fff;">{leader}</strong> ({lead_display}) • {mins:.0f} min played
             </div>
+            <div style="color: #666; font-size: 0.85em; margin-top: 4px;">{odds_text}</div>
         </div>
         """, unsafe_allow_html=True)
         
-        # Court and Play-by-Play columns
         court_col, pbp_col = st.columns([1, 1])
         
         with court_col:
-            # Render court
-            court_svg = render_nba_court(
-                g['away'], g['home'],
-                g['away_score'], g['home_score'],
-                g.get('possession', ''),
-                g['period'], g['clock'],
-                g.get('last_play', '')
-            )
+            court_svg = render_nba_court(g['away'], g['home'], g['away_score'], g['home_score'],
+                g.get('possession', ''), g['period'], g['clock'], g.get('last_play', ''))
             st.markdown(court_svg, unsafe_allow_html=True)
         
         with pbp_col:
-            # Play-by-play
             st.markdown("**📋 LAST 10 PLAYS**")
             plays = fetch_play_by_play(g.get('game_id', ''))
-            
             if plays:
                 for play in plays[:10]:
                     icon = get_play_icon(play['play_type'])
                     color = get_play_color(play['play_type'])
-                    team_display = play['team'][:3].upper() if play['team'] else ""
-                    
-                    # Truncate long play text
-                    play_text = play['text']
-                    if len(play_text) > 45:
-                        play_text = play_text[:42] + "..."
-                    
+                    play_text = play['text'][:42] + "..." if len(play['text']) > 45 else play['text']
                     st.markdown(f"""<div style="background:#0f172a;padding:6px 10px;margin-bottom:4px;border-radius:6px;border-left:3px solid {color};font-size:0.85em">
                         <span style="color:#888">Q{play['period']} {play['clock']}</span>
                         <span style="color:{color};margin-left:8px">{icon}</span>
@@ -787,7 +991,6 @@ if live_games:
             else:
                 st.caption("Play-by-play loading...")
         
-        # Action buttons
         bc1, bc2, bc3, bc4 = st.columns(4)
         with bc1:
             st.link_button(f"🎯 {edge['pick']} ML", get_kalshi_ml_link(g['away'], g['home']), use_container_width=True)
@@ -809,7 +1012,7 @@ st.divider()
 # 🎯 CUSHION SCANNER
 # ============================================================
 st.subheader("🎯 CUSHION SCANNER")
-st.caption("Totals recommendations with built-in safety cushion • Uses real Kalshi brackets")
+st.caption("Totals recommendations with built-in safety cushion")
 
 cushion_min = st.selectbox("Min minutes played", [6, 9, 12, 15, 18], index=1, key="cushion_min")
 
@@ -905,41 +1108,6 @@ else:
 st.divider()
 
 # ============================================================
-# 📊 PACE SCANNER
-# ============================================================
-st.subheader("📊 PACE SCANNER")
-st.caption("Quick visual of all live game paces")
-
-pace_results = []
-for g in live_games:
-    mins = g['minutes_played']
-    if mins < 3:
-        continue
-    projection = calc_projection(g)
-    pace_val, pace_label, pace_color = get_pace_info(g)
-    pace_results.append({
-        'away': g['away'], 'home': g['home'],
-        'total': g['total_score'], 'mins': mins,
-        'pace_val': pace_val, 'pace_label': pace_label, 'pace_color': pace_color,
-        'projection': projection, 'period': g['period'], 'clock': g['clock']
-    })
-
-pace_results.sort(key=lambda x: x['pace_val'])
-
-if pace_results:
-    for r in pace_results:
-        st.markdown(f"""<div style="background:#0f172a;padding:10px 14px;margin-bottom:6px;border-radius:8px;border-left:4px solid {r['pace_color']}">
-        <b style="color:#fff">{r['away']} @ {r['home']}</b> 
-        <span style="color:#888">Q{r['period']} {r['clock']} • {r['total']} pts in {r['mins']:.0f} min</span>
-        <span style="color:{r['pace_color']};font-weight:bold;margin-left:12px">{r['pace_val']:.2f}/min {r['pace_label']}</span>
-        <span style="color:#888;margin-left:12px">Proj: <b style="color:#fff">{r['projection']}</b></span>
-        </div>""", unsafe_allow_html=True)
-else:
-    st.info("No live games to track yet")
-
-st.divider()
-
-# ============================================================
 # 📊 POSITION TRACKER
 # ============================================================
 st.subheader("📊 POSITION TRACKER")
@@ -967,22 +1135,31 @@ else:
 st.divider()
 
 # ============================================================
-# 🎯 PRE-GAME ALIGNMENT
+# 🎯 PRE-GAME ALIGNMENT WITH VEGAS
 # ============================================================
 if scheduled_games:
-    with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
-        st.caption("⚠️ Pre-game picks are speculative. Live edges are more reliable.")
+    with st.expander("🎯 PRE-GAME ALIGNMENT (With Vegas Comparison)", expanded=True):
+        st.caption("⚠️ Pre-game picks with Vegas odds comparison")
         for g in scheduled_games:
             away, home = g['away'], g['home']
             game_key = f"{away}@{home}"
-            home_net = TEAM_STATS.get(home, {}).get("net", 0)
-            away_net = TEAM_STATS.get(away, {}).get("net", 0)
-            base = 50 + ((home_net - away_net) * 1.5) + 2.5
-            if away in b2b_teams: base += 3
-            if home in b2b_teams: base -= 2
-            base = max(15, min(85, base))
-            pick = home if base >= 50 else away
-            score = int(base) if base >= 50 else int(100 - base)
+            edge = calc_live_edge_with_vegas(g, injuries, b2b_teams, kalshi_ml)
+            
+            pick = home if edge['our_home_prob'] >= 50 else away
+            score = int(edge['our_home_prob']) if pick == home else int(edge['our_away_prob'])
+            
+            # Check for mispricing
+            mispricing = ""
+            mispricing_color = "#888"
+            if edge['kalshi_home_implied'] and edge['vegas_home_implied']:
+                if pick == home:
+                    gap = edge['vegas_home_implied'] - edge['kalshi_home_implied']
+                else:
+                    gap = edge['vegas_away_implied'] - edge['kalshi_away_implied']
+                if gap >= 5:
+                    mispricing = f"+{gap:.0f}% vs Kalshi"
+                    mispricing_color = "#22c55e" if gap >= 7 else "#eab308"
+            
             if score >= 70:
                 score_color, border_color = "#22c55e", "#22c55e"
             elif score >= 60:
@@ -991,14 +1168,24 @@ if scheduled_games:
                 score_color, border_color = "#eab308", "#eab308"
             else:
                 score_color, border_color = "#888", "#444"
+            
             b2b_away = "😴" if away in b2b_teams else ""
             b2b_home = "😴" if home in b2b_teams else ""
+            
+            vegas_text = ""
+            if edge['vegas_spread']:
+                vegas_text = f"Vegas: {edge['vegas_spread']} | "
+            if edge['vegas_home_implied']:
+                vegas_text += f"{home} {edge['vegas_home_implied']:.0f}%"
+            
             st.markdown(f"""
             <div style="background: #1e1e2e; border-radius: 10px; padding: 14px; margin-bottom: 10px; border-left: 4px solid {border_color};">
                 <div style="display: flex; justify-content: space-between;">
                     <span style="color: #fff; font-weight: 600;">{b2b_away}{away} @ {home}{b2b_home}</span>
-                    <span style="color: {score_color}; font-weight: 600;">{score}/100 → {pick}</span>
+                    <span style="color: {score_color}; font-weight: 600;">{score}% → {pick}</span>
                 </div>
+                <div style="color: #666; font-size: 0.85em; margin-top: 4px;">{vegas_text}</div>
+                <div style="color: {mispricing_color}; font-size: 0.9em; margin-top: 2px;">{mispricing}</div>
             </div>
             """, unsafe_allow_html=True)
             cols = st.columns(4)
@@ -1018,36 +1205,39 @@ with st.expander("📖 HOW TO USE BIGSNAPSHOT NBA EDGE FINDER", expanded=False):
     st.markdown(f"""
 ## 🏀 BIGSNAPSHOT v{VERSION}
 
-### NEW IN v7.3: COURT + PLAY-BY-PLAY
-- Live NBA court visualization showing score and possession
-- Real-time play-by-play feed (last 10 plays)
-- Color-coded plays: 🏀 Score, ❌ Miss, 📥 Rebound, 🔄 Turnover, 🚨 Foul, ⏸️ Timeout
+### 🆕 NEW IN v7.4: VEGAS MISPRICING DETECTOR
+The app now compares Vegas odds (from ESPN) to Kalshi prices to find real mispricings:
+
+```
+Vegas Implied: 65% (from spread/ML)
+Kalshi Price: 52¢ (implied 52%)
+MISPRICING: +13% → BUY YES on Kalshi
+```
+
+**Edge Thresholds:**
+| Gap | Label | Action |
+|-----|-------|--------|
+| +10%+ | 🔥 STRONG | Best value |
+| +5-10% | 🟢 GOOD | Worth it |
+| <5% | ⚪ NO EDGE | Skip |
 
 ---
+
+### 💰 MISPRICING ALERT
+Shows games where Vegas and Kalshi disagree by 5%+. This is where the real edge lives.
 
 ### 🔴 LIVE EDGE MONITOR (ML Picks)
-| Score | Label | Action |
-|-------|-------|--------|
-| 70+ | 🟢 STRONG | Best edge |
-| 60-69 | 🟢 GOOD | Worth it |
-| 50-59 | 🟡 MODERATE | Wait |
-
-**Wait for 6+ minutes** before trusting the edge.
-
----
+Now shows both model score AND Vegas comparison.
 
 ### 🎯 CUSHION SCANNER (Totals)
-| Pace | Direction | Recommendation |
-|------|-----------|----------------|
-| 🐢 SLOW (<4.2) | Under | BUY NO @ threshold ABOVE projection |
-| 🔥 FAST (>4.8) | Over | BUY YES @ threshold BELOW projection |
-| ⚖️ AVG | Neutral | WAIT |
+Same pace-based system with safety cushions.
 
 ---
 
-### ⚠️ REMEMBER
-- Bigger cushion = safer but lower payout
-- Only bet when pace confirms direction
+### ⚠️ IMPORTANT
+- Mispricings are the real edge (market inefficiency)
+- Model score alone doesn't guarantee edge
+- Wait for 5%+ gap before betting
 - Not financial advice
 
 **Stay small. Stay quiet. Win.**
