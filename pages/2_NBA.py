@@ -351,82 +351,108 @@ def fetch_kalshi_totals():
 def fetch_kalshi_ml():
     """Fetch Kalshi ML markets to compare with Vegas
     
-    KALSHI MARKET STRUCTURE FOR NBA (UPDATED):
-    - Ticker format: KXNBAGAME-{DATE}{AWAY}{HOME}-{TEAM}
-    - Example: KXNBAGAME-26JAN26INDATL-ATL means "Will Atlanta win?"
-    - The -ATL suffix tells us which team YES represents
-    - YES = the team in the suffix wins
-    - NO = the other team wins
+    KALSHI MARKET STRUCTURE FOR NBA:
+    - TWO markets per game (one for each team)
+    - Ticker: KXNBAGAME-{DATE}{AWAY}{HOME}-{TEAM}
+    - Example: KXNBAGAME-26JAN26PHICHA-CHA = "Will Charlotte win?"
+    - Example: KXNBAGAME-26JAN26PHICHA-PHI = "Will Philadelphia win?"
+    - YES = that team wins, NO = other team wins
+    
+    We'll store data from whichever market we find and calculate both teams' odds
     """
     url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNBAGAME&status=open&limit=200"
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
         markets = {}
+        
         for m in data.get("markets", []):
             ticker = m.get("ticker", "")
             if "KXNBAGAME-" not in ticker:
                 continue
             
             # Parse ticker - format: KXNBAGAME-{DATE}{AWAY}{HOME}-{TEAM_CODE}
-            # Example: KXNBAGAME-26JAN26INDATL-ATL
             parts = ticker.replace("KXNBAGAME-", "")
             
-            # Split by last hyphen to get team code
-            if "-" in parts:
-                main_part, yes_team_code = parts.rsplit("-", 1)
-            else:
-                continue  # Skip malformed tickers
+            if "-" not in parts:
+                continue
+                
+            main_part, yes_team_code = parts.rsplit("-", 1)
             
-            if len(main_part) >= 13:
-                date_part = main_part[:7]  # 26JAN26
-                teams_part = main_part[7:]  # INDATL
-                away_code = teams_part[:3]  # IND
-                home_code = teams_part[3:6]  # ATL
-                game_key = f"{away_code}@{home_code}"
+            if len(main_part) < 13:
+                continue
                 
-                # Get prices
-                yes_bid = m.get("yes_bid", 0) or 0
-                yes_ask = m.get("yes_ask", 0) or 0
-                no_bid = m.get("no_bid", 0) or 0
-                no_ask = m.get("no_ask", 0) or 0
-                last_price = m.get("last_price", 0) or 0
-                
-                # Best estimate of YES price
-                if yes_bid > 0 and yes_ask > 0:
-                    yes_price = (yes_bid + yes_ask) / 2
-                elif last_price > 0:
-                    yes_price = last_price
-                elif yes_bid > 0:
-                    yes_price = yes_bid
-                else:
-                    yes_price = 50
-                
-                # CRITICAL: YES = the team in the suffix (yes_team_code)
-                # Determine which team YES represents
-                if yes_team_code.upper() == home_code.upper():
-                    # YES = home team wins
-                    home_implied = yes_price
-                    away_implied = 100 - yes_price
-                else:
-                    # YES = away team wins
-                    away_implied = yes_price
-                    home_implied = 100 - yes_price
-                
-                markets[game_key] = {
-                    "away_code": away_code, 
-                    "home_code": home_code,
-                    "yes_team_code": yes_team_code,
-                    "ticker": ticker,
-                    "yes_bid": yes_bid,
-                    "yes_ask": yes_ask,
-                    "no_bid": no_bid,
-                    "no_ask": no_ask,
-                    "last_price": last_price,
-                    "yes_price": yes_price,
-                    "away_implied": away_implied,
-                    "home_implied": home_implied,
-                }
+            date_part = main_part[:7]
+            teams_part = main_part[7:]
+            away_code = teams_part[:3]
+            home_code = teams_part[3:6]
+            game_key = f"{away_code}@{home_code}"
+            
+            # Get prices
+            yes_bid = m.get("yes_bid", 0) or 0
+            yes_ask = m.get("yes_ask", 0) or 0
+            no_bid = m.get("no_bid", 0) or 0
+            no_ask = m.get("no_ask", 0) or 0
+            last_price = m.get("last_price", 0) or 0
+            
+            # Use yes_ask (what you pay to buy YES) for most accurate price
+            # If not available, use mid or bid
+            if yes_ask > 0:
+                yes_price = yes_ask
+            elif yes_bid > 0 and yes_ask > 0:
+                yes_price = (yes_bid + yes_ask) / 2
+            elif last_price > 0:
+                yes_price = last_price
+            elif yes_bid > 0:
+                yes_price = yes_bid
+            else:
+                yes_price = 50
+            
+            # Determine which team this market is for
+            yes_team_code = yes_team_code.upper()
+            
+            # Calculate implied probabilities
+            # YES price = probability that yes_team wins
+            if yes_team_code == home_code.upper():
+                # This market is "Will HOME win?"
+                home_implied = yes_price
+                away_implied = 100 - yes_price
+                market_team = "home"
+            elif yes_team_code == away_code.upper():
+                # This market is "Will AWAY win?"
+                away_implied = yes_price
+                home_implied = 100 - yes_price
+                market_team = "away"
+            else:
+                # Unknown team code, skip
+                continue
+            
+            # Store or update the game data
+            # If we already have data for this game, keep the more liquid market
+            if game_key in markets:
+                existing = markets[game_key]
+                # Keep market with tighter spread (more liquid)
+                existing_spread = abs((existing.get('yes_ask', 100) or 100) - (existing.get('yes_bid', 0) or 0))
+                new_spread = abs((yes_ask or 100) - (yes_bid or 0))
+                if new_spread >= existing_spread:
+                    continue  # Keep existing, skip this one
+            
+            markets[game_key] = {
+                "away_code": away_code, 
+                "home_code": home_code,
+                "yes_team_code": yes_team_code,
+                "market_team": market_team,
+                "ticker": ticker,
+                "yes_bid": yes_bid,
+                "yes_ask": yes_ask,
+                "no_bid": no_bid,
+                "no_ask": no_ask,
+                "last_price": last_price,
+                "yes_price": yes_price,
+                "away_implied": away_implied,
+                "home_implied": home_implied,
+            }
+        
         return markets
     except Exception as e:
         st.error(f"Kalshi ML fetch error: {e}")
@@ -872,25 +898,52 @@ Home ML: {vegas.get('homeML')}
 Away ML: {vegas.get('awayML')}
 Provider: {vegas.get('provider')}""")
             
+            # Calculate Vegas implied
             if vegas.get('homeML') and vegas.get('awayML'):
                 home_imp = american_to_implied_prob(vegas['homeML']) * 100
                 away_imp = american_to_implied_prob(vegas['awayML']) * 100
                 total = home_imp + away_imp
                 home_imp_norm = (home_imp / total) * 100
                 away_imp_norm = (away_imp / total) * 100
-                st.success(f"Vegas: {home} = {home_imp_norm:.1f}% | {away} = {away_imp_norm:.1f}%")
+                st.success(f"Vegas (ML): {home} = {home_imp_norm:.1f}% | {away} = {away_imp_norm:.1f}%")
+            elif vegas.get('spread'):
+                try:
+                    spread_val = float(vegas.get('spread'))
+                    home_imp = 50 - (spread_val * 2.8)
+                    home_imp = max(10, min(90, home_imp))
+                    st.info(f"Vegas (from spread): {home} = {home_imp:.1f}% | {away} = {100-home_imp:.1f}%")
+                except:
+                    st.error("Could not calculate Vegas probability")
+            else:
+                st.error("No Vegas odds available")
         
         with col2:
             st.markdown("**Kalshi Raw:**")
-            st.code(f"""Ticker: {kalshi_data.get('ticker', 'NOT FOUND')}
-Subtitle: {kalshi_data.get('subtitle', 'N/A')}
+            if kalshi_data:
+                yes_team = kalshi_data.get('yes_team_code', '?')
+                market_team = kalshi_data.get('market_team', '?')
+                st.code(f"""Ticker: {kalshi_data.get('ticker', 'NOT FOUND')}
+Market: "Will {yes_team} win?"
 YES bid: {kalshi_data.get('yes_bid')}¢
 YES ask: {kalshi_data.get('yes_ask')}¢
 NO bid: {kalshi_data.get('no_bid')}¢
-Last: {kalshi_data.get('last_price')}¢""")
-            
-            if kalshi_data.get('away_implied'):
-                st.success(f"Kalshi: {home} (NO) = {kalshi_data.get('home_implied'):.1f}% | {away} (YES) = {kalshi_data.get('away_implied'):.1f}%")
+YES price used: {kalshi_data.get('yes_price', 0):.0f}¢""")
+                
+                home_imp = kalshi_data.get('home_implied', 0)
+                away_imp = kalshi_data.get('away_implied', 0)
+                yes_team = kalshi_data.get('yes_team_code', '?')
+                
+                # Show which side is YES vs NO based on the market
+                if yes_team.upper() == KALSHI_CODES.get(home, 'XXX').upper():
+                    # Market is "Will HOME win?" so HOME=YES, AWAY=NO
+                    st.success(f"Kalshi: {home} (YES) = {home_imp:.0f}% | {away} (NO) = {away_imp:.0f}%")
+                else:
+                    # Market is "Will AWAY win?" so AWAY=YES, HOME=NO
+                    st.success(f"Kalshi: {home} (NO) = {home_imp:.0f}% | {away} (YES) = {away_imp:.0f}%")
+            else:
+                st.error(f"No Kalshi data for {kalshi_key}")
+            else:
+                st.error(f"No Kalshi data for {kalshi_key}")
         
         st.divider()
 
