@@ -349,7 +349,19 @@ def fetch_kalshi_totals():
 
 @st.cache_data(ttl=60)
 def fetch_kalshi_ml():
-    """Fetch Kalshi ML markets to compare with Vegas"""
+    """Fetch Kalshi ML markets to compare with Vegas
+    
+    KALSHI MARKET STRUCTURE FOR NBA:
+    - Ticker format: KXNBAGAME-{DATE}{AWAY}{HOME}
+    - The market asks: "Will [AWAY] win?"
+    - YES = Away team wins
+    - NO = Home team wins
+    - yes_bid = price to buy YES = implied prob away wins
+    - no_bid = price to buy NO = implied prob home wins
+    
+    IMPORTANT: We need yes_ask (best offer) not yes_bid (best bid)
+    But API gives us yes_bid/no_bid which are what buyers pay
+    """
     url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNBAGAME&status=open&limit=200"
     try:
         resp = requests.get(url, timeout=10)
@@ -367,21 +379,54 @@ def fetch_kalshi_ml():
                 home_code = teams_part[3:6]
                 game_key = f"{away_code}@{home_code}"
                 
-                # Get the team being bet on from subtitle
-                subtitle = m.get("subtitle", "")
-                yes_price = m.get("yes_bid", 50)
-                no_price = m.get("no_bid", 50)
+                # Get subtitle to confirm which team YES represents
+                subtitle = m.get("subtitle", "")  # e.g., "Golden State to win"
+                
+                # Kalshi prices - need to use yes_ask/no_ask for true market price
+                # But API might only give bid, so use last_price or calculate mid
+                yes_bid = m.get("yes_bid", 0) or 0
+                yes_ask = m.get("yes_ask", 0) or 0
+                no_bid = m.get("no_bid", 0) or 0
+                no_ask = m.get("no_ask", 0) or 0
+                last_price = m.get("last_price", 0) or 0
+                
+                # Best estimate of true market price:
+                # Use mid-point if both bid/ask available, else use last_price, else use bid
+                if yes_bid > 0 and yes_ask > 0:
+                    yes_price = (yes_bid + yes_ask) / 2
+                elif last_price > 0:
+                    yes_price = last_price
+                elif yes_bid > 0:
+                    yes_price = yes_bid
+                else:
+                    yes_price = 50
+                
+                # For Kalshi NBA markets:
+                # The ticker has AWAY then HOME
+                # YES = AWAY team wins (the team listed first in subtitle)
+                # So if subtitle says "Golden State to win" and GSW is away, YES = GSW wins
+                
+                # away_implied = YES price (away team winning)
+                # home_implied = 100 - YES price (home team winning)
+                away_implied = yes_price
+                home_implied = 100 - yes_price
                 
                 markets[game_key] = {
-                    "away_code": away_code, "home_code": home_code,
+                    "away_code": away_code, 
+                    "home_code": home_code,
                     "ticker": ticker,
-                    "yes_price": yes_price,  # YES = home team wins
-                    "no_price": no_price,    # NO = away team wins
-                    "home_implied": yes_price,  # Kalshi YES = home win
-                    "away_implied": 100 - yes_price
+                    "subtitle": subtitle,
+                    "yes_bid": yes_bid,
+                    "yes_ask": yes_ask,
+                    "no_bid": no_bid,
+                    "no_ask": no_ask,
+                    "last_price": last_price,
+                    "away_implied": away_implied,  # YES price = away wins
+                    "home_implied": home_implied,  # 100 - YES = home wins
                 }
         return markets
-    except:
+    except Exception as e:
+        st.error(f"Kalshi ML fetch error: {e}")
         return {}
 
 @st.cache_data(ttl=300)
@@ -544,7 +589,14 @@ def find_recommended_bracket(thresholds, projection, bet_type, cushion_levels=2)
         return rec_line, cushion, thresholds[rec_idx]
 
 def calc_live_edge_with_vegas(game, injuries, b2b_teams, kalshi_ml):
-    """Calculate edge comparing our model to BOTH Vegas and Kalshi"""
+    """Calculate edge comparing our model to BOTH Vegas and Kalshi
+    
+    CRITICAL DATA FLOW:
+    1. ESPN gives us Vegas odds (homeML, awayML, spread)
+    2. Kalshi gives us prediction market prices
+    3. We compare Vegas implied prob to Kalshi implied prob
+    4. Mispricing = Vegas - Kalshi (if positive, Kalshi is underpricing)
+    """
     away, home = game['away'], game['home']
     lead = game['home_score'] - game['away_score']
     
@@ -579,59 +631,75 @@ def calc_live_edge_with_vegas(game, injuries, b2b_teams, kalshi_ml):
     our_home_prob = max(5, min(95, base + live_adj))
     our_away_prob = 100 - our_home_prob
     
-    # Vegas implied probability
+    # ============================================================
+    # VEGAS IMPLIED PROBABILITY (from ESPN)
+    # ESPN homeML/awayML are American odds
+    # ============================================================
     vegas = game.get('vegas_odds', {})
     vegas_home_implied = None
     vegas_away_implied = None
     vegas_spread = vegas.get('spread')
     
-    if vegas.get('homeML'):
+    # Try moneyline first (most accurate)
+    if vegas.get('homeML') and vegas.get('awayML'):
         vegas_home_implied = american_to_implied_prob(vegas['homeML']) * 100
-        vegas_away_implied = 100 - vegas_home_implied
+        vegas_away_implied = american_to_implied_prob(vegas['awayML']) * 100
+        # Normalize to remove vig (they won't sum to 100)
+        total = vegas_home_implied + vegas_away_implied
+        if total > 0:
+            vegas_home_implied = (vegas_home_implied / total) * 100
+            vegas_away_implied = (vegas_away_implied / total) * 100
     elif vegas_spread is not None:
-        vegas_home_implied = spread_to_implied_prob(float(vegas_spread), home=True)
-        vegas_away_implied = 100 - vegas_home_implied
+        # Fallback to spread conversion
+        try:
+            spread_val = float(vegas_spread)
+            vegas_home_implied = spread_to_implied_prob(spread_val, home=True)
+            vegas_away_implied = 100 - vegas_home_implied
+        except:
+            pass
     
-    # Kalshi implied probability
+    # ============================================================
+    # KALSHI IMPLIED PROBABILITY
+    # Kalshi: YES = AWAY team wins, so home_implied = 100 - yes_price
+    # ============================================================
     away_code = KALSHI_CODES.get(away, "XXX")
     home_code = KALSHI_CODES.get(home, "XXX")
     kalshi_key = f"{away_code}@{home_code}"
     kalshi_data = kalshi_ml.get(kalshi_key, {})
     
-    kalshi_home_implied = kalshi_data.get('home_implied')
-    kalshi_away_implied = kalshi_data.get('away_implied')
+    kalshi_home_implied = kalshi_data.get('home_implied')  # 100 - YES price
+    kalshi_away_implied = kalshi_data.get('away_implied')  # YES price
+    kalshi_subtitle = kalshi_data.get('subtitle', '')
     
-    # Calculate edges
+    # ============================================================
+    # CALCULATE EDGES
+    # Edge = Vegas implied - Kalshi implied
+    # Positive edge means Kalshi is underpricing that outcome
+    # ============================================================
     vegas_edge_home = None
     vegas_edge_away = None
-    kalshi_edge_home = None
-    kalshi_edge_away = None
     
-    if vegas_home_implied:
-        vegas_edge_home = our_home_prob - vegas_home_implied
-        vegas_edge_away = our_away_prob - vegas_away_implied
+    if vegas_home_implied and kalshi_home_implied:
+        vegas_edge_home = vegas_home_implied - kalshi_home_implied
+        vegas_edge_away = vegas_away_implied - kalshi_away_implied
     
-    if kalshi_home_implied:
-        kalshi_edge_home = our_home_prob - kalshi_home_implied
-        kalshi_edge_away = our_away_prob - kalshi_away_implied
-    
-    # Determine best pick
+    # Determine best pick based on our model
     live_pick = home if our_home_prob >= 50 else away
     model_score = int(our_home_prob) if live_pick == home else int(our_away_prob)
     
-    # Find best mispricing
+    # Find best mispricing (Vegas vs Kalshi gap)
     best_edge = 0
     best_pick = live_pick
     edge_source = "MODEL"
     
-    if kalshi_edge_home and kalshi_edge_home > 5:
-        if kalshi_edge_home > best_edge:
-            best_edge = kalshi_edge_home
+    if vegas_edge_home is not None and vegas_edge_home > 5:
+        if vegas_edge_home > best_edge:
+            best_edge = vegas_edge_home
             best_pick = home
             edge_source = "KALSHI"
-    if kalshi_edge_away and kalshi_edge_away > 5:
-        if kalshi_edge_away > best_edge:
-            best_edge = kalshi_edge_away
+    if vegas_edge_away is not None and vegas_edge_away > 5:
+        if vegas_edge_away > best_edge:
+            best_edge = vegas_edge_away
             best_pick = away
             edge_source = "KALSHI"
     
@@ -645,10 +713,9 @@ def calc_live_edge_with_vegas(game, injuries, b2b_teams, kalshi_ml):
         "vegas_away_implied": vegas_away_implied,
         "kalshi_home_implied": kalshi_home_implied,
         "kalshi_away_implied": kalshi_away_implied,
+        "kalshi_subtitle": kalshi_subtitle,
         "vegas_edge_home": vegas_edge_home,
         "vegas_edge_away": vegas_edge_away,
-        "kalshi_edge_home": kalshi_edge_home,
-        "kalshi_edge_away": kalshi_edge_away,
         "best_edge": best_edge,
         "edge_source": edge_source,
         "vegas_spread": vegas_spread,
