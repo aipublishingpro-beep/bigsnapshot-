@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "9.2"
+VERSION = "9.3"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -163,6 +163,20 @@ def fetch_espn_games():
                 else: 
                     # Overtime
                     minutes_played = 48 + (period - 4) * 5
+            # Get game date and time
+            game_date = event.get("date", "")
+            game_time_str = ""
+            game_datetime_str = ""
+            if game_date:
+                try:
+                    game_dt = datetime.fromisoformat(game_date.replace("Z", "+00:00"))
+                    game_dt_eastern = game_dt.astimezone(eastern)
+                    game_time_str = game_dt_eastern.strftime("%I:%M %p ET")
+                    game_datetime_str = game_dt_eastern.strftime("%b %d, %I:%M %p ET")  # "Jan 26, 07:00 PM ET"
+                except:
+                    game_time_str = ""
+                    game_datetime_str = ""
+            
             odds_data = comp.get("odds", [])
             vegas_odds = {}
             if odds_data and len(odds_data) > 0:
@@ -172,7 +186,8 @@ def fetch_espn_games():
                     "awayML": odds.get("awayTeamOdds", {}).get("moneyLine")}
             games.append({"away": away_team, "home": home_team, "away_score": away_score, "home_score": home_score,
                 "status": status, "period": period, "clock": clock, "minutes_played": minutes_played,
-                "total_score": home_score + away_score, "game_id": game_id, "vegas_odds": vegas_odds})
+                "total_score": home_score + away_score, "game_id": game_id, "vegas_odds": vegas_odds,
+                "game_time": game_time_str, "game_datetime": game_datetime_str})
         return games
     except Exception as e: st.error("ESPN fetch error: " + str(e)); return []
 
@@ -430,7 +445,7 @@ if mispricings:
         edge_color = "#ff6b6b" if mp['edge'] >= 10 else ("#22c55e" if mp['edge'] >= 7 else "#eab308")
         edge_label = "🔥 STRONG" if mp['edge'] >= 10 else ("🟢 GOOD" if mp['edge'] >= 7 else "🟡 EDGE")
         action_color = "#22c55e" if mp['action'] == "YES" else "#ef4444"
-        status_text = f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "Scheduled"
+        status_text = f"Q{g['period']} {g['clock']}" if g['period'] > 0 else (g.get('game_datetime', 'Scheduled') or 'Scheduled')
         
         col1, col2 = st.columns([3, 1])
         with col1: st.markdown(f"**{g['away']} @ {g['home']}** • {status_text}")
@@ -676,7 +691,10 @@ with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
         
         for p in all_picks:
             pg1, pg2, pg3, pg4 = st.columns([2.5, 1, 2, 1])
-            with pg1: st.markdown(f"**{p['away']} @ {p['home']}**")
+            game_datetime = next((g.get('game_datetime', '') for g in scheduled_games if g['away'] == p['away'] and g['home'] == p['home']), '')
+            with pg1: 
+                st.markdown(f"**{p['away']} @ {p['home']}**")
+                if game_datetime: st.caption(game_datetime)
             with pg2: st.markdown(f"<span style='color:{p['edge_color']}'>{p['edge_label']}</span>", unsafe_allow_html=True)
             with pg3:
                 if p['pick'] != "WAIT": st.link_button(f"🎯 {p['pick']} ML", get_kalshi_game_link(p['away'], p['home']), use_container_width=True)
@@ -826,7 +844,10 @@ st.subheader("📋 ALL GAMES TODAY")
 for g in games:
     if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: status, color = f"FINAL: {g['away_score']}-{g['home_score']}", "#666"
     elif g['period'] > 0: status, color = f"LIVE Q{g['period']} {g['clock']} | {g['away_score']}-{g['home_score']}", "#22c55e"
-    else: status, color = f"Scheduled | Spread: {g.get('vegas_odds',{}).get('spread','N/A')}", "#888"
+    else: 
+        game_datetime = g.get('game_datetime', 'TBD')
+        spread = g.get('vegas_odds',{}).get('spread','N/A')
+        status, color = f"{game_datetime} | Spread: {spread}", "#888"
     st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid {color}'><b style='color:#fff'>{g['away']} @ {g['home']}</b><br><span style='color:{color}'>{status}</span></div>", unsafe_allow_html=True)
 
 st.divider()
