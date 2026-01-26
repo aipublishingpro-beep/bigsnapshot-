@@ -34,7 +34,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "7.1"
+VERSION = "7.2"
 LEAGUE_AVG_TOTAL = 225
 
 # ============================================================
@@ -74,70 +74,73 @@ KALSHI_CODES = {
 # Reverse lookup
 KALSHI_TO_TEAM = {v: k for k, v in KALSHI_CODES.items()}
 
+# TEAM_STATS - UPDATED FOR 2025-26 SEASON (as of Jan 26, 2026)
+# Net ratings estimated from win% differential: (W-L)/(W+L) * 15
 TEAM_STATS = {
-    "Atlanta": {"net": -3.2, "pace": 100.5, "tier": "weak"},
-    "Boston": {"net": 11.2, "pace": 99.8, "tier": "elite"},
-    "Brooklyn": {"net": -4.5, "pace": 98.2, "tier": "weak"},
-    "Charlotte": {"net": -6.8, "pace": 99.5, "tier": "weak"},
-    "Chicago": {"net": -2.1, "pace": 98.8, "tier": "weak"},
-    "Cleveland": {"net": 8.5, "pace": 97.2, "tier": "elite"},
-    "Dallas": {"net": 4.2, "pace": 99.0, "tier": "good"},
-    "Denver": {"net": 5.8, "pace": 98.5, "tier": "good"},
-    "Detroit": {"net": -8.2, "pace": 97.8, "tier": "weak"},
-    "Golden State": {"net": 2.5, "pace": 100.2, "tier": "mid"},
-    "Houston": {"net": -1.5, "pace": 99.5, "tier": "mid"},
-    "Indiana": {"net": 3.8, "pace": 102.5, "tier": "good"},
-    "LA Clippers": {"net": 1.2, "pace": 97.8, "tier": "mid"},
-    "LA Lakers": {"net": 2.8, "pace": 98.5, "tier": "mid"},
-    "Memphis": {"net": 1.5, "pace": 99.8, "tier": "mid"},
-    "Miami": {"net": 0.5, "pace": 97.2, "tier": "mid"},
-    "Milwaukee": {"net": 4.5, "pace": 98.8, "tier": "good"},
-    "Minnesota": {"net": 5.2, "pace": 98.2, "tier": "good"},
-    "New Orleans": {"net": -2.8, "pace": 99.0, "tier": "weak"},
-    "New York": {"net": 6.8, "pace": 97.5, "tier": "good"},
-    "Oklahoma City": {"net": 9.5, "pace": 98.8, "tier": "elite"},
-    "Orlando": {"net": 2.2, "pace": 96.8, "tier": "mid"},
-    "Philadelphia": {"net": 1.8, "pace": 97.5, "tier": "mid"},
-    "Phoenix": {"net": 0.8, "pace": 98.2, "tier": "mid"},
-    "Portland": {"net": -5.5, "pace": 98.8, "tier": "weak"},
-    "Sacramento": {"net": -1.2, "pace": 100.5, "tier": "mid"},
-    "San Antonio": {"net": -8.5, "pace": 99.2, "tier": "weak"},
-    "Toronto": {"net": -3.8, "pace": 97.8, "tier": "weak"},
-    "Utah": {"net": -6.2, "pace": 98.5, "tier": "weak"},
-    "Washington": {"net": -9.5, "pace": 100.8, "tier": "weak"},
+    "Oklahoma City": {"net": 12.0, "pace": 98.8, "tier": "elite"},    # 37-9
+    "Detroit": {"net": 10.5, "pace": 99.5, "tier": "elite"},          # 32-11
+    "San Antonio": {"net": 8.5, "pace": 99.2, "tier": "elite"},       # 31-14
+    "Denver": {"net": 7.8, "pace": 98.5, "tier": "elite"},            # 31-15
+    "Boston": {"net": 5.5, "pace": 99.8, "tier": "good"},             # 28-17
+    "Toronto": {"net": 4.8, "pace": 97.8, "tier": "good"},            # 28-19
+    "Houston": {"net": 5.2, "pace": 99.5, "tier": "good"},            # 27-16
+    "LA Lakers": {"net": 4.5, "pace": 98.5, "tier": "good"},          # 27-17
+    "Phoenix": {"net": 4.0, "pace": 98.2, "tier": "good"},            # 27-18
+    "Minnesota": {"net": 4.0, "pace": 98.2, "tier": "good"},          # 27-18
+    "New York": {"net": 4.0, "pace": 97.5, "tier": "good"},           # 27-18
+    "Cleveland": {"net": 3.5, "pace": 97.2, "tier": "good"},          # 27-20
+    "Golden State": {"net": 2.0, "pace": 100.2, "tier": "mid"},       # 25-21
+    "Philadelphia": {"net": 2.5, "pace": 97.5, "tier": "mid"},        # 24-20
+    "Miami": {"net": 1.5, "pace": 97.2, "tier": "mid"},               # 24-22
+    "Chicago": {"net": 1.0, "pace": 98.8, "tier": "mid"},             # 23-22
+    "Portland": {"net": 0.0, "pace": 98.8, "tier": "mid"},            # 23-23
+    "Orlando": {"net": 1.2, "pace": 96.8, "tier": "mid"},             # 23-21
+    "Atlanta": {"net": -1.5, "pace": 100.5, "tier": "mid"},           # 22-25
+    "LA Clippers": {"net": -2.0, "pace": 97.8, "tier": "weak"},       # 20-24
+    "Dallas": {"net": -3.5, "pace": 99.0, "tier": "weak"},            # 19-27
+    "Memphis": {"net": -4.0, "pace": 99.8, "tier": "weak"},           # 18-25
+    "Milwaukee": {"net": -4.5, "pace": 98.8, "tier": "weak"},         # 18-26
+    "Charlotte": {"net": -5.5, "pace": 99.5, "tier": "weak"},         # 18-28
+    "Utah": {"net": -7.0, "pace": 98.5, "tier": "weak"},              # 15-31
+    "Sacramento": {"net": -9.5, "pace": 100.5, "tier": "tank"},       # 12-34
+    "Brooklyn": {"net": -8.5, "pace": 98.2, "tier": "tank"},          # 12-31
+    "Indiana": {"net": -10.5, "pace": 102.5, "tier": "tank"},         # 11-35
+    "New Orleans": {"net": -11.0, "pace": 99.0, "tier": "tank"},      # 11-36
+    "Washington": {"net": -11.5, "pace": 100.8, "tier": "tank"},      # 10-34
 }
 
+# STAR_PLAYERS - UPDATED FOR 2025-26 SEASON (post-trades)
 STAR_PLAYERS = {
-    "Boston": ["Jayson Tatum", "Jaylen Brown"],
+    "Boston": ["Jayson Tatum", "Jaylen Brown", "Derrick White"],
     "Cleveland": ["Donovan Mitchell", "Darius Garland", "Evan Mobley"],
     "Oklahoma City": ["Shai Gilgeous-Alexander", "Chet Holmgren", "Jalen Williams"],
-    "New York": ["Jalen Brunson", "Karl-Anthony Towns", "Mikal Bridges"],
+    "New York": ["Jalen Brunson", "Karl-Anthony Towns", "Mikal Bridges", "OG Anunoby"],
     "Milwaukee": ["Giannis Antetokounmpo", "Damian Lillard"],
-    "Denver": ["Nikola Jokic", "Jamal Murray"],
-    "Minnesota": ["Anthony Edwards", "Rudy Gobert"],
+    "Denver": ["Nikola Jokic", "Jamal Murray", "Michael Porter Jr"],
+    "Minnesota": ["Anthony Edwards", "Rudy Gobert", "Julius Randle"],
     "Dallas": ["Luka Doncic", "Kyrie Irving"],
     "Phoenix": ["Kevin Durant", "Devin Booker", "Bradley Beal"],
     "LA Lakers": ["LeBron James", "Anthony Davis"],
     "Golden State": ["Stephen Curry", "Draymond Green"],
-    "Miami": ["Jimmy Butler", "Bam Adebayo"],
-    "Philadelphia": ["Joel Embiid", "Tyrese Maxey"],
-    "LA Clippers": ["Kawhi Leonard", "James Harden"],
+    "Miami": ["Bam Adebayo", "Tyler Herro"],  # Jimmy Butler injured
+    "Philadelphia": ["Joel Embiid", "Tyrese Maxey", "Paul George"],
+    "LA Clippers": ["James Harden", "Norman Powell"],  # Kawhi out
     "Memphis": ["Ja Morant", "Jaren Jackson Jr"],
     "New Orleans": ["Zion Williamson", "Brandon Ingram"],
-    "Sacramento": ["De'Aaron Fox", "Domantas Sabonis"],
-    "Indiana": ["Tyrese Haliburton", "Pascal Siakam"],
+    "Sacramento": ["Domantas Sabonis", "Keegan Murray"],  # De'Aaron Fox traded
+    "Indiana": ["Pascal Siakam", "Bennedict Mathurin"],  # Haliburton injured
     "Orlando": ["Paolo Banchero", "Franz Wagner"],
-    "Houston": ["Jalen Green", "Alperen Sengun"],
-    "Atlanta": ["Trae Young", "Dejounte Murray"],
+    "Houston": ["Jalen Green", "Alperen Sengun", "Fred VanVleet"],
+    "Atlanta": ["Jalen Johnson", "Onyeka Okongwu", "CJ McCollum"],  # Trae Young traded
     "Chicago": ["Zach LaVine", "Coby White"],
     "Charlotte": ["LaMelo Ball", "Brandon Miller"],
-    "Detroit": ["Cade Cunningham", "Jaden Ivey"],
-    "Toronto": ["Scottie Barnes", "RJ Barrett"],
-    "Brooklyn": ["Cam Thomas", "Mikal Bridges"],
-    "San Antonio": ["Victor Wembanyama", "Devin Vassell"],
+    "Detroit": ["Cade Cunningham", "Jalen Duren"],
+    "Toronto": ["Scottie Barnes", "RJ Barrett", "Brandon Ingram"],
+    "Brooklyn": ["Cam Thomas", "Dennis Schroder"],
+    "San Antonio": ["Victor Wembanyama", "De'Aaron Fox", "Stephon Castle"],  # Fox acquired
     "Utah": ["Lauri Markkanen", "Collin Sexton"],
-    "Portland": ["Anfernee Simons", "Scoot Henderson"],
-    "Washington": ["Jordan Poole", "Kyle Kuzma"],
+    "Portland": ["Anfernee Simons", "Deni Avdija", "Scoot Henderson"],
+    "Washington": ["Jordan Poole", "Kyle Kuzma", "Khris Middleton"],
 }
 
 STAR_TIERS = {
