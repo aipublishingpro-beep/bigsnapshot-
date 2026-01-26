@@ -103,39 +103,39 @@ with col4:
 # ============================================================
 st.markdown("""
 <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🏀</div>
-        <h3 style="color: #4ade80; margin-bottom: 5px;">NBA</h3>
+    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
+        <div style="font-size: 50px;">🏀</div>
+        <h3 style="color: #4ade80; margin: 0;">NBA</h3>
         <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🏈</div>
-        <h3 style="color: #4ade80; margin-bottom: 5px;">NFL</h3>
+    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
+        <div style="font-size: 50px;">🏈</div>
+        <h3 style="color: #4ade80; margin: 0;">NFL</h3>
         <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🏒</div>
-        <h3 style="color: #4ade80; margin-bottom: 5px;">NHL</h3>
+    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
+        <div style="font-size: 50px;">🏒</div>
+        <h3 style="color: #4ade80; margin: 0;">NHL</h3>
         <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🎓</div>
-        <h3 style="color: #4ade80; margin-bottom: 5px;">NCAA</h3>
+    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
+        <div style="font-size: 50px;">🎓</div>
+        <h3 style="color: #4ade80; margin: 0;">NCAA</h3>
         <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
-        <div style="font-size: 50px; margin-bottom: 10px;">⚽</div>
-        <h3 style="color: #4ade80; margin-bottom: 5px;">Soccer</h3>
+    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
+        <div style="font-size: 50px;">⚽</div>
+        <h3 style="color: #4ade80; margin: 0;">Soccer</h3>
         <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
-        <div style="font-size: 50px; margin-bottom: 10px;">🌡️</div>
-        <h3 style="color: #4ade80; margin-bottom: 5px;">Temp</h3>
+    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
+        <div style="font-size: 50px;">🌡️</div>
+        <h3 style="color: #4ade80; margin: 0;">Temp</h3>
         <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
     </div>
-    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; text-align: center; border: 2px solid #22c55e;">
-        <div style="font-size: 50px; margin-bottom: 10px;">📊</div>
-        <h3 style="color: #4ade80; margin-bottom: 5px;">Economics</h3>
+    <div style="background: linear-gradient(135deg, #1a3a1a 0%, #2a4a2a 100%); border-radius: 16px; padding: 25px; width: 140px; height: 180px; text-align: center; border: 2px solid #22c55e; display: flex; flex-direction: column; justify-content: space-between; align-items: center;">
+        <div style="font-size: 50px;">📊</div>
+        <h3 style="color: #4ade80; margin: 0;">Econ</h3>
         <span style="background:#22c55e;color:#000;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">FREE</span>
     </div>
 </div>
