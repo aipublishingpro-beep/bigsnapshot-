@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "8.4"
+VERSION = "8.6"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -247,97 +247,72 @@ def render_nba_court(away, home, away_score, home_score, possession, period, clo
     poss_home = "visible" if possession == home else "hidden"
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
     
-    # Possession arrow - points toward basket being attacked
+    # Possession arrow direction
     if possession == away:
-        arrow_points = "470,140 450,130 450,150"  # Arrow pointing right (away attacking home basket)
-        arrow_vis = "visible"
+        arrow_x, arrow_dir = 430, "➡"
     elif possession == home:
-        arrow_points = "30,140 50,130 50,150"  # Arrow pointing left (home attacking away basket)
-        arrow_vis = "visible"
+        arrow_x, arrow_dir = 70, "⬅"
     else:
-        arrow_points = "250,140 250,140 250,140"
-        arrow_vis = "hidden"
+        arrow_x, arrow_dir = 250, ""
     
     # Score flash and last play indicator
-    flash_away = "hidden"
-    flash_home = "hidden"
+    flash_away_opacity = "0"
+    flash_home_opacity = "0"
     play_text = ""
     play_color = "#888"
     
     if last_play:
-        play_text = last_play.get('text', '')[:40]
+        play_text = last_play.get('text', '')[:45]
         score_val = last_play.get('score_value', 0)
         play_type = (last_play.get('play_type', '') or '').lower()
         
         if score_val > 0 or 'made' in play_type:
-            play_color = "#22c55e"  # Green for made shot
-            # Determine which team scored based on possession or play text
-            if away.lower() in play_text.lower() or away_code.lower() in play_text.lower():
-                flash_home = "visible"  # Away team scores on home basket (right side)
+            play_color = "#22c55e"
+            # Away team scores on home's basket (right side)
+            if any(x in play_text.lower() for x in [away.lower(), away_code.lower()]):
+                flash_home_opacity = "0.8"
             else:
-                flash_away = "visible"  # Home team scores on away basket (left side)
+                flash_away_opacity = "0.8"
         elif 'miss' in play_type or 'block' in play_type:
-            play_color = "#ef4444"  # Red for miss
+            play_color = "#ef4444"
         elif 'rebound' in play_type:
-            play_color = "#3b82f6"  # Blue
+            play_color = "#3b82f6"
         elif 'turnover' in play_type or 'steal' in play_type:
-            play_color = "#f97316"  # Orange
+            play_color = "#f97316"
         elif 'foul' in play_type:
-            play_color = "#eab308"  # Yellow
+            play_color = "#eab308"
     
-    return f'''<svg viewBox="0 0 500 350" style="width:100%;max-width:500px;background:#1a1a2e;border-radius:12px;">
-        <!-- Court -->
-        <rect x="20" y="20" width="460" height="240" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/>
-        <circle cx="250" cy="140" r="40" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="140" r="4" fill="#fff"/>
-        <line x1="250" y1="20" x2="250" y2="260" stroke="#fff" stroke-width="2"/>
-        
-        <!-- Left side (Away attacks here = Home basket) -->
-        <path d="M 20 60 Q 120 140 20 220" fill="none" stroke="#fff" stroke-width="2"/>
-        <rect x="20" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
-        <circle cx="100" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
-        <circle cx="40" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
-        
-        <!-- Left basket score flash -->
-        <circle cx="40" cy="140" r="20" fill="#22c55e" opacity="0.7" visibility="{flash_away}">
-            <animate attributeName="r" values="8;25;8" dur="0.5s" repeatCount="1"/>
-            <animate attributeName="opacity" values="0.9;0;0" dur="0.5s" repeatCount="1"/>
-        </circle>
-        
-        <!-- Right side (Home attacks here = Away basket) -->
-        <path d="M 480 60 Q 380 140 480 220" fill="none" stroke="#fff" stroke-width="2"/>
-        <rect x="400" y="80" width="80" height="120" fill="none" stroke="#fff" stroke-width="2"/>
-        <circle cx="400" cy="140" r="30" fill="none" stroke="#fff" stroke-width="2"/>
-        <circle cx="460" cy="140" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
-        
-        <!-- Right basket score flash -->
-        <circle cx="460" cy="140" r="20" fill="#22c55e" opacity="0.7" visibility="{flash_home}">
-            <animate attributeName="r" values="8;25;8" dur="0.5s" repeatCount="1"/>
-            <animate attributeName="opacity" values="0.9;0;0" dur="0.5s" repeatCount="1"/>
-        </circle>
-        
-        <!-- Possession Arrow -->
-        <polygon points="{arrow_points}" fill="#ffd700" visibility="{arrow_vis}">
-            <animate attributeName="opacity" values="1;0.5;1" dur="1s" repeatCount="indefinite"/>
-        </polygon>
-        
-        <!-- Team boxes -->
-        <rect x="60" y="270" width="80" height="40" fill="{away_color}" rx="6"/>
-        <text x="100" y="290" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text>
-        <text x="100" y="305" fill="#fff" font-size="12" text-anchor="middle">{away_score}</text>
-        <circle cx="145" cy="290" r="8" fill="#ffd700" visibility="{poss_away}"/>
-        
-        <rect x="360" y="270" width="80" height="40" fill="{home_color}" rx="6"/>
-        <text x="400" y="290" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text>
-        <text x="400" y="305" fill="#fff" font-size="12" text-anchor="middle">{home_score}</text>
-        <circle cx="355" cy="290" r="8" fill="#ffd700" visibility="{poss_home}"/>
-        
-        <!-- Clock -->
-        <text x="250" y="295" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text>
-        
-        <!-- Last Play Indicator -->
-        <rect x="50" y="320" width="400" height="25" fill="#0f172a" rx="4"/>
-        <text x="250" y="337" fill="{play_color}" font-size="11" text-anchor="middle">{play_text}</text>
-    </svg>'''
+    svg = f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;">
+<svg viewBox="0 0 500 280" style="width:100%;max-width:500px;">
+<rect x="20" y="20" width="460" height="200" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/>
+<circle cx="250" cy="120" r="35" fill="none" stroke="#fff" stroke-width="2"/>
+<circle cx="250" cy="120" r="4" fill="#fff"/>
+<line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="2"/>
+<path d="M 20 50 Q 100 120 20 190" fill="none" stroke="#fff" stroke-width="2"/>
+<rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/>
+<circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/>
+<circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
+<circle cx="35" cy="120" r="18" fill="#22c55e" opacity="{flash_away_opacity}"/>
+<path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/>
+<rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/>
+<circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/>
+<circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>
+<circle cx="465" cy="120" r="18" fill="#22c55e" opacity="{flash_home_opacity}"/>
+<rect x="50" y="230" width="70" height="35" fill="{away_color}" rx="5"/>
+<text x="85" y="250" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">{away_code}</text>
+<text x="85" y="262" fill="#fff" font-size="10" text-anchor="middle">{away_score}</text>
+<circle cx="125" cy="248" r="6" fill="#ffd700" visibility="{poss_away}"/>
+<rect x="380" y="230" width="70" height="35" fill="{home_color}" rx="5"/>
+<text x="415" y="250" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">{home_code}</text>
+<text x="415" y="262" fill="#fff" font-size="10" text-anchor="middle">{home_score}</text>
+<circle cx="375" cy="248" r="6" fill="#ffd700" visibility="{poss_home}"/>
+<text x="250" y="252" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{period_text} {clock}</text>
+</svg>
+<div style="background:#0f172a;padding:8px;border-radius:6px;margin-top:5px;text-align:center;">
+<span style="color:{play_color};font-size:12px;">{play_text if play_text else "Waiting for play..."}</span>
+</div>
+</div>'''
+    return svg
 
 def get_play_icon(play_type, score_value):
     play_lower = play_type.lower() if play_type else ""
@@ -518,9 +493,12 @@ if live_games:
         plays, poss_team_id = fetch_plays(game_id)
         possession = next((tn for tn, c in KALSHI_CODES.items() if c.lower() in str(poss_team_id).lower()), "")
         
+        # Get last play for court visualization
+        last_play = plays[-1] if plays else None
+        
         st.markdown(f"### {away} @ {home}")
         col1, col2 = st.columns([1, 1])
-        with col1: st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock']), unsafe_allow_html=True)
+        with col1: st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock'], last_play), unsafe_allow_html=True)
         with col2:
             st.markdown("**📋 LAST 10 PLAYS**")
             for p in reversed(plays):
