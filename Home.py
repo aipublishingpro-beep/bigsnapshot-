@@ -33,4 +33,5 @@ with col4:
 
 st.markdown("---")
 st.markdown("📧 **Comments or suggestions?** aipublishingpro@gmail.com")
+st.caption("⚠️ For educational and entertainment purposes only. This is not financial advice. We are not responsible for any betting or trading decisions you make.")
 st.caption("© 2026 BigSnapshot. All rights reserved.")
