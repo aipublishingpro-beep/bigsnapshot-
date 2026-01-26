@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "9.1"
+VERSION = "9.2"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -144,10 +144,25 @@ def fetch_espn_games():
             if period > 0:
                 if period <= 4:
                     completed_quarters = (period - 1) * 12
-                    if clock and ":" in clock:
-                        try: mins_left = int(clock.split(":")[0]); minutes_played = completed_quarters + (12 - mins_left)
-                        except: minutes_played = completed_quarters
-                else: minutes_played = 48 + (period - 4) * 5
+                    if clock:
+                        try:
+                            if ":" in clock:
+                                mins_left = int(clock.split(":")[0])
+                                minutes_played = completed_quarters + (12 - mins_left)
+                            elif clock == "0.0" or clock == "0":
+                                # End of quarter - full quarter completed
+                                minutes_played = completed_quarters + 12
+                            else:
+                                # Could be seconds only like "45.2"
+                                minutes_played = completed_quarters + 12
+                        except: 
+                            minutes_played = completed_quarters + 12
+                    else:
+                        # No clock data, assume quarter just started
+                        minutes_played = completed_quarters
+                else: 
+                    # Overtime
+                    minutes_played = 48 + (period - 4) * 5
             odds_data = comp.get("odds", [])
             vegas_odds = {}
             if odds_data and len(odds_data) > 0:
