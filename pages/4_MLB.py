@@ -1,68 +1,50 @@
 import streamlit as st
 
-st.set_page_config(
-    page_title="MLB Edge Finder | BigSnapshot",
-    page_icon="⚾",
-    layout="wide"
-)
+st.set_page_config(page_title="MLB Edge Finder", page_icon="⚾", layout="wide")
 
 # ============================================================
-# GA4 ANALYTICS - SERVER SIDE
+# GA4 ANALYTICS
 # ============================================================
-import uuid
-import requests as req_ga
-
-def send_ga4_event(page_title, page_path):
-    try:
-        url = f"https://www.google-analytics.com/mp/collect?measurement_id=G-NQKY5VQ376&api_secret=n4oBJjH7RXi3dA7aQo2CZA"
-        payload = {"client_id": str(uuid.uuid4()), "events": [{"name": "page_view", "params": {"page_title": page_title, "page_location": f"https://bigsnapshot.streamlit.app{page_path}"}}]}
-        req_ga.post(url, json=payload, timeout=2)
-    except: pass
-
-send_ga4_event("MLB Edge Finder", "/MLB")
-
-# ============================================================
-# COOKIE AUTH CHECK
-# ============================================================
-import extra_streamlit_components as stx
-
-cookie_manager = stx.CookieManager()
-
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-saved_auth = cookie_manager.get("authenticated")
-if saved_auth == "true":
-    st.session_state.authenticated = True
-
-if not st.session_state.authenticated:
-    st.switch_page("Home.py")
-
-# ============================================================
-# STYLES
-# ============================================================
-from styles import apply_styles
-apply_styles()
-
-# ============================================================
-# MOBILE CSS
-# ============================================================
-st.markdown('<style>@media (max-width: 768px) { .stColumns > div { flex: 1 1 100% !important; min-width: 100% !important; } [data-testid="stMetricValue"] { font-size: 1.2rem !important; } [data-testid="stMetricLabel"] { font-size: 0.8rem !important; } h1 { font-size: 1.5rem !important; } h2 { font-size: 1.2rem !important; } h3 { font-size: 1rem !important; } button { padding: 8px 12px !important; font-size: 0.85em !important; } }</style>', unsafe_allow_html=True)
-
-# ============================================================
-# PAGE-SPECIFIC CSS
-# ============================================================
-st.markdown('<style>.stApp { background: linear-gradient(180deg, #0a0a0f 0%, #1a1a2e 100%); }</style>', unsafe_allow_html=True)
+import streamlit.components.v1 as components
+components.html("""
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1T35YHHYBC"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-1T35YHHYBC', { send_page_view: true });
+</script>
+""", height=0)
 
 # ============================================================
 # COMING SOON PAGE
 # ============================================================
-st.markdown('<div style="text-align: center; padding: 80px 20px;"><div style="font-size: 80px; margin-bottom: 20px;">⚾</div><h1 style="font-size: 48px; font-weight: 800; color: #fff; margin-bottom: 15px;">MLB Edge Finder</h1><p style="color: #888; font-size: 22px; margin-bottom: 40px;">Coming Soon — 2026 Season</p><div style="background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%); border-radius: 16px; padding: 40px; max-width: 600px; margin: 0 auto; border: 1px solid #333;"><p style="color: #4dabf7; font-size: 18px; font-weight: 600; margin-bottom: 20px;">⚾ March 2026</p><p style="color: #ccc; font-size: 16px; line-height: 1.7; margin-bottom: 25px;">MLB Edge Finder will activate when the 2026 baseball season begins and Kalshi has active MLB markets.</p><p style="color: #888; font-size: 14px; line-height: 1.6;"><strong>What\'s Coming:</strong><br>• Starting pitcher analysis (ERA, WHIP, K/9)<br>• Bullpen fatigue tracking<br>• Team OPS splits (vs LHP/RHP)<br>• Ballpark factors<br>• 12-factor edge model</p></div></div>', unsafe_allow_html=True)
+st.markdown("""
+<div style="text-align: center; padding: 80px 20px;">
+    <div style="font-size: 100px; margin-bottom: 20px;">⚾</div>
+    <h1 style="color: #fff; font-size: 42px; margin-bottom: 10px;">MLB Edge Finder</h1>
+    <div style="background: linear-gradient(135deg, #1a1a2a 0%, #2a2a3a 100%); border-radius: 16px; padding: 30px; max-width: 500px; margin: 30px auto; border: 2px dashed #3b82f6;">
+        <h2 style="color: #3b82f6; margin-bottom: 15px;">🚧 Coming Soon</h2>
+        <p style="color: #888; font-size: 16px; line-height: 1.6;">
+            MLB Edge Finder is under development and will launch before the 2026 season.
+        </p>
+        <p style="color: #666; font-size: 14px; margin-top: 15px;">
+            Expected: March 2026
+        </p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-# Timeline
-st.markdown("---")
-st.markdown('<div style="text-align: center; padding: 20px;"><h3 style="color: #fff; margin-bottom: 20px;">📅 2026 MLB Timeline</h3><div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;"><div style="text-align: center;"><p style="color: #4dabf7; font-size: 24px; margin: 0;">Feb 2026</p><p style="color: #888; font-size: 14px;">Spring Training</p></div><div style="text-align: center;"><p style="color: #4dabf7; font-size: 24px; margin: 0;">Mar - Oct 2026</p><p style="color: #888; font-size: 14px;">Regular Season</p></div><div style="text-align: center;"><p style="color: #4dabf7; font-size: 24px; margin: 0;">Oct 2026</p><p style="color: #888; font-size: 14px;">Playoffs</p></div></div></div>', unsafe_allow_html=True)
+# Back to Home button
+col1, col2, col3 = st.columns([1, 1, 1])
+with col2:
+    if st.button("🏠 Back to Home", use_container_width=True, type="primary"):
+        st.switch_page("Home.py")
 
-# Footer
-st.markdown("---")
-st.caption("⚠️ Educational only. Not financial advice. v18.2")
+st.markdown("""
+<div style="text-align: center; padding: 40px 20px;">
+    <p style="color: #555; font-size: 12px;">
+        ⚠️ For entertainment and educational purposes only. Not financial advice.
+    </p>
+</div>
+""", unsafe_allow_html=True)
