@@ -152,6 +152,25 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ============================================================
+# EMAIL SIGNUP
+# ============================================================
+st.markdown("""
+<div style="text-align: center; padding: 25px; margin: 20px auto; max-width: 600px; background: linear-gradient(135deg, #1a2a4a 0%, #2a3a5a 100%); border-radius: 16px; border: 2px solid #22c55e;">
+    <h3 style="color: #4ade80; margin: 0 0 10px 0;">📧 Get Notified</h3>
+    <p style="color: #ccc; font-size: 14px; margin: 0 0 15px 0;">
+        Want updates when we add features or launch paid plans?<br>
+        <span style="color: #888; font-size: 12px;">We'll only email you for major updates. No spam.</span>
+    </p>
+    <a href="https://docs.google.com/forms/d/e/1FAIpQLSfBcRg-QSB1E150zW2TSIkaPEFkJFGB4xqyZszfEqvtzn_wAw/viewform" target="_blank" style="display: inline-block; background: #22c55e; color: black; padding: 12px 30px; border-radius: 8px; font-weight: 700; text-decoration: none; font-size: 16px;">
+        ✉️ Sign Up for Updates
+    </a>
+    <p style="color: #666; font-size: 11px; margin: 15px 0 0 0;">
+        Questions? Contact: <a href="mailto:aipublishingpro@gmail.com" style="color: #4ade80;">aipublishingpro@gmail.com</a>
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
 st.markdown("---")
 
 # ============================================================
