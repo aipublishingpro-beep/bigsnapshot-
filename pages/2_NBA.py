@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "7.6"
+VERSION = "7.8"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -352,18 +352,21 @@ def get_play_icon(play_type, score_value):
     else:
         return "•", "#888"
 
-def get_kalshi_ml_link(away, home):
+def get_kalshi_game_link(away, home):
+    """Build correct Kalshi game URL - ALL markets (ML, Spread, Totals) are on same page"""
     away_code = KALSHI_CODES.get(away, "XXX").lower()
     home_code = KALSHI_CODES.get(home, "XXX").lower()
-    date_str = datetime.now(eastern).strftime('%d%b%y').lower()
-    return f"https://kalshi.com/markets/kxnbagame/kxnbagame-{date_str}{away_code}{home_code}"
+    date_str = datetime.now(eastern).strftime('%y%b%d').lower()  # 26jan26
+    ticker = f"kxnbagame-{date_str}{away_code}{home_code}"
+    return f"https://kalshi.com/markets/kxnbagame/professional-basketball-game/{ticker}"
 
-def get_kalshi_totals_link(away, home, line):
-    away_code = KALSHI_CODES.get(away, "XXX").lower()
-    home_code = KALSHI_CODES.get(home, "XXX").lower()
-    date_str = datetime.now(eastern).strftime('%d%b%y').lower()
-    line_str = str(int(line)) if line == int(line) else str(line).replace(".", "p")
-    return f"https://kalshi.com/markets/kxnba/nba-{away_code}-{home_code}-{date_str}-{line_str}"
+def get_kalshi_ml_link(away, home):
+    """ML link - same as game page"""
+    return get_kalshi_game_link(away, home)
+
+def get_kalshi_totals_link(away, home, line=None):
+    """Totals link - same as game page (totals are on the same page)"""
+    return get_kalshi_game_link(away, home)
 
 def calc_projection(total_score, minutes_played):
     if minutes_played >= 8:
@@ -627,12 +630,13 @@ if live_games:
             safe_yes = next((t for t in sorted(THRESHOLDS) if t <= proj - 6), None)
             
             tc1, tc2 = st.columns(2)
+            totals_link = get_kalshi_totals_link(away, home)
             if safe_no:
                 with tc1:
-                    st.link_button(f"🔴 BUY NO {safe_no}", get_kalshi_totals_link(away, home, safe_no), use_container_width=True)
+                    st.link_button(f"🔴 BUY NO {safe_no}", totals_link, use_container_width=True)
             if safe_yes:
                 with tc2:
-                    st.link_button(f"🟢 BUY YES {safe_yes}", get_kalshi_totals_link(away, home, safe_yes), use_container_width=True)
+                    st.link_button(f"🟢 BUY YES {safe_yes}", totals_link, use_container_width=True)
         else:
             st.caption("⏳ Waiting for 6+ minutes of game time...")
         
@@ -672,7 +676,7 @@ for g in live_games:
                     "cushion": cushion,
                     "pace": pace_label,
                     "pace_color": pace_color,
-                    "link": get_kalshi_totals_link(g['away'], g['home'], thresh),
+                    "link": get_kalshi_totals_link(g['away'], g['home']),
                     "away": g['away'],
                     "home": g['home']
                 })
