@@ -63,13 +63,13 @@ now = datetime.now(eastern)
 
 # All Kalshi Temperature Cities with LOCAL TIMEZONES
 CITY_CONFIG = {
-    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central"},
-    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central"},
-    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "tz": "US/Mountain"},
-    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific"},
-    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern"},
-    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern"},
-    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern"},
+    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central", "slug_low": "lowest-temperature-in-austin"},
+    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central", "slug_low": "lowest-temperature-in-chicago"},
+    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "tz": "US/Mountain", "slug_low": "lowest-temperature-in-denver"},
+    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific", "slug_low": "lowest-temperature-in-los-angeles"},
+    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern", "slug_low": "lowest-temperature-in-miami"},
+    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern", "slug_low": "lowest-temperature-in-nyc"},
+    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern", "slug_low": "lowest-temperature-in-philadelphia"},
 }
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
@@ -108,7 +108,7 @@ def temp_in_bracket(temp, range_str):
     return low < temp <= high
 
 @st.cache_data(ttl=60)
-def fetch_kalshi_brackets(series_ticker):
+def fetch_kalshi_brackets(series_ticker, slug=""):
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
     try:
         resp = requests.get(url, timeout=10)
@@ -128,7 +128,6 @@ def fetch_kalshi_brackets(series_ticker):
             range_txt = m.get("subtitle", "") or m.get("title", "")
             ticker = m.get("ticker", "")
             # Skip binary threshold markets (">X°" or "<X°") - only use bracket markets
-            # Bracket markets have "to" or "or above" or "or below"
             range_lower = range_txt.lower()
             if not any(x in range_lower for x in ["to", "or above", "or below"]):
                 continue
@@ -145,8 +144,14 @@ def fetch_kalshi_brackets(series_ticker):
                 yes_price = (yb + ya) / 2
             else:
                 yes_price = ya or yb or 0
-            brackets.append({"range": range_txt, "mid": mid, "yes": yes_price, "ticker": ticker,
-                "url": f"https://kalshi.com/markets/{series_ticker.lower()}/{ticker.lower()}" if ticker else "#"})
+            # Build correct Kalshi URL with slug
+            if ticker and slug:
+                kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}/{slug}/{ticker.lower()}"
+            elif ticker:
+                kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}/{ticker.lower()}"
+            else:
+                kalshi_url = "#"
+            brackets.append({"range": range_txt, "mid": mid, "yes": yes_price, "ticker": ticker, "url": kalshi_url})
         brackets.sort(key=lambda x: x['mid'] or 0)
         return brackets
     except:
@@ -383,7 +388,7 @@ if st.button("⭐ Set as Default City", use_container_width=False):
 # Fetch with city's timezone
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"), city_tz_str)
 extremes_6hr, official_high, official_low = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else ({}, None, None)
-brackets_low_data = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC")) if is_owner else None
+brackets_low_data = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"), cfg.get("slug_low", "")) if is_owner else None
 
 if current_temp:
     tz_abbrev = city_now.strftime('%Z')
@@ -496,7 +501,7 @@ st.caption("💡 LOW locks in by 6 AM local time and rarely changes — this is 
 hour = city_now.hour  # Use city's LOCAL hour
 if obs_low:
     st.metric("📉 Today's Low", f"{obs_low}°F")
-    brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
+    brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"), cfg.get("slug_low", ""))
     if hour >= 6:
         st.caption("✅ Low locked in (after 6 AM local)")
         render_brackets_with_actual(brackets_low, obs_low, "LOW")
