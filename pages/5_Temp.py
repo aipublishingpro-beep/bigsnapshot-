@@ -49,10 +49,10 @@ def fetch_nws_observations(station, city_tz_str):
         city_tz = pytz.timezone(city_tz_str)
         resp = requests.get(url, headers={"User-Agent": "TempEdge/7.0"}, timeout=15)
         if resp.status_code != 200:
-            return None, None, None, [], None
+            return None, None, None, [], None, None, None
         observations = resp.json().get("features", [])
         if not observations:
-            return None, None, None, [], None
+            return None, None, None, [], None, None, None
         today = datetime.now(city_tz).date()
         readings = []
         for obs in observations:
@@ -70,7 +70,7 @@ def fetch_nws_observations(station, city_tz_str):
             except:
                 continue
         if not readings:
-            return None, None, None, [], None
+            return None, None, None, [], None, None, None
         readings.sort(key=lambda x: x["time"], reverse=True)
         current = readings[0]["temp"]
         obs_low = min(r["temp"] for r in readings)
@@ -84,10 +84,12 @@ def fetch_nws_observations(station, city_tz_str):
             elif low_found and r["temp"] > obs_low:
                 confirm_time = r["time"]
                 break
+        oldest_time = readings_chrono[0]["time"] if readings_chrono else None
+        newest_time = readings_chrono[-1]["time"] if readings_chrono else None
         display_readings = [{"time": r["time"].strftime("%H:%M"), "temp": r["temp"]} for r in readings]
-        return current, obs_low, obs_high, display_readings, confirm_time
+        return current, obs_low, obs_high, display_readings, confirm_time, oldest_time, newest_time
     except:
-        return None, None, None, [], None
+        return None, None, None, [], None, None, None
 
 @st.cache_data(ttl=300)
 def fetch_nws_forecast(lat, lon):
@@ -327,7 +329,7 @@ if is_owner and st.session_state.view_mode == "today":
     
     results = []
     for city_name, cfg in CITY_CONFIG.items():
-        current_temp, obs_low, obs_high, readings, confirm_time = fetch_nws_observations(cfg["station"], cfg["tz"])
+        current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg["station"], cfg["tz"])
         brackets = fetch_kalshi_brackets(cfg["low"])
         pattern_icon = "🌙" if cfg.get("pattern") == "midnight" else "☀️"
         
@@ -479,25 +481,55 @@ else:
             st.rerun()
     
     cfg = CITY_CONFIG.get(city, {})
-    current_temp, obs_low, obs_high, readings, confirm_time = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
+    current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
     
     if obs_low is not None and current_temp is not None:
         status_code, lock_status, confidence = get_lock_status(cfg, confirm_time, obs_low, readings)
-        lock_color = "#22c55e" if status_code == "locked" else "#3b82f6" if status_code == "likely" else "#fbbf24" if status_code == "watching" else "#6b7280"
+        
+        if is_owner:
+            city_tz = pytz.timezone(cfg.get("tz", "US/Eastern"))
+            hour = datetime.now(city_tz).hour
+            if confirm_time:
+                mins_ago = int((datetime.now(city_tz) - confirm_time).total_seconds() / 60)
+                time_ago_text = f"Confirmed {mins_ago} minutes ago" if 0 <= mins_ago < 1440 else "Check readings below"
+            else:
+                time_ago_text = "Awaiting rise after low..."
+            data_warning = ""
+            if oldest_time and oldest_time.hour >= 7:
+                data_warning = f"⚠️ Data only from {oldest_time.strftime('%H:%M')} - early low may be missing!"
+            if status_code == "locked":
+                box_status, lock_color, box_bg = "✅ LOCKED IN", "#22c55e", "linear-gradient(135deg,#1a2e1a,#0d1117)"
+            elif status_code == "likely":
+                box_status, lock_color, box_bg = "🔒 LIKELY LOCKED", "#3b82f6", "linear-gradient(135deg,#1a1a2e,#0d1117)"
+            else:
+                box_status, lock_color, box_bg = "⏳ MAY STILL DROP", "#f59e0b", "linear-gradient(135deg,#2d1f0a,#0d1117)"
+            st.markdown(f"""
+            <div style="background:{box_bg};border:3px solid {lock_color};border-radius:16px;padding:30px;margin:20px 0;text-align:center">
+                <div style="color:{lock_color};font-size:1.2em;font-weight:700;margin-bottom:10px">{box_status}</div>
+                <div style="color:#6b7280;font-size:0.9em">Today's Low (from available data)</div>
+                <div style="color:#fff;font-size:4em;font-weight:800;margin:10px 0">{obs_low}°F</div>
+                <div style="color:#9ca3af;font-size:0.9em">{time_ago_text}</div>
+                <div style="color:#f59e0b;font-size:0.85em;margin-top:10px">{data_warning}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            lock_color = "#22c55e" if status_code == "locked" else "#3b82f6" if status_code == "likely" else "#fbbf24" if status_code == "watching" else "#6b7280"
+            st.markdown(f"""
+            <div style="background:linear-gradient(135deg,#1a1a2e,#0d1117);border:3px solid {lock_color};border-radius:16px;padding:25px;margin:20px 0;text-align:center;box-shadow:0 0 20px rgba(59,130,246,0.3)">
+                <div style="color:#6b7280;font-size:1em;margin-bottom:5px">📊 Today's Recorded Low</div>
+                <div style="color:{lock_color};font-size:4.5em;font-weight:800;margin:10px 0;text-shadow:0 0 20px rgba(59,130,246,0.5)">{obs_low}°F</div>
+                <div style="color:#9ca3af;font-size:0.9em">From NWS Station: <span style="color:#22c55e;font-weight:600">{cfg.get('station', 'N/A')}</span></div>
+            </div>
+            """, unsafe_allow_html=True)
         
         st.markdown(f"""
-        <div style="background:#0d1117;border:3px solid {lock_color};border-radius:16px;padding:25px;margin:20px 0;text-align:center">
-            <div style="color:{lock_color};font-size:1.2em;font-weight:700">{lock_status}</div>
-            <div style="color:#6b7280">Today's Low</div>
-            <div style="color:#fff;font-size:4em;font-weight:800">{obs_low}°F</div>
-            <div style="color:#6b7280;font-size:0.9em">Rounds to {round(obs_low)}°F</div>
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
+            <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
+                <div><div style="color:#6b7280;font-size:0.8em">CURRENT TEMP</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
+                <div><div style="color:#6b7280;font-size:0.8em">TODAY'S HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric("🌡️ Current", f"{current_temp}°F")
-        col2.metric("📈 High", f"{obs_high}°F")
-        col3.metric("📉 Low", f"{obs_low}°F")
         
         brackets = fetch_kalshi_brackets(cfg["low"])
         winning = find_winning_bracket(obs_low, brackets)
@@ -515,26 +547,45 @@ else:
             """, unsafe_allow_html=True)
         
         if readings:
-            with st.expander("📊 Recent Readings", expanded=False):
-                display_count = len(readings) if is_owner else min(12, len(readings))
-                for i, r in enumerate(readings[:display_count]):
-                    marker = " ← **LOW**" if r['temp'] == obs_low else ""
-                    st.write(f"{r['time']} → {r['temp']}°F{marker}")
+            with st.expander("📊 Recent NWS Observations", expanded=True):
+                if oldest_time and newest_time:
+                    st.markdown(f"<div style='color:#6b7280;font-size:0.8em;margin-bottom:10px;text-align:center'>📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local</div>", unsafe_allow_html=True)
+                display_list = readings if is_owner else readings[:8]
+                low_idx = next((i for i, r in enumerate(display_list) if r['temp'] == obs_low), None)
+                confirm_idx = (low_idx - 2) if (low_idx is not None and low_idx >= 2) else None
+                for i, r in enumerate(display_list):
+                    if is_owner and confirm_idx is not None and i == confirm_idx:
+                        st.markdown(f'<div style="display:flex;justify-content:center;padding:8px;border-radius:4px;background:#166534;border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW</span></div>', unsafe_allow_html=True)
+                    if i == low_idx:
+                        row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:#2d1f0a;border:1px solid #f59e0b;margin:2px 0"
+                        temp_style = "color:#fbbf24;font-weight:700"
+                        label = " ↩️ LOW"
+                    else:
+                        row_style = "display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"
+                        temp_style = "color:#fff;font-weight:600"
+                        label = ""
+                    st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:50px'>{r['time']}</span><span style='{temp_style}'>{r['temp']}°F{label}</span></div>", unsafe_allow_html=True)
     else:
         st.warning("⚠️ Could not fetch NWS data for this city")
     
     st.markdown("---")
+    st.subheader("📡 NWS Forecast")
     forecast = fetch_nws_forecast(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
     if forecast:
-        st.subheader("📡 NWS Forecast")
-        cols = st.columns(len(forecast))
-        for i, p in enumerate(forecast):
-            with cols[i]:
-                icon = "☀️" if p.get("isDaytime", True) else "🌙"
-                st.metric(f"{icon} {p.get('name', '')[:8]}", f"{p.get('temperature', '')}°F")
+        fcols = st.columns(len(forecast))
+        for i, period in enumerate(forecast):
+            with fcols[i]:
+                name = period.get("name", "")
+                temp = period.get("temperature", "")
+                unit = period.get("temperatureUnit", "F")
+                short = period.get("shortForecast", "")
+                bg = "#1a1a2e" if "night" in name.lower() else "#1f2937"
+                temp_color = "#3b82f6" if "night" in name.lower() else "#ef4444"
+                st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 # ============================================================
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.markdown('<div style="background:#f59e0b;padding:8px;border-radius:6px;text-align:center"><b style="color:#000">LOW Temp Edge Finder v7.1</b></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v7.2</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment purposes only. Not financial advice. Verify on Kalshi before trading.</div>', unsafe_allow_html=True)
