@@ -127,10 +127,16 @@ def fetch_kalshi_brackets(series_ticker, slug=""):
         for m in today_markets:
             range_txt = m.get("subtitle", "") or m.get("title", "")
             ticker = m.get("ticker", "")
-            # Skip binary threshold markets (">X°" or "<X°") - only use bracket markets
+            
+            # FIXED: More lenient filter - only skip pure binary threshold markets
+            # Keep brackets that have two numbers (a range) OR "above"/"below" phrases
             range_lower = range_txt.lower()
-            if not any(x in range_lower for x in ["to", "or above", "or below"]):
+            nums_in_range = re.findall(r'\d+', range_txt)
+            is_binary_only = (('<' in range_txt or '>' in range_txt) and len(nums_in_range) == 1 
+                              and 'above' not in range_lower and 'below' not in range_lower)
+            if is_binary_only:
                 continue
+            
             low, high = get_bracket_bounds(range_txt)
             if low == -999:
                 mid = high - 1
@@ -466,20 +472,27 @@ if current_temp:
                 if is_owner and low_confirm_idx is not None and i == low_confirm_idx:
                     low_bracket_info = ""
                     low_bracket_link = "#"
+                    low_bracket_price = ""
                     if brackets_low_data and obs_low:
                         for b in brackets_low_data:
                             if temp_in_bracket(obs_low, b['range']):
-                                low_bracket_info = f" → {b['range']} @ {b['yes']:.0f}¢"
+                                low_bracket_info = b['range']
+                                low_bracket_price = f"{b['yes']:.0f}¢"
                                 low_bracket_link = b['url']
                                 break
                     confirm_time = display_list[low_confirm_idx]['time']
                     try:
                         confirm_dt = datetime.strptime(confirm_time, "%H:%M").replace(year=city_now.year, month=city_now.month, day=city_now.day, tzinfo=city_tz)
                         mins_ago = int((city_now - confirm_dt).total_seconds() / 60)
-                        time_ago = f" ({mins_ago}m ago)" if mins_ago > 0 else " (just now)"
+                        time_ago = f"({mins_ago}m ago)" if mins_ago > 0 else "(just now)"
                     except:
                         time_ago = ""
-                    st.markdown(f'<a href="{low_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW{low_bracket_info}{time_ago} — CLICK TO BUY</span></div></a>', unsafe_allow_html=True)
+                    # Build clear confirmation message
+                    if low_bracket_info and low_bracket_price:
+                        confirm_text = f"✅ CONFIRMED LOW: {obs_low}°F → BUY {low_bracket_info} @ {low_bracket_price} {time_ago}"
+                    else:
+                        confirm_text = f"✅ CONFIRMED LOW: {obs_low}°F {time_ago}"
+                    st.markdown(f'<a href="{low_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">{confirm_text}</span></div></a>', unsafe_allow_html=True)
                 
                 if i == low_reversal_idx:
                     row_style = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
@@ -537,7 +550,7 @@ else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v4.3</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v4.4</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     docs = """
