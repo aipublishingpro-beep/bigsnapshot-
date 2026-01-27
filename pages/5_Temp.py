@@ -128,7 +128,14 @@ def fetch_kalshi_brackets(series_ticker, slug=""):
             range_txt = m.get("subtitle", "") or m.get("title", "")
             ticker = m.get("ticker", "")
             
-            # No filter - trust Kalshi API returns correct bracket markets
+            # Filter: Only keep markets with proper bracket subtitles
+            # Skip binary threshold markets (">13°") - these have no "to"/"above"/"below"
+            subtitle = m.get("subtitle", "")
+            if not subtitle:
+                continue  # Skip markets with no subtitle (binary markets)
+            range_lower = subtitle.lower()
+            if not any(x in range_lower for x in ["to", "above", "below"]):
+                continue  # Skip if subtitle doesn't have bracket keywords
             
             low, high = get_bracket_bounds(range_txt)
             if low == -999:
