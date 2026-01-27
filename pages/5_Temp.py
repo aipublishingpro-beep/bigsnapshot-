@@ -271,11 +271,6 @@ extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner el
 if is_owner and obs_low and current_temp:
     hour = now.hour
     
-    # Build Kalshi event URL (not specific market) for cleaner landing
-    series_ticker = cfg.get("low", "KXLOWTNYC")
-    slug = cfg.get("slug", "lowest-temperature-in-nyc")
-    kalshi_market_url = f"https://kalshi.com/markets/{series_ticker.lower()}"
-    
     # Calculate time ago
     if confirm_time:
         mins_ago = int((now - confirm_time).total_seconds() / 60)
@@ -300,7 +295,6 @@ if is_owner and obs_low and current_temp:
         <div style="color:#fff;font-size:4em;font-weight:800;margin:10px 0">{obs_low}°F</div>
         <div style="color:#9ca3af;font-size:0.9em;margin-bottom:20px">{time_ago_text}</div>
         <div style="color:#fbbf24;font-size:0.9em;margin-top:10px">Find bracket on Kalshi that best fits this locked number</div>
-        <a href="{kalshi_market_url}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:15px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">GO TO KALSHI →</a>
     </div>
     """, unsafe_allow_html=True)
 
