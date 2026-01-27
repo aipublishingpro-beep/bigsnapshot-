@@ -28,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "9.4"
+VERSION = "9.5"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -410,7 +410,7 @@ st.subheader("🎯 CUSHION SCANNER (Totals)")
 all_game_options = ["All Games"] + [f"{g['away']} @ {g['home']}" for g in games]
 cush_col1, cush_col2, cush_col3 = st.columns(3)
 with cush_col1: selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
-with cush_col2: min_mins = st.selectbox("Min minutes:", [0, 6, 9, 12, 15, 18], index=0, key="cush_mins")
+with cush_col2: min_mins = st.selectbox("Min minutes:", [0, 5, 8, 10, 12, 15, 18], index=2, key="cush_mins")
 with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
 
 cushion_data = []
