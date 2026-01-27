@@ -172,15 +172,21 @@ def fetch_yesterday_teams():
 
 @st.cache_data(ttl=30)
 def fetch_plays(game_id):
-    if not game_id: return [], ""
+    if not game_id: return [], "", {}
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={game_id}"
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
         plays = [{"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", "")} for p in data.get("plays", [])[-15:]]
-        poss_team_id = data.get("situation", {}).get("possession", "")
-        return plays[-10:], poss_team_id
-    except: return [], ""
+        poss_team_id = str(data.get("situation", {}).get("possession", ""))
+        # Build team ID map from boxscore
+        team_id_map = {}
+        for team in data.get("boxscore", {}).get("teams", []):
+            tid = str(team.get("team", {}).get("id", ""))
+            tname = team.get("team", {}).get("displayName", "")
+            team_id_map[tid] = TEAM_ABBREVS.get(tname, tname)
+        return plays[-10:], poss_team_id, team_id_map
+    except: return [], "", {}
 
 def render_nba_court(away, home, away_score, home_score, possession, period, clock):
     away_color, home_color = TEAM_COLORS.get(away, "#666"), TEAM_COLORS.get(home, "#666")
@@ -346,8 +352,8 @@ st.subheader("🎮 LIVE EDGE MONITOR")
 if live_games:
     for g in live_games:
         away, home, total, mins, game_id = g['away'], g['home'], g['total_score'], g['minutes_played'], g['game_id']
-        plays, poss_team_id = fetch_plays(game_id)
-        possession = next((tn for tn, c in KALSHI_CODES.items() if c.lower() in str(poss_team_id).lower()), "")
+        plays, poss_team_id, team_id_map = fetch_plays(game_id)
+        possession = team_id_map.get(poss_team_id, "")
         st.markdown(f"### {away} @ {home}")
         col1, col2 = st.columns([1, 1])
         with col1:
