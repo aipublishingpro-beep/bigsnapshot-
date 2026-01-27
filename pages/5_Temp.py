@@ -424,11 +424,14 @@ if current_temp:
                         low_reversal_idx = i
                         break
             
-            # Confirm bar: shows when NEXT reading is higher than the low
+            # Confirm bar: shows at FIRST reading where temp rises ABOVE the low
             low_confirm_idx = None
-            if is_owner and low_reversal_idx is not None and low_reversal_idx >= 1:
-                if display_list[low_reversal_idx - 1]['temp'] > obs_low:
-                    low_confirm_idx = low_reversal_idx - 1
+            if is_owner and obs_low:
+                for i in range(len(display_list) - 1):
+                    # Current reading > low AND next reading (older) is at the low
+                    if display_list[i]['temp'] > obs_low and display_list[i + 1]['temp'] == obs_low:
+                        low_confirm_idx = i
+                        break
             
             for i, r in enumerate(display_list):
                 time_key = r['time']
