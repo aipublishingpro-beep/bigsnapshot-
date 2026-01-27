@@ -382,6 +382,12 @@ brackets_low_data = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC")) if is_own
 
 if current_temp:
     tz_abbrev = city_now.strftime('%Z')
+    # DEBUG: Show if Kalshi brackets loaded
+    if is_owner:
+        if brackets_low_data:
+            st.caption(f"✅ Loaded {len(brackets_low_data)} Kalshi brackets")
+        else:
+            st.caption("❌ No Kalshi brackets loaded")
     if is_owner and official_low:
         st.markdown(f"""
         <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
