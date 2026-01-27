@@ -32,13 +32,13 @@ eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
 CITY_CONFIG = {
-    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67},
-    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75},
-    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67},
-    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41},
-    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29},
-    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97},
-    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23},
+    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "slug": "lowest-temperature-in-austin"},
+    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "slug": "lowest-temperature-in-chicago"},
+    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "slug": "lowest-temperature-in-denver"},
+    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "slug": "lowest-temperature-in-los-angeles"},
+    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "slug": "lowest-temperature-in-miami"},
+    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "slug": "lowest-temperature-in-nyc"},
+    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "slug": "lowest-temperature-in-philadelphia"},
 }
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
@@ -271,6 +271,12 @@ extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner el
 if is_owner and obs_low and current_temp:
     hour = now.hour
     
+    # Build Kalshi market URL for this city's LOW market
+    series_ticker = cfg.get("low", "KXLOWTNYC")
+    slug = cfg.get("slug", "lowest-temperature-in-nyc")
+    today_str = now.strftime('%d%b%y').lower()  # e.g., "27jan26"
+    kalshi_market_url = f"https://kalshi.com/markets/{series_ticker.lower()}/{slug}/{series_ticker.lower()}-{today_str}"
+    
     # Calculate time ago
     if confirm_time:
         mins_ago = int((now - confirm_time).total_seconds() / 60)
@@ -288,14 +294,23 @@ if is_owner and obs_low and current_temp:
         lock_color = "#f59e0b"
         box_bg = "linear-gradient(135deg,#2d1f0a,#0d1117)"
     
+    # Build dynamic Kalshi URL with today's date
+    # Format: kxlowtnyc-27jan27 (day + lowercase month + 2-digit year)
+    kalshi_date = now.strftime("%d%b%y").lower()
+    kalshi_ticker = cfg.get("low", "KXLOWTNYC").lower()
+    kalshi_url = f"https://kalshi.com/markets/{kalshi_ticker}/lowest-temperature-in-nyc/{kalshi_ticker}-{kalshi_date}"
+    
     st.markdown(f"""
-    <div style="background:{box_bg};border:3px solid {lock_color};border-radius:16px;padding:30px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)">
+    <a href="{kalshi_url}" target="_blank" style="text-decoration:none;display:block">
+    <div style="background:{box_bg};border:3px solid {lock_color};border-radius:16px;padding:30px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3);cursor:pointer">
         <div style="color:{lock_color};font-size:1.2em;font-weight:700;margin-bottom:10px">{lock_status}</div>
         <div style="color:#6b7280;font-size:0.9em;margin-bottom:5px">Today's Low</div>
         <div style="color:#fff;font-size:4em;font-weight:800;margin:10px 0">{obs_low}°F</div>
         <div style="color:#9ca3af;font-size:0.9em;margin-bottom:20px">{time_ago_text}</div>
         <div style="color:#fbbf24;font-size:0.9em;margin-top:10px">Find bracket on Kalshi that best fits this locked number</div>
+        <a href="{kalshi_market_url}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:15px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">GO TO KALSHI →</a>
     </div>
+    </a>
     """, unsafe_allow_html=True)
 
 # ============================================================
