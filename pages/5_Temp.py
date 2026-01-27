@@ -26,6 +26,7 @@ import requests
 from datetime import datetime
 import pytz
 import math
+import re
 
 st.markdown("""
 <style>
@@ -38,21 +39,109 @@ eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
 CITY_CONFIG = {
-    "Austin": {"low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central"},
-    "Chicago": {"low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central"},
-    "Denver": {"low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "tz": "US/Mountain"},
-    "Los Angeles": {"low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific"},
-    "Miami": {"low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern"},
-    "New York City": {"low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern"},
-    "Philadelphia": {"low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern"},
+    "Austin": {"low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central", "slug": "lowest-temperature-in-austin"},
+    "Chicago": {"low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central", "slug": "lowest-temperature-in-chicago"},
+    "Denver": {"low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "tz": "US/Mountain", "slug": "lowest-temperature-in-denver"},
+    "Los Angeles": {"low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific", "slug": "lowest-temperature-in-los-angeles"},
+    "Miami": {"low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern", "slug": "lowest-temperature-in-miami"},
+    "New York City": {"low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern", "slug": "lowest-temperature-in-nyc"},
+    "Philadelphia": {"low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern", "slug": "lowest-temperature-in-philadelphia"},
 }
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
-def get_buy_bracket(low_temp):
-    """Given a low temp, return what bracket to buy (X° or above)"""
-    # Round DOWN to nearest integer - that's the "or above" threshold
-    threshold = math.floor(low_temp)
-    return f"{threshold}° or above"
+@st.cache_data(ttl=60)
+def fetch_kalshi_brackets(series_ticker, slug):
+    """Fetch REAL Kalshi brackets from API"""
+    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code != 200:
+            return []
+        markets = resp.json().get("markets", [])
+        if not markets:
+            return []
+        
+        # Get today's markets
+        today = datetime.now(eastern)
+        today_str = today.strftime('%y%b%d').upper()
+        today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
+        if not today_markets:
+            first_event = markets[0].get("event_ticker", "")
+            today_markets = [m for m in markets if m.get("event_ticker") == first_event]
+        
+        brackets = []
+        for m in today_markets:
+            title = m.get("title", "")
+            ticker = m.get("ticker", "")
+            
+            # Parse the title to extract bracket info
+            # Examples: "Will the minimum temperature be 9-10° on Jan 28, 2026?"
+            #           "Will the minimum temperature be >10° on Jan 28, 2026?"
+            #           "Will the minimum temperature be <3° on Jan 28, 2026?"
+            
+            # Extract the temperature part
+            match = re.search(r'be\s+([<>]?\d+[-–]?\d*)[°]', title)
+            if not match:
+                continue
+            
+            temp_part = match.group(1)
+            
+            # Determine bracket type and bounds
+            if temp_part.startswith('>'):
+                # ">10" means "11° or above" (greater than 10)
+                threshold = int(temp_part[1:])
+                bracket_name = f"{threshold + 1}° or above"
+                low_bound = threshold + 0.5
+                high_bound = 999
+            elif temp_part.startswith('<'):
+                # "<3" means "2° or below" (less than 3)
+                threshold = int(temp_part[1:])
+                bracket_name = f"{threshold - 1}° or below"
+                low_bound = -999
+                high_bound = threshold - 0.5
+            elif '-' in temp_part or '–' in temp_part:
+                # "9-10" means 9° to 10°
+                parts = re.split(r'[-–]', temp_part)
+                low_num = int(parts[0])
+                high_num = int(parts[1])
+                bracket_name = f"{low_num}° to {high_num}°"
+                low_bound = low_num - 0.5
+                high_bound = high_num + 0.5
+            else:
+                continue
+            
+            # Get price
+            yb = m.get("yes_bid", 0)
+            ya = m.get("yes_ask", 0)
+            yes_price = ((yb + ya) / 2) if (yb and ya) else (ya or yb or 0)
+            
+            # Build URL
+            kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}/{slug}/{ticker.lower()}"
+            
+            brackets.append({
+                "name": bracket_name,
+                "low": low_bound,
+                "high": high_bound,
+                "price": yes_price,
+                "url": kalshi_url,
+                "ticker": ticker
+            })
+        
+        # Sort by low bound
+        brackets.sort(key=lambda x: x['low'])
+        return brackets
+    except:
+        return []
+
+def find_winning_bracket(low_temp, brackets):
+    """Find which REAL Kalshi bracket the low temp falls into"""
+    for b in brackets:
+        if b['low'] < low_temp <= b['high']:
+            return b
+    # Fallback to highest bracket if temp is very high
+    if brackets and low_temp > brackets[-1]['high']:
+        return brackets[-1]
+    return None
 
 @st.cache_data(ttl=120)
 def fetch_nws_observations(station, city_tz_str):
@@ -121,8 +210,21 @@ hour = city_now.hour
 
 current_temp, obs_low, low_time, confirm_time = fetch_nws_observations(cfg.get("station", "KNYC"), city_tz_str)
 
+# Fetch REAL Kalshi brackets
+brackets = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"), cfg.get("slug", "lowest-temperature-in-nyc"))
+
 if obs_low:
-    buy_bracket = get_buy_bracket(obs_low)
+    # Find the REAL winning bracket
+    winning = find_winning_bracket(obs_low, brackets)
+    
+    if winning:
+        buy_bracket = winning['name']
+        buy_price = f"@ {winning['price']:.0f}¢" if winning['price'] else ""
+        buy_url = winning['url']
+    else:
+        buy_bracket = "Could not load brackets"
+        buy_price = ""
+        buy_url = "#"
     
     # Calculate minutes ago
     if confirm_time:
@@ -150,8 +252,9 @@ if obs_low:
         <div style="color:#fff;font-size:4em;font-weight:800;margin:10px 0">{obs_low}°F</div>
         <div style="color:#9ca3af;font-size:0.9em;margin-bottom:20px">{time_ago_text}</div>
         <div style="background:#161b22;border-radius:10px;padding:20px;margin-top:15px">
-            <div style="color:#f59e0b;font-size:1em;margin-bottom:8px">BUY ON KALSHI:</div>
+            <div style="color:#f59e0b;font-size:1em;margin-bottom:8px">BUY ON KALSHI {buy_price}:</div>
             <div style="color:#fbbf24;font-size:2em;font-weight:700">{buy_bracket}</div>
+            <a href="{buy_url}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:15px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY YES →</a>
         </div>
     </div>
     """, unsafe_allow_html=True)
