@@ -343,7 +343,7 @@ if live_only_games:
     all_game_options = ["All Live Games"] + [f"{g['away_abbrev']} @ {g['home_abbrev']}" for g in live_only_games]
     cush_col1, cush_col2, cush_col3 = st.columns(3)
     with cush_col1: selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
-    with cush_col2: min_mins = st.selectbox("Min minutes:", [1, 5, 8, 10, 12, 15], index=1, key="cush_mins")
+    with cush_col2: min_mins = st.selectbox("Min minutes:", [5, 8, 10, 12, 15, 18], index=1, key="cush_mins")
     with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
 
     cushion_data = []
