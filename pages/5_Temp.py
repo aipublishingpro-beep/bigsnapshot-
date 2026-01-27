@@ -366,7 +366,13 @@ if current_temp:
                 
                 # Show CONFIRMED LOW bar (owner only)
                 if is_owner and low_confirm_idx is not None and i == low_confirm_idx:
-                    st.markdown('<div style="display:flex;justify-content:center;align-items:center;padding:8px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW</span></div>', unsafe_allow_html=True)
+                    # Calculate minutes ago
+                    if confirm_time:
+                        mins_ago = int((now - confirm_time).total_seconds() / 60)
+                        time_ago_text = f" ({mins_ago}m ago)"
+                    else:
+                        time_ago_text = ""
+                    st.markdown(f'<div style="display:flex;justify-content:center;align-items:center;padding:8px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW{time_ago_text}</span></div>', unsafe_allow_html=True)
                 
                 # Row styling
                 if i == low_reversal_idx:
