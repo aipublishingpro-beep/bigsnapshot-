@@ -332,51 +332,74 @@ if live_games:
 else:
     st.info("No live games right now")
 
-# CUSHION SCANNER - LIVE GAMES ONLY
-st.subheader("🎯 CUSHION SCANNER (Live Totals)")
-st.caption("⚠️ Live games only — requires actual pace data")
+# CUSHION SCANNER - ALL GAMES
+st.subheader("🎯 CUSHION SCANNER (Totals)")
 
-# Only show games that are live (have minutes played)
-live_only_games = [g for g in games if g['minutes_played'] >= 1 and g['status'] not in ['STATUS_FINAL', 'STATUS_FULL_TIME']]
+# All non-final games
+scanner_games = [g for g in games if g['status'] not in ['STATUS_FINAL', 'STATUS_FULL_TIME']]
 
-if live_only_games:
-    all_game_options = ["All Live Games"] + [f"{g['away_abbrev']} @ {g['home_abbrev']}" for g in live_only_games]
-    cush_col1, cush_col2, cush_col3 = st.columns(3)
-    with cush_col1: selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
-    with cush_col2: min_mins = st.selectbox("Min minutes:", [5, 8, 10, 12, 15, 18], index=1, key="cush_mins")
-    with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
+all_game_options = ["All Games"] + [f"{g['away_abbrev']} @ {g['home_abbrev']}" for g in scanner_games]
+cush_col1, cush_col2, cush_col3 = st.columns(3)
+with cush_col1: selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
+with cush_col2: min_mins = st.selectbox("Min minutes:", [0, 5, 8, 10, 12, 15, 18], index=0, key="cush_mins")
+with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
 
-    cushion_data = []
-    for g in live_only_games:
-        game_name = f"{g['away_abbrev']} @ {g['home_abbrev']}"
-        if selected_game != "All Live Games" and game_name != selected_game: continue
-        if g['minutes_played'] < min_mins: continue
-        total, mins = g['total_score'], g['minutes_played']
+cushion_data = []
+for g in scanner_games:
+    game_name = f"{g['away_abbrev']} @ {g['home_abbrev']}"
+    if selected_game != "All Games" and game_name != selected_game: continue
+    if g['minutes_played'] < min_mins: continue
+    
+    total, mins = g['total_score'], g['minutes_played']
+    vegas_ou = g.get('vegas_odds', {}).get('overUnder')
+    
+    # Use pace for live games (8+ min), Vegas O/U for pregame/early
+    if mins >= 8:
         proj = calc_projection(total, mins)
         pace_label = get_pace_label(total / mins)[0]
-        for thresh in THRESHOLDS:
-            cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
-            if cushion >= 6 or (selected_game != "All Live Games"):
-                cushion_data.append({"game": game_name, "status": f"H{g['period']} {g['clock']}" if g['period'] > 0 else "Live", "proj": proj, "line": thresh, "cushion": cushion, "pace": pace_label, "link": get_kalshi_game_link(g['away_abbrev'], g['home_abbrev']), "mins": mins})
-
-    cushion_data.sort(key=lambda x: x['cushion'], reverse=True)
-    if cushion_data:
-        max_results = 20 if selected_game != "All Live Games" else 10
-        for cd in cushion_data[:max_results]:
-            cc1, cc2, cc3, cc4 = st.columns([3, 1, 1, 2])
-            with cc1:
-                st.markdown(f"**{cd['game']}** • {cd['status']}")
-                st.caption(f"{cd['pace']} • {cd['mins']} min played")
-            with cc2: st.write(f"Proj: {cd['proj']} | Line: {cd['line']}")
-            with cc3:
-                cushion_color = "#22c55e" if cd['cushion'] >= 6 else ("#eab308" if cd['cushion'] >= 0 else "#ef4444")
-                st.markdown(f"<span style='color:{cushion_color};font-weight:bold'>{'+' if cd['cushion'] >= 0 else ''}{round(cd['cushion'])}</span>", unsafe_allow_html=True)
-            with cc4: st.link_button(f"BUY {'NO' if 'NO' in side_choice else 'YES'} {cd['line']}", cd['link'], use_container_width=True)
+        status_text = f"H{g['period']} {g['clock']}" if g['period'] > 0 else "Live"
+    elif vegas_ou:
+        try:
+            proj = round(float(vegas_ou))
+            pace_label = "📊 VEGAS"
+            status_text = "Scheduled" if mins == 0 else f"H{g['period']} {g['clock']} (early)"
+        except:
+            continue  # Skip if no valid projection
     else:
-        if selected_game != "All Live Games": st.info(f"Select a side and see all lines for {selected_game}")
-        else: st.info("No cushion opportunities found (need 6+ cushion)")
+        continue  # Skip games with no Vegas O/U and not enough minutes
+    
+    for thresh in THRESHOLDS:
+        cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
+        if cushion >= 6 or (selected_game != "All Games"):
+            cushion_data.append({
+                "game": game_name, 
+                "status": status_text, 
+                "proj": proj, 
+                "line": thresh, 
+                "cushion": cushion, 
+                "pace": pace_label, 
+                "link": get_kalshi_game_link(g['away_abbrev'], g['home_abbrev']), 
+                "mins": mins,
+                "is_live": mins >= 8
+            })
+
+cushion_data.sort(key=lambda x: (not x['is_live'], -x['cushion']))  # Live first, then by cushion
+
+if cushion_data:
+    max_results = 20 if selected_game != "All Games" else 15
+    for cd in cushion_data[:max_results]:
+        cc1, cc2, cc3, cc4 = st.columns([3, 1, 1, 2])
+        with cc1:
+            st.markdown(f"**{cd['game']}** • {cd['status']}")
+            st.caption(f"{cd['pace']} • {cd['mins']} min played" if cd['mins'] > 0 else f"{cd['pace']} O/U: {cd['proj']}")
+        with cc2: st.write(f"Proj: {cd['proj']} | Line: {cd['line']}")
+        with cc3:
+            cushion_color = "#22c55e" if cd['cushion'] >= 10 else ("#22c55e" if cd['cushion'] >= 6 else ("#eab308" if cd['cushion'] >= 0 else "#ef4444"))
+            st.markdown(f"<span style='color:{cushion_color};font-weight:bold'>{'+' if cd['cushion'] >= 0 else ''}{round(cd['cushion'])}</span>", unsafe_allow_html=True)
+        with cc4: st.link_button(f"BUY {'NO' if 'NO' in side_choice else 'YES'} {cd['line']}", cd['link'], use_container_width=True)
 else:
-    st.info("🕐 No live games yet — Cushion Scanner activates when games start")
+    if selected_game != "All Games": st.info(f"Select a side and see all lines for {selected_game}")
+    else: st.info("No cushion opportunities found (need 6+ cushion or Vegas O/U data)")
 
 st.divider()
 
