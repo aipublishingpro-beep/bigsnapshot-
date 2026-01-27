@@ -1,5 +1,6 @@
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="BigSnapshot NBA Edge Finder", page_icon="🏀", layout="wide")
 
@@ -13,7 +14,7 @@ import requests as req_ga
 
 def send_ga4_event(page_title, page_path):
     try:
-        url = "https://www.google-analytics.com/mp/collect?measurement_id=G-NQKY5VQ376&api_secret=n4oBJjH7RXi3dA7aQo2CZA"
+        url = "https://www.google-analytics.com/mp/collect?measurement_id=G-NQKY5VQ376&api_secret=n4oBJjH7RXi0dA7aQo2CZA"
         payload = {"client_id": str(uuid.uuid4()), "events": [{"name": "page_view", "params": {"page_title": page_title, "page_location": "https://bigsnapshot.streamlit.app" + page_path}}]}
         req_ga.post(url, json=payload, timeout=2)
     except: pass
@@ -27,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "9.3"
+VERSION = "9.4"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -117,6 +118,19 @@ def american_to_implied_prob(odds):
     if odds > 0: return 100 / (odds + 100)
     else: return abs(odds) / (abs(odds) + 100)
 
+def speak_play(text):
+    """Browser text-to-speech for play-by-play"""
+    clean_text = text.replace("'", "").replace('"', '').replace('\n', ' ')[:100]
+    js = f'''<script>
+        if (!window.lastSpoken || window.lastSpoken !== "{clean_text}") {{
+            window.lastSpoken = "{clean_text}";
+            var u = new SpeechSynthesisUtterance("{clean_text}");
+            u.rate = 1.1;
+            window.speechSynthesis.speak(u);
+        }}
+    </script>'''
+    components.html(js, height=0)
+
 @st.cache_data(ttl=30)
 def fetch_espn_games():
     today = datetime.now(eastern).strftime('%Y%m%d')
@@ -150,20 +164,15 @@ def fetch_espn_games():
                                 mins_left = int(clock.split(":")[0])
                                 minutes_played = completed_quarters + (12 - mins_left)
                             elif clock == "0.0" or clock == "0":
-                                # End of quarter - full quarter completed
                                 minutes_played = completed_quarters + 12
                             else:
-                                # Could be seconds only like "45.2"
                                 minutes_played = completed_quarters + 12
                         except: 
                             minutes_played = completed_quarters + 12
                     else:
-                        # No clock data, assume quarter just started
                         minutes_played = completed_quarters
                 else: 
-                    # Overtime
                     minutes_played = 48 + (period - 4) * 5
-            # Get game date and time
             game_date = event.get("date", "")
             game_time_str = ""
             game_datetime_str = ""
@@ -172,7 +181,7 @@ def fetch_espn_games():
                     game_dt = datetime.fromisoformat(game_date.replace("Z", "+00:00"))
                     game_dt_eastern = game_dt.astimezone(eastern)
                     game_time_str = game_dt_eastern.strftime("%I:%M %p ET")
-                    game_datetime_str = game_dt_eastern.strftime("%b %d, %I:%M %p ET")  # "Jan 26, 07:00 PM ET"
+                    game_datetime_str = game_dt_eastern.strftime("%b %d, %I:%M %p ET")
                 except:
                     game_time_str = ""
                     game_datetime_str = ""
@@ -493,13 +502,17 @@ if live_games:
             st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock']), unsafe_allow_html=True)
         
         with col2:
-            # Play-by-play feed - THIS is the only place plays are shown
+            # Play-by-play feed with TTS option
             st.markdown("**📋 LAST 10 PLAYS**")
+            tts_on = st.checkbox("🔊 Announce plays", key=f"tts_{game_id}")
             if plays:
-                for p in reversed(plays):
+                for i, p in enumerate(reversed(plays)):
                     icon, color = get_play_icon(p['play_type'], p['score_value'])
                     play_text = p['text'][:60] if p['text'] else "Play"
                     st.markdown(f"<div style='padding:4px 8px;margin:2px 0;background:#1e1e2e;border-radius:4px;border-left:3px solid {color}'><span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
+                    # Announce newest play only
+                    if i == 0 and tts_on and p['text']:
+                        speak_play(f"Q{p['period']} {p['clock']}. {p['text']}")
             else:
                 st.caption("Waiting for plays...")
         
@@ -841,122 +854,4 @@ st.divider()
 # ALL GAMES TODAY
 # ============================================================
 st.subheader("📋 ALL GAMES TODAY")
-for g in games:
-    if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: status, color = f"FINAL: {g['away_score']}-{g['home_score']}", "#666"
-    elif g['period'] > 0: status, color = f"LIVE Q{g['period']} {g['clock']} | {g['away_score']}-{g['home_score']}", "#22c55e"
-    else: 
-        game_datetime = g.get('game_datetime', 'TBD')
-        spread = g.get('vegas_odds',{}).get('spread','N/A')
-        status, color = f"{game_datetime} | Spread: {spread}", "#888"
-    st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid {color}'><b style='color:#fff'>{g['away']} @ {g['home']}</b><br><span style='color:{color}'>{status}</span></div>", unsafe_allow_html=True)
-
-st.divider()
-
-# ============================================================
-# HOW TO USE THIS APP
-# ============================================================
-with st.expander("📖 HOW TO USE THIS APP", expanded=False):
-    st.markdown("""
-## 🎯 QUICK START GUIDE
-
-### What This App Does
-This app finds **mispricings** between Vegas odds and Kalshi prediction markets. When Vegas says a team has 65% chance to win but Kalshi prices them at 55¢, that's a 10% edge — you buy on Kalshi.
-
----
-
-### 📍 SECTION GUIDE
-
-| Section | What It Does | When To Use |
-|---------|--------------|-------------|
-| 💰 **Mispricing Alert** | Shows Vegas vs Kalshi gaps ≥5% | Check before games start |
-| 🎮 **Live Edge Monitor** | Court, scores, play-by-play, totals projections | During live games |
-| 🎯 **Cushion Scanner** | Finds safe totals bets with buffer from projection | Mid-game (Q2+) |
-| 📈 **Pace Scanner** | Shows scoring pace (SLOW/FAST) for all live games | Mid-game totals |
-| 🎯 **Pre-Game Alignment** | Model picks for scheduled games | Before tipoff |
-| 🏥 **Injury Report** | Star player injuries affecting today's games | Pre-game research |
-| 📊 **Position Tracker** | Track your bets, see live P&L | All day |
-
----
-
-### 🚦 SIGNAL LABELS
-
-| Label | Meaning | Action |
-|-------|---------|--------|
-| 🔥 **STRONG** | 10%+ edge | High confidence bet |
-| 🟢 **GOOD** | 7-10% edge | Solid bet |
-| 🟡 **EDGE** | 5-7% edge | Smaller position |
-| 🟡 **NEUTRAL** | <5% edge | Wait / Skip |
-
----
-
-### 📊 PACE LABELS (Totals)
-
-| Label | Pace | Totals Strategy |
-|-------|------|-----------------|
-| 🐢 **SLOW** | <4.2 pts/min | Lean UNDER / BUY NO |
-| ⚖️ **AVG** | 4.2-4.5 pts/min | Wait for clarity |
-| 🔥 **FAST** | 4.5-5.0 pts/min | Lean OVER / BUY YES |
-| 💥 **SHOOTOUT** | >5.0 pts/min | Strong OVER / BUY YES |
-
----
-
-### 💰 HOW TO BET ON KALSHI
-
-1. **YES** = You think the event WILL happen (team wins, total goes OVER)
-2. **NO** = You think the event WON'T happen (team loses, total stays UNDER)
-3. **Price** = Cost in cents (50¢ = 50% implied probability)
-4. **Profit** = 100¢ - Price (buy at 40¢, win 60¢ profit)
-
----
-
-### ⚡ QUICK WORKFLOW
-
-**Pre-Game:**
-1. Check **Mispricing Alert** for edges
-2. Click **➕ ADD ALL** to track all picks
-3. Review **Injury Report** for context
-4. Click **🎯 BUY** buttons to go to Kalshi
-
-**Live Games:**
-1. Watch **Live Edge Monitor** for score + pace
-2. Use **Cushion Scanner** to find safe totals (6+ cushion)
-3. Check **Pace Scanner** — SLOW pace = NO value, FAST = YES value
-4. Buy when projection + cushion aligns with pace
-
-**Position Tracking:**
-1. Use **➕ ADD ALL** or individual ➕ buttons
-2. Or manually add via **➕ ADD NEW POSITION** form
-3. See live game status in tracker
-4. Click **🗑️ CLEAR ALL** to reset
-
----
-
-### ⭐ STAR PLAYER TIERS
-
-| Tier | Impact | Examples |
-|------|--------|----------|
-| ⭐⭐⭐ | +5 pts swing | Jokic, SGA, Giannis, LeBron, Curry |
-| ⭐⭐ | +3 pts swing | Tatum, AD, Booker, Brunson |
-| ⭐ | +1 pt swing | Role players |
-
----
-
-### 🧠 PRO TIPS
-
-1. **Bigger cushion = safer but lower payout** — find your balance
-2. **Pace is more predictive than score** — trust pace over leads
-3. **Q2+ data is more reliable** — early Q1 is volatile
-4. **B2B (back-to-back) matters** — tired teams underperform
-5. **Check injuries before betting** — one star out = huge swing
-
----
-
-### ⚠️ DISCLAIMER
-
-This app is for **educational purposes only**. Not financial advice. Past performance doesn't guarantee future results. Only bet what you can afford to lose.
-
-**Stay small. Stay quiet. Win.**
-""")
-
-st.caption(f"v{VERSION} • Educational only • Not financial advice")
-st.caption("Stay small. Stay quiet. Win.")
+for
