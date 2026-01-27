@@ -32,13 +32,13 @@ eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
 CITY_CONFIG = {
-    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "slug": "lowest-temperature-in-austin"},
-    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "slug": "lowest-temperature-in-chicago"},
-    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "slug": "lowest-temperature-in-denver"},
-    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "slug": "lowest-temperature-in-los-angeles"},
-    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "slug": "lowest-temperature-in-miami"},
-    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "slug": "lowest-temperature-in-nyc"},
-    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "slug": "lowest-temperature-in-philadelphia"},
+    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central", "slug": "lowest-temperature-in-austin"},
+    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central", "slug": "lowest-temperature-in-chicago"},
+    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "tz": "US/Mountain", "slug": "lowest-temperature-in-denver"},
+    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific", "slug": "lowest-temperature-in-los-angeles"},
+    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern", "slug": "lowest-temperature-in-miami"},
+    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern", "slug": "lowest-temperature-in-nyc"},
+    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern", "slug": "lowest-temperature-in-philadelphia"},
 }
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
@@ -154,16 +154,17 @@ def fetch_nws_6hr_extremes(station):
         return {}
 
 @st.cache_data(ttl=120)
-def fetch_nws_observations(station):
+def fetch_nws_observations(station, city_tz_str):
     url = f"https://api.weather.gov/stations/{station}/observations"
     try:
+        city_tz = pytz.timezone(city_tz_str)
         resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
         if resp.status_code != 200:
             return None, None, None, [], None
         observations = resp.json().get("features", [])
         if not observations:
             return None, None, None, [], None
-        today = datetime.now(eastern).date()
+        today = datetime.now(city_tz).date()
         readings = []
         for obs in observations:
             props = obs.get("properties", {})
@@ -173,7 +174,7 @@ def fetch_nws_observations(station):
                 continue
             try:
                 ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                ts_local = ts.astimezone(eastern)
+                ts_local = ts.astimezone(city_tz)
                 if ts_local.date() == today:
                     temp_f = round(temp_c * 9/5 + 32, 1)
                     readings.append({"time": ts_local, "temp": temp_f})
@@ -272,7 +273,7 @@ if st.button("⭐ Set as Default City", use_container_width=False):
     st.query_params["city"] = city
     st.success(f"✓ Bookmark this page to save {city} as default!")
 
-current_temp, obs_low, obs_high, readings, confirm_time = fetch_nws_observations(cfg.get("station", "KNYC"))
+current_temp, obs_low, obs_high, readings, confirm_time = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
 extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else {}
 
 # ============================================================
