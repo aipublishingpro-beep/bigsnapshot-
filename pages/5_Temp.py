@@ -127,6 +127,11 @@ def fetch_kalshi_brackets(series_ticker):
         for m in today_markets:
             range_txt = m.get("subtitle", "") or m.get("title", "")
             ticker = m.get("ticker", "")
+            # Skip binary threshold markets (">X°" or "<X°") - only use bracket markets
+            # Bracket markets have "to" or "or above" or "or below"
+            range_lower = range_txt.lower()
+            if not any(x in range_lower for x in ["to", "or above", "or below"]):
+                continue
             low, high = get_bracket_bounds(range_txt)
             if low == -999:
                 mid = high - 1
