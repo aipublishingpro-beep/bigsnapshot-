@@ -128,11 +128,7 @@ def fetch_kalshi_brackets(series_ticker, slug=""):
             range_txt = m.get("subtitle", "") or m.get("title", "")
             ticker = m.get("ticker", "")
             
-            # Only keep REAL bracket markets - must contain "to", "or above", or "or below"
-            # This filters out binary threshold markets like ">13°" that Kalshi API also returns
-            range_lower = range_txt.lower()
-            if not any(x in range_lower for x in ["to", "or above", "or below"]):
-                continue
+            # No filter - trust Kalshi API returns correct bracket markets
             
             low, high = get_bracket_bounds(range_txt)
             if low == -999:
