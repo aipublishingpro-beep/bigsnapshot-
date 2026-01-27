@@ -1,4 +1,144 @@
-import streamlit as st
+if is_owner and st.session_state.scanner_view:
+    tomorrow_date = (datetime.now(eastern) + timedelta(days=1))
+    tomorrow_str = tomorrow_date.strftime('%A, %b %d')
+    
+    st.subheader(f"🎰 TOMORROW'S LOTTERY TICKETS")
+    st.caption(f"Buy {tomorrow_str} brackets NOW while market is asleep → Sell tomorrow 7 AM when LOW locks")
+    
+    if st.button("🔄 Refresh Scan", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+    
+    # Show current time context
+    st.markdown(f"""
+    <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:15px;margin-bottom:20px">
+        <div style="display:flex;justify-content:space-around;flex-wrap:wrap;gap:15px;text-align:center">
+            <div>
+                <div style="color:#6b7280;font-size:0.8em">YOUR TIME (ET)</div>
+                <div style="color:#3b82f6;font-size:1.5em;font-weight:700">{now.strftime('%I:%M %p')}</div>
+            </div>
+            <div>
+                <div style="color:#6b7280;font-size:0.8em">CHICAGO (CT)</div>
+                <div style="color:#fbbf24;font-size:1.5em;font-weight:700">{datetime.now(pytz.timezone('US/Central')).strftime('%I:%M %p')}</div>
+            </div>
+            <div>
+                <div style="color:#6b7280;font-size:0.8em">DENVER (MT)</div>
+                <div style="color:#fbbf24;font-size:1.5em;font-weight:700">{datetime.now(pytz.timezone('US/Mountain')).strftime('%I:%M %p')}</div>
+            </div>
+            <div>
+                <div style="color:#6b7280;font-size:0.8em">LA (PT)</div>
+                <div style="color:#22c55e;font-size:1.5em;font-weight:700">{datetime.now(pytz.timezone('US/Pacific')).strftime('%I:%M %p')}</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # The play explanation
+    st.markdown("""
+    <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:15px;margin-bottom:20px">
+        <div style="color:#22c55e;font-weight:700;margin-bottom:8px">💡 THE PLAY</div>
+        <div style="color:#c9d1d9;font-size:0.9em;line-height:1.6">
+            <b>1.</b> NWS forecast tells us tomorrow's LOW right now<br>
+            <b>2.</b> Kalshi's tomorrow market is open but nobody's watching<br>
+            <b>3.</b> Buy the winning bracket at 20-30¢<br>
+            <b>4.</b> Tomorrow 7 AM: LOW locks in, price spikes to 85¢+<br>
+            <b>5. SELL at 35-50¢ → Pocket 10-25¢ profit</b>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    lottery_tickets = []
+    all_cities = []
+    
+    with st.spinner(f"Scanning tomorrow's markets ({tomorrow_str})..."):
+        for city_name, cfg in CITY_CONFIG.items():
+            pattern = cfg.get("pattern", "sunrise")
+            pattern_icon = "🌙" if pattern == "midnight" else "☀️"
+            
+            # Get NWS forecast for tomorrow's LOW
+            forecast_low, forecast_desc = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
+            
+            # Get tomorrow's Kalshi brackets
+            brackets = fetch_kalshi_tomorrow_brackets(cfg["low"])
+            
+            if forecast_low is None:
+                all_cities.append({
+                    "city": city_name, "pattern": pattern_icon, "status": "❌ NO FORECAST",
+                    "forecast_low": None, "bracket": None, "ask": None, "url": None, "desc": None
+                })
+                continue
+            
+            if not brackets:
+                all_cities.append({
+                    "city": city_name, "pattern": pattern_icon, "status": "⚠️ NO MARKET",
+                    "forecast_low": forecast_low, "bracket": None, "ask": None, "url": None, "desc": forecast_desc
+                })
+                continue
+            
+            # Find the winning bracket based on forecast
+            winning = find_winning_bracket(forecast_low, brackets)
+            
+            if winning:
+                ask = winning["ask"]
+                bid = winning["bid"]
+                potential_profit = 100 - ask
+                
+                # Check if forecast is centered in bracket (safer) or on edge (riskier)
+                bracket_low, bracket_high = winning["low"], winning["high"]
+                if bracket_high == 999:
+                    buffer = forecast_low - bracket_low
+                elif bracket_low == -999:
+                    buffer = bracket_high - forecast_low
+                else:
+                    mid = (bracket_low + bracket_high) / 2
+                    buffer = abs(forecast_low - mid)
+                
+                if buffer <= 1:
+                    safety = "🎯 CENTERED"
+                    safety_score = 3
+                elif buffer <= 2:
+                    safety = "⚠️ NEAR EDGE"
+                    safety_score = 2
+                else:
+                    safety = "🔴 ON EDGE"
+                    safety_score = 1
+                
+                city_data = {
+                    "city": city_name, "pattern": pattern_icon, "status": "✅",
+                    "forecast_low": forecast_low, "bracket": winning["name"], 
+                    "bid": bid, "ask": ask, "url": winning["url"], "desc": forecast_desc,
+                    "potential": potential_profit, "safety": safety, "safety_score": safety_score
+                }
+                all_cities.append(city_data)
+                
+                # Lottery ticket criteria: cheap price + reasonable safety
+                if ask < 50 and safety_score >= 2:
+                    city_data["ticket_type"] = "🎰 LOTTERY TICKET"
+                    city_data["ticket_color"] = "#fbbf24"
+                    lottery_tickets.append(city_data)
+                elif ask < 40:
+                    city_data["ticket_type"] = "🎰 LOTTERY TICKET"
+                    city_data["ticket_color"] = "#fbbf24"
+                    lottery_tickets.append(city_data)
+                elif ask < 60 and safety_score >= 2:
+                    city_data["ticket_type"] = "💰 GOOD ENTRY"
+                    city_data["ticket_color"] = "#22c55e"
+                    lottery_tickets.append(city_data)
+                elif ask < 70 and safety_score == 3:
+                    city_data["ticket_type"] = "✅ DECENT ENTRY"
+                    city_data["ticket_color"] = "#3b82f6"
+                    lottery_tickets.append(city_data)
+            else:
+                all_cities.append({
+                    "city": city_name, "pattern": pattern_icon, "status": "⚠️ NO BRACKET",
+                    "forecast_low": forecast_low, "bracket": None, "ask": None, "url": None, "desc": forecast_desc
+                })
+    
+    # LOTTERY TICKETS SECTION
+    if lottery_tickets:
+        lottery_tickets.sort(key=lambda x: x["ask"])
+        
+        st.markdown(f"### 🎰 LOTTERY TICKETS FOR {tomorrow_str.upperimport streamlit as st
 import requests
 from datetime import datetime, timedelta
 import pytz
@@ -513,13 +653,22 @@ st.title("🌡️ LOW TEMP EDGE FINDER")
 st.caption(f"Live NWS Observations + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')}")
 
 if is_owner:
-    col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
-    with col_toggle2:
-        view_label = "🔍 SCANNER VIEW" if st.session_state.scanner_view else "📍 CITY VIEW"
-        if st.button(f"Switch to {'📍 City View' if st.session_state.scanner_view else '🔍 Scanner View'}", use_container_width=True):
-            st.session_state.scanner_view = not st.session_state.scanner_view
+    col_t1, col_t2, col_t3 = st.columns(3)
+    with col_t1:
+        if st.button("📍 City View", use_container_width=True, type="primary" if st.session_state.view_mode == "city" else "secondary"):
+            st.session_state.view_mode = "city"
             st.rerun()
-        st.markdown(f"<div style='text-align:center;color:#22c55e;font-size:0.9em;margin-top:5px'>Current: {view_label}</div>", unsafe_allow_html=True)
+    with col_t2:
+        if st.button("🔍 Today's Scanner", use_container_width=True, type="primary" if st.session_state.view_mode == "today_scanner" else "secondary"):
+            st.session_state.view_mode = "today_scanner"
+            st.rerun()
+    with col_t3:
+        if st.button("🎰 Tomorrow's Lottery", use_container_width=True, type="primary" if st.session_state.view_mode == "tomorrow_lottery" else "secondary"):
+            st.session_state.view_mode = "tomorrow_lottery"
+            st.rerun()
+    
+    view_labels = {"city": "📍 CITY VIEW", "today_scanner": "🔍 TODAY'S SCANNER", "tomorrow_lottery": "🎰 TOMORROW'S LOTTERY"}
+    st.markdown(f"<div style='text-align:center;color:#22c55e;font-size:0.9em;margin:10px 0'>Current: {view_labels[st.session_state.view_mode]}</div>", unsafe_allow_html=True)
     st.markdown("---")
 
 # ============================================================
@@ -884,9 +1033,9 @@ if is_owner and st.session_state.scanner_view:
             st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'><div><span style='color:#fff;font-weight:600'>{r['city']}</span></div><div><span style='color:#fbbf24'>NWS: {r['forecast_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#22c55e'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:#9ca3af'>Ask:</span><span style='color:{ask_color};margin-left:3px;font-weight:700'>{r['ask']:.0f}¢</span></div></div>", unsafe_allow_html=True)
 
 # ============================================================
-# CITY VIEW (DEFAULT)
+# CITY VIEW (DEFAULT FOR PUBLIC, OPTION FOR OWNER)
 # ============================================================
-else:
+if not is_owner or st.session_state.view_mode == "city":
     c1, c2 = st.columns([4, 1])
     with c1:
         city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
@@ -1002,5 +1151,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.2</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v7.0</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment purposes only. Not financial advice. Verify on Kalshi before trading.</div>', unsafe_allow_html=True)
