@@ -444,50 +444,49 @@ if is_owner:
     with st.sidebar:
         st.markdown("""
         <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">🔒 EDGE TIPS</div>
+            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">🎯 CONFIRMATION SIGNALS</div>
             <div style="color:#c9d1d9;font-size:0.85em;line-height:1.5">
-                <b>LOW (Safer):</b><br>
-                • Wait 1hr after reversal<br>
-                • 2+ rising readings = locked<br>
-                • Sun up = no going back<br><br>
-                <b>6hr Extremes:</b><br>
-                • 06:51 & 12:51 bracket LOW<br>
-                • Official NWS confirmation
+                <b>🔒 LOCKED (95%):</b><br>
+                • Confirmed reversal + 2 rising<br><br>
+                <b>🔒 LIKELY (75-80%):</b><br>
+                • Confirmation OR 2+ rising readings<br><br>
+                <b>👀 WATCHING (40-60%):</b><br>
+                • In window, watching for reversal<br><br>
+                <b>⏳ WAITING:</b><br>
+                • Before typical window
             </div>
         </div>
         <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 YOUR TRADING SCHEDULE (ET)</div>
+            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 YOUR TRADING WINDOWS (ET)</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>🌙 1-2 AM</b> → Chicago, Denver<br>
-                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">Midnight LOWs - trade while they sleep!</span><br>
-                <b>☀️ 7-8 AM</b> → Austin, Miami, NYC, Philly<br>
-                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">Sunrise LOWs - Eastern cities</span><br>
-                <b>☀️ 9-10 AM</b> → Los Angeles<br>
-                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">West coast sunrise</span>
+                <b>🌙 MIDNIGHT CITIES:</b><br>
+                • Chicago, Denver<br>
+                • Window: 00:00-02:00 local<br>
+                • Trade: <b>1-3 AM ET</b><br><br>
+                <b>☀️ SUNRISE CITIES:</b><br>
+                • Austin, Miami, NYC, Philly, LA<br>
+                • Window: 05:00-09:00 local<br>
+                • Trade: <b>6-10 AM ET</b>
             </div>
         </div>
         <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES</div>
+            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">💡 THE KEY INSIGHT</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>🌙 MIDNIGHT CITIES:</b><br>
-                • Chicago ~00:15 CT (1:15 AM ET)<br>
-                • Denver ~00:40 MT (2:40 AM ET)<br><br>
-                <b>☀️ SUNRISE CITIES:</b><br>
-                • Austin ~06:40 CT (7:40 AM ET)<br>
-                • Miami ~07:40 ET<br>
-                • NYC ~07:51 ET<br>
-                • Philly ~07:54 ET<br>
-                • LA ~06:00 PT (9:00 AM ET)
+                <b>Clock time doesn't matter.</b><br>
+                <b>Rising temps = LOCKED</b><br><br>
+                Watch for:<br>
+                • 2+ readings ABOVE the low<br>
+                • That's your lottery ticket
             </div>
         </div>
         <div style="background:#1a1a2e;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">💰 ENTRY THRESHOLDS (Ask)</div>
+            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">💰 LOTTERY THRESHOLDS</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>🔥 &lt;85¢</b> = JUMP IN (+15¢)<br>
-                <b>✅ 85-90¢</b> = Good (+10-15¢)<br>
-                <b>⚠️ 90-95¢</b> = Small edge (+5-10¢)<br>
-                <b>❌ 95¢+</b> = Skip it<br><br>
-                <span style="color:#9ca3af">Only showing 10¢+ edge opps</span>
+                <b>🎰 &lt;50¢</b> = LOTTERY TICKET<br>
+                <b>💰 &lt;65¢</b> = BIG EDGE<br>
+                <b>✅ &lt;80¢</b> = GOOD EDGE<br>
+                <b>📈 &lt;90¢</b> = SMALL EDGE<br><br>
+                <span style="color:#9ca3af">Requires 70%+ confidence</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -495,17 +494,14 @@ else:
     with st.sidebar:
         st.markdown("""
         <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES (ET)</div>
+            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW WINDOWS (Local)</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
                 <b>🌙 MIDNIGHT CITIES:</b><br>
-                • Chicago ~1:15 AM ET<br>
-                • Denver ~2:40 AM ET<br><br>
+                • Chicago, Denver<br>
+                • Window: 00:00-02:00<br><br>
                 <b>☀️ SUNRISE CITIES:</b><br>
-                • Austin ~7:40 AM ET<br>
-                • Miami ~7:40 AM ET<br>
-                • NYC ~7:51 AM ET<br>
-                • Philly ~7:54 AM ET<br>
-                • LA ~9:00 AM ET
+                • Austin, Miami, NYC, Philly, LA<br>
+                • Window: 05:00-09:00
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -531,7 +527,7 @@ if is_owner:
 # ============================================================
 if is_owner and st.session_state.scanner_view:
     st.subheader("🎰 LOTTERY TICKET SCANNER")
-    st.caption("Find locked LOWs where market hasn't caught up yet")
+    st.caption("Find confirmed LOWs where market hasn't caught up yet")
     
     if st.button("🔄 Refresh Scan", use_container_width=True):
         st.cache_data.clear()
@@ -561,6 +557,18 @@ if is_owner and st.session_state.scanner_view:
     </div>
     """, unsafe_allow_html=True)
     
+    # Legend for status
+    st.markdown("""
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px;margin-bottom:20px">
+        <div style="color:#9ca3af;font-size:0.85em;display:flex;flex-wrap:wrap;gap:15px;justify-content:center">
+            <span><b style="color:#22c55e">🔒 LOCKED</b> = Confirmed reversal (95%)</span>
+            <span><b style="color:#3b82f6">🔒 LIKELY</b> = Rising temps (75-80%)</span>
+            <span><b style="color:#fbbf24">👀 WATCHING</b> = In window (40-60%)</span>
+            <span><b style="color:#6b7280">⏳ WAITING</b> = Before window</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     results = []
     lottery_tickets = []
     
@@ -569,21 +577,34 @@ if is_owner and st.session_state.scanner_view:
             current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg["station"], cfg["tz"])
             brackets = fetch_kalshi_brackets(cfg["low"])
             
-            is_locked, lock_status = check_low_locked_precise(cfg)
             pattern = cfg.get("pattern", "sunrise")
             pattern_icon = "🌙" if pattern == "midnight" else "☀️"
             
             city_tz = pytz.timezone(cfg["tz"])
             local_time = datetime.now(city_tz).strftime('%H:%M')
-            lock_time = f"{cfg.get('low_hour', 7):02d}:{cfg.get('low_min', 0):02d}"
+            window_str = f"{cfg.get('window_start', 6):02d}:00-{cfg.get('window_end', 9):02d}:00"
             
             if obs_low is None:
                 results.append({
                     "city": city_name, "status": "❌ NO DATA", "obs_low": None, "bracket": None, 
-                    "price": None, "edge": None, "url": None, "locked": False, "confirm_time": None,
-                    "lock_status": lock_status, "pattern": pattern_icon, "local_time": local_time, "lock_time": lock_time
+                    "price": None, "edge": None, "url": None, "confirm_time": None,
+                    "lock_status": "⏳ NO DATA", "confidence": 0, "pattern": pattern_icon, 
+                    "local_time": local_time, "window": window_str, "rising_count": 0
                 })
                 continue
+            
+            # Get lock status based on confirmation + window
+            status_code, lock_status, confidence = get_lock_status(cfg, confirm_time, obs_low, readings)
+            
+            # Count rising readings
+            rising_count = 0
+            if readings:
+                found_low = False
+                for r in readings:
+                    if r["temp"] == obs_low:
+                        found_low = True
+                    elif found_low and r["temp"] > obs_low:
+                        rising_count += 1
             
             winning = find_winning_bracket(obs_low, brackets)
             
@@ -592,14 +613,15 @@ if is_owner and st.session_state.scanner_view:
                 ask = winning["ask"]
                 
                 # Check for lottery ticket opportunity
-                lottery_type, lottery_msg, lottery_edge = get_lottery_status(cfg, obs_low, ask, confirm_time)
+                lottery_type, lottery_msg, lottery_edge, lottery_conf = get_lottery_status(cfg, obs_low, ask, confirm_time, readings)
                 
                 if lottery_type:
                     lottery_tickets.append({
                         "city": city_name, "obs_low": obs_low, "bracket": winning["name"],
                         "bid": bid, "ask": ask, "edge": lottery_edge, "url": winning["url"],
                         "lottery_type": lottery_type, "lottery_msg": lottery_msg,
-                        "pattern": pattern_icon, "lock_status": lock_status, "confirm_time": confirm_time
+                        "pattern": pattern_icon, "lock_status": lock_status, "confirm_time": confirm_time,
+                        "confidence": lottery_conf, "rising_count": rising_count
                     })
                 
                 # Rating based on ask price
@@ -612,30 +634,32 @@ if is_owner and st.session_state.scanner_view:
                 else:
                     rating = "❌"
                 
-                edge = (100 - ask) if is_locked and ask < 95 else 0
+                edge = (100 - ask) if status_code in ["locked", "likely"] and ask < 95 else 0
                 
                 results.append({
                     "city": city_name, "status": "✅", "obs_low": obs_low, "bracket": winning["name"],
                     "bid": bid, "ask": ask, "edge": edge, "rating": rating, "url": winning["url"],
-                    "locked": is_locked, "confirm_time": confirm_time, "lock_status": lock_status,
-                    "pattern": pattern_icon, "local_time": local_time, "lock_time": lock_time
+                    "confirm_time": confirm_time, "lock_status": lock_status, "confidence": confidence,
+                    "pattern": pattern_icon, "local_time": local_time, "window": window_str,
+                    "rising_count": rising_count, "status_code": status_code
                 })
             else:
                 results.append({
                     "city": city_name, "status": "⚠️ NO BRACKET", "obs_low": obs_low, "bracket": None,
-                    "price": None, "edge": None, "url": None, "locked": is_locked, "confirm_time": confirm_time,
-                    "lock_status": lock_status, "pattern": pattern_icon, "local_time": local_time, "lock_time": lock_time
+                    "price": None, "edge": None, "url": None, "confirm_time": confirm_time,
+                    "lock_status": lock_status, "confidence": confidence, "pattern": pattern_icon, 
+                    "local_time": local_time, "window": window_str, "rising_count": rising_count
                 })
     
     # LOTTERY TICKETS SECTION
     if lottery_tickets:
         st.markdown("### 🎰 LOTTERY TICKETS - ACT NOW!")
-        st.markdown("<div style='color:#22c55e;font-size:0.9em;margin-bottom:15px'>LOW is LOCKED but market hasn't caught up. This is free money.</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:#22c55e;font-size:0.9em;margin-bottom:15px'>LOW is CONFIRMED but market hasn't caught up. This is free money.</div>", unsafe_allow_html=True)
         
-        lottery_tickets.sort(key=lambda x: x["edge"], reverse=True)
+        lottery_tickets.sort(key=lambda x: (x["confidence"], x["edge"]), reverse=True)
         
         for t in lottery_tickets:
-            confirm_text = "✓ Confirmed" if t.get("confirm_time") else "Observed"
+            confirm_text = f"✓ Confirmed + {t['rising_count']} rising" if t.get("confirm_time") else f"👀 {t['rising_count']} rising readings"
             ticket_color = "#fbbf24" if t["lottery_type"] == "🎰 LOTTERY TICKET" else "#22c55e" if t["lottery_type"] == "💰 BIG EDGE" else "#3b82f6"
             
             st.markdown(f"""
@@ -650,13 +674,25 @@ if is_owner and st.session_state.scanner_view:
                         <div style="color:#6b7280;font-size:0.9em">potential profit</div>
                     </div>
                 </div>
+                <div style="margin-top:15px;padding:10px;background:#0d1117;border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                    <div>
+                        <span style="color:#9ca3af">Status:</span>
+                        <span style="color:#22c55e;font-weight:700;margin-left:5px">{t['lock_status']}</span>
+                    </div>
+                    <div>
+                        <span style="color:#9ca3af">Confidence:</span>
+                        <span style="color:#fbbf24;font-weight:700;margin-left:5px">{t['confidence']}%</span>
+                    </div>
+                    <div>
+                        <span style="color:#6b7280;font-size:0.9em">{confirm_text}</span>
+                    </div>
+                </div>
                 <div style="margin-top:20px;padding:15px;background:#161b22;border-radius:8px">
                     <div style="color:#fbbf24;font-size:1.1em;margin-bottom:10px">{t['lottery_msg']}</div>
                     <div style="display:flex;justify-content:space-around;flex-wrap:wrap;gap:15px;margin-top:15px">
                         <div style="text-align:center">
                             <div style="color:#6b7280;font-size:0.8em">ACTUAL LOW</div>
                             <div style="color:#3b82f6;font-size:1.8em;font-weight:700">{t['obs_low']}°F</div>
-                            <div style="color:#6b7280;font-size:0.75em">{confirm_text}</div>
                         </div>
                         <div style="text-align:center">
                             <div style="color:#6b7280;font-size:0.8em">WINNING BRACKET</div>
@@ -674,7 +710,7 @@ if is_owner and st.session_state.scanner_view:
                 </div>
                 <a href="{t['url']}" target="_blank" style="text-decoration:none;display:block;margin-top:20px">
                     <div style="background:linear-gradient(135deg,#fbbf24,#f59e0b);padding:15px 25px;border-radius:8px;text-align:center;cursor:pointer">
-                        <span style="color:#000;font-weight:800;font-size:1.3em">🎰 BUY {t['bracket']} NOW → GUARANTEED +{t['edge']:.0f}¢</span>
+                        <span style="color:#000;font-weight:800;font-size:1.3em">🎰 BUY {t['bracket']} NOW → {t['confidence']}% CONFIDENCE</span>
                     </div>
                 </a>
             </div>
@@ -682,19 +718,15 @@ if is_owner and st.session_state.scanner_view:
     else:
         # Check what's coming up
         upcoming = []
-        for city_name, cfg in CITY_CONFIG.items():
-            is_locked, lock_status = check_low_locked_precise(cfg)
-            if not is_locked:
-                city_tz = pytz.timezone(cfg["tz"])
-                lock_time_local = f"{cfg.get('low_hour', 7):02d}:{cfg.get('low_min', 0):02d}"
-                pattern = "🌙" if cfg.get("pattern") == "midnight" else "☀️"
-                upcoming.append(f"{pattern} {city_name} locks ~{lock_time_local} local")
+        for r in results:
+            if r.get("status_code") not in ["locked", "likely"] and r.get("status") != "❌ NO DATA":
+                upcoming.append(f"{r['pattern']} {r['city']} - {r['lock_status']} (window: {r['window']} local)")
         
         if upcoming:
             st.markdown("### ⏳ NO LOTTERY TICKETS RIGHT NOW")
-            st.info(f"**Upcoming locks:**\n" + "\n".join(upcoming))
+            st.info(f"**Waiting for confirmation on:**\n" + "\n".join(upcoming[:5]))
         else:
-            st.success("All cities locked! Check ALL CITIES below for edge opportunities.")
+            st.success("All cities have data! Check ALL CITIES below for edge opportunities.")
     
     # ALL CITIES STATUS
     st.markdown("### 📊 ALL CITIES STATUS")
@@ -707,16 +739,18 @@ if is_owner and st.session_state.scanner_view:
                 <span style='color:#6b7280;margin-left:10px'>— No NWS data</span>
             </div>""", unsafe_allow_html=True)
         elif r["status"] == "⚠️ NO BRACKET":
+            lock_color = "#22c55e" if "LOCKED" in r["lock_status"] else "#3b82f6" if "LIKELY" in r["lock_status"] else "#fbbf24" if "WATCH" in r["lock_status"] or "RISING" in r["lock_status"] else "#6b7280"
             st.markdown(f"""
             <div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'>
                 <span style='color:#f59e0b;font-weight:600'>{r['pattern']} {r['city']}</span>
-                <span style='color:#6b7280;margin-left:8px'>{r['lock_status']}</span>
+                <span style='color:{lock_color};margin-left:8px;font-size:0.9em'>{r['lock_status']}</span>
                 <span style='color:#6b7280;margin-left:10px'>— Low: {r['obs_low']}°F — No matching Kalshi bracket</span>
             </div>""", unsafe_allow_html=True)
         else:
-            lock_color = "#22c55e" if "LOCKED" in r["lock_status"] else "#f59e0b"
+            lock_color = "#22c55e" if "LOCKED" in r["lock_status"] else "#3b82f6" if "LIKELY" in r["lock_status"] else "#fbbf24" if "WATCH" in r["lock_status"] or "RISING" in r["lock_status"] else "#6b7280"
             edge_display = f"<span style='color:#22c55e;font-weight:700'>+{r['edge']:.0f}¢</span>" if r["edge"] and r["edge"] >= 10 else "<span style='color:#6b7280'>—</span>"
             ask_color = "#22c55e" if r["ask"] and r["ask"] < 50 else "#3b82f6" if r["ask"] and r["ask"] < 75 else "#f59e0b" if r["ask"] and r["ask"] < 90 else "#9ca3af"
+            rising_text = f"↑{r['rising_count']}" if r.get('rising_count', 0) > 0 else ""
             
             st.markdown(f"""
             <div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'>
@@ -724,7 +758,8 @@ if is_owner and st.session_state.scanner_view:
                     <div>
                         <span style='color:#fff;font-weight:600'>{r['pattern']} {r['city']}</span>
                         <span style='color:{lock_color};margin-left:8px;font-size:0.85em'>{r['lock_status']}</span>
-                        <span style='color:#6b7280;margin-left:8px;font-size:0.8em'>({r['local_time']} local, locks ~{r['lock_time']})</span>
+                        <span style='color:#22c55e;margin-left:5px;font-size:0.8em'>{rising_text}</span>
+                        <span style='color:#6b7280;margin-left:8px;font-size:0.75em'>({r['local_time']} local)</span>
                     </div>
                     <div>
                         <span style='color:#3b82f6;font-weight:600'>{r['obs_low']}°F</span>
@@ -740,7 +775,7 @@ if is_owner and st.session_state.scanner_view:
             </div>""", unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown(f"<div style='text-align:center;color:#6b7280;font-size:0.8em'>Last scan: {now.strftime('%I:%M %p ET')} | 🌙 = Midnight LOW | ☀️ = Sunrise LOW</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:center;color:#6b7280;font-size:0.8em'>Last scan: {now.strftime('%I:%M %p ET')} | 🌙 = Midnight pattern (00:00-02:00) | ☀️ = Sunrise pattern (05:00-09:00)</div>", unsafe_allow_html=True)
 
     # ============================================================
     # TOMORROW'S LOW SECTION (OWNER ONLY)
@@ -872,6 +907,9 @@ else:
     if is_owner and obs_low and current_temp:
         city_tz = pytz.timezone(cfg.get("tz", "US/Eastern"))
         hour = datetime.now(city_tz).hour
+        
+        # Get lock status using new function
+        status_code, lock_status_text, confidence = get_lock_status(cfg, confirm_time, obs_low, readings)
         if confirm_time:
             mins_ago = int((datetime.now(city_tz) - confirm_time).total_seconds() / 60)
             time_ago_text = f"Confirmed {mins_ago} minutes ago" if 0 <= mins_ago < 1440 else "Check readings below"
@@ -880,15 +918,19 @@ else:
         data_warning = ""
         if oldest_time and oldest_time.hour >= 7:
             data_warning = f"⚠️ Data only from {oldest_time.strftime('%H:%M')} - early low may be missing!"
-        if hour >= 6 and confirm_time:
-            lock_status, lock_color, box_bg = "✅ LOCKED IN", "#22c55e", "linear-gradient(135deg,#1a2e1a,#0d1117)"
-        elif hour >= 6:
-            lock_status, lock_color, box_bg = "⏳ LIKELY LOCKED", "#3b82f6", "linear-gradient(135deg,#1a1a2e,#0d1117)"
+        
+        # Use the new status for display
+        if status_code == "locked":
+            lock_display, lock_color, box_bg = "✅ LOCKED IN", "#22c55e", "linear-gradient(135deg,#1a2e1a,#0d1117)"
+        elif status_code == "likely":
+            lock_display, lock_color, box_bg = "🔒 LIKELY LOCKED", "#3b82f6", "linear-gradient(135deg,#1a1a2e,#0d1117)"
+        elif status_code == "watching":
+            lock_display, lock_color, box_bg = "👀 WATCHING", "#fbbf24", "linear-gradient(135deg,#2d1f0a,#0d1117)"
         else:
-            lock_status, lock_color, box_bg = "⏳ MAY STILL DROP", "#f59e0b", "linear-gradient(135deg,#2d1f0a,#0d1117)"
+            lock_display, lock_color, box_bg = "⏳ WAITING", "#f59e0b", "linear-gradient(135deg,#2d1f0a,#0d1117)"
         st.markdown(f"""
         <div style="background:{box_bg};border:3px solid {lock_color};border-radius:16px;padding:30px;margin:20px 0;text-align:center">
-            <div style="color:{lock_color};font-size:1.2em;font-weight:700;margin-bottom:10px">{lock_status}</div>
+            <div style="color:{lock_color};font-size:1.2em;font-weight:700;margin-bottom:10px">{lock_display}</div>
             <div style="color:#6b7280;font-size:0.9em">Today's Low (from available data)</div>
             <div style="color:#fff;font-size:4em;font-weight:800;margin:10px 0">{obs_low}°F</div>
             <div style="color:#9ca3af;font-size:0.9em">{time_ago_text}</div>
@@ -960,5 +1002,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.0</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.2</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment purposes only. Not financial advice. Verify on Kalshi before trading.</div>', unsafe_allow_html=True)
