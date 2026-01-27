@@ -113,7 +113,7 @@ def fetch_kalshi_brackets(series_ticker, slug=""):
     try:
         resp = requests.get(url, timeout=10)
         if resp.status_code != 200:
-            return None, []
+            return None
         markets = resp.json().get("markets", [])
         if not markets:
             return None
@@ -159,8 +159,7 @@ def fetch_kalshi_brackets(series_ticker, slug=""):
                 kalshi_url = "#"
             brackets.append({"range": range_txt, "mid": mid, "yes": yes_price, "ticker": ticker, "url": kalshi_url})
         brackets.sort(key=lambda x: x['mid'] or 0)
-        # Return debug info too
-        return brackets if brackets else None, debug_info
+        return brackets if brackets else None
     except:
         return None
 
@@ -395,7 +394,7 @@ if st.button("⭐ Set as Default City", use_container_width=False):
 # Fetch with city's timezone
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"), city_tz_str)
 extremes_6hr, official_high, official_low = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else ({}, None, None)
-brackets_low_data, debug_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"), cfg.get("slug_low", "")) if is_owner else (None, [])
+brackets_low_data = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"), cfg.get("slug_low", "")) if is_owner else None
 
 if current_temp:
     tz_abbrev = city_now.strftime('%Z')
@@ -405,10 +404,6 @@ if current_temp:
             st.caption(f"✅ Loaded {len(brackets_low_data)} Kalshi brackets")
         else:
             st.caption("❌ No Kalshi brackets loaded")
-        if debug_low:
-            with st.expander("🔍 DEBUG: Raw Kalshi API"):
-                for d in debug_low[:10]:
-                    st.code(d)
     if is_owner and official_low:
         st.markdown(f"""
         <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
@@ -519,7 +514,7 @@ st.caption("💡 LOW locks in by 6 AM local time and rarely changes — this is 
 hour = city_now.hour  # Use city's LOCAL hour
 if obs_low:
     st.metric("📉 Today's Low", f"{obs_low}°F")
-    brackets_low, _ = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"), cfg.get("slug_low", ""))
+    brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"), cfg.get("slug_low", ""))
     if hour >= 6:
         st.caption("✅ Low locked in (after 6 AM local)")
         render_brackets_with_actual(brackets_low, obs_low, "LOW")
