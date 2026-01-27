@@ -271,11 +271,10 @@ extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner el
 if is_owner and obs_low and current_temp:
     hour = now.hour
     
-    # Build Kalshi market URL for this city's LOW market
+    # Build Kalshi event URL (not specific market) for cleaner landing
     series_ticker = cfg.get("low", "KXLOWTNYC")
     slug = cfg.get("slug", "lowest-temperature-in-nyc")
-    today_str = now.strftime('%d%b%y').lower()  # e.g., "27jan26"
-    kalshi_market_url = f"https://kalshi.com/markets/{series_ticker.lower()}/{slug}"
+    kalshi_market_url = f"https://kalshi.com/markets/{series_ticker.lower()}"
     
     # Calculate time ago
     if confirm_time:
