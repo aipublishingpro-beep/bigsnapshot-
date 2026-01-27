@@ -177,26 +177,14 @@ def fetch_plays(game_id):
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
-        plays = [{"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", ""), "team": p.get("team", {}).get("displayName", "")} for p in data.get("plays", [])[-15:]]
-        # Get possession from situation or last play
+        plays = [{"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", ""), "team": TEAM_ABBREVS.get(p.get("team", {}).get("displayName", ""), p.get("team", {}).get("displayName", ""))} for p in data.get("plays", [])[-15:]]
+        # Get last team that had the ball
         poss_team = ""
-        situation = data.get("situation", {})
-        if situation.get("possession"):
-            poss_id = str(situation.get("possession"))
-            for team in data.get("boxscore", {}).get("teams", []):
-                if str(team.get("team", {}).get("id", "")) == poss_id:
-                    poss_team = TEAM_ABBREVS.get(team.get("team", {}).get("displayName", ""), "")
+        if plays:
+            for p in reversed(plays):
+                if p.get("team"):
+                    poss_team = p["team"]
                     break
-        # Fallback: infer from last play
-        if not poss_team and plays:
-            last_play = plays[-1]
-            last_team = last_play.get("team", "")
-            if last_team:
-                poss_team = TEAM_ABBREVS.get(last_team, last_team)
-                # If it was a made shot/turnover, possession switches
-                play_text = last_play.get("text", "").lower()
-                if "makes" in play_text or "turnover" in play_text or "steal" in play_text:
-                    poss_team = ""  # Don't show arrow on possession change
         return plays[-10:], poss_team
     except: return [], ""
 
@@ -370,9 +358,9 @@ if live_games:
         with col1:
             st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock']), unsafe_allow_html=True)
             if possession:
-                st.caption(f"🏀 Possession: {possession}")
+                st.caption(f"🏀 Last action: {possession}")
             else:
-                st.caption("⏸️ Dead ball / No possession")
+                st.caption("⏸️ Waiting for play data...")
         with col2:
             st.markdown("**📋 LAST 10 PLAYS**")
             tts_on = st.checkbox("🔊 Announce plays", key=f"tts_{game_id}")
