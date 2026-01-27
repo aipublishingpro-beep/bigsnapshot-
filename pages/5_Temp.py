@@ -3,7 +3,6 @@ import requests
 from datetime import datetime, timedelta
 import pytz
 import re
-from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="LOW Temp Edge Finder", page_icon="🌡️", layout="wide", initial_sidebar_state="expanded")
 
@@ -17,14 +16,17 @@ div[data-testid="stMarkdownContainer"] p {color: #c9d1d9;}
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
+# ============================================================
+# CITY CONFIG
+# ============================================================
 CITY_CONFIG = {
-    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central", "window_start": 5, "window_end": 8, "pattern": "sunrise"},
-    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central", "window_start": 0, "window_end": 2, "pattern": "midnight"},
-    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "tz": "US/Mountain", "window_start": 0, "window_end": 2, "pattern": "midnight"},
-    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific", "window_start": 5, "window_end": 8, "pattern": "sunrise"},
-    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern", "window_start": 6, "window_end": 9, "pattern": "sunrise"},
-    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern", "window_start": 6, "window_end": 9, "pattern": "sunrise"},
-    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern", "window_start": 6, "window_end": 9, "pattern": "sunrise"},
+    "Austin": {"low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central", "pattern": "sunrise"},
+    "Chicago": {"low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central", "pattern": "midnight"},
+    "Denver": {"low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "tz": "US/Mountain", "pattern": "midnight"},
+    "Los Angeles": {"low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific", "pattern": "sunrise"},
+    "Miami": {"low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern", "pattern": "sunrise"},
+    "New York City": {"low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern", "pattern": "sunrise"},
+    "Philadelphia": {"low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern", "pattern": "sunrise"},
 }
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
@@ -45,12 +47,12 @@ def fetch_nws_observations(station, city_tz_str):
     url = f"https://api.weather.gov/stations/{station}/observations"
     try:
         city_tz = pytz.timezone(city_tz_str)
-        resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
+        resp = requests.get(url, headers={"User-Agent": "TempEdge/7.0"}, timeout=15)
         if resp.status_code != 200:
-            return None, None, None, [], None, None, None
+            return None, None, None, [], None
         observations = resp.json().get("features", [])
         if not observations:
-            return None, None, None, [], None, None, None
+            return None, None, None, [], None
         today = datetime.now(city_tz).date()
         readings = []
         for obs in observations:
@@ -68,38 +70,36 @@ def fetch_nws_observations(station, city_tz_str):
             except:
                 continue
         if not readings:
-            return None, None, None, [], None, None, None
+            return None, None, None, [], None
         readings.sort(key=lambda x: x["time"], reverse=True)
         current = readings[0]["temp"]
-        low = min(r["temp"] for r in readings)
-        high = max(r["temp"] for r in readings)
+        obs_low = min(r["temp"] for r in readings)
+        obs_high = max(r["temp"] for r in readings)
         readings_chrono = sorted(readings, key=lambda x: x["time"])
         confirm_time = None
         low_found = False
         for r in readings_chrono:
-            if r["temp"] == low:
+            if r["temp"] == obs_low:
                 low_found = True
-            elif low_found and r["temp"] > low:
+            elif low_found and r["temp"] > obs_low:
                 confirm_time = r["time"]
                 break
-        oldest_time = readings_chrono[0]["time"] if readings_chrono else None
-        newest_time = readings_chrono[-1]["time"] if readings_chrono else None
         display_readings = [{"time": r["time"].strftime("%H:%M"), "temp": r["temp"]} for r in readings]
-        return current, low, high, display_readings, confirm_time, oldest_time, newest_time
+        return current, obs_low, obs_high, display_readings, confirm_time
     except:
-        return None, None, None, [], None, None, None
+        return None, None, None, [], None
 
 @st.cache_data(ttl=300)
 def fetch_nws_forecast(lat, lon):
     try:
         points_url = f"https://api.weather.gov/points/{lat},{lon}"
-        resp = requests.get(points_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
+        resp = requests.get(points_url, headers={"User-Agent": "TempEdge/7.0"}, timeout=10)
         if resp.status_code != 200:
             return None
         forecast_url = resp.json().get("properties", {}).get("forecast")
         if not forecast_url:
             return None
-        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
+        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/7.0"}, timeout=10)
         if resp.status_code != 200:
             return None
         periods = resp.json().get("properties", {}).get("periods", [])
@@ -111,15 +111,15 @@ def fetch_nws_forecast(lat, lon):
 def fetch_nws_tomorrow_low(lat, lon):
     try:
         points_url = f"https://api.weather.gov/points/{lat},{lon}"
-        resp = requests.get(points_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
+        resp = requests.get(points_url, headers={"User-Agent": "TempEdge/7.0"}, timeout=10)
         if resp.status_code != 200:
-            return None, None
+            return None
         forecast_url = resp.json().get("properties", {}).get("forecast")
         if not forecast_url:
-            return None, None
-        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
+            return None
+        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/7.0"}, timeout=10)
         if resp.status_code != 200:
-            return None, None
+            return None
         periods = resp.json().get("properties", {}).get("periods", [])
         tomorrow = (datetime.now(eastern) + timedelta(days=1)).date()
         for p in periods:
@@ -130,12 +130,12 @@ def fetch_nws_tomorrow_low(lat, lon):
                 try:
                     period_date = datetime.fromisoformat(start_time.replace("Z", "+00:00")).date()
                     if period_date == tomorrow:
-                        return temp, p.get("shortForecast", "")
+                        return temp
                 except:
                     continue
-        return None, None
+        return None
     except:
-        return None, None
+        return None
 
 @st.cache_data(ttl=60)
 def fetch_kalshi_brackets(series_ticker):
@@ -226,60 +226,38 @@ def fetch_kalshi_tomorrow_brackets(series_ticker):
         return []
 
 def find_winning_bracket(temp, brackets):
+    if temp is None or not brackets:
+        return None
+    rounded_temp = round(temp)
     for b in brackets:
-        if b['high'] == 999 and temp >= b['low']:
+        if b['high'] == 999 and rounded_temp >= b['low']:
             return b
-        if b['low'] == -999 and temp < b['high']:
+        if b['low'] == -999 and rounded_temp < b['high']:
             return b
-        if b['low'] <= temp <= b['high']:
+        if b['low'] <= rounded_temp <= b['high']:
             return b
     return None
 
 def get_lock_status(cfg, confirm_time, obs_low, readings):
-    city_tz = pytz.timezone(cfg["tz"])
-    city_now = datetime.now(city_tz)
-    current_hour = city_now.hour
-    window_start = cfg.get("window_start", 6)
-    window_end = cfg.get("window_end", 9)
-    pattern = cfg.get("pattern", "sunrise")
-    
+    if obs_low is None or not readings:
+        return "no_data", "❌ NO DATA", 0
     rising_count = 0
-    if readings and obs_low is not None:
-        found_low = False
-        for r in readings:
-            if r["temp"] == obs_low:
-                found_low = True
-            elif found_low and r["temp"] > obs_low:
-                rising_count += 1
-                if rising_count >= 5:
-                    break
-    
-    if pattern == "midnight":
-        in_window = current_hour >= window_start and current_hour <= window_end
-        past_window = current_hour > window_end and current_hour < 12
-        if confirm_time and rising_count >= 2:
-            return "locked", "🔒 LOCKED", 95
-        elif confirm_time or rising_count >= 2:
-            return "likely", "🔒 LIKELY", 80
-        elif past_window and rising_count >= 1:
-            return "likely", "🔒 LIKELY", 75
-        elif in_window:
-            return "watching", "👀 IN WINDOW", 40
-        else:
-            return "waiting", "⏳ WAITING", 20
+    found_low = False
+    for r in readings:
+        if r["temp"] == obs_low:
+            found_low = True
+        elif found_low and r["temp"] > obs_low:
+            rising_count += 1
+            if rising_count >= 5:
+                break
+    if confirm_time and rising_count >= 2:
+        return "locked", "🔒 LOCKED", 95
+    elif confirm_time or rising_count >= 2:
+        return "likely", "🔒 LIKELY", 80
+    elif rising_count >= 1:
+        return "watching", "👀 RISING", 60
     else:
-        in_window = current_hour >= window_start and current_hour <= window_end
-        past_window = current_hour > window_end
-        if confirm_time and rising_count >= 2:
-            return "locked", "🔒 LOCKED", 95
-        elif confirm_time or rising_count >= 2:
-            return "likely", "🔒 LIKELY", 80
-        elif past_window and rising_count >= 1:
-            return "likely", "🔒 LIKELY", 75
-        elif in_window:
-            return "watching", "👀 IN WINDOW", 40
-        else:
-            return "waiting", "⏳ WAITING", 20
+        return "waiting", "⏳ WAITING", 30
 
 # ============================================================
 # SIDEBAR
@@ -291,16 +269,16 @@ if is_owner:
             <div style="color:#22c55e;font-weight:700;margin-bottom:8px">🎯 CONFIRMATION SIGNALS</div>
             <div style="color:#c9d1d9;font-size:0.85em;line-height:1.5">
                 <b>🔒 LOCKED (95%):</b> Confirmed + 2 rising<br>
-                <b>🔒 LIKELY (75-80%):</b> Confirmation OR 2+ rising<br>
-                <b>👀 WATCHING (40%):</b> In window<br>
-                <b>⏳ WAITING:</b> Before window
+                <b>🔒 LIKELY (80%):</b> Confirmation OR 2+ rising<br>
+                <b>👀 RISING (60%):</b> 1 rising reading<br>
+                <b>⏳ WAITING:</b> No rising yet
             </div>
         </div>
         <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 TRADING WINDOWS (ET)</div>
+            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 LOW PATTERNS</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>🌙 1-3 AM:</b> Chicago, Denver<br>
-                <b>☀️ 6-10 AM:</b> Austin, Miami, NYC, Philly, LA
+                <b>🌙 Midnight:</b> Chicago, Denver<br>
+                <b>☀️ Sunrise:</b> Austin, LA, Miami, NYC, Philly
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -311,7 +289,7 @@ else:
             <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW WINDOWS</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
                 <b>🌙 Midnight:</b> Chicago, Denver<br>
-                <b>☀️ Sunrise:</b> Austin, Miami, NYC, Philly, LA
+                <b>☀️ Sunrise:</b> Austin, LA, Miami, NYC, Philly
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -339,17 +317,17 @@ if is_owner:
     st.markdown("---")
 
 # ============================================================
-# TODAY'S SCANNER
+# TODAY'S SCANNER (OWNER ONLY)
 # ============================================================
 if is_owner and st.session_state.view_mode == "today":
     st.subheader("🔍 TODAY'S MISPRICING SCANNER")
-    if st.button("🔄 Refresh", use_container_width=True):
+    if st.button("🔄 Refresh All", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
     
     results = []
     for city_name, cfg in CITY_CONFIG.items():
-        current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg["station"], cfg["tz"])
+        current_temp, obs_low, obs_high, readings, confirm_time = fetch_nws_observations(cfg["station"], cfg["tz"])
         brackets = fetch_kalshi_brackets(cfg["low"])
         pattern_icon = "🌙" if cfg.get("pattern") == "midnight" else "☀️"
         
@@ -362,37 +340,65 @@ if is_owner and st.session_state.view_mode == "today":
         
         if winning:
             edge = (100 - winning["ask"]) if status_code in ["locked", "likely"] else 0
-            results.append({"city": city_name, "pattern": pattern_icon, "obs_low": obs_low, "bracket": winning["name"], "ask": winning["ask"], "edge": edge, "lock_status": lock_status, "url": winning["url"]})
+            results.append({
+                "city": city_name, 
+                "pattern": pattern_icon, 
+                "obs_low": obs_low, 
+                "bracket": winning["name"], 
+                "ask": winning["ask"], 
+                "edge": edge, 
+                "lock_status": lock_status, 
+                "status_code": status_code,
+                "url": winning["url"]
+            })
         else:
-            results.append({"city": city_name, "pattern": pattern_icon, "obs_low": obs_low, "bracket": "NO MATCH", "ask": 0, "edge": 0, "lock_status": lock_status})
+            results.append({
+                "city": city_name, 
+                "pattern": pattern_icon, 
+                "obs_low": obs_low, 
+                "bracket": "NO MATCH", 
+                "ask": 0, 
+                "edge": 0, 
+                "lock_status": lock_status,
+                "status_code": status_code
+            })
     
     opps = [r for r in results if r.get("edge", 0) >= 5]
     if opps:
-        st.markdown("### 🔥 OPPORTUNITIES")
+        st.markdown("### 🔥 OPPORTUNITIES (Edge ≥ 5¢)")
         for o in sorted(opps, key=lambda x: x["edge"], reverse=True):
-            st.markdown(f"**{o['pattern']} {o['city']}** | {o['lock_status']} | Low: {o['obs_low']}°F → {o['bracket']} | Ask: {o['ask']}¢ | **+{o['edge']}¢ edge** | [BUY]({o.get('url', '#')})")
+            color = "#22c55e" if o["edge"] >= 15 else "#fbbf24"
+            st.markdown(f"""
+            <div style="background:#0d1117;border:2px solid {color};border-radius:8px;padding:15px;margin:10px 0">
+                <b style="color:{color}">{o['pattern']} {o['city']}</b> | {o['lock_status']} | 
+                Low: {o['obs_low']}°F → <b>{o['bracket']}</b> | Ask: {o['ask']}¢ | 
+                <b style="color:#22c55e">+{o['edge']}¢ edge</b> | 
+                <a href="{o.get('url', '#')}" target="_blank" style="color:#fbbf24">BUY →</a>
+            </div>
+            """, unsafe_allow_html=True)
     else:
         if now.hour >= 10:
-            st.warning("⏰ TODAY'S MARKETS DONE - Check Tomorrow's Lottery!")
+            st.warning("⏰ TODAY'S MARKETS LIKELY DONE - Check Tomorrow's Lottery!")
         else:
-            st.info("No mispricing found yet.")
+            st.info("No mispricing found yet. Markets may already be priced efficiently.")
     
-    st.markdown("### 📊 ALL CITIES")
+    st.markdown("### 📊 ALL CITIES STATUS")
     for r in results:
         if r.get("status") == "NO DATA":
-            st.write(f"{r['pattern']} {r['city']} — No data")
+            st.write(f"{r['pattern']} **{r['city']}** — ❌ No data")
         else:
-            st.write(f"{r['pattern']} {r['city']} | {r['lock_status']} | {r['obs_low']}°F → {r.get('bracket', 'N/A')} | Ask: {r.get('ask', 0)}¢")
+            status_color = "🟢" if r.get("status_code") == "locked" else "🟡" if r.get("status_code") == "likely" else "⚪"
+            st.write(f"{r['pattern']} **{r['city']}** | {r['lock_status']} | {r['obs_low']}°F → {r.get('bracket', 'N/A')} | Ask: {r.get('ask', 0)}¢")
 
 # ============================================================
-# TOMORROW'S LOTTERY
+# TOMORROW'S LOTTERY (OWNER ONLY)
 # ============================================================
 elif is_owner and st.session_state.view_mode == "tomorrow":
     tomorrow_str = (datetime.now(eastern) + timedelta(days=1)).strftime('%A, %b %d')
     st.subheader(f"🎰 TOMORROW'S LOTTERY ({tomorrow_str})")
     st.caption("Buy now while market is dead → Sell tomorrow when LOW locks")
     
-    if st.button("🔄 Refresh", use_container_width=True):
+    if st.button("🔄 Refresh All", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
     
@@ -400,7 +406,7 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
     <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:15px;margin-bottom:20px">
         <div style="color:#22c55e;font-weight:700">💡 THE PLAY</div>
         <div style="color:#c9d1d9;font-size:0.9em">
-            Buy winning bracket at 15-30¢ → Sell tomorrow at 35-50¢ → Pocket 10-25¢
+            Buy winning bracket at 15-30¢ tonight → Sell tomorrow AM at 35-50¢ → Pocket 10-25¢
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -409,7 +415,7 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
     all_cities = []
     for city_name, cfg in CITY_CONFIG.items():
         pattern_icon = "🌙" if cfg.get("pattern") == "midnight" else "☀️"
-        forecast_low, desc = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
+        forecast_low = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
         brackets = fetch_kalshi_tomorrow_brackets(cfg["low"])
         
         if forecast_low is None:
@@ -421,7 +427,14 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
         
         winning = find_winning_bracket(forecast_low, brackets)
         if winning:
-            data = {"city": city_name, "pattern": pattern_icon, "forecast": forecast_low, "bracket": winning["name"], "ask": winning["ask"], "url": winning["url"]}
+            data = {
+                "city": city_name, 
+                "pattern": pattern_icon, 
+                "forecast": forecast_low, 
+                "bracket": winning["name"], 
+                "ask": winning["ask"], 
+                "url": winning["url"]
+            }
             all_cities.append(data)
             if winning["ask"] < 60:
                 tickets.append(data)
@@ -429,61 +442,86 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
             all_cities.append({"city": city_name, "pattern": pattern_icon, "status": "NO BRACKET", "forecast": forecast_low})
     
     if tickets:
-        st.markdown("### 🎰 CHEAP ENTRIES")
+        st.markdown("### 🎰 CHEAP ENTRIES (<60¢)")
         for t in sorted(tickets, key=lambda x: x["ask"]):
             color = "#fbbf24" if t["ask"] < 40 else "#22c55e"
             st.markdown(f"""
             <div style="background:#0d1117;border:2px solid {color};border-radius:8px;padding:15px;margin:10px 0">
-                <b style="color:{color}">{t['pattern']} {t['city']}</b> | NWS: {t['forecast']}°F → <b>{t['bracket']}</b> | Ask: <b style="color:#22c55e">{t['ask']}¢</b> | 
+                <b style="color:{color}">{t['pattern']} {t['city']}</b> | NWS: {t['forecast']}°F → <b>{t['bracket']}</b> | 
+                Ask: <b style="color:#22c55e">{t['ask']}¢</b> | 
                 <a href="{t['url']}" target="_blank" style="color:#fbbf24">BUY NOW →</a>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("No cheap entries found. Prices may already be high.")
+        st.info("No cheap entries found. All brackets priced above 60¢.")
     
     st.markdown(f"### 📋 ALL CITIES - {tomorrow_str}")
     for c in all_cities:
         if c.get("status") == "NO FORECAST":
-            st.write(f"{c['pattern']} {c['city']} — No forecast")
+            st.write(f"{c['pattern']} **{c['city']}** — ❌ No forecast available")
         elif c.get("status") == "NO MARKET":
-            st.write(f"{c['pattern']} {c['city']} — NWS: {c['forecast']}°F — Market not open")
+            st.write(f"{c['pattern']} **{c['city']}** — NWS: {c['forecast']}°F — Market not open yet")
         elif c.get("status") == "NO BRACKET":
-            st.write(f"{c['pattern']} {c['city']} — NWS: {c['forecast']}°F — No matching bracket")
+            st.write(f"{c['pattern']} **{c['city']}** — NWS: {c['forecast']}°F — No matching bracket")
         else:
-            st.write(f"{c['pattern']} {c['city']} | NWS: {c['forecast']}°F → {c['bracket']} | Ask: {c['ask']}¢")
+            st.write(f"{c['pattern']} **{c['city']}** | NWS: {c['forecast']}°F → {c['bracket']} | Ask: {c['ask']}¢")
 
 # ============================================================
-# CITY VIEW
+# CITY VIEW (DEFAULT)
 # ============================================================
 else:
     c1, c2 = st.columns([4, 1])
     with c1:
         city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
+    with c2:
+        if st.button("🔄", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    
     cfg = CITY_CONFIG.get(city, {})
+    current_temp, obs_low, obs_high, readings, confirm_time = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
     
-    current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
-    
-    if obs_low and current_temp:
+    if obs_low is not None and current_temp is not None:
         status_code, lock_status, confidence = get_lock_status(cfg, confirm_time, obs_low, readings)
-        lock_color = "#22c55e" if "LOCKED" in lock_status else "#3b82f6" if "LIKELY" in lock_status else "#fbbf24"
+        lock_color = "#22c55e" if status_code == "locked" else "#3b82f6" if status_code == "likely" else "#fbbf24" if status_code == "watching" else "#6b7280"
         
         st.markdown(f"""
         <div style="background:#0d1117;border:3px solid {lock_color};border-radius:16px;padding:25px;margin:20px 0;text-align:center">
             <div style="color:{lock_color};font-size:1.2em;font-weight:700">{lock_status}</div>
             <div style="color:#6b7280">Today's Low</div>
             <div style="color:#fff;font-size:4em;font-weight:800">{obs_low}°F</div>
+            <div style="color:#6b7280;font-size:0.9em">Rounds to {round(obs_low)}°F</div>
         </div>
         """, unsafe_allow_html=True)
         
-        st.markdown(f"**Current:** {current_temp}°F | **High:** {obs_high}°F")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("🌡️ Current", f"{current_temp}°F")
+        col2.metric("📈 High", f"{obs_high}°F")
+        col3.metric("📉 Low", f"{obs_low}°F")
+        
+        brackets = fetch_kalshi_brackets(cfg["low"])
+        winning = find_winning_bracket(obs_low, brackets)
+        
+        if winning:
+            st.markdown("### 🎯 Kalshi Market")
+            edge = (100 - winning["ask"]) if status_code in ["locked", "likely"] else 0
+            edge_text = f" | **+{edge}¢ edge**" if edge > 0 else ""
+            st.markdown(f"""
+            <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:15px;margin:10px 0">
+                <b style="color:#22c55e">Winning Bracket: {winning['name']}</b><br>
+                Bid: {winning['bid']}¢ | Ask: {winning['ask']}¢{edge_text}<br>
+                <a href="{winning['url']}" target="_blank" style="color:#fbbf24">View on Kalshi →</a>
+            </div>
+            """, unsafe_allow_html=True)
         
         if readings:
-            with st.expander("📊 Recent Readings", expanded=True):
-                for i, r in enumerate(readings[:12]):
-                    marker = " ← LOW" if r['temp'] == obs_low else ""
+            with st.expander("📊 Recent Readings", expanded=False):
+                display_count = len(readings) if is_owner else min(12, len(readings))
+                for i, r in enumerate(readings[:display_count]):
+                    marker = " ← **LOW**" if r['temp'] == obs_low else ""
                     st.write(f"{r['time']} → {r['temp']}°F{marker}")
     else:
-        st.warning("⚠️ Could not fetch NWS data")
+        st.warning("⚠️ Could not fetch NWS data for this city")
     
     st.markdown("---")
     forecast = fetch_nws_forecast(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
@@ -492,7 +530,11 @@ else:
         cols = st.columns(len(forecast))
         for i, p in enumerate(forecast):
             with cols[i]:
-                st.metric(p.get("name", ""), f"{p.get('temperature', '')}°F")
+                icon = "☀️" if p.get("isDaytime", True) else "🌙"
+                st.metric(f"{icon} {p.get('name', '')[:8]}", f"{p.get('temperature', '')}°F")
 
+# ============================================================
+# FOOTER
+# ============================================================
 st.markdown("---")
-st.markdown('<div style="background:#f59e0b;padding:8px;border-radius:6px;text-align:center"><b style="color:#000">LOW Temp Edge Finder v7.0</b></div>', unsafe_allow_html=Tru
+st.markdown('<div style="background:#f59e0b;padding:8px;border-radius:6px;text-align:center"><b style="color:#000">LOW Temp Edge Finder v7.1</b></div>', unsafe_allow_html=True)
