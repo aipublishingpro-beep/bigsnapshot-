@@ -269,25 +269,7 @@ extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner el
 # OWNER ONLY: BIG GREEN/AMBER BOX WITH BUY RECOMMENDATION
 # ============================================================
 if is_owner and obs_low and current_temp:
-    brackets = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"))
     hour = now.hour
-    
-    # Find winning bracket
-    winning = None
-    if brackets:
-        for b in brackets:
-            if b['low'] < obs_low <= b['high']:
-                winning = b
-                break
-    
-    if winning:
-        buy_bracket = winning['range']
-        buy_price = f"@ {winning['yes']:.0f}¢" if winning['yes'] else ""
-        buy_url = winning['url']
-    else:
-        buy_bracket = "Could not match bracket"
-        buy_price = ""
-        buy_url = "#"
     
     # Calculate time ago
     if confirm_time:
@@ -312,11 +294,7 @@ if is_owner and obs_low and current_temp:
         <div style="color:#6b7280;font-size:0.9em;margin-bottom:5px">Today's Low</div>
         <div style="color:#fff;font-size:4em;font-weight:800;margin:10px 0">{obs_low}°F</div>
         <div style="color:#9ca3af;font-size:0.9em;margin-bottom:20px">{time_ago_text}</div>
-        <div style="background:#161b22;border-radius:10px;padding:20px;margin-top:15px">
-            <div style="color:#f59e0b;font-size:1em;margin-bottom:8px">BUY ON KALSHI {buy_price}:</div>
-            <div style="color:#fbbf24;font-size:2em;font-weight:700">{buy_bracket}</div>
-            <a href="{buy_url}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:15px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY YES →</a>
-        </div>
+        <div style="color:#6b7280;font-size:0.85em">Find bracket on Kalshi that best fits this locked number</div>
     </div>
     """, unsafe_allow_html=True)
 
