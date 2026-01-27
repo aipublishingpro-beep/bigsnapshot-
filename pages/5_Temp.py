@@ -305,6 +305,29 @@ if is_owner and st.session_state.scanner_view:
     
     results_with_edge = sorted([r for r in results if r["edge"] and r["edge"] > 0], key=lambda x: x["edge"], reverse=True)
     
+    st.markdown("""
+    <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:15px;margin-bottom:20px">
+        <div style="color:#3b82f6;font-weight:700;margin-bottom:10px">🗽 NYC TRADER SCHEDULE (All times ET)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:15px;color:#c9d1d9;font-size:0.9em">
+            <div><span style="color:#22c55e">●</span> <b>6-7 AM</b> → NYC, Philly, Miami</div>
+            <div><span style="color:#fbbf24">●</span> <b>7-8 AM</b> → Chicago, Austin</div>
+            <div><span style="color:#f59e0b">●</span> <b>8-9 AM</b> → Denver</div>
+            <div><span style="color:#ef4444">●</span> <b>9-10 AM</b> → Los Angeles</div>
+        </div>
+        <div style="color:#6b7280;font-size:0.8em;margin-top:10px">🔒 = LOW locked (after 7 AM local) | ⏳ = LOW may still drop</div>
+    </div>
+    <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:15px;margin-bottom:20px">
+        <div style="color:#f59e0b;font-weight:700;margin-bottom:10px">⏰ LOW LOCK-IN TIMES (Local Time)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:20px;color:#c9d1d9;font-size:0.9em">
+            <div><span style="color:#3b82f6">❄️</span> <b>Winter</b> (Nov-Feb): 6-7 AM</div>
+            <div><span style="color:#22c55e">🌸</span> <b>Spring</b> (Mar-Apr): 5-6 AM</div>
+            <div><span style="color:#fbbf24">☀️</span> <b>Summer</b> (May-Aug): 5-6 AM</div>
+            <div><span style="color:#f59e0b">🍂</span> <b>Fall</b> (Sep-Oct): 6-7 AM</div>
+        </div>
+        <div style="color:#6b7280;font-size:0.8em;margin-top:10px">LOW locks around sunrise ±30 min</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.markdown("### 🔥 OPPORTUNITIES")
     if results_with_edge:
         for r in results_with_edge:
