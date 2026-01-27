@@ -434,7 +434,9 @@ if cushion_data:
     max_results = 20 if selected_game != "All Games" else 10
     for cd in cushion_data[:max_results]:
         cc1, cc2, cc3, cc4 = st.columns([3, 1, 1, 2])
-        with cc1: st.markdown(f"**{cd['game']}** • {cd['status']}"); st.caption(f"{cd['pace']} • {cd['mins']} min played") if cd['mins'] > 0 else None
+        with cc1:
+            st.markdown(f"**{cd['game']}** • {cd['status']}")
+            if cd['mins'] > 0: st.caption(f"{cd['pace']} • {cd['mins']} min played")
         with cc2: st.write(f"Proj: {cd['proj']} | Line: {cd['line']}")
         with cc3:
             cushion_color = "#22c55e" if cd['cushion'] >= 6 else ("#eab308" if cd['cushion'] >= 0 else "#ef4444")
@@ -493,7 +495,9 @@ with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
         for p in all_picks:
             pg1, pg2, pg3, pg4 = st.columns([2.5, 1, 2, 1])
             game_datetime = next((g.get('game_datetime', '') for g in scheduled_games if g['away'] == p['away'] and g['home'] == p['home']), '')
-            with pg1: st.markdown(f"**{p['away']} @ {p['home']}**"); st.caption(game_datetime) if game_datetime else None
+            with pg1:
+                st.markdown(f"**{p['away']} @ {p['home']}**")
+                if game_datetime: st.caption(game_datetime)
             with pg2: st.markdown(f"<span style='color:{p['edge_color']}'>{p['edge_label']}</span>", unsafe_allow_html=True)
             with pg3:
                 if p['pick'] != "WAIT": st.link_button(f"🎯 {p['pick']} ML", get_kalshi_game_link(p['away'], p['home']), use_container_width=True)
