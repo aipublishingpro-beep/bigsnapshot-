@@ -297,8 +297,9 @@ if current_temp:
                 st.markdown(f"<div style='color:#6b7280;font-size:0.8em;margin-bottom:10px;text-align:center'>📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local</div>", unsafe_allow_html=True)
             
             display_list = readings if is_owner else readings[:8]
-            min_temp = min(r['temp'] for r in display_list)
-            low_idx = next((i for i, r in enumerate(display_list) if r['temp'] == min_temp), None)
+            
+            # Use actual obs_low, not min of display_list
+            low_idx = next((i for i, r in enumerate(display_list) if r['temp'] == obs_low), None)
             confirm_idx = (low_idx - 2) if (low_idx is not None and low_idx >= 2) else None
             
             for i, r in enumerate(display_list):
