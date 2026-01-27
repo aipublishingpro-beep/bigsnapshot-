@@ -246,6 +246,16 @@ if is_owner:
                 • Official NWS confirmation
             </div>
         </div>
+        <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
+            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES</div>
+            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
+                <b>Winter</b> (Nov-Feb): 6-7 AM<br>
+                <b>Spring</b> (Mar-Apr): 5-6 AM<br>
+                <b>Summer</b> (May-Aug): 5-6 AM<br>
+                <b>Fall</b> (Sep-Oct): 6-7 AM<br><br>
+                <span style="color:#9ca3af">LOW locks around sunrise ±30min</span>
+            </div>
+        </div>
         """, unsafe_allow_html=True)
 
 c1, c2 = st.columns([4, 1])
