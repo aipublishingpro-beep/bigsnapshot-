@@ -360,23 +360,28 @@ if is_owner:
             </div>
         </div>
         <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 NYC TRADER SCHEDULE</div>
+            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 YOUR TRADING SCHEDULE (ET)</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>6-7 AM ET</b> → NYC, Philly, Miami<br>
-                <b>7-8 AM ET</b> → Chicago, Austin<br>
-                <b>8-9 AM ET</b> → Denver<br>
-                <b>9-10 AM ET</b> → Los Angeles<br><br>
-                <span style="color:#9ca3af">All LOWs locked by 10 AM ET</span>
+                <b>🌙 1-2 AM</b> → Chicago, Denver<br>
+                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">Midnight LOWs - trade while they sleep!</span><br>
+                <b>☀️ 7-8 AM</b> → Austin, Miami, NYC, Philly<br>
+                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">Sunrise LOWs - Eastern cities</span><br>
+                <b>☀️ 9-10 AM</b> → Los Angeles<br>
+                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">West coast sunrise</span>
             </div>
         </div>
         <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES (Local)</div>
+            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>Winter</b> (Nov-Feb): 6-7 AM<br>
-                <b>Spring</b> (Mar-Apr): 5-6 AM<br>
-                <b>Summer</b> (May-Aug): 5-6 AM<br>
-                <b>Fall</b> (Sep-Oct): 6-7 AM<br><br>
-                <span style="color:#9ca3af">LOW locks around sunrise ±30min</span>
+                <b>🌙 MIDNIGHT CITIES:</b><br>
+                • Chicago ~00:15 CT (1:15 AM ET)<br>
+                • Denver ~00:40 MT (2:40 AM ET)<br><br>
+                <b>☀️ SUNRISE CITIES:</b><br>
+                • Austin ~06:40 CT (7:40 AM ET)<br>
+                • Miami ~07:40 ET<br>
+                • NYC ~07:51 ET<br>
+                • Philly ~07:54 ET<br>
+                • LA ~06:00 PT (9:00 AM ET)
             </div>
         </div>
         <div style="background:#1a1a2e;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
@@ -394,13 +399,17 @@ else:
     with st.sidebar:
         st.markdown("""
         <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES (Local)</div>
+            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES (ET)</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>Winter</b> (Nov-Feb): 6-7 AM<br>
-                <b>Spring</b> (Mar-Apr): 5-6 AM<br>
-                <b>Summer</b> (May-Aug): 5-6 AM<br>
-                <b>Fall</b> (Sep-Oct): 6-7 AM<br><br>
-                <span style="color:#9ca3af">LOW locks around sunrise ±30min</span>
+                <b>🌙 MIDNIGHT CITIES:</b><br>
+                • Chicago ~1:15 AM ET<br>
+                • Denver ~2:40 AM ET<br><br>
+                <b>☀️ SUNRISE CITIES:</b><br>
+                • Austin ~7:40 AM ET<br>
+                • Miami ~7:40 AM ET<br>
+                • NYC ~7:51 AM ET<br>
+                • Philly ~7:54 AM ET<br>
+                • LA ~9:00 AM ET
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -749,5 +758,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v5.6</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v5.8</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment purposes only. Not financial advice. Verify on Kalshi before trading.</div>', unsafe_allow_html=True)
