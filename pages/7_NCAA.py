@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.5"
+VERSION = "10.7"
 LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
@@ -310,22 +310,29 @@ if live_games:
             else:
                 st.caption(f"⏳ Wait for larger lead (currently {leader} +{abs(lead)})")
             st.markdown("**📊 TOTALS**")
-            yes_lines = [(t, proj - t) for t in sorted(THRESHOLDS) if proj - t >= 6]
-            no_lines = [(t, t - proj) for t in sorted(THRESHOLDS, reverse=True) if t - proj >= 6]
+            # YES = lower brackets are safer (sort ascending), NO = higher brackets are safer (sort descending)
+            yes_lines = [(t, proj - t) for t in sorted(THRESHOLDS) if proj - t >= 6]  # Lowest first = safest
+            no_lines = [(t, t - proj) for t in sorted(THRESHOLDS, reverse=True) if t - proj >= 6]  # Highest first = safest
             tc1, tc2 = st.columns(2)
             with tc1:
-                st.markdown("<span style='color:#22c55e;font-weight:bold'>🟢 YES (Over)</span>", unsafe_allow_html=True)
+                st.markdown("<span style='color:#22c55e;font-weight:bold'>🟢 YES (Over) — go LOW</span>", unsafe_allow_html=True)
                 if yes_lines:
-                    for line, cushion in yes_lines[:3]:
-                        safety = "🔥" if cushion >= 15 else ("✅" if cushion >= 10 else "🟡")
-                        st.link_button(f"{safety} YES {line} (+{int(cushion)} cushion)", kalshi_link, use_container_width=True)
+                    for i, (line, cushion) in enumerate(yes_lines[:3]):
+                        if cushion >= 20: safety = "🔒 FORTRESS"
+                        elif cushion >= 12: safety = "✅ SAFE"
+                        else: safety = "🎯 TIGHT"
+                        rec = " ⭐REC" if i == 0 and cushion >= 12 else ""
+                        st.link_button(f"{safety} YES {line} (+{int(cushion)}){rec}", kalshi_link, use_container_width=True)
                 else: st.caption("No safe YES lines (need 6+ cushion)")
             with tc2:
-                st.markdown("<span style='color:#ef4444;font-weight:bold'>🔴 NO (Under)</span>", unsafe_allow_html=True)
+                st.markdown("<span style='color:#ef4444;font-weight:bold'>🔴 NO (Under) — go HIGH</span>", unsafe_allow_html=True)
                 if no_lines:
-                    for line, cushion in no_lines[:3]:
-                        safety = "🔥" if cushion >= 15 else ("✅" if cushion >= 10 else "🟡")
-                        st.link_button(f"{safety} NO {line} (+{int(cushion)} cushion)", kalshi_link, use_container_width=True)
+                    for i, (line, cushion) in enumerate(no_lines[:3]):
+                        if cushion >= 20: safety = "🔒 FORTRESS"
+                        elif cushion >= 12: safety = "✅ SAFE"
+                        else: safety = "🎯 TIGHT"
+                        rec = " ⭐REC" if i == 0 and cushion >= 12 else ""
+                        st.link_button(f"{safety} NO {line} (+{int(cushion)}){rec}", kalshi_link, use_container_width=True)
                 else: st.caption("No safe NO lines (need 6+ cushion)")
         else: st.caption("⏳ Waiting for 5+ minutes...")
         st.divider()
@@ -341,8 +348,12 @@ scanner_games = [g for g in games if g['status'] not in ['STATUS_FINAL', 'STATUS
 all_game_options = ["All Games"] + [f"{g['away_abbrev']} @ {g['home_abbrev']}" for g in scanner_games]
 cush_col1, cush_col2, cush_col3 = st.columns(3)
 with cush_col1: selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
-with cush_col2: min_mins = st.selectbox("Min minutes:", [0, 5, 8, 10, 12, 15, 18], index=0, key="cush_mins")
+with cush_col2: min_mins = st.selectbox("Min PLAY TIME:", [8, 12, 16, 20], index=1, key="cush_mins")
 with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
+
+# Warning for 8 min selection
+if min_mins == 8:
+    st.warning("⚠️ 8 min = high variance. Only buy if cushion ≥12. Pace still settling.")
 
 cushion_data = []
 for g in scanner_games:
@@ -368,9 +379,22 @@ for g in scanner_games:
     else:
         continue  # Skip games with no Vegas O/U and not enough minutes
     
-    for thresh in THRESHOLDS:
+    # For YES: lower lines are safer (sort ascending by threshold)
+    # For NO: higher lines are safer (sort descending by threshold)
+    if side_choice == "YES (Over)":
+        thresh_sorted = sorted(THRESHOLDS)  # Ascending = lowest (safest) first
+    else:
+        thresh_sorted = sorted(THRESHOLDS, reverse=True)  # Descending = highest (safest) first
+    
+    for idx, thresh in enumerate(thresh_sorted):
         cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
         if cushion >= 6 or (selected_game != "All Games"):
+            # Label based on cushion
+            if cushion >= 20: safety_label = "🔒 FORTRESS"
+            elif cushion >= 12: safety_label = "✅ SAFE"
+            elif cushion >= 6: safety_label = "🎯 TIGHT"
+            else: safety_label = "⚠️ RISKY"
+            
             cushion_data.append({
                 "game": game_name, 
                 "status": status_text, 
@@ -380,22 +404,31 @@ for g in scanner_games:
                 "pace": pace_label, 
                 "link": get_kalshi_game_link(g['away_abbrev'], g['home_abbrev']), 
                 "mins": mins,
-                "is_live": mins >= 8
+                "is_live": mins >= 8,
+                "safety": safety_label,
+                "is_recommended": idx == 0 and cushion >= 12  # First safe line = recommended
             })
 
-cushion_data.sort(key=lambda x: (not x['is_live'], -x['cushion']))  # Live first, then by cushion
+# Sort: Live first, then by safety (FORTRESS > SAFE > TIGHT), then by cushion
+safety_order = {"🔒 FORTRESS": 0, "✅ SAFE": 1, "🎯 TIGHT": 2, "⚠️ RISKY": 3}
+cushion_data.sort(key=lambda x: (not x['is_live'], safety_order.get(x['safety'], 3), -x['cushion']))
 
 if cushion_data:
+    # Show direction hint
+    direction = "go LOW for safety" if side_choice == "YES (Over)" else "go HIGH for safety"
+    st.caption(f"💡 {side_choice.split()[0]} bets: {direction}")
+    
     max_results = 20 if selected_game != "All Games" else 15
     for cd in cushion_data[:max_results]:
-        cc1, cc2, cc3, cc4 = st.columns([3, 1, 1, 2])
+        cc1, cc2, cc3, cc4 = st.columns([3, 1.2, 1.3, 2])
         with cc1:
-            st.markdown(f"**{cd['game']}** • {cd['status']}")
+            rec_badge = " ⭐REC" if cd.get('is_recommended') else ""
+            st.markdown(f"**{cd['game']}** • {cd['status']}{rec_badge}")
             st.caption(f"{cd['pace']} • {cd['mins']} min played" if cd['mins'] > 0 else f"{cd['pace']} O/U: {cd['proj']}")
         with cc2: st.write(f"Proj: {cd['proj']} | Line: {cd['line']}")
         with cc3:
-            cushion_color = "#22c55e" if cd['cushion'] >= 10 else ("#22c55e" if cd['cushion'] >= 6 else ("#eab308" if cd['cushion'] >= 0 else "#ef4444"))
-            st.markdown(f"<span style='color:{cushion_color};font-weight:bold'>{'+' if cd['cushion'] >= 0 else ''}{round(cd['cushion'])}</span>", unsafe_allow_html=True)
+            cushion_color = "#22c55e" if cd['cushion'] >= 12 else ("#eab308" if cd['cushion'] >= 6 else "#ef4444")
+            st.markdown(f"<span style='color:{cushion_color};font-weight:bold'>{cd['safety']}<br>+{round(cd['cushion'])}</span>", unsafe_allow_html=True)
         with cc4: st.link_button(f"BUY {'NO' if 'NO' in side_choice else 'YES'} {cd['line']}", cd['link'], use_container_width=True)
 else:
     if selected_game != "All Games": st.info(f"Select a side and see all lines for {selected_game}")
