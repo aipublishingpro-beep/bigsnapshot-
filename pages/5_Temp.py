@@ -2,9 +2,6 @@ import streamlit as st
 
 st.set_page_config(page_title="LOW Temp Edge Finder", page_icon="🌡️", layout="wide")
 
-# ============================================================
-# GA4 ANALYTICS - SERVER SIDE
-# ============================================================
 import uuid
 import requests as req_ga
 
@@ -17,25 +14,14 @@ def send_ga4_event(page_title, page_path):
 
 send_ga4_event("Temp Edge Finder", "/Temp")
 
-# ============================================================
-# COOKIE AUTH CHECK - FREE PAGE (NO REDIRECT)
-# ============================================================
 import extra_streamlit_components as stx
-
 cookie_manager = stx.CookieManager()
-
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-
 saved_auth = cookie_manager.get("authenticated")
 if saved_auth == "true":
     st.session_state.authenticated = True
 
-# FREE PAGE - Anyone can access, no redirect
-
-# ============================================================
-# IMPORTS
-# ============================================================
 import requests
 from datetime import datetime, timedelta
 import pytz
@@ -61,7 +47,6 @@ div[data-testid="stMarkdownContainer"] p {color: #c9d1d9;}
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-# All Kalshi Temperature Cities with LOCAL TIMEZONES
 CITY_CONFIG = {
     "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central", "slug_low": "lowest-temperature-in-austin"},
     "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central", "slug_low": "lowest-temperature-in-chicago"},
@@ -75,13 +60,13 @@ CITY_LIST = sorted(CITY_CONFIG.keys())
 
 def get_bracket_bounds(range_str):
     tl = range_str.lower()
-    below_match = re.search(r'<\s*(\d+)°', range_str)
+    below_match = re.search(r'<\s*(\d+)', range_str)
     if below_match:
         return -999, int(below_match.group(1)) - 0.5
-    above_match = re.search(r'>\s*(\d+)°', range_str)
+    above_match = re.search(r'>\s*(\d+)', range_str)
     if above_match:
         return int(above_match.group(1)) + 0.5, 999
-    range_match = re.search(r'(\d+)[-–]\s*(\d+)°|(\d+)°?\s*to\s*(\d+)°', range_str)
+    range_match = re.search(r'(\d+)[-–]\s*(\d+)|(\d+)\s*to\s*(\d+)', range_str)
     if range_match:
         if range_match.group(1) and range_match.group(2):
             low, high = int(range_match.group(1)), int(range_match.group(2))
@@ -89,14 +74,14 @@ def get_bracket_bounds(range_str):
             low, high = int(range_match.group(3)), int(range_match.group(4))
         return low - 0.5, high + 0.5
     if "or below" in tl or "below" in tl:
-        nums = re.findall(r'(\d+)°', range_str)
+        nums = re.findall(r'(\d+)', range_str)
         if nums:
             return -999, int(nums[0]) + 0.5
     if "or above" in tl or "above" in tl:
-        nums = re.findall(r'(\d+)°', range_str)
+        nums = re.findall(r'(\d+)', range_str)
         if nums:
             return int(nums[0]) - 0.5, 999
-    nums = re.findall(r'(\d+)°', range_str)
+    nums = re.findall(r'(\d+)', range_str)
     if len(nums) >= 2:
         return int(nums[0]) - 0.5, int(nums[1]) + 0.5
     elif nums:
@@ -117,25 +102,28 @@ def fetch_kalshi_brackets(series_ticker, slug=""):
         markets = resp.json().get("markets", [])
         if not markets:
             return None
+        
         today = datetime.now(eastern)
         today_str = today.strftime('%y%b%d').upper()
         today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
         if not today_markets:
             first_event = markets[0].get("event_ticker", "")
             today_markets = [m for m in markets if m.get("event_ticker") == first_event]
+        
         brackets = []
         for m in today_markets:
-            range_txt = m.get("subtitle", "") or m.get("title", "")
-            ticker = m.get("ticker", "")
-            
-            # Filter: Only keep markets with proper bracket subtitles
-            # Skip binary threshold markets (">13°") - these have no "to"/"above"/"below"
             subtitle = m.get("subtitle", "")
-            if not subtitle:
-                continue  # Skip markets with no subtitle (binary markets)
-            range_lower = subtitle.lower()
-            if not any(x in range_lower for x in ["to", "above", "below"]):
-                continue  # Skip if subtitle doesn't have bracket keywords
+            title = m.get("title", "")
+            ticker = m.get("ticker", "")
+            range_txt = subtitle if subtitle else title
+            
+            if not range_txt:
+                continue
+            
+            # ONLY keep bracket markets with "to", "above", or "below"
+            range_lower = range_txt.lower()
+            if not any(x in range_lower for x in [" to ", "above", "below"]):
+                continue
             
             low, high = get_bracket_bounds(range_txt)
             if low == -999:
@@ -144,23 +132,26 @@ def fetch_kalshi_brackets(series_ticker, slug=""):
                 mid = low + 1
             else:
                 mid = (low + high) / 2
+            
             yb = m.get("yes_bid", 0)
             ya = m.get("yes_ask", 0)
             if yb and ya:
                 yes_price = (yb + ya) / 2
             else:
                 yes_price = ya or yb or 0
-            # Build correct Kalshi URL with slug
+            
             if ticker and slug:
                 kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}/{slug}/{ticker.lower()}"
             elif ticker:
                 kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}/{ticker.lower()}"
             else:
                 kalshi_url = "#"
+            
             brackets.append({"range": range_txt, "mid": mid, "yes": yes_price, "ticker": ticker, "url": kalshi_url})
+        
         brackets.sort(key=lambda x: x['mid'] or 0)
         return brackets if brackets else None
-    except:
+    except Exception as e:
         return None
 
 @st.cache_data(ttl=120)
@@ -213,7 +204,6 @@ def fetch_nws_6hr_extremes(station):
 
 @st.cache_data(ttl=120)
 def fetch_nws_observations(station, city_tz_str):
-    """Fetch NWS observations and convert to city's LOCAL timezone"""
     url = f"https://api.weather.gov/stations/{station}/observations?limit=100"
     try:
         city_tz = pytz.timezone(city_tz_str)
@@ -233,7 +223,7 @@ def fetch_nws_observations(station, city_tz_str):
                 continue
             try:
                 ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                ts_local = ts.astimezone(city_tz)  # Convert to CITY'S timezone
+                ts_local = ts.astimezone(city_tz)
                 if ts_local.date() == today:
                     temp_f = round(temp_c * 9/5 + 32, 1)
                     readings.append({"time": ts_local, "temp": temp_f, "hour": ts_local.hour})
@@ -342,7 +332,6 @@ def render_brackets_with_actual(brackets, actual_temp, temp_type):
             card = f'<div style="{card_style};border-radius:10px;padding:18px;text-align:center;margin-top:12px"><div style="color:#fbbf24;font-size:0.9em;font-weight:600">🌡️ ACTUAL {temp_type}: {actual_temp}°F</div>{edge_score_line}<div style="color:#fff;font-size:1.3em;font-weight:700;margin:10px 0">{winning_bracket}</div><div style="color:#4ade80;font-size:0.9em">Potential profit: +{potential_profit:.0f}¢ per contract</div><a href="{winner_data["url"]}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:10px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">BUY YES</a></div>'
         st.markdown(card, unsafe_allow_html=True)
 
-# ========== HEADER ==========
 st.title("🌡️ LOW TEMP EDGE FINDER")
 st.caption(f"Live NWS Observations + Kalshi LOW Markets | {now.strftime('%b %d, %Y %I:%M %p ET')}")
 
@@ -350,7 +339,6 @@ query_params = st.query_params
 default_city = query_params.get("city", "New York City")
 if default_city not in CITY_LIST:
     default_city = "New York City"
-
 is_owner = query_params.get("mode") == "owner"
 
 if is_owner:
@@ -391,19 +379,29 @@ if st.button("⭐ Set as Default City", use_container_width=False):
         st.query_params[key] = value
     st.success(f"✓ Bookmark this page to save {city} as default!")
 
-# Fetch with city's timezone
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg.get("station", "KNYC"), city_tz_str)
 extremes_6hr, official_high, official_low = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else ({}, None, None)
 brackets_low_data = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"), cfg.get("slug_low", "")) if is_owner else None
 
 if current_temp:
     tz_abbrev = city_now.strftime('%Z')
-    # DEBUG: Show if Kalshi brackets loaded
     if is_owner:
         if brackets_low_data:
             st.caption(f"✅ Loaded {len(brackets_low_data)} Kalshi brackets")
         else:
-            st.caption("❌ No Kalshi brackets loaded")
+            st.caption("❌ No Kalshi brackets loaded - checking API...")
+            # Debug: show raw API response
+            debug_url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={cfg.get('low', 'KXLOWTNYC')}&status=open"
+            try:
+                debug_resp = requests.get(debug_url, timeout=10)
+                debug_markets = debug_resp.json().get("markets", [])
+                st.caption(f"API returned {len(debug_markets)} total markets")
+                if debug_markets:
+                    for dm in debug_markets[:5]:
+                        st.code(f"ticker: {dm.get('ticker')}, subtitle: {dm.get('subtitle')}, title: {dm.get('title')}")
+            except Exception as e:
+                st.caption(f"API error: {e}")
+    
     if is_owner and official_low:
         st.markdown(f"""
         <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
@@ -432,29 +430,19 @@ if current_temp:
     if readings:
         with st.expander("📊 Recent NWS Observations", expanded=True):
             display_list = readings
-            
-            # ============================================================
-            # FIX: Show amber LOW reversal row at the EARLIEST occurrence
-            # REMOVED hour < 12 filter - now triggers on ANY low occurrence
-            # ============================================================
             low_reversal_idx = None
             if obs_low:
-                # Iterate backwards (oldest first) to find the first/earliest occurrence
                 for i in range(len(display_list) - 1, -1, -1):
                     r = display_list[i]
-                    if r['temp'] == obs_low:  # FIXED: Removed hour check
+                    if r['temp'] == obs_low:
                         low_reversal_idx = i
                         break
-            
-            # Confirm bar: shows at FIRST reading where temp rises ABOVE the low
             low_confirm_idx = None
             if is_owner and obs_low:
                 for i in range(len(display_list) - 1):
-                    # Current reading > low AND next reading (older) is at the low
                     if display_list[i]['temp'] > obs_low and display_list[i + 1]['temp'] == obs_low:
                         low_confirm_idx = i
                         break
-            
             for i, r in enumerate(display_list):
                 time_key = r['time']
                 six_hr_display = ""
@@ -468,7 +456,6 @@ if current_temp:
                         if six_hr_min is not None:
                             parts.append(f"<span style='color:#3b82f6'>6hr↓{six_hr_min:.0f}°</span>")
                         six_hr_display = " ".join(parts)
-                
                 if is_owner and low_confirm_idx is not None and i == low_confirm_idx:
                     low_bracket_info = ""
                     low_bracket_link = "#"
@@ -487,13 +474,11 @@ if current_temp:
                         time_ago = f"({mins_ago}m ago)" if mins_ago > 0 else "(just now)"
                     except:
                         time_ago = ""
-                    # Build clear confirmation message
                     if low_bracket_info and low_bracket_price:
                         confirm_text = f"✅ CONFIRMED LOW: {obs_low}°F → BUY {low_bracket_info} @ {low_bracket_price} {time_ago}"
                     else:
                         confirm_text = f"✅ CONFIRMED LOW: {obs_low}°F {time_ago}"
                     st.markdown(f'<a href="{low_bracket_link}" target="_blank" style="text-decoration:none;display:block"><div style="display:flex;justify-content:center;align-items:center;padding:10px;border-radius:4px;background:linear-gradient(135deg,#166534,#14532d);border:2px solid #22c55e;margin:4px 0;cursor:pointer"><span style="color:#4ade80;font-weight:700">{confirm_text}</span></div></a>', unsafe_allow_html=True)
-                
                 if i == low_reversal_idx:
                     row_style = "display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:4px;background:linear-gradient(135deg,#2d1f0a,#1a1408);border:1px solid #f59e0b;margin:2px 0"
                     time_style = "color:#fbbf24;font-weight:600"
@@ -511,7 +496,7 @@ else:
 st.markdown("---")
 st.subheader("🌙 LOW TEMP")
 st.caption("💡 LOW locks in by 6 AM local time and rarely changes — this is where the edge is.")
-hour = city_now.hour  # Use city's LOCAL hour
+hour = city_now.hour
 if obs_low:
     st.metric("📉 Today's Low", f"{obs_low}°F")
     brackets_low = fetch_kalshi_brackets(cfg.get("low", "KXLOWTNYC"), cfg.get("slug_low", ""))
@@ -550,7 +535,7 @@ else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v4.4</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v4.5</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     docs = """
