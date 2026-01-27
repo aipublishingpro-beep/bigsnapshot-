@@ -411,17 +411,20 @@ if current_temp:
         with st.expander("📊 Recent NWS Observations", expanded=True):
             display_list = readings
             
-            # Show amber LOW reversal row at the EARLIEST occurrence of the low (morning LOCAL time)
+            # ============================================================
+            # FIX: Show amber LOW reversal row at the EARLIEST occurrence
+            # REMOVED hour < 12 filter - now triggers on ANY low occurrence
+            # ============================================================
             low_reversal_idx = None
             if obs_low:
                 # Iterate backwards (oldest first) to find the first/earliest occurrence
                 for i in range(len(display_list) - 1, -1, -1):
                     r = display_list[i]
-                    reading_hour = r.get('hour', 12)  # Use stored LOCAL hour
-                    if r['temp'] == obs_low and reading_hour < 12:
+                    if r['temp'] == obs_low:  # FIXED: Removed hour check
                         low_reversal_idx = i
                         break
             
+            # Confirm bar: shows when NEXT reading is higher than the low
             low_confirm_idx = None
             if is_owner and low_reversal_idx is not None and low_reversal_idx >= 1:
                 if display_list[low_reversal_idx - 1]['temp'] > obs_low:
@@ -515,7 +518,7 @@ else:
     st.caption("Could not load NWS forecast")
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v4.2</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v4.3</span></div>', unsafe_allow_html=True)
 
 with st.expander("❓ How to Use This App"):
     docs = """
