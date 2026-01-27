@@ -443,30 +443,60 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
         else:
             all_cities.append({"city": city_name, "pattern": pattern_icon, "status": "NO BRACKET", "forecast": forecast_low})
     
+    # Check times in ET for William
+    CHECK_TIMES_ET = {
+        "Austin": "7-8 AM ET",
+        "Chicago": "1-2 AM ET",
+        "Denver": "2-3 AM ET", 
+        "Los Angeles": "9-10 AM ET",
+        "Miami": "7-8 AM ET",
+        "New York City": "7-8 AM ET",
+        "Philadelphia": "7-8 AM ET",
+    }
+    
     if tickets:
         st.markdown("### 🎰 CHEAP ENTRIES (<60¢)")
         for t in sorted(tickets, key=lambda x: x["ask"]):
             color = "#fbbf24" if t["ask"] < 40 else "#22c55e"
+            check_time = CHECK_TIMES_ET.get(t['city'], "7-10 AM ET")
             st.markdown(f"""
             <div style="background:#0d1117;border:2px solid {color};border-radius:8px;padding:15px;margin:10px 0">
-                <b style="color:{color}">{t['pattern']} {t['city']}</b> | NWS: {t['forecast']}°F → <b>{t['bracket']}</b> | 
-                Ask: <b style="color:#22c55e">{t['ask']}¢</b> | 
-                <a href="{t['url']}" target="_blank" style="color:#fbbf24">BUY NOW →</a>
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                    <div>
+                        <b style="color:{color}">{t['pattern']} {t['city']}</b> | NWS: {t['forecast']}°F → <b>{t['bracket']}</b> | 
+                        Ask: <b style="color:#22c55e">{t['ask']}¢</b>
+                    </div>
+                    <a href="{t['url']}" target="_blank" style="color:#fbbf24;text-decoration:none">View Market →</a>
+                </div>
+                <div style="margin-top:10px;padding:8px;background:#1a1a2e;border-radius:6px;text-align:center">
+                    <span style="color:#9ca3af">⏰ LOW locks:</span> <b style="color:#3b82f6">{check_time}</b>
+                    <span style="color:#6b7280;margin-left:10px">— Check back then to confirm winner</span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
     else:
         st.info("No cheap entries found. All brackets priced above 60¢.")
     
     st.markdown(f"### 📋 ALL CITIES - {tomorrow_str}")
+    CHECK_TIMES_ALL = {
+        "Austin": "7-8 AM ET",
+        "Chicago": "1-2 AM ET",
+        "Denver": "2-3 AM ET", 
+        "Los Angeles": "9-10 AM ET",
+        "Miami": "7-8 AM ET",
+        "New York City": "7-8 AM ET",
+        "Philadelphia": "7-8 AM ET",
+    }
     for c in all_cities:
+        check_time = CHECK_TIMES_ALL.get(c['city'], "7-10 AM ET")
         if c.get("status") == "NO FORECAST":
             st.write(f"{c['pattern']} **{c['city']}** — ❌ No forecast available")
         elif c.get("status") == "NO MARKET":
-            st.write(f"{c['pattern']} **{c['city']}** — NWS: {c['forecast']}°F — Market not open yet")
+            st.write(f"{c['pattern']} **{c['city']}** — NWS: {c['forecast']}°F — Market not open yet | ⏰ {check_time}")
         elif c.get("status") == "NO BRACKET":
             st.write(f"{c['pattern']} **{c['city']}** — NWS: {c['forecast']}°F — No matching bracket")
         else:
-            st.write(f"{c['pattern']} **{c['city']}** | NWS: {c['forecast']}°F → {c['bracket']} | Ask: {c['ask']}¢")
+            st.write(f"{c['pattern']} **{c['city']}** | NWS: {c['forecast']}°F → {c['bracket']} | Ask: {c['ask']}¢ | ⏰ {check_time}")
 
 # ============================================================
 # CITY VIEW (DEFAULT)
