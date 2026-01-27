@@ -230,7 +230,9 @@ def fetch_kalshi_brackets(series_ticker):
                 low_bound = -999
                 bracket_name = f"below {high_bound}°"
             if low_bound is not None and high_bound is not None:
-                kalshi_url = f"https://kalshi.com/markets/{ticker}"
+                # Use event ticker for URL (e.g., KXLOWTDEN-26JAN27), not market ticker
+                event_ticker = m.get("event_ticker", "")
+                kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}" if series_ticker else f"https://kalshi.com/markets/{event_ticker}"
                 brackets.append({"name": bracket_name, "low": low_bound, "high": high_bound, "price": yes_price, "url": kalshi_url, "ticker": ticker})
         brackets.sort(key=lambda x: x['low'])
         return brackets
