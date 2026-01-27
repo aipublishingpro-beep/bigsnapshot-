@@ -190,6 +190,94 @@ def fetch_nws_forecast(lat, lon):
     except:
         return None
 
+@st.cache_data(ttl=300)
+def fetch_nws_tomorrow_low(lat, lon):
+    """Get tomorrow's forecasted low from NWS 7-day forecast"""
+    try:
+        points_url = f"https://api.weather.gov/points/{lat},{lon}"
+        resp = requests.get(points_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
+        if resp.status_code != 200:
+            return None, None
+        forecast_url = resp.json().get("properties", {}).get("forecast")
+        if not forecast_url:
+            return None, None
+        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
+        if resp.status_code != 200:
+            return None, None
+        periods = resp.json().get("properties", {}).get("periods", [])
+        
+        tomorrow = (datetime.now(eastern) + timedelta(days=1)).date()
+        
+        for p in periods:
+            start_time = p.get("startTime", "")
+            is_day = p.get("isDaytime", True)
+            temp = p.get("temperature")
+            if start_time and not is_day:
+                try:
+                    period_date = datetime.fromisoformat(start_time.replace("Z", "+00:00")).date()
+                    # Tomorrow night = tomorrow's low
+                    if period_date == tomorrow:
+                        short_forecast = p.get("shortForecast", "")
+                        return temp, short_forecast
+                except:
+                    continue
+        return None, None
+    except:
+        return None, None
+
+@st.cache_data(ttl=60)
+def fetch_kalshi_tomorrow_brackets(series_ticker):
+    """Fetch tomorrow's Kalshi brackets"""
+    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code != 200:
+            return []
+        markets = resp.json().get("markets", [])
+        if not markets:
+            return []
+        
+        tomorrow = datetime.now(eastern) + timedelta(days=1)
+        tomorrow_str = tomorrow.strftime('%y%b%d').upper()
+        
+        tomorrow_markets = [m for m in markets if tomorrow_str in m.get("event_ticker", "").upper()]
+        if not tomorrow_markets:
+            return []
+        
+        brackets = []
+        for m in tomorrow_markets:
+            title = m.get("title", "")
+            ticker = m.get("ticker", "")
+            yes_bid = m.get("yes_bid", 0) or 0
+            yes_ask = m.get("yes_ask", 0) or 0
+            low_bound, high_bound, bracket_name = None, None, ""
+            
+            range_match = re.search(r'(\d+)\s*[-–to]+\s*(\d+)°', title)
+            if range_match:
+                low_bound = int(range_match.group(1))
+                high_bound = int(range_match.group(2))
+                bracket_name = f"{low_bound}-{high_bound}°"
+            above_match = re.search(r'(\d+)°?\s*(or above|or more|at least|\+)', title, re.IGNORECASE)
+            if above_match and not range_match:
+                low_bound = int(above_match.group(1))
+                high_bound = 999
+                bracket_name = f"{low_bound}° or above"
+            below_match = re.search(r'(below|under|less than)\s*(\d+)°', title, re.IGNORECASE)
+            if below_match and not range_match:
+                high_bound = int(below_match.group(2))
+                low_bound = -999
+                bracket_name = f"below {high_bound}°"
+            
+            if low_bound is not None and high_bound is not None:
+                event_ticker = m.get("event_ticker", "")
+                kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}"
+                brackets.append({"name": bracket_name, "low": low_bound, "high": high_bound, "bid": yes_bid, "ask": yes_ask, "url": kalshi_url, "ticker": ticker})
+        
+        brackets.sort(key=lambda x: x['low'])
+        return brackets
+    except:
+        return []
+
 @st.cache_data(ttl=60)
 def fetch_kalshi_brackets(series_ticker):
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
@@ -442,6 +530,112 @@ if is_owner and st.session_state.scanner_view:
     
     st.markdown("---")
     st.markdown(f"<div style='text-align:center;color:#6b7280;font-size:0.8em'>Last scan: {now.strftime('%I:%M %p ET')} | 🔒 = LOW locked (after 7 AM local) | ⏳ = LOW may still drop</div>", unsafe_allow_html=True)
+
+    # ============================================================
+    # TOMORROW'S LOW SECTION (OWNER ONLY)
+    # ============================================================
+    st.markdown("---")
+    tomorrow_date = (datetime.now(eastern) + timedelta(days=1)).strftime('%A, %b %d')
+    st.subheader(f"🔮 TOMORROW'S LOW ({tomorrow_date})")
+    st.caption("Buy now, sell tomorrow 7 AM when LOW locks in")
+    
+    tomorrow_results = []
+    with st.spinner("Scanning tomorrow's markets..."):
+        for city_name, cfg in CITY_CONFIG.items():
+            forecast_low, forecast_desc = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
+            brackets = fetch_kalshi_tomorrow_brackets(cfg["low"])
+            
+            if forecast_low is None:
+                tomorrow_results.append({"city": city_name, "status": "❌ NO FORECAST", "forecast_low": None, "bracket": None, "ask": None, "url": None, "desc": None})
+                continue
+            
+            if not brackets:
+                tomorrow_results.append({"city": city_name, "status": "⚠️ NO MARKET", "forecast_low": forecast_low, "bracket": None, "ask": None, "url": None, "desc": forecast_desc})
+                continue
+            
+            winning = find_winning_bracket(forecast_low, brackets)
+            if winning:
+                tomorrow_results.append({
+                    "city": city_name, 
+                    "status": "✅", 
+                    "forecast_low": forecast_low, 
+                    "bracket": winning["name"], 
+                    "bid": winning["bid"],
+                    "ask": winning["ask"], 
+                    "url": winning["url"],
+                    "desc": forecast_desc
+                })
+            else:
+                tomorrow_results.append({"city": city_name, "status": "⚠️ NO BRACKET", "forecast_low": forecast_low, "bracket": None, "ask": None, "url": None, "desc": forecast_desc})
+    
+    # Show cheap opportunities (ask < 40¢)
+    cheap_opps = [r for r in tomorrow_results if r.get("ask") and r["ask"] < 40]
+    cheap_opps.sort(key=lambda x: x["ask"])
+    
+    if cheap_opps:
+        st.markdown("### 💰 CHEAP ENTRIES (Ask < 40¢)")
+        for r in cheap_opps:
+            potential = 100 - r["ask"]
+            # Check if forecast is in middle of bracket (safer)
+            bracket_low, bracket_high = 0, 100
+            range_match = re.search(r'(\d+)-(\d+)', r["bracket"])
+            if range_match:
+                bracket_low, bracket_high = int(range_match.group(1)), int(range_match.group(2))
+            mid = (bracket_low + bracket_high) / 2
+            buffer = abs(r["forecast_low"] - mid)
+            safety = "🎯 CENTERED" if buffer <= 1 else "⚠️ EDGE" if buffer <= 2 else "🔴 RISKY"
+            
+            st.markdown(f"""
+            <div style="background:linear-gradient(135deg,#1a1a2e,#0d1117);border:2px solid #3b82f6;border-radius:12px;padding:20px;margin:10px 0">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                    <div>
+                        <span style="color:#3b82f6;font-size:1.4em;font-weight:700">{r['city']}</span>
+                    </div>
+                    <div style="text-align:right">
+                        <span style="color:#9ca3af;font-size:0.9em">Ask:</span>
+                        <span style="color:#22c55e;font-size:1.8em;font-weight:800;margin-left:5px">{r['ask']:.0f}¢</span>
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:15px;flex-wrap:wrap;gap:10px">
+                    <div>
+                        <span style="color:#9ca3af">NWS Forecast:</span>
+                        <span style="color:#fbbf24;font-weight:700;margin-left:5px">{r['forecast_low']}°F</span>
+                        <span style="color:#6b7280;margin-left:8px;font-size:0.85em">{r.get('desc', '')}</span>
+                    </div>
+                    <div>
+                        <span style="color:#9ca3af">Winner:</span>
+                        <span style="color:#22c55e;font-weight:700;margin-left:5px">{r['bracket']}</span>
+                        <span style="margin-left:8px">{safety}</span>
+                    </div>
+                </div>
+                <div style="margin-top:15px;padding:10px;background:#161b22;border-radius:8px;text-align:center">
+                    <span style="color:#9ca3af">Potential profit:</span>
+                    <span style="color:#22c55e;font-weight:700;margin-left:5px">+{potential:.0f}¢</span>
+                    <span style="color:#6b7280;margin-left:10px">|</span>
+                    <span style="color:#9ca3af;margin-left:10px">Sell at 35-40¢ = </span>
+                    <span style="color:#fbbf24;font-weight:700">+{35 - r['ask']:.0f}¢ to +{40 - r['ask']:.0f}¢</span>
+                </div>
+                <a href="{r['url']}" target="_blank" style="text-decoration:none;display:block;margin-top:15px">
+                    <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);padding:12px 20px;border-radius:8px;text-align:center;cursor:pointer">
+                        <span style="color:#fff;font-weight:800;font-size:1.1em">🛒 BUY TOMORROW'S {r['bracket']} → {r['ask']:.0f}¢</span>
+                    </div>
+                </a>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No cheap entries found (all brackets > 40¢). Check back later or prices may already be efficient.")
+    
+    st.markdown("### 📋 ALL CITIES - TOMORROW")
+    for r in tomorrow_results:
+        if r["status"] == "❌ NO FORECAST":
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#ef4444'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— No NWS forecast</span></div>", unsafe_allow_html=True)
+        elif r["status"] == "⚠️ NO MARKET":
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— Forecast: {r['forecast_low']}°F — Market not open yet</span></div>", unsafe_allow_html=True)
+        elif r["status"] == "⚠️ NO BRACKET":
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— Forecast: {r['forecast_low']}°F — No matching bracket</span></div>", unsafe_allow_html=True)
+        else:
+            ask_color = "#22c55e" if r["ask"] < 30 else "#3b82f6" if r["ask"] < 40 else "#f59e0b" if r["ask"] < 50 else "#9ca3af"
+            st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'><div><span style='color:#fff;font-weight:600'>{r['city']}</span></div><div><span style='color:#fbbf24'>NWS: {r['forecast_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#22c55e'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:#9ca3af'>Ask:</span><span style='color:{ask_color};margin-left:3px;font-weight:700'>{r['ask']:.0f}¢</span></div></div>", unsafe_allow_html=True)
 
 # ============================================================
 # CITY VIEW (DEFAULT)
