@@ -294,7 +294,7 @@ if is_owner and obs_low and current_temp:
         <div style="color:#6b7280;font-size:0.9em;margin-bottom:5px">Today's Low</div>
         <div style="color:#fff;font-size:4em;font-weight:800;margin:10px 0">{obs_low}°F</div>
         <div style="color:#9ca3af;font-size:0.9em;margin-bottom:20px">{time_ago_text}</div>
-        <div style="color:#6b7280;font-size:0.85em">Find bracket on Kalshi that best fits this locked number</div>
+        <div style="color:#fbbf24;font-size:0.9em;margin-top:10px">Find bracket on Kalshi that best fits this locked number</div>
     </div>
     """, unsafe_allow_html=True)
 
