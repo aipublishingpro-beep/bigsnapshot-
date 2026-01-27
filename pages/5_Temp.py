@@ -169,6 +169,42 @@ else:
     st.error("⚠️ Could not fetch NWS observations")
 
 st.markdown("---")
+st.subheader("📡 NWS Forecast")
+
+@st.cache_data(ttl=300)
+def fetch_nws_forecast(lat, lon):
+    try:
+        points_url = f"https://api.weather.gov/points/{lat},{lon}"
+        resp = requests.get(points_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        forecast_url = resp.json().get("properties", {}).get("forecast")
+        if not forecast_url:
+            return None
+        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        periods = resp.json().get("properties", {}).get("periods", [])
+        return periods[:4] if periods else None
+    except:
+        return None
+
+forecast = fetch_nws_forecast(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
+if forecast:
+    fcols = st.columns(len(forecast))
+    for i, period in enumerate(forecast):
+        with fcols[i]:
+            name = period.get("name", "")
+            temp = period.get("temperature", "")
+            unit = period.get("temperatureUnit", "F")
+            short = period.get("shortForecast", "")
+            bg = "#1a1a2e" if "night" in name.lower() or "tonight" in name.lower() else "#1f2937"
+            temp_color = "#3b82f6" if "night" in name.lower() or "tonight" in name.lower() else "#ef4444"
+            st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em;font-weight:600">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em;margin-top:5px">{short}</div></div>', unsafe_allow_html=True)
+else:
+    st.caption("Could not load NWS forecast")
+
+st.markdown("---")
 st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v5.0</span></div>', unsafe_allow_html=True)
 
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:20px">⚠️ For educational purposes only. Not financial advice. Verify on Kalshi before trading.</div>', unsafe_allow_html=True)
