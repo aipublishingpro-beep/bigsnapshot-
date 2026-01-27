@@ -277,10 +277,31 @@ if is_owner:
             </div>
         </div>
         <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 LOW PATTERNS</div>
+            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 YOUR TRADING SCHEDULE (ET)</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>🌙 Midnight:</b> Chicago, Denver<br>
-                <b>☀️ Sunrise:</b> Austin, LA, Miami, NYC, Philly
+                <b>🌙 1-2 AM</b> → Chicago<br>
+                <b>🌙 2-3 AM</b> → Denver<br>
+                <b>☀️ 7-8 AM</b> → Austin, Miami, NYC, Philly<br>
+                <b>☀️ 9-10 AM</b> → Los Angeles
+            </div>
+        </div>
+        <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
+            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">📅 SEASONAL LOCK-IN TIMES</div>
+            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
+                <b>❄️ Winter</b> (Nov-Feb): 6-7 AM local<br>
+                <b>🌸 Spring</b> (Mar-Apr): 5-6 AM local<br>
+                <b>☀️ Summer</b> (May-Aug): 5-6 AM local<br>
+                <b>🍂 Fall</b> (Sep-Oct): 6-7 AM local<br>
+                <span style="color:#6b7280;font-size:0.85em">LOW locks around sunrise ±30 min</span>
+            </div>
+        </div>
+        <div style="background:#1a1a2e;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
+            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">💰 ENTRY THRESHOLDS (Ask)</div>
+            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
+                <b>🔥 &lt;85¢</b> = JUMP IN (+15¢)<br>
+                <b>✅ 85-90¢</b> = Good (+10-15¢)<br>
+                <b>⚠️ 90-95¢</b> = Small edge (+5-10¢)<br>
+                <b>❌ 95¢+</b> = Skip it
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -398,7 +419,7 @@ if is_owner and st.session_state.view_mode == "today":
 elif is_owner and st.session_state.view_mode == "tomorrow":
     tomorrow_str = (datetime.now(eastern) + timedelta(days=1)).strftime('%A, %b %d')
     st.subheader(f"🎰 TOMORROW'S LOTTERY ({tomorrow_str})")
-    st.caption("Buy now while market is dead → Sell tomorrow when LOW locks")
+    st.caption("Scout targets now → Wait for LOW to lock → Buy confirmed winners")
     
     if st.button("🔄 Refresh All", use_container_width=True):
         st.cache_data.clear()
@@ -406,9 +427,9 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
     
     st.markdown("""
     <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:15px;margin-bottom:20px">
-        <div style="color:#22c55e;font-weight:700">💡 THE PLAY</div>
+        <div style="color:#22c55e;font-weight:700">💡 TOMORROW'S TARGETS</div>
         <div style="color:#c9d1d9;font-size:0.9em">
-            Buy winning bracket at 15-30¢ tonight → Sell tomorrow AM at 35-50¢ → Pocket 10-25¢
+            Scout cheap brackets now → Check back at lock time → Buy only after LOW confirmed
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -466,7 +487,7 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
                         <b style="color:{color}">{t['pattern']} {t['city']}</b> | NWS: {t['forecast']}°F → <b>{t['bracket']}</b> | 
                         Ask: <b style="color:#22c55e">{t['ask']}¢</b>
                     </div>
-                    <a href="{t['url']}" target="_blank" style="color:#fbbf24;text-decoration:none">View Market →</a>
+                    <a href="{t['url']}" target="_blank" style="color:#fbbf24;text-decoration:none">Preview Market →</a>
                 </div>
                 <div style="margin-top:10px;padding:8px;background:#1a1a2e;border-radius:6px;text-align:center">
                     <span style="color:#9ca3af">⏰ LOW locks:</span> <b style="color:#3b82f6">{check_time}</b>
