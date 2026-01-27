@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.7"
+VERSION = "10.8"
 LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
@@ -353,7 +353,9 @@ with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"]
 
 # Warning for 8 min selection
 if min_mins == 8:
-    st.warning("⚠️ 8 min = high variance. Only buy if cushion ≥12. Pace still settling.")
+    st.info("🦈 SHARK MODE: 8 min played = early entry. Only buy if cushion ≥12 (✅ SAFE or 🔒 FORTRESS)")
+elif min_mins == 12:
+    st.info("✅ SMART MONEY: 12 min played = pace locked. Cushion ≥6 is tradeable.")
 
 cushion_data = []
 for g in scanner_games:
@@ -432,7 +434,13 @@ if cushion_data:
         with cc4: st.link_button(f"BUY {'NO' if 'NO' in side_choice else 'YES'} {cd['line']}", cd['link'], use_container_width=True)
 else:
     if selected_game != "All Games": st.info(f"Select a side and see all lines for {selected_game}")
-    else: st.info("No cushion opportunities found (need 6+ cushion or Vegas O/U data)")
+    else: 
+        # Count live games
+        live_count = sum(1 for g in scanner_games if g['minutes_played'] >= min_mins)
+        if live_count == 0:
+            st.info(f"⏳ No games have reached {min_mins}+ min play time yet. Waiting for tip-off...")
+        else:
+            st.info(f"No {side_choice.split()[0]} opportunities with 6+ cushion. Try switching sides or wait for pace to develop.")
 
 st.divider()
 
