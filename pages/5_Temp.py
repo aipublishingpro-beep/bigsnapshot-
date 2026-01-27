@@ -212,7 +212,8 @@ def fetch_kalshi_brackets(series_ticker):
         for m in today_markets:
             title = m.get("title", "")
             ticker = m.get("ticker", "")
-            yes_price = m.get("yes_bid", 0) or 0
+            yes_bid = m.get("yes_bid", 0) or 0
+            yes_ask = m.get("yes_ask", 0) or 0
             low_bound, high_bound, bracket_name = None, None, ""
             range_match = re.search(r'(\d+)\s*[-–to]+\s*(\d+)°', title)
             if range_match:
@@ -233,7 +234,7 @@ def fetch_kalshi_brackets(series_ticker):
                 # Use event ticker for URL (e.g., KXLOWTDEN-26JAN27), not market ticker
                 event_ticker = m.get("event_ticker", "")
                 kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}" if series_ticker else f"https://kalshi.com/markets/{event_ticker}"
-                brackets.append({"name": bracket_name, "low": low_bound, "high": high_bound, "price": yes_price, "url": kalshi_url, "ticker": ticker})
+                brackets.append({"name": bracket_name, "low": low_bound, "high": high_bound, "bid": yes_bid, "ask": yes_ask, "url": kalshi_url, "ticker": ticker})
         brackets.sort(key=lambda x: x['low'])
         return brackets
     except:
@@ -297,13 +298,24 @@ if is_owner and st.session_state.scanner_view:
             is_locked = check_low_locked(cfg["tz"])
             
             if winning:
-                price = winning["price"]
-                edge = (100 - price) if is_locked and price < 95 else 0
-                results.append({"city": city_name, "status": "✅", "obs_low": obs_low, "bracket": winning["name"], "price": price, "edge": edge, "url": winning["url"], "locked": is_locked, "confirm_time": confirm_time})
+                bid = winning["bid"]
+                ask = winning["ask"]
+                # Edge calculated from ASK (what you actually pay)
+                edge = (100 - ask) if is_locked and ask < 95 else 0
+                # Rating based on ask price
+                if ask < 85:
+                    rating = "🔥"
+                elif ask < 90:
+                    rating = "✅"
+                elif ask < 95:
+                    rating = "⚠️"
+                else:
+                    rating = "❌"
+                results.append({"city": city_name, "status": "✅", "obs_low": obs_low, "bracket": winning["name"], "bid": bid, "ask": ask, "edge": edge, "rating": rating, "url": winning["url"], "locked": is_locked, "confirm_time": confirm_time})
             else:
                 results.append({"city": city_name, "status": "⚠️ NO BRACKET", "obs_low": obs_low, "bracket": None, "price": None, "edge": None, "url": None, "locked": is_locked, "confirm_time": confirm_time})
     
-    results_with_edge = sorted([r for r in results if r["edge"] and r["edge"] > 0], key=lambda x: x["edge"], reverse=True)
+    results_with_edge = sorted([r for r in results if r["edge"] and r["edge"] >= 10], key=lambda x: x["edge"], reverse=True)
     
     st.markdown("""
     <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:15px;margin-bottom:20px">
@@ -326,6 +338,16 @@ if is_owner and st.session_state.scanner_view:
         </div>
         <div style="color:#6b7280;font-size:0.8em;margin-top:10px">LOW locks around sunrise ±30 min</div>
     </div>
+    <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:15px;margin-bottom:20px">
+        <div style="color:#22c55e;font-weight:700;margin-bottom:10px">💰 ENTRY THRESHOLDS (Ask Price)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:15px;color:#c9d1d9;font-size:0.9em">
+            <div><span style="color:#22c55e">🔥</span> <b>&lt;85¢</b> = JUMP IN (+15¢)</div>
+            <div><span style="color:#3b82f6">✅</span> <b>85-90¢</b> = Good (+10-15¢)</div>
+            <div><span style="color:#f59e0b">⚠️</span> <b>90-95¢</b> = Small edge (+5-10¢)</div>
+            <div><span style="color:#ef4444">❌</span> <b>95¢+</b> = Skip it</div>
+        </div>
+        <div style="color:#6b7280;font-size:0.8em;margin-top:10px">Only showing opportunities with 10¢+ edge</div>
+    </div>
     """, unsafe_allow_html=True)
     
     st.markdown("### 🔥 OPPORTUNITIES")
@@ -333,11 +355,12 @@ if is_owner and st.session_state.scanner_view:
         for r in results_with_edge:
             lock_icon = "🔒" if r["locked"] else "⏳"
             confirm_text = "Confirmed ✓" if r.get("confirm_time") else "Awaiting confirmation..."
+            rating_color = "#22c55e" if r["rating"] == "🔥" else "#3b82f6" if r["rating"] == "✅" else "#f59e0b"
             st.markdown(f"""
-            <div style="background:linear-gradient(135deg,#1a2e1a,#0d1117);border:2px solid #22c55e;border-radius:12px;padding:20px;margin:10px 0">
+            <div style="background:linear-gradient(135deg,#1a2e1a,#0d1117);border:2px solid {rating_color};border-radius:12px;padding:20px;margin:10px 0">
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
                     <div>
-                        <span style="color:#22c55e;font-size:1.5em;font-weight:700">{r['city']}</span>
+                        <span style="color:{rating_color};font-size:1.5em;font-weight:700">{r['rating']} {r['city']}</span>
                         <span style="color:#6b7280;margin-left:10px">{lock_icon}</span>
                     </div>
                     <div style="text-align:right">
@@ -353,8 +376,20 @@ if is_owner and st.session_state.scanner_view:
                     <div>
                         <span style="color:#9ca3af">Winner:</span>
                         <span style="color:#fbbf24;font-weight:700;margin-left:5px">{r['bracket']}</span>
-                        <span style="color:#9ca3af;margin-left:5px">@</span>
-                        <span style="color:#22c55e;font-weight:700;margin-left:5px">{r['price']:.0f}¢</span>
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:center;gap:20px;margin-top:15px;padding:10px;background:#161b22;border-radius:8px">
+                    <div style="text-align:center">
+                        <div style="color:#6b7280;font-size:0.75em">BID</div>
+                        <div style="color:#22c55e;font-size:1.2em;font-weight:700">{r['bid']:.0f}¢</div>
+                    </div>
+                    <div style="text-align:center">
+                        <div style="color:#6b7280;font-size:0.75em">ASK (You Pay)</div>
+                        <div style="color:#ef4444;font-size:1.2em;font-weight:700">{r['ask']:.0f}¢</div>
+                    </div>
+                    <div style="text-align:center">
+                        <div style="color:#6b7280;font-size:0.75em">SPREAD</div>
+                        <div style="color:#fbbf24;font-size:1.2em;font-weight:700">{r['ask'] - r['bid']:.0f}¢</div>
                     </div>
                 </div>
                 <a href="{r['url']}" target="_blank" style="text-decoration:none;display:block;margin-top:15px">
@@ -365,7 +400,7 @@ if is_owner and st.session_state.scanner_view:
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("No mispricings found right now. Markets may be efficiently priced or LOWs not yet locked.")
+        st.info("No opportunities with 10¢+ edge found. Markets may be efficiently priced or LOWs not yet locked.")
     
     st.markdown("### 📊 ALL CITIES")
     for r in results:
@@ -375,9 +410,9 @@ if is_owner and st.session_state.scanner_view:
             st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— Low: {r['obs_low']}°F — No matching Kalshi bracket</span></div>", unsafe_allow_html=True)
         else:
             lock_icon = "🔒" if r["locked"] else "⏳"
-            edge_display = f"<span style='color:#22c55e;font-weight:700'>+{r['edge']:.0f}¢</span>" if r["edge"] and r["edge"] > 0 else "<span style='color:#6b7280'>—</span>"
-            price_color = "#22c55e" if r["price"] and r["price"] < 90 else "#9ca3af"
-            st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'><div><span style='color:#fff;font-weight:600'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span></div><div><span style='color:#3b82f6'>{r['obs_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#fbbf24'>{r['bracket']}</span><span style='color:#6b7280;margin:0 8px'>@</span><span style='color:{price_color}'>{r['price']:.0f}¢</span><span style='color:#6b7280;margin:0 8px'>|</span>{edge_display}</div></div>", unsafe_allow_html=True)
+            edge_display = f"<span style='color:#22c55e;font-weight:700'>{r['rating']} +{r['edge']:.0f}¢</span>" if r["edge"] and r["edge"] >= 10 else "<span style='color:#6b7280'>—</span>"
+            ask_color = "#22c55e" if r["ask"] and r["ask"] < 85 else "#3b82f6" if r["ask"] and r["ask"] < 90 else "#f59e0b" if r["ask"] and r["ask"] < 95 else "#9ca3af"
+            st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'><div><span style='color:#fff;font-weight:600'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span></div><div><span style='color:#3b82f6'>{r['obs_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#fbbf24'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:#9ca3af'>Bid:</span><span style='color:#22c55e;margin:0 3px'>{r['bid']:.0f}¢</span><span style='color:#9ca3af'>Ask:</span><span style='color:{ask_color};margin:0 3px'>{r['ask']:.0f}¢</span><span style='color:#6b7280;margin:0 5px'>|</span>{edge_display}</div></div>", unsafe_allow_html=True)
     
     st.markdown("---")
     st.markdown(f"<div style='text-align:center;color:#6b7280;font-size:0.8em'>Last scan: {now.strftime('%I:%M %p ET')} | 🔒 = LOW locked (after 7 AM local) | ⏳ = LOW may still drop</div>", unsafe_allow_html=True)
