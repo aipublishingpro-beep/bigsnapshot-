@@ -73,9 +73,10 @@ def get_bracket_bounds(range_str):
     return 0, 100
 
 @st.cache_data(ttl=120)
-def fetch_nws_6hr_extremes(station):
+def fetch_nws_6hr_extremes(station, city_tz_str):
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
+        city_tz = pytz.timezone(city_tz_str)
         resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
         if resp.status_code != 200:
             return {}
@@ -85,7 +86,7 @@ def fetch_nws_6hr_extremes(station):
             return {}
         rows = table.find_all('tr')
         extremes = {}
-        today = datetime.now(eastern).day
+        today = datetime.now(city_tz).day
         for row in rows[3:]:
             cells = row.find_all('td')
             if len(cells) >= 10:
@@ -214,7 +215,7 @@ if st.button("⭐ Set as Default City", use_container_width=False):
     st.success(f"✓ Bookmark this page to save {city} as default!")
 
 current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
-extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC")) if is_owner else {}
+extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern")) if is_owner else {}
 
 # OWNER BOX
 if is_owner and obs_low and current_temp:
