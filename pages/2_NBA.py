@@ -358,6 +358,10 @@ if live_games:
         col1, col2 = st.columns([1, 1])
         with col1:
             st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock']), unsafe_allow_html=True)
+            if possession:
+                st.caption(f"🏀 Possession: {possession}")
+            else:
+                st.caption("⏸️ Dead ball / No possession")
         with col2:
             st.markdown("**📋 LAST 10 PLAYS**")
             tts_on = st.checkbox("🔊 Announce plays", key=f"tts_{game_id}")
