@@ -28,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "9.5"
+VERSION = "9.7"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -134,6 +134,71 @@ def fetch_kalshi_ml():
                 markets[game_key] = {"away_code": away_code, "home_code": home_code, "yes_team_code": yes_team_code, "ticker": ticker, "yes_bid": yes_bid, "yes_ask": yes_ask, "yes_price": yes_price, "away_implied": away_implied, "home_implied": home_implied}
         return markets
     except Exception as e: st.error("Kalshi ML fetch error: " + str(e)); return {}
+
+@st.cache_data(ttl=60)
+def fetch_kalshi_spreads():
+    """Fetch NBA spread markets from Kalshi"""
+    url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNBASPREAD&status=open&limit=200"
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        spreads = {}  # game_key -> list of {line, team, ticker, yes_bid, yes_ask}
+        for m in data.get("markets", []):
+            ticker = m.get("ticker", "")
+            subtitle = m.get("subtitle", "")
+            title = m.get("title", "")
+            yes_bid, yes_ask = m.get("yes_bid", 0) or 0, m.get("yes_ask", 0) or 0
+            
+            # Try to parse game and spread from ticker/title
+            # Format varies, so we try multiple approaches
+            if "KXNBASPREAD-" in ticker:
+                parts = ticker.replace("KXNBASPREAD-", "")
+                # Extract date and teams
+                if len(parts) >= 13:
+                    date_part = parts[:7]  # e.g., "27JAN26"
+                    rest = parts[7:]
+                    # Find team codes and spread line
+                    # Ticker might be like: KXNBASPREAD-27JAN26SACNYK-NYK-7
+                    if "-" in rest:
+                        game_teams, spread_info = rest.split("-", 1)
+                        if len(game_teams) >= 6:
+                            away_code = game_teams[:3].upper()
+                            home_code = game_teams[3:6].upper()
+                            game_key = f"{away_code}@{home_code}"
+                            
+                            # Parse spread line from spread_info (e.g., "NYK-7" or "SAC+7")
+                            spread_line = None
+                            spread_team = None
+                            if "-" in spread_info:
+                                sp_parts = spread_info.rsplit("-", 1)
+                                if len(sp_parts) == 2:
+                                    spread_team = sp_parts[0].upper()
+                                    try:
+                                        spread_line = f"-{sp_parts[1]}"
+                                    except: pass
+                            elif "+" in spread_info:
+                                sp_parts = spread_info.split("+", 1)
+                                if len(sp_parts) == 2:
+                                    spread_team = sp_parts[0].upper()
+                                    try:
+                                        spread_line = f"+{sp_parts[1]}"
+                                    except: pass
+                            
+                            if spread_line and spread_team:
+                                if game_key not in spreads:
+                                    spreads[game_key] = []
+                                spreads[game_key].append({
+                                    "line": spread_line,
+                                    "team_code": spread_team,
+                                    "ticker": ticker,
+                                    "yes_bid": yes_bid,
+                                    "yes_ask": yes_ask,
+                                    "yes_price": yes_ask if yes_ask > 0 else (yes_bid if yes_bid > 0 else 50)
+                                })
+        return spreads
+    except Exception as e: 
+        # Silently fail - spreads may not be available
+        return {}
 
 @st.cache_data(ttl=300)
 def fetch_injuries():
@@ -247,6 +312,7 @@ def remove_position(pos_id):
 # FETCH DATA
 games = fetch_espn_games()
 kalshi_ml = fetch_kalshi_ml()
+kalshi_spreads = fetch_kalshi_spreads()
 injuries = fetch_injuries()
 b2b_teams = fetch_yesterday_teams()
 
@@ -533,19 +599,54 @@ with st.expander("➕ ADD NEW POSITION", expanded=False):
     if today_games:
         ac1, ac2 = st.columns(2)
         with ac1: game_sel = st.selectbox("Select Game", [g[0] for g in today_games], key="add_game"); sel_game = next((g for g in today_games if g[0] == game_sel), None)
-        with ac2: bet_type = st.selectbox("Bet Type", ["ML (Moneyline)", "Totals (Over/Under)"], key="add_type")
+        with ac2: bet_type = st.selectbox("Bet Type", ["ML (Moneyline)", "Totals (Over/Under)", "Spread"], key="add_type")
         ac3, ac4 = st.columns(2)
         with ac3:
             if bet_type == "ML (Moneyline)": pick = st.selectbox("Pick", [sel_game[1], sel_game[2]] if sel_game else [], key="add_pick")
+            elif bet_type == "Spread": pick = st.selectbox("Pick Team", [sel_game[1], sel_game[2]] if sel_game else [], key="add_pick")
             else: pick = st.selectbox("Pick", ["YES (Over)", "NO (Under)"], key="add_totals_pick")
-        with ac4: line = st.selectbox("Line", THRESHOLDS, key="add_line") if "Totals" in bet_type else "-"
+        with ac4:
+            if bet_type == "Spread":
+                # Try to get Kalshi spreads for this game
+                if sel_game:
+                    away_code = KALSHI_CODES.get(sel_game[1], "XXX")
+                    home_code = KALSHI_CODES.get(sel_game[2], "XXX")
+                    game_spread_key = f"{away_code}@{home_code}"
+                    kalshi_spread_list = kalshi_spreads.get(game_spread_key, [])
+                    
+                    if kalshi_spread_list:
+                        # Build spread options from Kalshi
+                        spread_options = []
+                        for sp in kalshi_spread_list:
+                            spread_options.append(f"{sp['line']} ({sp['team_code']}) @ {sp['yes_price']}¢")
+                        line = st.selectbox("Kalshi Spreads", spread_options, key="add_spread_line")
+                        # Extract just the line value
+                        line = line.split()[0] if line else "-7.5"
+                        st.caption(f"✅ {len(kalshi_spread_list)} spreads from Kalshi")
+                    else:
+                        # Fallback to manual
+                        spread_options = ["-1.5", "-2.5", "-3.5", "-4.5", "-5.5", "-6.5", "-7.5", "-8.5", "-9.5", "-10.5", "-11.5", "-12.5", "+1.5", "+2.5", "+3.5", "+4.5", "+5.5", "+6.5", "+7.5", "+8.5", "+9.5", "+10.5", "+11.5", "+12.5"]
+                        line = st.selectbox("Spread Line (Manual)", spread_options, index=5, key="add_spread_line")
+                        st.caption("⚠️ No Kalshi spreads found - manual entry")
+                else:
+                    line = "-7.5"
+            elif "Totals" in bet_type:
+                line = st.selectbox("Line", THRESHOLDS, key="add_line")
+            else:
+                line = "-"
         ac5, ac6, ac7 = st.columns(3)
         with ac5: entry_price = st.number_input("Entry Price (¢)", 1, 99, 50, key="add_price")
         with ac6: contracts = st.number_input("Contracts", 1, 10000, 10, key="add_contracts")
         with ac7: cost = entry_price * contracts / 100; st.metric("Cost", f"${cost:.2f}"); st.caption(f"Win: +${contracts - cost:.2f}")
         if st.button("✅ ADD POSITION", use_container_width=True, key="add_pos_btn"):
             if sel_game:
-                st.session_state.positions.append({"game": f"{sel_game[1]}@{sel_game[2]}", "pick": pick if "ML" in bet_type else pick.split()[0], "type": "ML" if "ML" in bet_type else "Totals", "line": "-" if "ML" in bet_type else str(line), "price": entry_price, "contracts": contracts, "link": get_kalshi_game_link(sel_game[1], sel_game[2]), "id": str(uuid.uuid4())[:8]})
+                if bet_type == "ML (Moneyline)":
+                    pos_type, pos_pick, pos_line = "ML", pick, "-"
+                elif bet_type == "Spread":
+                    pos_type, pos_pick, pos_line = "Spread", pick, str(line)
+                else:
+                    pos_type, pos_pick, pos_line = "Totals", pick.split()[0], str(line)
+                st.session_state.positions.append({"game": f"{sel_game[1]}@{sel_game[2]}", "pick": pos_pick, "type": pos_type, "line": pos_line, "price": entry_price, "contracts": contracts, "link": get_kalshi_game_link(sel_game[1], sel_game[2]), "id": str(uuid.uuid4())[:8]})
                 st.success("Added!"); st.rerun()
 
 if st.session_state.positions:
@@ -557,12 +658,30 @@ if st.session_state.positions:
         if is_editing:
             st.markdown(f"**✏️ Editing: {pos['game']}**")
             ec1, ec2 = st.columns(2)
-            with ec1: new_type = st.selectbox("Bet Type", ["ML", "Totals"], index=0 if pos['type']=="ML" else 1, key=f"edit_type_{pos['id']}")
+            type_options = ["ML", "Totals", "Spread"]
+            current_type_idx = 0 if pos['type']=="ML" else (2 if pos['type']=="Spread" else 1)
+            with ec1: new_type = st.selectbox("Bet Type", type_options, index=current_type_idx, key=f"edit_type_{pos['id']}")
             with ec2:
                 if new_type == "ML":
                     parts = pos['game'].split("@")
                     new_pick = st.selectbox("Pick", [parts[0], parts[1]], index=[parts[0], parts[1]].index(pos['pick']) if pos['pick'] in parts else 0, key=f"edit_pick_{pos['id']}")
                     new_line = "-"
+                elif new_type == "Spread":
+                    parts = pos['game'].split("@")
+                    new_pick = st.selectbox("Pick", [parts[0], parts[1]], index=[parts[0], parts[1]].index(pos['pick']) if pos['pick'] in parts else 0, key=f"edit_pick_{pos['id']}")
+                    # Try to get Kalshi spreads
+                    away_code = KALSHI_CODES.get(parts[0], "XXX")
+                    home_code = KALSHI_CODES.get(parts[1], "XXX")
+                    game_spread_key = f"{away_code}@{home_code}"
+                    kalshi_spread_list = kalshi_spreads.get(game_spread_key, [])
+                    if kalshi_spread_list:
+                        spread_options = [sp['line'] for sp in kalshi_spread_list]
+                        current_spread_idx = spread_options.index(pos['line']) if pos.get('line') in spread_options else 0
+                        new_line = st.selectbox("Kalshi Spread", spread_options, index=current_spread_idx, key=f"edit_line_{pos['id']}")
+                    else:
+                        spread_options = ["-1.5", "-2.5", "-3.5", "-4.5", "-5.5", "-6.5", "-7.5", "-8.5", "-9.5", "-10.5", "-11.5", "-12.5", "+1.5", "+2.5", "+3.5", "+4.5", "+5.5", "+6.5", "+7.5", "+8.5", "+9.5", "+10.5", "+11.5", "+12.5"]
+                        current_spread_idx = spread_options.index(pos['line']) if pos.get('line') in spread_options else 5
+                        new_line = st.selectbox("Spread (Manual)", spread_options, index=current_spread_idx, key=f"edit_line_{pos['id']}")
                 else:
                     new_pick = st.selectbox("Pick", ["YES", "NO"], index=0 if pos.get('pick','YES')=="YES" else 1, key=f"edit_pick_{pos['id']}")
                     new_line = st.selectbox("Line", THRESHOLDS, index=THRESHOLDS.index(float(pos['line'])) if pos['line'] != "-" and float(pos['line']) in THRESHOLDS else 3, key=f"edit_line_{pos['id']}")
@@ -591,7 +710,7 @@ if st.session_state.positions:
                     if current['period'] > 0: st.caption(f"🔴 LIVE Q{current['period']} {current['clock']} | {current['away_score']}-{current['home_score']}")
                     elif current['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: st.caption(f"✅ FINAL {current['away_score']}-{current['home_score']}")
                     else: st.caption("⏳ Scheduled")
-            with pc2: st.write(f"🎯 {pos['pick']} {pos['type']}" if pos['type']=="ML" else f"📊 {pos['pick']} {pos['line']}")
+            with pc2: st.write(f"🎯 {pos['pick']} ML" if pos['type']=="ML" else (f"📏 {pos['pick']} {pos['line']}" if pos['type']=="Spread" else f"📊 {pos['pick']} {pos['line']}"))
             with pc3: st.write(f"{pos.get('contracts',10)} @ {pos.get('price',50)}¢"); st.caption(f"${pos.get('price',50)*pos.get('contracts',10)/100:.2f}")
             with pc4: st.link_button("🔗 Kalshi", pos['link'], use_container_width=True)
             with pc5:
