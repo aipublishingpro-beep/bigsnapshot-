@@ -33,13 +33,13 @@ eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
 CITY_CONFIG = {
-    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central"},
-    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central"},
-    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "tz": "US/Mountain"},
-    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific"},
-    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern"},
-    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern"},
-    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern"},
+    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central", "window_start": 5, "window_end": 8, "pattern": "sunrise"},
+    "Chicago": {"high": "KXHIGHCHI", "low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central", "window_start": 0, "window_end": 2, "pattern": "midnight"},
+    "Denver": {"high": "KXHIGHDEN", "low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "tz": "US/Mountain", "window_start": 0, "window_end": 2, "pattern": "midnight"},
+    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific", "window_start": 5, "window_end": 8, "pattern": "sunrise"},
+    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern", "window_start": 6, "window_end": 9, "pattern": "sunrise"},
+    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern", "window_start": 6, "window_end": 9, "pattern": "sunrise"},
+    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern", "window_start": 6, "window_end": 9, "pattern": "sunrise"},
 }
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
@@ -341,6 +341,102 @@ def check_low_locked(city_tz_str):
     city_now = datetime.now(city_tz)
     return city_now.hour >= 7
 
+def get_lock_status(cfg, confirm_time, obs_low, readings):
+    """
+    Determine lock status based on:
+    1. Time window (when LOW typically occurs)
+    2. Confirmation (temps rising after low point)
+    
+    Returns: (status_code, status_text, confidence)
+    - status_code: "locked", "likely", "watching", "waiting"
+    - status_text: Display text
+    - confidence: 0-100
+    """
+    city_tz = pytz.timezone(cfg["tz"])
+    city_now = datetime.now(city_tz)
+    current_hour = city_now.hour
+    
+    window_start = cfg.get("window_start", 6)
+    window_end = cfg.get("window_end", 9)
+    pattern = cfg.get("pattern", "sunrise")
+    
+    # Count rising readings after the low
+    rising_count = 0
+    if readings and obs_low is not None:
+        found_low = False
+        for r in readings:  # readings are newest first
+            if r["temp"] == obs_low:
+                found_low = True
+            elif found_low and r["temp"] > obs_low:
+                rising_count += 1
+    
+    # For midnight cities, handle the 0-2 AM window specially
+    if pattern == "midnight":
+        in_window = current_hour >= window_start and current_hour <= window_end
+        past_window = current_hour > window_end and current_hour < 12  # Before noon
+        
+        if confirm_time and rising_count >= 2:
+            return "locked", "🔒 LOCKED", 95
+        elif confirm_time or rising_count >= 2:
+            return "likely", "🔒 LIKELY", 80
+        elif past_window:
+            # Past the window but no confirmation - still likely locked
+            if rising_count >= 1:
+                return "likely", "🔒 LIKELY", 75
+            else:
+                return "watching", "👀 WATCHING", 60
+        elif in_window:
+            return "watching", "👀 IN WINDOW", 40
+        else:
+            return "waiting", "⏳ WAITING", 20
+    
+    # For sunrise cities
+    else:
+        in_window = current_hour >= window_start and current_hour <= window_end
+        past_window = current_hour > window_end
+        
+        if confirm_time and rising_count >= 2:
+            return "locked", "🔒 LOCKED", 95
+        elif confirm_time or rising_count >= 2:
+            return "likely", "🔒 LIKELY", 80
+        elif past_window:
+            # Past the typical window
+            if rising_count >= 1:
+                return "likely", "🔒 LIKELY", 75
+            else:
+                return "watching", "👀 CHECK DATA", 50
+        elif in_window:
+            if rising_count >= 1:
+                return "watching", "👀 RISING", 55
+            else:
+                return "watching", "👀 IN WINDOW", 40
+        else:
+            return "waiting", "⏳ WAITING", 20
+
+def get_lottery_status(cfg, obs_low, ask_price, confirm_time, readings):
+    """Determine if this is a lottery ticket opportunity"""
+    status_code, status_text, confidence = get_lock_status(cfg, confirm_time, obs_low, readings)
+    
+    if status_code not in ["locked", "likely"]:
+        return None, None, None, None
+    
+    if obs_low is None or ask_price is None:
+        return None, None, None, None
+    
+    # LOW is locked/likely - check if market is stale
+    edge = 100 - ask_price
+    
+    if ask_price < 50 and confidence >= 75:
+        return "🎰 LOTTERY TICKET", f"LOW {status_text} at {obs_low}°F, market still at {ask_price}¢!", edge, confidence
+    elif ask_price < 65 and confidence >= 75:
+        return "💰 BIG EDGE", f"LOW {status_text}, market catching up ({ask_price}¢)", edge, confidence
+    elif ask_price < 80 and confidence >= 70:
+        return "✅ GOOD EDGE", f"LOW {status_text}, decent price ({ask_price}¢)", edge, confidence
+    elif ask_price < 90 and confidence >= 80:
+        return "📈 SMALL EDGE", f"LOW {status_text}, thin margin ({ask_price}¢)", edge, confidence
+    else:
+        return None, None, None, None
+
 # ============================================================
 # SIDEBAR LEGENDS (OWNER ONLY - BOTH VIEWS)
 # ============================================================
@@ -434,30 +530,79 @@ if is_owner:
 # SCANNER VIEW (OWNER ONLY)
 # ============================================================
 if is_owner and st.session_state.scanner_view:
-    st.subheader("🔍 All Cities Scanner")
-    st.caption("Scans all 7 cities for LOW temp mispricings")
+    st.subheader("🎰 LOTTERY TICKET SCANNER")
+    st.caption("Find locked LOWs where market hasn't caught up yet")
     
     if st.button("🔄 Refresh Scan", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
     
+    # Show current time context
+    st.markdown(f"""
+    <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:15px;margin-bottom:20px">
+        <div style="display:flex;justify-content:space-around;flex-wrap:wrap;gap:15px;text-align:center">
+            <div>
+                <div style="color:#6b7280;font-size:0.8em">YOUR TIME (ET)</div>
+                <div style="color:#3b82f6;font-size:1.5em;font-weight:700">{now.strftime('%I:%M %p')}</div>
+            </div>
+            <div>
+                <div style="color:#6b7280;font-size:0.8em">CHICAGO (CT)</div>
+                <div style="color:#fbbf24;font-size:1.5em;font-weight:700">{datetime.now(pytz.timezone('US/Central')).strftime('%I:%M %p')}</div>
+            </div>
+            <div>
+                <div style="color:#6b7280;font-size:0.8em">DENVER (MT)</div>
+                <div style="color:#fbbf24;font-size:1.5em;font-weight:700">{datetime.now(pytz.timezone('US/Mountain')).strftime('%I:%M %p')}</div>
+            </div>
+            <div>
+                <div style="color:#6b7280;font-size:0.8em">LA (PT)</div>
+                <div style="color:#22c55e;font-size:1.5em;font-weight:700">{datetime.now(pytz.timezone('US/Pacific')).strftime('%I:%M %p')}</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     results = []
+    lottery_tickets = []
+    
     with st.spinner("Scanning all 7 cities..."):
         for city_name, cfg in CITY_CONFIG.items():
             current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg["station"], cfg["tz"])
             brackets = fetch_kalshi_brackets(cfg["low"])
             
+            is_locked, lock_status = check_low_locked_precise(cfg)
+            pattern = cfg.get("pattern", "sunrise")
+            pattern_icon = "🌙" if pattern == "midnight" else "☀️"
+            
+            city_tz = pytz.timezone(cfg["tz"])
+            local_time = datetime.now(city_tz).strftime('%H:%M')
+            lock_time = f"{cfg.get('low_hour', 7):02d}:{cfg.get('low_min', 0):02d}"
+            
             if obs_low is None:
-                results.append({"city": city_name, "status": "❌ NO DATA", "obs_low": None, "bracket": None, "price": None, "edge": None, "url": None, "locked": False, "confirm_time": None})
+                results.append({
+                    "city": city_name, "status": "❌ NO DATA", "obs_low": None, "bracket": None, 
+                    "price": None, "edge": None, "url": None, "locked": False, "confirm_time": None,
+                    "lock_status": lock_status, "pattern": pattern_icon, "local_time": local_time, "lock_time": lock_time
+                })
                 continue
             
             winning = find_winning_bracket(obs_low, brackets)
-            is_locked = check_low_locked(cfg["tz"])
             
             if winning:
                 bid = winning["bid"]
                 ask = winning["ask"]
-                edge = (100 - ask) if is_locked and ask < 95 else 0
+                
+                # Check for lottery ticket opportunity
+                lottery_type, lottery_msg, lottery_edge = get_lottery_status(cfg, obs_low, ask, confirm_time)
+                
+                if lottery_type:
+                    lottery_tickets.append({
+                        "city": city_name, "obs_low": obs_low, "bracket": winning["name"],
+                        "bid": bid, "ask": ask, "edge": lottery_edge, "url": winning["url"],
+                        "lottery_type": lottery_type, "lottery_msg": lottery_msg,
+                        "pattern": pattern_icon, "lock_status": lock_status, "confirm_time": confirm_time
+                    })
+                
+                # Rating based on ask price
                 if ask < 85:
                     rating = "🔥"
                 elif ask < 90:
@@ -466,79 +611,136 @@ if is_owner and st.session_state.scanner_view:
                     rating = "⚠️"
                 else:
                     rating = "❌"
-                results.append({"city": city_name, "status": "✅", "obs_low": obs_low, "bracket": winning["name"], "bid": bid, "ask": ask, "edge": edge, "rating": rating, "url": winning["url"], "locked": is_locked, "confirm_time": confirm_time})
+                
+                edge = (100 - ask) if is_locked and ask < 95 else 0
+                
+                results.append({
+                    "city": city_name, "status": "✅", "obs_low": obs_low, "bracket": winning["name"],
+                    "bid": bid, "ask": ask, "edge": edge, "rating": rating, "url": winning["url"],
+                    "locked": is_locked, "confirm_time": confirm_time, "lock_status": lock_status,
+                    "pattern": pattern_icon, "local_time": local_time, "lock_time": lock_time
+                })
             else:
-                results.append({"city": city_name, "status": "⚠️ NO BRACKET", "obs_low": obs_low, "bracket": None, "price": None, "edge": None, "url": None, "locked": is_locked, "confirm_time": confirm_time})
+                results.append({
+                    "city": city_name, "status": "⚠️ NO BRACKET", "obs_low": obs_low, "bracket": None,
+                    "price": None, "edge": None, "url": None, "locked": is_locked, "confirm_time": confirm_time,
+                    "lock_status": lock_status, "pattern": pattern_icon, "local_time": local_time, "lock_time": lock_time
+                })
     
-    results_with_edge = sorted([r for r in results if r["edge"] and r["edge"] >= 10], key=lambda x: x["edge"], reverse=True)
-    
-    st.markdown("### 🔥 OPPORTUNITIES")
-    if results_with_edge:
-        for r in results_with_edge:
-            lock_icon = "🔒" if r["locked"] else "⏳"
-            confirm_text = "Confirmed ✓" if r.get("confirm_time") else "Awaiting confirmation..."
-            rating_color = "#22c55e" if r["rating"] == "🔥" else "#3b82f6" if r["rating"] == "✅" else "#f59e0b"
+    # LOTTERY TICKETS SECTION
+    if lottery_tickets:
+        st.markdown("### 🎰 LOTTERY TICKETS - ACT NOW!")
+        st.markdown("<div style='color:#22c55e;font-size:0.9em;margin-bottom:15px'>LOW is LOCKED but market hasn't caught up. This is free money.</div>", unsafe_allow_html=True)
+        
+        lottery_tickets.sort(key=lambda x: x["edge"], reverse=True)
+        
+        for t in lottery_tickets:
+            confirm_text = "✓ Confirmed" if t.get("confirm_time") else "Observed"
+            ticket_color = "#fbbf24" if t["lottery_type"] == "🎰 LOTTERY TICKET" else "#22c55e" if t["lottery_type"] == "💰 BIG EDGE" else "#3b82f6"
+            
             st.markdown(f"""
-            <div style="background:linear-gradient(135deg,#1a2e1a,#0d1117);border:2px solid {rating_color};border-radius:12px;padding:20px;margin:10px 0">
+            <div style="background:linear-gradient(135deg,#1a2e1a,#0d1117);border:3px solid {ticket_color};border-radius:16px;padding:25px;margin:15px 0;box-shadow:0 0 30px rgba(251,191,36,0.3)">
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
                     <div>
-                        <span style="color:{rating_color};font-size:1.5em;font-weight:700">{r['rating']} {r['city']}</span>
-                        <span style="color:#6b7280;margin-left:10px">{lock_icon}</span>
+                        <span style="color:{ticket_color};font-size:2em;font-weight:800">{t['lottery_type']}</span>
+                        <span style="color:#6b7280;margin-left:15px;font-size:1.2em">{t['pattern']} {t['city']}</span>
                     </div>
                     <div style="text-align:right">
-                        <div style="color:#fbbf24;font-size:1.8em;font-weight:800">+{r['edge']:.0f}¢ EDGE</div>
+                        <div style="color:#22c55e;font-size:2.5em;font-weight:800">+{t['edge']:.0f}¢</div>
+                        <div style="color:#6b7280;font-size:0.9em">potential profit</div>
                     </div>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:15px;flex-wrap:wrap;gap:10px">
-                    <div>
-                        <span style="color:#9ca3af">Actual Low:</span>
-                        <span style="color:#3b82f6;font-weight:700;margin-left:5px">{r['obs_low']}°F</span>
-                        <span style="color:#6b7280;margin-left:10px;font-size:0.85em">{confirm_text}</span>
-                    </div>
-                    <div>
-                        <span style="color:#9ca3af">Winner:</span>
-                        <span style="color:#fbbf24;font-weight:700;margin-left:5px">{r['bracket']}</span>
-                    </div>
-                </div>
-                <div style="display:flex;justify-content:center;gap:20px;margin-top:15px;padding:10px;background:#161b22;border-radius:8px">
-                    <div style="text-align:center">
-                        <div style="color:#6b7280;font-size:0.75em">BID</div>
-                        <div style="color:#22c55e;font-size:1.2em;font-weight:700">{r['bid']:.0f}¢</div>
-                    </div>
-                    <div style="text-align:center">
-                        <div style="color:#6b7280;font-size:0.75em">ASK (You Pay)</div>
-                        <div style="color:#ef4444;font-size:1.2em;font-weight:700">{r['ask']:.0f}¢</div>
-                    </div>
-                    <div style="text-align:center">
-                        <div style="color:#6b7280;font-size:0.75em">SPREAD</div>
-                        <div style="color:#fbbf24;font-size:1.2em;font-weight:700">{r['ask'] - r['bid']:.0f}¢</div>
+                <div style="margin-top:20px;padding:15px;background:#161b22;border-radius:8px">
+                    <div style="color:#fbbf24;font-size:1.1em;margin-bottom:10px">{t['lottery_msg']}</div>
+                    <div style="display:flex;justify-content:space-around;flex-wrap:wrap;gap:15px;margin-top:15px">
+                        <div style="text-align:center">
+                            <div style="color:#6b7280;font-size:0.8em">ACTUAL LOW</div>
+                            <div style="color:#3b82f6;font-size:1.8em;font-weight:700">{t['obs_low']}°F</div>
+                            <div style="color:#6b7280;font-size:0.75em">{confirm_text}</div>
+                        </div>
+                        <div style="text-align:center">
+                            <div style="color:#6b7280;font-size:0.8em">WINNING BRACKET</div>
+                            <div style="color:#fbbf24;font-size:1.8em;font-weight:700">{t['bracket']}</div>
+                        </div>
+                        <div style="text-align:center">
+                            <div style="color:#6b7280;font-size:0.8em">CURRENT ASK</div>
+                            <div style="color:#ef4444;font-size:1.8em;font-weight:700">{t['ask']:.0f}¢</div>
+                        </div>
+                        <div style="text-align:center">
+                            <div style="color:#6b7280;font-size:0.8em">SETTLES AT</div>
+                            <div style="color:#22c55e;font-size:1.8em;font-weight:700">100¢</div>
+                        </div>
                     </div>
                 </div>
-                <a href="{r['url']}" target="_blank" style="text-decoration:none;display:block;margin-top:15px">
-                    <div style="background:linear-gradient(135deg,#22c55e,#16a34a);padding:12px 20px;border-radius:8px;text-align:center;cursor:pointer">
-                        <span style="color:#000;font-weight:800;font-size:1.1em">🛒 BUY YES ON KALSHI → {r['bracket']}</span>
+                <a href="{t['url']}" target="_blank" style="text-decoration:none;display:block;margin-top:20px">
+                    <div style="background:linear-gradient(135deg,#fbbf24,#f59e0b);padding:15px 25px;border-radius:8px;text-align:center;cursor:pointer">
+                        <span style="color:#000;font-weight:800;font-size:1.3em">🎰 BUY {t['bracket']} NOW → GUARANTEED +{t['edge']:.0f}¢</span>
                     </div>
                 </a>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("No opportunities with 10¢+ edge found. Markets may be efficiently priced or LOWs not yet locked.")
+        # Check what's coming up
+        upcoming = []
+        for city_name, cfg in CITY_CONFIG.items():
+            is_locked, lock_status = check_low_locked_precise(cfg)
+            if not is_locked:
+                city_tz = pytz.timezone(cfg["tz"])
+                lock_time_local = f"{cfg.get('low_hour', 7):02d}:{cfg.get('low_min', 0):02d}"
+                pattern = "🌙" if cfg.get("pattern") == "midnight" else "☀️"
+                upcoming.append(f"{pattern} {city_name} locks ~{lock_time_local} local")
+        
+        if upcoming:
+            st.markdown("### ⏳ NO LOTTERY TICKETS RIGHT NOW")
+            st.info(f"**Upcoming locks:**\n" + "\n".join(upcoming))
+        else:
+            st.success("All cities locked! Check ALL CITIES below for edge opportunities.")
     
-    st.markdown("### 📊 ALL CITIES")
+    # ALL CITIES STATUS
+    st.markdown("### 📊 ALL CITIES STATUS")
+    
     for r in results:
         if r["status"] == "❌ NO DATA":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#ef4444'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— No NWS data</span></div>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'>
+                <span style='color:#ef4444;font-weight:600'>{r['pattern']} {r['city']}</span>
+                <span style='color:#6b7280;margin-left:10px'>— No NWS data</span>
+            </div>""", unsafe_allow_html=True)
         elif r["status"] == "⚠️ NO BRACKET":
-            lock_icon = "🔒" if r["locked"] else "⏳"
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span><span style='color:#6b7280;margin-left:10px'>— Low: {r['obs_low']}°F — No matching Kalshi bracket</span></div>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'>
+                <span style='color:#f59e0b;font-weight:600'>{r['pattern']} {r['city']}</span>
+                <span style='color:#6b7280;margin-left:8px'>{r['lock_status']}</span>
+                <span style='color:#6b7280;margin-left:10px'>— Low: {r['obs_low']}°F — No matching Kalshi bracket</span>
+            </div>""", unsafe_allow_html=True)
         else:
-            lock_icon = "🔒" if r["locked"] else "⏳"
-            edge_display = f"<span style='color:#22c55e;font-weight:700'>{r['rating']} +{r['edge']:.0f}¢</span>" if r["edge"] and r["edge"] >= 10 else "<span style='color:#6b7280'>—</span>"
-            ask_color = "#22c55e" if r["ask"] and r["ask"] < 85 else "#3b82f6" if r["ask"] and r["ask"] < 90 else "#f59e0b" if r["ask"] and r["ask"] < 95 else "#9ca3af"
-            st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'><div><span style='color:#fff;font-weight:600'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span></div><div><span style='color:#3b82f6'>{r['obs_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#fbbf24'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:#9ca3af'>Bid:</span><span style='color:#22c55e;margin:0 3px'>{r['bid']:.0f}¢</span><span style='color:#9ca3af'>Ask:</span><span style='color:{ask_color};margin:0 3px'>{r['ask']:.0f}¢</span><span style='color:#6b7280;margin:0 5px'>|</span>{edge_display}</div></div>", unsafe_allow_html=True)
+            lock_color = "#22c55e" if "LOCKED" in r["lock_status"] else "#f59e0b"
+            edge_display = f"<span style='color:#22c55e;font-weight:700'>+{r['edge']:.0f}¢</span>" if r["edge"] and r["edge"] >= 10 else "<span style='color:#6b7280'>—</span>"
+            ask_color = "#22c55e" if r["ask"] and r["ask"] < 50 else "#3b82f6" if r["ask"] and r["ask"] < 75 else "#f59e0b" if r["ask"] and r["ask"] < 90 else "#9ca3af"
+            
+            st.markdown(f"""
+            <div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'>
+                <div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'>
+                    <div>
+                        <span style='color:#fff;font-weight:600'>{r['pattern']} {r['city']}</span>
+                        <span style='color:{lock_color};margin-left:8px;font-size:0.85em'>{r['lock_status']}</span>
+                        <span style='color:#6b7280;margin-left:8px;font-size:0.8em'>({r['local_time']} local, locks ~{r['lock_time']})</span>
+                    </div>
+                    <div>
+                        <span style='color:#3b82f6;font-weight:600'>{r['obs_low']}°F</span>
+                        <span style='color:#6b7280;margin:0 8px'>→</span>
+                        <span style='color:#fbbf24'>{r['bracket']}</span>
+                        <span style='color:#6b7280;margin:0 5px'>|</span>
+                        <span style='color:#9ca3af'>Ask:</span>
+                        <span style='color:{ask_color};margin:0 3px;font-weight:700'>{r['ask']:.0f}¢</span>
+                        <span style='color:#6b7280;margin:0 5px'>|</span>
+                        {edge_display}
+                    </div>
+                </div>
+            </div>""", unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown(f"<div style='text-align:center;color:#6b7280;font-size:0.8em'>Last scan: {now.strftime('%I:%M %p ET')} | 🔒 = LOW locked (after 7 AM local) | ⏳ = LOW may still drop</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:center;color:#6b7280;font-size:0.8em'>Last scan: {now.strftime('%I:%M %p ET')} | 🌙 = Midnight LOW | ☀️ = Sunrise LOW</div>", unsafe_allow_html=True)
 
     # ============================================================
     # TOMORROW'S LOW SECTION (OWNER ONLY)
@@ -758,5 +960,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v5.8</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.0</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment purposes only. Not financial advice. Verify on Kalshi before trading.</div>', unsafe_allow_html=True)
