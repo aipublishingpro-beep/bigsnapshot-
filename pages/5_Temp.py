@@ -407,7 +407,8 @@ if is_owner and st.session_state.scanner_view:
         if r["status"] == "❌ NO DATA":
             st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#ef4444'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— No NWS data</span></div>", unsafe_allow_html=True)
         elif r["status"] == "⚠️ NO BRACKET":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— Low: {r['obs_low']}°F — No matching Kalshi bracket</span></div>", unsafe_allow_html=True)
+            lock_icon = "🔒" if r["locked"] else "⏳"
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span><span style='color:#6b7280;margin-left:10px'>— Low: {r['obs_low']}°F — No matching Kalshi bracket</span></div>", unsafe_allow_html=True)
         else:
             lock_icon = "🔒" if r["locked"] else "⏳"
             edge_display = f"<span style='color:#22c55e;font-weight:700'>{r['rating']} +{r['edge']:.0f}¢</span>" if r["edge"] and r["edge"] >= 10 else "<span style='color:#6b7280'>—</span>"
