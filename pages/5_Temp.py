@@ -49,9 +49,6 @@ if default_city not in CITY_LIST:
     default_city = "New York City"
 is_owner = query_params.get("mode") == "owner"
 
-# ============================================================
-# SESSION STATE FOR VIEW TOGGLE
-# ============================================================
 if "scanner_view" not in st.session_state:
     st.session_state.scanner_view = False
 
@@ -231,7 +228,6 @@ def fetch_kalshi_brackets(series_ticker):
                 low_bound = -999
                 bracket_name = f"below {high_bound}°"
             if low_bound is not None and high_bound is not None:
-                # Use event ticker for URL (e.g., KXLOWTDEN-26JAN27), not market ticker
                 event_ticker = m.get("event_ticker", "")
                 kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}" if series_ticker else f"https://kalshi.com/markets/{event_ticker}"
                 brackets.append({"name": bracket_name, "low": low_bound, "high": high_bound, "bid": yes_bid, "ask": yes_ask, "url": kalshi_url, "ticker": ticker})
@@ -256,6 +252,70 @@ def check_low_locked(city_tz_str):
     city_tz = pytz.timezone(city_tz_str)
     city_now = datetime.now(city_tz)
     return city_now.hour >= 7
+
+# ============================================================
+# SIDEBAR LEGENDS (OWNER ONLY - BOTH VIEWS)
+# ============================================================
+if is_owner:
+    with st.sidebar:
+        st.markdown("""
+        <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
+            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">🔒 EDGE TIPS</div>
+            <div style="color:#c9d1d9;font-size:0.85em;line-height:1.5">
+                <b>LOW (Safer):</b><br>
+                • Wait 1hr after reversal<br>
+                • 2+ rising readings = locked<br>
+                • Sun up = no going back<br><br>
+                <b>6hr Extremes:</b><br>
+                • 06:51 & 12:51 bracket LOW<br>
+                • Official NWS confirmation
+            </div>
+        </div>
+        <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:15px">
+            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 NYC TRADER SCHEDULE</div>
+            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
+                <b>6-7 AM ET</b> → NYC, Philly, Miami<br>
+                <b>7-8 AM ET</b> → Chicago, Austin<br>
+                <b>8-9 AM ET</b> → Denver<br>
+                <b>9-10 AM ET</b> → Los Angeles<br><br>
+                <span style="color:#9ca3af">All LOWs locked by 10 AM ET</span>
+            </div>
+        </div>
+        <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
+            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES (Local)</div>
+            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
+                <b>Winter</b> (Nov-Feb): 6-7 AM<br>
+                <b>Spring</b> (Mar-Apr): 5-6 AM<br>
+                <b>Summer</b> (May-Aug): 5-6 AM<br>
+                <b>Fall</b> (Sep-Oct): 6-7 AM<br><br>
+                <span style="color:#9ca3af">LOW locks around sunrise ±30min</span>
+            </div>
+        </div>
+        <div style="background:#1a1a2e;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
+            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">💰 ENTRY THRESHOLDS (Ask)</div>
+            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
+                <b>🔥 &lt;85¢</b> = JUMP IN (+15¢)<br>
+                <b>✅ 85-90¢</b> = Good (+10-15¢)<br>
+                <b>⚠️ 90-95¢</b> = Small edge (+5-10¢)<br>
+                <b>❌ 95¢+</b> = Skip it<br><br>
+                <span style="color:#9ca3af">Only showing 10¢+ edge opps</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+else:
+    with st.sidebar:
+        st.markdown("""
+        <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
+            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES (Local)</div>
+            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
+                <b>Winter</b> (Nov-Feb): 6-7 AM<br>
+                <b>Spring</b> (Mar-Apr): 5-6 AM<br>
+                <b>Summer</b> (May-Aug): 5-6 AM<br>
+                <b>Fall</b> (Sep-Oct): 6-7 AM<br><br>
+                <span style="color:#9ca3af">LOW locks around sunrise ±30min</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ============================================================
 # HEADER + OWNER TOGGLE
@@ -300,9 +360,7 @@ if is_owner and st.session_state.scanner_view:
             if winning:
                 bid = winning["bid"]
                 ask = winning["ask"]
-                # Edge calculated from ASK (what you actually pay)
                 edge = (100 - ask) if is_locked and ask < 95 else 0
-                # Rating based on ask price
                 if ask < 85:
                     rating = "🔥"
                 elif ask < 90:
@@ -316,39 +374,6 @@ if is_owner and st.session_state.scanner_view:
                 results.append({"city": city_name, "status": "⚠️ NO BRACKET", "obs_low": obs_low, "bracket": None, "price": None, "edge": None, "url": None, "locked": is_locked, "confirm_time": confirm_time})
     
     results_with_edge = sorted([r for r in results if r["edge"] and r["edge"] >= 10], key=lambda x: x["edge"], reverse=True)
-    
-    st.markdown("""
-    <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:15px;margin-bottom:20px">
-        <div style="color:#3b82f6;font-weight:700;margin-bottom:10px">🗽 NYC TRADER SCHEDULE (All times ET)</div>
-        <div style="display:flex;flex-wrap:wrap;gap:15px;color:#c9d1d9;font-size:0.9em">
-            <div><span style="color:#22c55e">●</span> <b>6-7 AM</b> → NYC, Philly, Miami</div>
-            <div><span style="color:#fbbf24">●</span> <b>7-8 AM</b> → Chicago, Austin</div>
-            <div><span style="color:#f59e0b">●</span> <b>8-9 AM</b> → Denver</div>
-            <div><span style="color:#ef4444">●</span> <b>9-10 AM</b> → Los Angeles</div>
-        </div>
-        <div style="color:#6b7280;font-size:0.8em;margin-top:10px">🔒 = LOW locked (after 7 AM local) | ⏳ = LOW may still drop</div>
-    </div>
-    <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:15px;margin-bottom:20px">
-        <div style="color:#f59e0b;font-weight:700;margin-bottom:10px">⏰ LOW LOCK-IN TIMES (Local Time)</div>
-        <div style="display:flex;flex-wrap:wrap;gap:20px;color:#c9d1d9;font-size:0.9em">
-            <div><span style="color:#3b82f6">❄️</span> <b>Winter</b> (Nov-Feb): 6-7 AM</div>
-            <div><span style="color:#22c55e">🌸</span> <b>Spring</b> (Mar-Apr): 5-6 AM</div>
-            <div><span style="color:#fbbf24">☀️</span> <b>Summer</b> (May-Aug): 5-6 AM</div>
-            <div><span style="color:#f59e0b">🍂</span> <b>Fall</b> (Sep-Oct): 6-7 AM</div>
-        </div>
-        <div style="color:#6b7280;font-size:0.8em;margin-top:10px">LOW locks around sunrise ±30 min</div>
-    </div>
-    <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:15px;margin-bottom:20px">
-        <div style="color:#22c55e;font-weight:700;margin-bottom:10px">💰 ENTRY THRESHOLDS (Ask Price)</div>
-        <div style="display:flex;flex-wrap:wrap;gap:15px;color:#c9d1d9;font-size:0.9em">
-            <div><span style="color:#22c55e">🔥</span> <b>&lt;85¢</b> = JUMP IN (+15¢)</div>
-            <div><span style="color:#3b82f6">✅</span> <b>85-90¢</b> = Good (+10-15¢)</div>
-            <div><span style="color:#f59e0b">⚠️</span> <b>90-95¢</b> = Small edge (+5-10¢)</div>
-            <div><span style="color:#ef4444">❌</span> <b>95¢+</b> = Skip it</div>
-        </div>
-        <div style="color:#6b7280;font-size:0.8em;margin-top:10px">Only showing opportunities with 10¢+ edge</div>
-    </div>
-    """, unsafe_allow_html=True)
     
     st.markdown("### 🔥 OPPORTUNITIES")
     if results_with_edge:
@@ -422,47 +447,6 @@ if is_owner and st.session_state.scanner_view:
 # CITY VIEW (DEFAULT)
 # ============================================================
 else:
-    if is_owner:
-        with st.sidebar:
-            st.markdown("""
-            <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
-                <div style="color:#22c55e;font-weight:700;margin-bottom:8px">🔒 EDGE TIPS</div>
-                <div style="color:#c9d1d9;font-size:0.85em;line-height:1.5">
-                    <b>LOW (Safer):</b><br>
-                    • Wait 1hr after reversal<br>
-                    • 2+ rising readings = locked<br>
-                    • Sun up = no going back<br><br>
-                    <b>6hr Extremes:</b><br>
-                    • 06:51 & 12:51 bracket LOW<br>
-                    • Official NWS confirmation
-                </div>
-            </div>
-            <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:15px">
-                <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 NYC TRADER SCHEDULE</div>
-                <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                    <b>6-7 AM ET</b> → NYC, Philly, Miami<br>
-                    <b>7-8 AM ET</b> → Chicago, Austin<br>
-                    <b>8-9 AM ET</b> → Denver<br>
-                    <b>9-10 AM ET</b> → Los Angeles<br><br>
-                    <span style="color:#9ca3af">All LOWs locked by 10 AM ET</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    with st.sidebar:
-        st.markdown("""
-        <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES (Local)</div>
-            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>Winter</b> (Nov-Feb): 6-7 AM<br>
-                <b>Spring</b> (Mar-Apr): 5-6 AM<br>
-                <b>Summer</b> (May-Aug): 5-6 AM<br>
-                <b>Fall</b> (Sep-Oct): 6-7 AM<br><br>
-                <span style="color:#9ca3af">LOW locks around sunrise ±30min</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
     c1, c2 = st.columns([4, 1])
     with c1:
         city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
@@ -571,5 +555,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v5.5</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v5.6</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment purposes only. Not financial advice. Verify on Kalshi before trading.</div>', unsafe_allow_html=True)
