@@ -275,7 +275,7 @@ if is_owner and obs_low and current_temp:
     series_ticker = cfg.get("low", "KXLOWTNYC")
     slug = cfg.get("slug", "lowest-temperature-in-nyc")
     today_str = now.strftime('%d%b%y').lower()  # e.g., "27jan26"
-    kalshi_market_url = f"https://kalshi.com/markets/{series_ticker.lower()}/{slug}/{series_ticker.lower()}-{today_str}"
+    kalshi_market_url = f"https://kalshi.com/markets/{series_ticker.lower()}/{slug}"
     
     # Calculate time ago
     if confirm_time:
@@ -294,15 +294,8 @@ if is_owner and obs_low and current_temp:
         lock_color = "#f59e0b"
         box_bg = "linear-gradient(135deg,#2d1f0a,#0d1117)"
     
-    # Build dynamic Kalshi URL with today's date
-    # Format: kxlowtnyc-27jan27 (day + lowercase month + 2-digit year)
-    kalshi_date = now.strftime("%d%b%y").lower()
-    kalshi_ticker = cfg.get("low", "KXLOWTNYC").lower()
-    kalshi_url = f"https://kalshi.com/markets/{kalshi_ticker}/lowest-temperature-in-nyc/{kalshi_ticker}-{kalshi_date}"
-    
     st.markdown(f"""
-    <a href="{kalshi_url}" target="_blank" style="text-decoration:none;display:block">
-    <div style="background:{box_bg};border:3px solid {lock_color};border-radius:16px;padding:30px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3);cursor:pointer">
+    <div style="background:{box_bg};border:3px solid {lock_color};border-radius:16px;padding:30px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)">
         <div style="color:{lock_color};font-size:1.2em;font-weight:700;margin-bottom:10px">{lock_status}</div>
         <div style="color:#6b7280;font-size:0.9em;margin-bottom:5px">Today's Low</div>
         <div style="color:#fff;font-size:4em;font-weight:800;margin:10px 0">{obs_low}°F</div>
@@ -310,7 +303,6 @@ if is_owner and obs_low and current_temp:
         <div style="color:#fbbf24;font-size:0.9em;margin-top:10px">Find bracket on Kalshi that best fits this locked number</div>
         <a href="{kalshi_market_url}" target="_blank" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block;margin-top:15px;box-shadow:0 4px 12px rgba(245,158,11,0.4)">GO TO KALSHI →</a>
     </div>
-    </a>
     """, unsafe_allow_html=True)
 
 # ============================================================
