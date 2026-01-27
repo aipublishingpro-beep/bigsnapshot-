@@ -6,7 +6,7 @@ import re
 import math
 from bs4 import BeautifulSoup
 
-st.set_page_config(page_title="LOW Temp Edge Finder", page_icon="🌡️", layout="wide")
+st.set_page_config(page_title="LOW Temp Edge Finder", page_icon="🌡️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
