@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.4"
+VERSION = "10.5"
 LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
@@ -155,12 +155,19 @@ def get_kalshi_game_link(away_abbrev, home_abbrev):
     ticker = f"KXNCAAMBGAME-{date_str}{t1}{t2}"
     return f"https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game/{ticker.lower()}"
 
-def calc_projection(total_score, minutes_played):
+def calc_projection(total_score, minutes_played, vegas_ou=None):
+    """Calculate projection - uses Vegas O/U for pregame, pace-based for live"""
     if minutes_played >= 5:
         pace = total_score / minutes_played
         weight = min(1.0, (minutes_played - 5) / 15)
         blended_pace = (pace * weight) + ((LEAGUE_AVG_TOTAL / 40) * (1 - weight))
         return max(100, min(200, round(blended_pace * 40)))
+    elif vegas_ou:
+        # Use Vegas O/U for pregame if available
+        try:
+            return round(float(vegas_ou))
+        except:
+            return LEAGUE_AVG_TOTAL
     return LEAGUE_AVG_TOTAL
 
 def get_pace_label(pace):
@@ -217,7 +224,7 @@ c4.metric("Final", len(final_games))
 
 st.divider()
 
-# VEGAS ODDS OVERVIEW (FIXED - No fake mispricings)
+# VEGAS ODDS OVERVIEW
 st.subheader("💰 VEGAS ODDS OVERVIEW")
 st.caption("Vegas favorites for today's games • Click to trade on Kalshi")
 
@@ -325,44 +332,51 @@ if live_games:
 else:
     st.info("No live games right now")
 
-# CUSHION SCANNER
-st.subheader("🎯 CUSHION SCANNER (Totals)")
-all_game_options = ["All Games"] + [f"{g['away_abbrev']} @ {g['home_abbrev']}" for g in games]
-cush_col1, cush_col2, cush_col3 = st.columns(3)
-with cush_col1: selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
-with cush_col2: min_mins = st.selectbox("Min minutes:", [0, 5, 8, 10, 12, 15], index=0, key="cush_mins")
-with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
+# CUSHION SCANNER - LIVE GAMES ONLY
+st.subheader("🎯 CUSHION SCANNER (Live Totals)")
+st.caption("⚠️ Live games only — requires actual pace data")
 
-cushion_data = []
-for g in games:
-    if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: continue
-    game_name = f"{g['away_abbrev']} @ {g['home_abbrev']}"
-    if selected_game != "All Games" and game_name != selected_game: continue
-    if g['minutes_played'] < min_mins: continue
-    total, mins = g['total_score'], g['minutes_played']
-    if mins < 1: proj = LEAGUE_AVG_TOTAL; pace_label = "⏳ PRE"
-    else: proj = calc_projection(total, mins); pace_label = get_pace_label(total / mins)[0]
-    for thresh in THRESHOLDS:
-        cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
-        if cushion >= 6 or (selected_game != "All Games"):
-            cushion_data.append({"game": game_name, "status": f"H{g['period']} {g['clock']}" if g['period'] > 0 else "Scheduled", "proj": proj, "line": thresh, "cushion": cushion, "pace": pace_label, "link": get_kalshi_game_link(g['away_abbrev'], g['home_abbrev']), "mins": mins})
+# Only show games that are live (have minutes played)
+live_only_games = [g for g in games if g['minutes_played'] >= 1 and g['status'] not in ['STATUS_FINAL', 'STATUS_FULL_TIME']]
 
-cushion_data.sort(key=lambda x: x['cushion'], reverse=True)
-if cushion_data:
-    max_results = 20 if selected_game != "All Games" else 10
-    for cd in cushion_data[:max_results]:
-        cc1, cc2, cc3, cc4 = st.columns([3, 1, 1, 2])
-        with cc1:
-            st.markdown(f"**{cd['game']}** • {cd['status']}")
-            if cd['mins'] > 0: st.caption(f"{cd['pace']} • {cd['mins']} min played")
-        with cc2: st.write(f"Proj: {cd['proj']} | Line: {cd['line']}")
-        with cc3:
-            cushion_color = "#22c55e" if cd['cushion'] >= 6 else ("#eab308" if cd['cushion'] >= 0 else "#ef4444")
-            st.markdown(f"<span style='color:{cushion_color};font-weight:bold'>{'+' if cd['cushion'] >= 0 else ''}{round(cd['cushion'])}</span>", unsafe_allow_html=True)
-        with cc4: st.link_button(f"BUY {'NO' if 'NO' in side_choice else 'YES'} {cd['line']}", cd['link'], use_container_width=True)
+if live_only_games:
+    all_game_options = ["All Live Games"] + [f"{g['away_abbrev']} @ {g['home_abbrev']}" for g in live_only_games]
+    cush_col1, cush_col2, cush_col3 = st.columns(3)
+    with cush_col1: selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
+    with cush_col2: min_mins = st.selectbox("Min minutes:", [1, 5, 8, 10, 12, 15], index=1, key="cush_mins")
+    with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
+
+    cushion_data = []
+    for g in live_only_games:
+        game_name = f"{g['away_abbrev']} @ {g['home_abbrev']}"
+        if selected_game != "All Live Games" and game_name != selected_game: continue
+        if g['minutes_played'] < min_mins: continue
+        total, mins = g['total_score'], g['minutes_played']
+        proj = calc_projection(total, mins)
+        pace_label = get_pace_label(total / mins)[0]
+        for thresh in THRESHOLDS:
+            cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
+            if cushion >= 6 or (selected_game != "All Live Games"):
+                cushion_data.append({"game": game_name, "status": f"H{g['period']} {g['clock']}" if g['period'] > 0 else "Live", "proj": proj, "line": thresh, "cushion": cushion, "pace": pace_label, "link": get_kalshi_game_link(g['away_abbrev'], g['home_abbrev']), "mins": mins})
+
+    cushion_data.sort(key=lambda x: x['cushion'], reverse=True)
+    if cushion_data:
+        max_results = 20 if selected_game != "All Live Games" else 10
+        for cd in cushion_data[:max_results]:
+            cc1, cc2, cc3, cc4 = st.columns([3, 1, 1, 2])
+            with cc1:
+                st.markdown(f"**{cd['game']}** • {cd['status']}")
+                st.caption(f"{cd['pace']} • {cd['mins']} min played")
+            with cc2: st.write(f"Proj: {cd['proj']} | Line: {cd['line']}")
+            with cc3:
+                cushion_color = "#22c55e" if cd['cushion'] >= 6 else ("#eab308" if cd['cushion'] >= 0 else "#ef4444")
+                st.markdown(f"<span style='color:{cushion_color};font-weight:bold'>{'+' if cd['cushion'] >= 0 else ''}{round(cd['cushion'])}</span>", unsafe_allow_html=True)
+            with cc4: st.link_button(f"BUY {'NO' if 'NO' in side_choice else 'YES'} {cd['line']}", cd['link'], use_container_width=True)
+    else:
+        if selected_game != "All Live Games": st.info(f"Select a side and see all lines for {selected_game}")
+        else: st.info("No cushion opportunities found (need 6+ cushion)")
 else:
-    if selected_game != "All Games": st.info(f"Select a side and see all lines for {selected_game}")
-    else: st.info("No cushion opportunities found (need 6+ cushion)")
+    st.info("🕐 No live games yet — Cushion Scanner activates when games start")
 
 st.divider()
 
@@ -378,6 +392,39 @@ if pace_data:
         with pc3: st.markdown(f"<span style='color:{pd['pace_color']};font-weight:bold'>{pd['pace_label']}</span>", unsafe_allow_html=True)
         with pc4: st.write(f"Proj: {pd['proj']}")
 else: st.info("No live games with 5+ minutes played")
+
+st.divider()
+
+# PREGAME TOTALS PREVIEW (NEW - uses Vegas O/U)
+with st.expander("📊 PREGAME TOTALS PREVIEW", expanded=False):
+    st.caption("Based on Vegas Over/Under — for reference only until games start")
+    pregame_totals = []
+    for g in scheduled_games:
+        vegas_ou = g.get('vegas_odds', {}).get('overUnder')
+        if vegas_ou:
+            try:
+                proj = round(float(vegas_ou))
+                pregame_totals.append({
+                    "game": f"{g['away_abbrev']} @ {g['home_abbrev']}",
+                    "time": g.get('game_datetime', 'TBD'),
+                    "vegas_ou": proj,
+                    "link": get_kalshi_game_link(g['away_abbrev'], g['home_abbrev'])
+                })
+            except: pass
+    
+    if pregame_totals:
+        pregame_totals.sort(key=lambda x: x['vegas_ou'])
+        for pt in pregame_totals[:20]:
+            pt1, pt2, pt3 = st.columns([3, 1, 2])
+            with pt1:
+                st.markdown(f"**{pt['game']}**")
+                st.caption(pt['time'])
+            with pt2:
+                st.write(f"O/U: {pt['vegas_ou']}")
+            with pt3:
+                st.link_button("🎯 View on Kalshi", pt['link'], use_container_width=True)
+    else:
+        st.info("No Vegas O/U lines available yet")
 
 st.divider()
 
