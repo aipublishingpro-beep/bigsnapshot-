@@ -213,7 +213,6 @@ if is_owner:
         </div>
         """, unsafe_allow_html=True)
 
-# Public sidebar - visible to everyone
 with st.sidebar:
     st.markdown("""
     <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
@@ -245,7 +244,7 @@ if st.button("⭐ Set as Default City", use_container_width=False):
 current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
 extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern")) if is_owner else {}
 
-# OWNER BOX
+# OWNER BOX - detailed with confirmation time
 if is_owner and obs_low and current_temp:
     city_tz = pytz.timezone(cfg.get("tz", "US/Eastern"))
     hour = datetime.now(city_tz).hour
@@ -277,16 +276,23 @@ if is_owner and obs_low and current_temp:
     </div>
     """, unsafe_allow_html=True)
 
+# USER BOX - prominent display for non-owners
+if not is_owner and obs_low and current_temp:
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg,#1a1a2e,#0d1117);border:3px solid #3b82f6;border-radius:16px;padding:25px;margin:20px 0;text-align:center;box-shadow:0 0 20px rgba(59,130,246,0.3)">
+        <div style="color:#6b7280;font-size:1em;margin-bottom:5px">📊 Today's Recorded Low</div>
+        <div style="color:#3b82f6;font-size:4.5em;font-weight:800;margin:10px 0;text-shadow:0 0 20px rgba(59,130,246,0.5)">{obs_low}°F</div>
+        <div style="color:#9ca3af;font-size:0.9em">From NWS Station: <span style="color:#22c55e;font-weight:600">{cfg.get('station', 'N/A')}</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+
 # Current temp display
 if current_temp:
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
-        <div style="text-align:center;margin-bottom:10px">
-            <span style="color:#6b7280;font-size:0.75em">Data from NWS Station: <strong style="color:#22c55e">{cfg.get('station', 'N/A')}</strong></span>
-        </div>
         <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
-            <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.5em;font-weight:700">{current_temp}°F</div></div>
-            <div><div style="color:#3b82f6;font-size:0.8em">TODAY'S LOW</div><div style="color:#3b82f6;font-size:1.5em;font-weight:700">{obs_low}°F</div></div>
+            <div><div style="color:#6b7280;font-size:0.8em">CURRENT TEMP</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
+            <div><div style="color:#6b7280;font-size:0.8em">TODAY'S HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -297,8 +303,6 @@ if current_temp:
                 st.markdown(f"<div style='color:#6b7280;font-size:0.8em;margin-bottom:10px;text-align:center'>📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local</div>", unsafe_allow_html=True)
             
             display_list = readings if is_owner else readings[:8]
-            
-            # Use actual obs_low, not min of display_list
             low_idx = next((i for i, r in enumerate(display_list) if r['temp'] == obs_low), None)
             confirm_idx = (low_idx - 2) if (low_idx is not None and low_idx >= 2) else None
             
@@ -343,6 +347,6 @@ if forecast:
             st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v5.3</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v5.4</span></div>', unsafe_allow_html=True)
 
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment purposes only. Not financial advice. Verify on Kalshi before trading.</div>', unsafe_allow_html=True)
