@@ -3,9 +3,6 @@ import requests
 from datetime import datetime, timedelta
 import pytz
 import re
-import struct
-import base64
-import math
 
 st.set_page_config(page_title="LOW Temp Edge Finder", page_icon="🌡️", layout="wide", initial_sidebar_state="expanded")
 
