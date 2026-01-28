@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "11.0"
+VERSION = "11.1"
 LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
@@ -121,14 +121,13 @@ def fetch_yesterday_teams():
 
 @st.cache_data(ttl=30)
 def fetch_plays(game_id):
-    if not game_id: return [], ""
+    if not game_id: return [], "", {}
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event={game_id}"
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
         plays = []
         for p in data.get("plays", [])[-15:]:
-            # Try to get team info from play
             team_data = p.get("team", {})
             team_abbrev = ""
             if isinstance(team_data, dict):
@@ -139,8 +138,61 @@ def fetch_plays(game_id):
         if situation:
             poss_text = situation.get("possessionText", "") or ""
             poss_team = poss_text.split()[0] if poss_text else ""
-        return plays[-10:], poss_team
-    except: return [], ""
+        # Get half scores from header
+        half_scores = {"away": [], "home": [], "away_record": "", "home_record": ""}
+        header = data.get("header", {})
+        competitions = header.get("competitions", [{}])
+        if competitions:
+            for comp in competitions[0].get("competitors", []):
+                linescores = comp.get("linescores", [])
+                record = comp.get("record", [{}])
+                record_str = record[0].get("summary", "") if record else ""
+                scores = [ls.get("value", 0) for ls in linescores]
+                if comp.get("homeAway") == "home":
+                    half_scores["home"] = scores
+                    half_scores["home_record"] = record_str
+                else:
+                    half_scores["away"] = scores
+                    half_scores["away_record"] = record_str
+        return plays[-10:], poss_team, half_scores
+    except: return [], "", {}
+
+def render_scoreboard_ncaa(away_abbrev, home_abbrev, away_score, home_score, period, clock, half_scores):
+    """Render ESPN-style half-by-half scoreboard for NCAA"""
+    away_color = TEAM_COLORS.get(away_abbrev, "#666")
+    home_color = TEAM_COLORS.get(home_abbrev, "#666")
+    away_hs = half_scores.get("away", [])
+    home_hs = half_scores.get("home", [])
+    away_record = half_scores.get("away_record", "")
+    home_record = half_scores.get("home_record", "")
+    # Build period headers (1, 2, OT1, OT2, etc.)
+    num_periods = max(len(away_hs), len(home_hs), period)
+    p_headers = ""
+    away_p_scores = ""
+    home_p_scores = ""
+    for i in range(num_periods):
+        p_label = str(i+1) if i < 2 else f"OT{i-1}"
+        p_headers += f"<th style='padding:4px 8px;color:#888;font-size:12px'>{p_label}</th>"
+        away_val = int(away_hs[i]) if i < len(away_hs) else "-"
+        home_val = int(home_hs[i]) if i < len(home_hs) else "-"
+        away_p_scores += f"<td style='padding:4px 8px;color:#fff'>{away_val}</td>"
+        home_p_scores += f"<td style='padding:4px 8px;color:#fff'>{home_val}</td>"
+    period_text = f"H{period}" if period <= 2 else f"OT{period-2}"
+    return f'''<div style="background:#0f172a;border-radius:8px;padding:12px;margin-bottom:8px">
+    <div style="text-align:center;color:#ffd700;font-weight:bold;margin-bottom:8px">{period_text} - {clock}</div>
+    <table style="width:100%;border-collapse:collapse;color:#fff;font-size:14px">
+    <tr style="border-bottom:1px solid #333"><th></th>{p_headers}<th style='padding:4px 12px;color:#888'>T</th></tr>
+    <tr style="border-bottom:1px solid #333">
+        <td style="padding:8px;text-align:left"><span style="color:{away_color};font-weight:bold">{away_abbrev}</span> <span style="color:#666;font-size:11px">{away_record}</span></td>
+        {away_p_scores}
+        <td style="padding:8px 12px;font-weight:bold;font-size:18px;color:#fff">{away_score}</td>
+    </tr>
+    <tr>
+        <td style="padding:8px;text-align:left"><span style="color:{home_color};font-weight:bold">{home_abbrev}</span> <span style="color:#666;font-size:11px">{home_record}</span></td>
+        {home_p_scores}
+        <td style="padding:8px 12px;font-weight:bold;font-size:18px;color:#fff">{home_score}</td>
+    </tr>
+    </table></div>'''
 
 def get_play_badge(last_play):
     """Generate SVG badge for the last play"""
@@ -361,8 +413,10 @@ if live_games:
     for g in live_games:
         away_abbrev, home_abbrev = g['away_abbrev'], g['home_abbrev']
         total, mins, game_id = g['total_score'], g['minutes_played'], g['game_id']
-        plays, espn_poss = fetch_plays(game_id)
+        plays, espn_poss, half_scores = fetch_plays(game_id)
         st.markdown(f"### {g['away']} @ {g['home']}")
+        # Half-by-half scoreboard
+        st.markdown(render_scoreboard_ncaa(away_abbrev, home_abbrev, g['away_score'], g['home_score'], g['period'], g['clock'], half_scores), unsafe_allow_html=True)
         col1, col2 = st.columns([1, 1])
         with col1:
             last_play = plays[-1] if plays else None
