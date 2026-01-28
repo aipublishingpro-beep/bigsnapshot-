@@ -28,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "11.1"
+VERSION = "11.2"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -47,7 +47,6 @@ STAR_PLAYERS = {"Boston": ["Jayson Tatum", "Jaylen Brown"], "Cleveland": ["Donov
 
 STAR_TIERS = {"Nikola Jokic": 3, "Shai Gilgeous-Alexander": 3, "Giannis Antetokounmpo": 3, "Luka Doncic": 3, "Joel Embiid": 3, "Jayson Tatum": 3, "LeBron James": 3, "Stephen Curry": 3, "Kevin Durant": 3, "Anthony Edwards": 3, "Donovan Mitchell": 2, "Jaylen Brown": 2, "Damian Lillard": 2, "Anthony Davis": 2, "Kyrie Irving": 2, "Devin Booker": 2, "Ja Morant": 2, "Trae Young": 2, "Tyrese Haliburton": 2, "De'Aaron Fox": 2, "Jalen Brunson": 2, "Paolo Banchero": 2, "Victor Wembanyama": 2, "LaMelo Ball": 2, "Cade Cunningham": 2, "Tyrese Maxey": 2}
 
-# Player to team mapping for possession detection
 PLAYER_TEAMS = {"Jalen Brunson": "New York", "Karl-Anthony Towns": "New York", "OG Anunoby": "New York", "Mikal Bridges": "New York", "Josh Hart": "New York", "Miles McBride": "New York", "Donte DiVincenzo": "New York", "Mitchell Robinson": "New York", "Precious Achiuwa": "New York", "Landry Shamet": "New York", "Domantas Sabonis": "Sacramento", "De'Aaron Fox": "Sacramento", "Keegan Murray": "Sacramento", "Malik Monk": "Sacramento", "DeMar DeRozan": "Sacramento", "Kevin Huerter": "Sacramento", "Trey Lyles": "Sacramento", "Keon Ellis": "Sacramento", "Russell Westbrook": "Sacramento", "Dylan Cardwell": "Sacramento", "Jayson Tatum": "Boston", "Jaylen Brown": "Boston", "Derrick White": "Boston", "Jrue Holiday": "Boston", "Kristaps Porzingis": "Boston", "Al Horford": "Boston", "Payton Pritchard": "Boston", "Sam Hauser": "Boston", "Donovan Mitchell": "Cleveland", "Darius Garland": "Cleveland", "Evan Mobley": "Cleveland", "Jarrett Allen": "Cleveland", "Max Strus": "Cleveland", "Caris LeVert": "Cleveland", "Shai Gilgeous-Alexander": "Oklahoma City", "Chet Holmgren": "Oklahoma City", "Jalen Williams": "Oklahoma City", "Lu Dort": "Oklahoma City", "Isaiah Hartenstein": "Oklahoma City", "Alex Caruso": "Oklahoma City", "Giannis Antetokounmpo": "Milwaukee", "Damian Lillard": "Milwaukee", "Khris Middleton": "Milwaukee", "Brook Lopez": "Milwaukee", "Bobby Portis": "Milwaukee", "Pat Connaughton": "Milwaukee", "Nikola Jokic": "Denver", "Jamal Murray": "Denver", "Michael Porter Jr.": "Denver", "Aaron Gordon": "Denver", "Christian Braun": "Denver", "Luka Doncic": "Dallas", "Kyrie Irving": "Dallas", "PJ Washington": "Dallas", "Daniel Gafford": "Dallas", "Dereck Lively II": "Dallas", "Klay Thompson": "Dallas", "Anthony Edwards": "Minnesota", "Rudy Gobert": "Minnesota", "Julius Randle": "Minnesota", "Jaden McDaniels": "Minnesota", "Mike Conley": "Minnesota", "Naz Reid": "Minnesota", "Kevin Durant": "Phoenix", "Devin Booker": "Phoenix", "Bradley Beal": "Phoenix", "Jusuf Nurkic": "Phoenix", "Grayson Allen": "Phoenix", "LeBron James": "LA Lakers", "Anthony Davis": "LA Lakers", "Austin Reaves": "LA Lakers", "D'Angelo Russell": "LA Lakers", "Rui Hachimura": "LA Lakers", "Stephen Curry": "Golden State", "Draymond Green": "Golden State", "Andrew Wiggins": "Golden State", "Jonathan Kuminga": "Golden State", "Brandin Podziemski": "Golden State", "Bam Adebayo": "Miami", "Tyler Herro": "Miami", "Jimmy Butler": "Miami", "Terry Rozier": "Miami", "Jaime Jaquez Jr.": "Miami", "Joel Embiid": "Philadelphia", "Tyrese Maxey": "Philadelphia", "Paul George": "Philadelphia", "Caleb Martin": "Philadelphia", "Kelly Oubre Jr.": "Philadelphia", "Ja Morant": "Memphis", "Jaren Jackson Jr.": "Memphis", "Desmond Bane": "Memphis", "Marcus Smart": "Memphis", "Zion Williamson": "New Orleans", "Brandon Ingram": "New Orleans", "CJ McCollum": "New Orleans", "Trey Murphy III": "New Orleans", "Trae Young": "Atlanta", "Jalen Johnson": "Atlanta", "De'Andre Hunter": "Atlanta", "Clint Capela": "Atlanta", "LaMelo Ball": "Charlotte", "Miles Bridges": "Charlotte", "Brandon Miller": "Charlotte", "Mark Williams": "Charlotte", "Cade Cunningham": "Detroit", "Jaden Ivey": "Detroit", "Ausar Thompson": "Detroit", "Jalen Duren": "Detroit", "Victor Wembanyama": "San Antonio", "Devin Vassell": "San Antonio", "Jeremy Sochan": "San Antonio", "Keldon Johnson": "San Antonio", "James Harden": "LA Clippers", "Kawhi Leonard": "LA Clippers", "Norman Powell": "LA Clippers", "Ivica Zubac": "LA Clippers", "Tyrese Haliburton": "Indiana", "Pascal Siakam": "Indiana", "Myles Turner": "Indiana", "Aaron Nesmith": "Indiana", "Benedict Mathurin": "Indiana", "Paolo Banchero": "Orlando", "Franz Wagner": "Orlando", "Jalen Suggs": "Orlando", "Wendell Carter Jr.": "Orlando", "Moritz Wagner": "Orlando", "Jalen Green": "Houston", "Alperen Sengun": "Houston", "Jabari Smith Jr.": "Houston", "Fred VanVleet": "Houston", "Dillon Brooks": "Houston", "Anfernee Simons": "Portland", "Scoot Henderson": "Portland", "Jerami Grant": "Portland", "Deandre Ayton": "Portland", "Lauri Markkanen": "Utah", "Collin Sexton": "Utah", "Jordan Clarkson": "Utah", "John Collins": "Utah", "Kyle Kuzma": "Washington", "Jordan Poole": "Washington", "Bilal Coulibaly": "Washington", "Cameron Johnson": "Brooklyn", "Mikal Bridges": "Brooklyn", "Cam Thomas": "Brooklyn", "Nic Claxton": "Brooklyn", "Scottie Barnes": "Toronto", "RJ Barrett": "Toronto", "Immanuel Quickley": "Toronto", "Jakob Poeltl": "Toronto"}
 
 def american_to_implied_prob(odds):
@@ -73,12 +72,15 @@ def fetch_espn_games():
             competitors = comp.get("competitors", [])
             if len(competitors) < 2: continue
             home_team, away_team, home_score, away_score = None, None, 0, 0
+            home_record, away_record = "", ""
             for c in competitors:
                 full_name = c.get("team", {}).get("displayName", "")
                 team_name = TEAM_ABBREVS.get(full_name, full_name)
                 score = int(c.get("score", 0) or 0)
-                if c.get("homeAway") == "home": home_team, home_score = team_name, score
-                else: away_team, away_score = team_name, score
+                records = c.get("records", [])
+                record = records[0].get("summary", "") if records else ""
+                if c.get("homeAway") == "home": home_team, home_score, home_record = team_name, score, record
+                else: away_team, away_score, away_record = team_name, score, record
             status = event.get("status", {}).get("type", {}).get("name", "STATUS_SCHEDULED")
             period = event.get("status", {}).get("period", 0)
             clock = event.get("status", {}).get("displayClock", "")
@@ -107,7 +109,7 @@ def fetch_espn_games():
             if odds_data and len(odds_data) > 0:
                 odds = odds_data[0]
                 vegas_odds = {"spread": odds.get("spread"), "overUnder": odds.get("overUnder"), "homeML": odds.get("homeTeamOdds", {}).get("moneyLine"), "awayML": odds.get("awayTeamOdds", {}).get("moneyLine")}
-            games.append({"away": away_team, "home": home_team, "away_score": away_score, "home_score": home_score, "status": status, "period": period, "clock": clock, "minutes_played": minutes_played, "total_score": home_score + away_score, "game_id": game_id, "vegas_odds": vegas_odds, "game_time": game_time_str, "game_datetime": game_datetime_str})
+            games.append({"away": away_team, "home": home_team, "away_score": away_score, "home_score": home_score, "away_record": away_record, "home_record": home_record, "status": status, "period": period, "clock": clock, "minutes_played": minutes_played, "total_score": home_score + away_score, "game_id": game_id, "vegas_odds": vegas_odds, "game_time": game_time_str, "game_datetime": game_datetime_str})
         return games
     except Exception as e: st.error("ESPN fetch error: " + str(e)); return []
 
@@ -215,7 +217,7 @@ def fetch_yesterday_teams():
 
 @st.cache_data(ttl=30)
 def fetch_plays(game_id):
-    if not game_id: return [], {}
+    if not game_id: return []
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={game_id}"
     try:
         resp = requests.get(url, timeout=10)
@@ -223,33 +225,10 @@ def fetch_plays(game_id):
         plays = []
         for p in data.get("plays", [])[-15:]:
             plays.append({"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", "")})
-        # Get quarter scores from boxscore
-        quarter_scores = {"away": [], "home": [], "away_record": "", "home_record": ""}
-        boxscore = data.get("boxscore", {})
-        teams = boxscore.get("teams", [])
-        for team in teams:
-            team_info = team.get("team", {})
-            stats = team.get("statistics", [])
-            # Get linescores (quarter by quarter)
-            header = data.get("header", {})
-            competitions = header.get("competitions", [{}])
-            if competitions:
-                for comp in competitions[0].get("competitors", []):
-                    linescores = comp.get("linescores", [])
-                    record = comp.get("record", [{}])
-                    record_str = record[0].get("summary", "") if record else ""
-                    scores = [ls.get("value", 0) for ls in linescores]
-                    if comp.get("homeAway") == "home":
-                        quarter_scores["home"] = scores
-                        quarter_scores["home_record"] = record_str
-                    else:
-                        quarter_scores["away"] = scores
-                        quarter_scores["away_record"] = record_str
-        return plays[-10:], quarter_scores
-    except: return [], {}
+        return plays[-10:]
+    except: return []
 
 def get_team_from_play(play_text, away, home):
-    """Try to identify which team made the play by matching player names"""
     if not play_text: return None
     play_text_lower = play_text.lower()
     for player, team in PLAYER_TEAMS.items():
@@ -259,70 +238,42 @@ def get_team_from_play(play_text, away, home):
     return None
 
 def infer_possession(plays, away, home):
-    """Infer which team has the ball based on the most recent play"""
     if not plays: return None, None
     last_play = plays[-1]
     play_text = (last_play.get("text", "") or "").lower()
     acting_team = get_team_from_play(last_play.get("text", ""), away, home)
     if not acting_team: return None, None
     other_team = home if acting_team == away else away
-    # After made basket → other team gets ball
     if last_play.get("score_value", 0) > 0 or "makes" in play_text:
         return other_team, f"→ {KALSHI_CODES.get(other_team, other_team[:3].upper())}"
-    # After defensive rebound → rebounding team gets ball
     if "defensive rebound" in play_text:
         return acting_team, f"🏀 {KALSHI_CODES.get(acting_team, acting_team[:3].upper())}"
-    # After offensive rebound → rebounding team keeps ball
     if "offensive rebound" in play_text:
         return acting_team, f"🏀 {KALSHI_CODES.get(acting_team, acting_team[:3].upper())}"
-    # After turnover/steal → other team gets ball
     if "turnover" in play_text or "steal" in play_text:
         return other_team, f"→ {KALSHI_CODES.get(other_team, other_team[:3].upper())}"
-    # After miss → unclear until rebound
     if "misses" in play_text:
         return None, "⏳ LOOSE"
-    # After foul → fouled team gets ball (usually)
     if "foul" in play_text:
         return other_team, f"FT {KALSHI_CODES.get(other_team, other_team[:3].upper())}"
-    # Default: acting team has ball
     return acting_team, f"🏀 {KALSHI_CODES.get(acting_team, acting_team[:3].upper())}"
 
-def render_scoreboard(away, home, away_score, home_score, period, clock, quarter_scores):
-    """Render ESPN-style quarter-by-quarter scoreboard"""
+def render_scoreboard(away, home, away_score, home_score, period, clock, away_record="", home_record=""):
     away_code = KALSHI_CODES.get(away, away[:3].upper())
     home_code = KALSHI_CODES.get(home, home[:3].upper())
     away_color = TEAM_COLORS.get(away, "#666")
     home_color = TEAM_COLORS.get(home, "#666")
-    away_qs = quarter_scores.get("away", [])
-    home_qs = quarter_scores.get("home", [])
-    away_record = quarter_scores.get("away_record", "")
-    home_record = quarter_scores.get("home_record", "")
-    # Build quarter headers
-    num_periods = max(len(away_qs), len(home_qs), period)
-    q_headers = ""
-    away_q_scores = ""
-    home_q_scores = ""
-    for i in range(num_periods):
-        q_label = str(i+1) if i < 4 else f"OT{i-3}"
-        q_headers += f"<th style='padding:4px 8px;color:#888;font-size:12px'>{q_label}</th>"
-        away_val = int(away_qs[i]) if i < len(away_qs) else "-"
-        home_val = int(home_qs[i]) if i < len(home_qs) else "-"
-        away_q_scores += f"<td style='padding:4px 8px;color:#fff'>{away_val}</td>"
-        home_q_scores += f"<td style='padding:4px 8px;color:#fff'>{home_val}</td>"
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
-    return f'''<div style="background:#0f172a;border-radius:8px;padding:12px;margin-bottom:8px">
-    <div style="text-align:center;color:#ffd700;font-weight:bold;margin-bottom:8px">{period_text} - {clock}</div>
-    <table style="width:100%;border-collapse:collapse;color:#fff;font-size:14px">
-    <tr style="border-bottom:1px solid #333"><th></th>{q_headers}<th style='padding:4px 12px;color:#888'>T</th></tr>
-    <tr style="border-bottom:1px solid #333">
-        <td style="padding:8px;text-align:left"><span style="color:{away_color};font-weight:bold">{away_code}</span> <span style="color:#666;font-size:11px">{away_record}</span></td>
-        {away_q_scores}
-        <td style="padding:8px 12px;font-weight:bold;font-size:18px;color:#fff">{away_score}</td>
+    return f'''<div style="background:#0f172a;border-radius:12px;padding:20px;margin-bottom:8px">
+    <div style="text-align:center;color:#ffd700;font-weight:bold;font-size:22px;margin-bottom:16px">{period_text} - {clock}</div>
+    <table style="width:100%;border-collapse:collapse;color:#fff">
+    <tr style="border-bottom:2px solid #333">
+        <td style="padding:16px;text-align:left;width:70%"><span style="color:{away_color};font-weight:bold;font-size:28px">{away_code}</span><span style="color:#666;font-size:14px;margin-left:12px">{away_record}</span></td>
+        <td style="padding:16px;text-align:right;font-weight:bold;font-size:52px;color:#fff">{away_score}</td>
     </tr>
     <tr>
-        <td style="padding:8px;text-align:left"><span style="color:{home_color};font-weight:bold">{home_code}</span> <span style="color:#666;font-size:11px">{home_record}</span></td>
-        {home_q_scores}
-        <td style="padding:8px 12px;font-weight:bold;font-size:18px;color:#fff">{home_score}</td>
+        <td style="padding:16px;text-align:left;width:70%"><span style="color:{home_color};font-weight:bold;font-size:28px">{home_code}</span><span style="color:#666;font-size:14px;margin-left:12px">{home_record}</span></td>
+        <td style="padding:16px;text-align:right;font-weight:bold;font-size:52px;color:#fff">{home_score}</td>
     </tr>
     </table></div>'''
 
@@ -330,7 +281,6 @@ def get_play_badge(last_play):
     if not last_play: return ""
     play_text = (last_play.get("text", "") or "").lower()
     score_value = last_play.get("score_value", 0)
-    play_type = (last_play.get("play_type", "") or "").lower()
     if score_value == 3 or ("three point" in play_text and "makes" in play_text):
         return '<rect x="175" y="25" width="150" height="30" fill="#22c55e" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">3PT MADE!</text>'
     elif score_value == 2 or ("makes" in play_text and any(w in play_text for w in ["layup", "dunk", "shot", "jumper", "hook"])):
@@ -415,7 +365,6 @@ def calc_pregame_edge(away, home, injuries, b2b_teams):
 def remove_position(pos_id):
     st.session_state.positions = [p for p in st.session_state.positions if p['id'] != pos_id]
 
-# FETCH DATA
 games = fetch_espn_games()
 kalshi_ml = fetch_kalshi_ml()
 kalshi_spreads = fetch_kalshi_spreads()
@@ -426,7 +375,6 @@ live_games = [g for g in games if g['status'] in ['STATUS_IN_PROGRESS', 'STATUS_
 scheduled_games = [g for g in games if g['status'] == 'STATUS_SCHEDULED' and g['period'] == 0]
 final_games = [g for g in games if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']]
 
-# HEADER
 st.title("🏀 BIGSNAPSHOT NBA EDGE FINDER")
 st.caption(f"v{VERSION} • {now.strftime('%b %d, %Y %I:%M %p ET')} • Vegas vs Kalshi Mispricing Detector")
 
@@ -438,7 +386,6 @@ c4.metric("Final", len(final_games))
 
 st.divider()
 
-# VEGAS vs KALSHI MISPRICING ALERT
 st.subheader("💰 VEGAS vs KALSHI MISPRICING ALERT")
 st.caption("Buy when Kalshi underprices Vegas favorite • 5%+ gap = edge")
 
@@ -485,8 +432,7 @@ if mispricings:
                 if not any(pos['game'] == game_key for pos in st.session_state.positions):
                     st.session_state.positions.append({"game": game_key, "pick": f"{mp['action']} ({mp['team']})", "type": "ML", "line": "-", "price": round(mp['kalshi_prob']), "contracts": 10, "link": get_kalshi_game_link(g['away'], g['home']), "id": str(uuid.uuid4())[:8]})
                     added += 1
-            st.toast(f"✅ Added {added} positions!")
-            st.rerun()
+            st.toast(f"✅ Added {added} positions!"); st.rerun()
     for mp in mispricings:
         g = mp['game']
         game_key = f"{g['away']}@{g['home']}"
@@ -504,28 +450,24 @@ if mispricings:
             already = any(pos['game'] == game_key for pos in st.session_state.positions)
             if already: st.success("✅ Tracked")
             elif st.button("➕ Track", key=f"mp_{game_key}"):
-                st.session_state.positions.append({"game": game_key, "pick": f"{mp['action']} ({mp['team']})", "type": "ML", "line": "-", "price": round(mp['kalshi_prob']), "contracts": 10, "link": get_kalshi_game_link(g['away'], g['home']), "id": str(uuid.uuid4())[:8]})
-                st.rerun()
+                st.session_state.positions.append({"game": game_key, "pick": f"{mp['action']} ({mp['team']})", "type": "ML", "line": "-", "price": round(mp['kalshi_prob']), "contracts": 10, "link": get_kalshi_game_link(g['away'], g['home']), "id": str(uuid.uuid4())[:8]}); st.rerun()
 else:
     st.info("🔍 No mispricings found (need 5%+ gap between Vegas & Kalshi)")
 
 st.divider()
 
-# LIVE EDGE MONITOR
 st.subheader("🎮 LIVE EDGE MONITOR")
 
 if live_games:
     for g in live_games:
         away, home, total, mins, game_id = g['away'], g['home'], g['total_score'], g['minutes_played'], g['game_id']
-        plays, quarter_scores = fetch_plays(game_id)
+        plays = fetch_plays(game_id)
         st.markdown(f"### {away} @ {home}")
-        # Quarter-by-quarter scoreboard
-        st.markdown(render_scoreboard(away, home, g['away_score'], g['home_score'], g['period'], g['clock'], quarter_scores), unsafe_allow_html=True)
+        st.markdown(render_scoreboard(away, home, g['away_score'], g['home_score'], g['period'], g['clock'], g.get('away_record', ''), g.get('home_record', '')), unsafe_allow_html=True)
         col1, col2 = st.columns([1, 1])
         with col1:
             last_play = plays[-1] if plays else None
             st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], g['period'], g['clock'], last_play), unsafe_allow_html=True)
-            # Possession indicator
             poss_team, poss_text = infer_possession(plays, away, home)
             if poss_text:
                 poss_color = TEAM_COLORS.get(poss_team, "#ffd700") if poss_team else "#888"
@@ -591,7 +533,6 @@ if live_games:
 else:
     st.info("No live games right now")
 
-# CUSHION SCANNER
 st.subheader("🎯 CUSHION SCANNER (Totals)")
 all_game_options = ["All Games"] + [f"{g['away']} @ {g['home']}" for g in games]
 cush_col1, cush_col2, cush_col3 = st.columns(3)
@@ -599,10 +540,8 @@ with cush_col1: selected_game = st.selectbox("Select Game:", all_game_options, k
 with cush_col2: min_mins = st.selectbox("Min PLAY TIME:", [8, 12, 16, 20, 24], index=1, key="cush_mins")
 with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
 
-if min_mins == 8:
-    st.info("🦈 SHARK MODE: 8 min played = early entry. Only buy if cushion ≥12 (✅ SAFE or 🔒 FORTRESS)")
-elif min_mins == 12:
-    st.info("✅ SMART MONEY: 12 min played = pace locked. Cushion ≥6 is tradeable.")
+if min_mins == 8: st.info("🦈 SHARK MODE: 8 min played = early entry. Only buy if cushion ≥12 (✅ SAFE or 🔒 FORTRESS)")
+elif min_mins == 12: st.info("✅ SMART MONEY: 12 min played = pace locked. Cushion ≥6 is tradeable.")
 
 cushion_data = []
 for g in games:
@@ -617,22 +556,11 @@ for g in games:
         pace_label = get_pace_label(total / mins)[0]
         status_text = f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "Live"
     elif vegas_ou:
-        try:
-            proj = round(float(vegas_ou))
-            pace_label = "📊 VEGAS"
-            status_text = "Scheduled" if mins == 0 else f"Q{g['period']} {g['clock']} (early)"
-        except:
-            proj = LEAGUE_AVG_TOTAL
-            pace_label = "⏳ PRE"
-            status_text = "Scheduled"
-    else:
-        proj = LEAGUE_AVG_TOTAL
-        pace_label = "⏳ PRE"
-        status_text = "Scheduled"
-    if side_choice == "YES (Over)":
-        thresh_sorted = sorted(THRESHOLDS)
-    else:
-        thresh_sorted = sorted(THRESHOLDS, reverse=True)
+        try: proj = round(float(vegas_ou)); pace_label = "📊 VEGAS"; status_text = "Scheduled" if mins == 0 else f"Q{g['period']} {g['clock']} (early)"
+        except: proj = LEAGUE_AVG_TOTAL; pace_label = "⏳ PRE"; status_text = "Scheduled"
+    else: proj = LEAGUE_AVG_TOTAL; pace_label = "⏳ PRE"; status_text = "Scheduled"
+    if side_choice == "YES (Over)": thresh_sorted = sorted(THRESHOLDS)
+    else: thresh_sorted = sorted(THRESHOLDS, reverse=True)
     for idx, thresh in enumerate(thresh_sorted):
         cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
         if cushion >= 6 or (selected_game != "All Games"):
@@ -664,14 +592,11 @@ else:
     if selected_game != "All Games": st.info(f"Select a side and see all lines for {selected_game}")
     else:
         live_count = sum(1 for g in games if g['minutes_played'] >= min_mins and g['status'] not in ['STATUS_FINAL', 'STATUS_FULL_TIME'])
-        if live_count == 0:
-            st.info(f"⏳ No games have reached {min_mins}+ min play time yet. Waiting for tip-off...")
-        else:
-            st.info(f"No {side_choice.split()[0]} opportunities with 6+ cushion. Try switching sides or wait for pace to develop.")
+        if live_count == 0: st.info(f"⏳ No games have reached {min_mins}+ min play time yet. Waiting for tip-off...")
+        else: st.info(f"No {side_choice.split()[0]} opportunities with 6+ cushion. Try switching sides or wait for pace to develop.")
 
 st.divider()
 
-# PACE SCANNER
 st.subheader("📈 PACE SCANNER")
 pace_data = [{"game": f"{g['away']} @ {g['home']}", "status": f"Q{g['period']} {g['clock']}", "total": g['total_score'], "pace": g['total_score']/g['minutes_played'], "pace_label": get_pace_label(g['total_score']/g['minutes_played'])[0], "pace_color": get_pace_label(g['total_score']/g['minutes_played'])[1], "proj": calc_projection(g['total_score'], g['minutes_played'])} for g in live_games if g['minutes_played'] >= 6]
 pace_data.sort(key=lambda x: x['pace'])
@@ -686,7 +611,6 @@ else: st.info("No live games with 6+ minutes played")
 
 st.divider()
 
-# PRE-GAME ALIGNMENT
 with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
     st.caption("Model prediction for scheduled games • Click ➕ to add to tracker")
     if scheduled_games:
@@ -710,10 +634,8 @@ with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
                     for p in actionable:
                         game_key = f"{p['away']}@{p['home']}"
                         if not any(pos['game'] == game_key for pos in st.session_state.positions):
-                            st.session_state.positions.append({"game": game_key, "pick": p['pick'], "type": "ML", "line": "-", "price": 50, "contracts": 10, "link": get_kalshi_game_link(p['away'], p['home']), "id": str(uuid.uuid4())[:8]})
-                            added += 1
-                    st.toast(f"✅ Added {added} positions!")
-                    st.rerun()
+                            st.session_state.positions.append({"game": game_key, "pick": p['pick'], "type": "ML", "line": "-", "price": 50, "contracts": 10, "link": get_kalshi_game_link(p['away'], p['home']), "id": str(uuid.uuid4())[:8]}); added += 1
+                    st.toast(f"✅ Added {added} positions!"); st.rerun()
             st.markdown("---")
         for p in all_picks:
             pg1, pg2, pg3, pg4 = st.columns([2.5, 1, 2, 1])
@@ -730,13 +652,11 @@ with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
                     game_key = f"{p['away']}@{p['home']}"
                     if any(pos['game'] == game_key for pos in st.session_state.positions): st.caption("✅ Tracked")
                     elif st.button("➕", key=f"quick_{p['away']}_{p['home']}"):
-                        st.session_state.positions.append({"game": game_key, "pick": p['pick'], "type": "ML", "line": "-", "price": 50, "contracts": 10, "link": get_kalshi_game_link(p['away'], p['home']), "id": str(uuid.uuid4())[:8]})
-                        st.rerun()
+                        st.session_state.positions.append({"game": game_key, "pick": p['pick'], "type": "ML", "line": "-", "price": 50, "contracts": 10, "link": get_kalshi_game_link(p['away'], p['home']), "id": str(uuid.uuid4())[:8]}); st.rerun()
     else: st.info("No scheduled games")
 
 st.divider()
 
-# INJURY REPORT
 st.subheader("🏥 INJURY REPORT")
 today_teams = set([g['away'] for g in games] + [g['home'] for g in games])
 injury_found = False
@@ -750,7 +670,6 @@ if not injury_found: st.info("No star player injuries reported")
 
 st.divider()
 
-# POSITION TRACKER
 st.subheader("📊 POSITION TRACKER")
 today_games = [(f"{g['away']} @ {g['home']}", g['away'], g['home']) for g in games]
 
@@ -767,116 +686,52 @@ with st.expander("➕ ADD NEW POSITION", expanded=False):
         with ac4:
             if bet_type == "Spread":
                 if sel_game:
-                    away_code = KALSHI_CODES.get(sel_game[1], "XXX")
-                    home_code = KALSHI_CODES.get(sel_game[2], "XXX")
+                    away_code = KALSHI_CODES.get(sel_game[1], "XXX"); home_code = KALSHI_CODES.get(sel_game[2], "XXX")
                     game_spread_key = f"{away_code}@{home_code}"
                     kalshi_spread_list = kalshi_spreads.get(game_spread_key, [])
                     if kalshi_spread_list:
-                        spread_options = []
-                        for sp in kalshi_spread_list:
-                            spread_options.append(f"{sp['line']} ({sp['team_code']}) @ {sp['yes_price']}¢")
+                        spread_options = [f"{sp['line']} ({sp['team_code']}) @ {sp['yes_price']}¢" for sp in kalshi_spread_list]
                         line = st.selectbox("Kalshi Spreads", spread_options, key="add_spread_line")
                         line = line.split()[0] if line else "-7.5"
-                        st.caption(f"✅ {len(kalshi_spread_list)} spreads from Kalshi")
                     else:
                         spread_options = ["-1.5", "-2.5", "-3.5", "-4.5", "-5.5", "-6.5", "-7.5", "-8.5", "-9.5", "-10.5", "-11.5", "-12.5", "+1.5", "+2.5", "+3.5", "+4.5", "+5.5", "+6.5", "+7.5", "+8.5", "+9.5", "+10.5", "+11.5", "+12.5"]
                         line = st.selectbox("Spread Line (Manual)", spread_options, index=5, key="add_spread_line")
-                        st.caption("⚠️ No Kalshi spreads found - manual entry")
-                else:
-                    line = "-7.5"
-            elif "Totals" in bet_type:
-                line = st.selectbox("Line", THRESHOLDS, key="add_line")
-            else:
-                line = "-"
+                else: line = "-7.5"
+            elif "Totals" in bet_type: line = st.selectbox("Line", THRESHOLDS, key="add_line")
+            else: line = "-"
         ac5, ac6, ac7 = st.columns(3)
         with ac5: entry_price = st.number_input("Entry Price (¢)", 1, 99, 50, key="add_price")
         with ac6: contracts = st.number_input("Contracts", 1, 10000, 10, key="add_contracts")
         with ac7: cost = entry_price * contracts / 100; st.metric("Cost", f"${cost:.2f}"); st.caption(f"Win: +${contracts - cost:.2f}")
         if st.button("✅ ADD POSITION", use_container_width=True, key="add_pos_btn"):
             if sel_game:
-                if bet_type == "ML (Moneyline)":
-                    pos_type, pos_pick, pos_line = "ML", pick, "-"
-                elif bet_type == "Spread":
-                    pos_type, pos_pick, pos_line = "Spread", pick, str(line)
-                else:
-                    pos_type, pos_pick, pos_line = "Totals", pick.split()[0], str(line)
-                st.session_state.positions.append({"game": f"{sel_game[1]}@{sel_game[2]}", "pick": pos_pick, "type": pos_type, "line": pos_line, "price": entry_price, "contracts": contracts, "link": get_kalshi_game_link(sel_game[1], sel_game[2]), "id": str(uuid.uuid4())[:8]})
-                st.success("Added!"); st.rerun()
+                if bet_type == "ML (Moneyline)": pos_type, pos_pick, pos_line = "ML", pick, "-"
+                elif bet_type == "Spread": pos_type, pos_pick, pos_line = "Spread", pick, str(line)
+                else: pos_type, pos_pick, pos_line = "Totals", pick.split()[0], str(line)
+                st.session_state.positions.append({"game": f"{sel_game[1]}@{sel_game[2]}", "pick": pos_pick, "type": pos_type, "line": pos_line, "price": entry_price, "contracts": contracts, "link": get_kalshi_game_link(sel_game[1], sel_game[2]), "id": str(uuid.uuid4())[:8]}); st.success("Added!"); st.rerun()
 
 if st.session_state.positions:
     st.markdown("---")
     for idx, pos in enumerate(st.session_state.positions):
         current = next((g for g in games if f"{g['away']}@{g['home']}" == pos['game']), None)
-        edit_key = f"editing_{pos['id']}"
-        is_editing = st.session_state.get(edit_key, False)
-        if is_editing:
-            st.markdown(f"**✏️ Editing: {pos['game']}**")
-            ec1, ec2 = st.columns(2)
-            type_options = ["ML", "Totals", "Spread"]
-            current_type_idx = 0 if pos['type']=="ML" else (2 if pos['type']=="Spread" else 1)
-            with ec1: new_type = st.selectbox("Bet Type", type_options, index=current_type_idx, key=f"edit_type_{pos['id']}")
-            with ec2:
-                if new_type == "ML":
-                    parts = pos['game'].split("@")
-                    new_pick = st.selectbox("Pick", [parts[0], parts[1]], index=[parts[0], parts[1]].index(pos['pick']) if pos['pick'] in parts else 0, key=f"edit_pick_{pos['id']}")
-                    new_line = "-"
-                elif new_type == "Spread":
-                    parts = pos['game'].split("@")
-                    new_pick = st.selectbox("Pick", [parts[0], parts[1]], index=[parts[0], parts[1]].index(pos['pick']) if pos['pick'] in parts else 0, key=f"edit_pick_{pos['id']}")
-                    away_code = KALSHI_CODES.get(parts[0], "XXX")
-                    home_code = KALSHI_CODES.get(parts[1], "XXX")
-                    game_spread_key = f"{away_code}@{home_code}"
-                    kalshi_spread_list = kalshi_spreads.get(game_spread_key, [])
-                    if kalshi_spread_list:
-                        spread_options = [sp['line'] for sp in kalshi_spread_list]
-                        current_spread_idx = spread_options.index(pos['line']) if pos.get('line') in spread_options else 0
-                        new_line = st.selectbox("Kalshi Spread", spread_options, index=current_spread_idx, key=f"edit_line_{pos['id']}")
-                    else:
-                        spread_options = ["-1.5", "-2.5", "-3.5", "-4.5", "-5.5", "-6.5", "-7.5", "-8.5", "-9.5", "-10.5", "-11.5", "-12.5", "+1.5", "+2.5", "+3.5", "+4.5", "+5.5", "+6.5", "+7.5", "+8.5", "+9.5", "+10.5", "+11.5", "+12.5"]
-                        current_spread_idx = spread_options.index(pos['line']) if pos.get('line') in spread_options else 5
-                        new_line = st.selectbox("Spread (Manual)", spread_options, index=current_spread_idx, key=f"edit_line_{pos['id']}")
-                else:
-                    new_pick = st.selectbox("Pick", ["YES", "NO"], index=0 if pos.get('pick','YES')=="YES" else 1, key=f"edit_pick_{pos['id']}")
-                    new_line = st.selectbox("Line", THRESHOLDS, index=THRESHOLDS.index(float(pos['line'])) if pos['line'] != "-" and float(pos['line']) in THRESHOLDS else 3, key=f"edit_line_{pos['id']}")
-            ec3, ec4 = st.columns(2)
-            with ec3: new_price = st.number_input("Entry Price (¢)", 1, 99, pos.get('price', 50), key=f"edit_price_{pos['id']}")
-            with ec4: new_contracts = st.number_input("Contracts", 1, 10000, pos.get('contracts', 10), key=f"edit_contracts_{pos['id']}")
-            ec5, ec6, ec7 = st.columns(3)
-            with ec5:
-                if st.button("💾 SAVE", key=f"save_{pos['id']}", use_container_width=True):
-                    st.session_state.positions[idx]['type'] = new_type
-                    st.session_state.positions[idx]['pick'] = new_pick
-                    st.session_state.positions[idx]['line'] = str(new_line) if new_type == "Totals" else "-"
-                    st.session_state.positions[idx]['price'] = new_price
-                    st.session_state.positions[idx]['contracts'] = new_contracts
-                    st.session_state[edit_key] = False
-                    st.rerun()
-            with ec6:
-                if st.button("❌ CANCEL", key=f"cancel_{pos['id']}", use_container_width=True): st.session_state[edit_key] = False; st.rerun()
-            with ec7: cost = new_price * new_contracts / 100; st.metric("Cost", f"${cost:.2f}")
-            st.markdown("---")
-        else:
-            pc1, pc2, pc3, pc4, pc5, pc6 = st.columns([2.2, 1.3, 1.3, 1.2, 1, 1])
-            with pc1:
-                st.markdown(f"**{pos['game']}**")
-                if current:
-                    if current['period'] > 0: st.caption(f"🔴 LIVE Q{current['period']} {current['clock']} | {current['away_score']}-{current['home_score']}")
-                    elif current['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: st.caption(f"✅ FINAL {current['away_score']}-{current['home_score']}")
-                    else: st.caption("⏳ Scheduled")
-            with pc2: st.write(f"🎯 {pos['pick']} ML" if pos['type']=="ML" else (f"📏 {pos['pick']} {pos['line']}" if pos['type']=="Spread" else f"📊 {pos['pick']} {pos['line']}"))
-            with pc3: st.write(f"{pos.get('contracts',10)} @ {pos.get('price',50)}¢"); st.caption(f"${pos.get('price',50)*pos.get('contracts',10)/100:.2f}")
-            with pc4: st.link_button("🔗 Kalshi", pos['link'], use_container_width=True)
-            with pc5:
-                if st.button("✏️", key=f"edit_{pos['id']}", help="Edit position"): st.session_state[edit_key] = True; st.rerun()
-            with pc6:
-                if st.button("🗑️", key=f"del_{pos['id']}"): remove_position(pos['id']); st.rerun()
+        pc1, pc2, pc3, pc4, pc5 = st.columns([2.5, 1.5, 1.5, 1.5, 1])
+        with pc1:
+            st.markdown(f"**{pos['game']}**")
+            if current:
+                if current['period'] > 0: st.caption(f"🔴 LIVE Q{current['period']} {current['clock']} | {current['away_score']}-{current['home_score']}")
+                elif current['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: st.caption(f"✅ FINAL {current['away_score']}-{current['home_score']}")
+                else: st.caption("⏳ Scheduled")
+        with pc2: st.write(f"🎯 {pos['pick']} ML" if pos['type']=="ML" else (f"📏 {pos['pick']} {pos['line']}" if pos['type']=="Spread" else f"📊 {pos['pick']} {pos['line']}"))
+        with pc3: st.write(f"{pos.get('contracts',10)} @ {pos.get('price',50)}¢"); st.caption(f"${pos.get('price',50)*pos.get('contracts',10)/100:.2f}")
+        with pc4: st.link_button("🔗 Kalshi", pos['link'], use_container_width=True)
+        with pc5:
+            if st.button("🗑️", key=f"del_{pos['id']}"): remove_position(pos['id']); st.rerun()
     st.markdown("---")
     if st.button("🗑️ CLEAR ALL POSITIONS", use_container_width=True, type="primary"): st.session_state.positions = []; st.rerun()
 else: st.caption("No positions tracked yet. Use ➕ ADD ALL buttons above or add manually.")
 
 st.divider()
 
-# ALL GAMES TODAY
 st.subheader("📋 ALL GAMES TODAY")
 for g in games:
     if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: status, color = f"FINAL: {g['away_score']}-{g['home_score']}", "#666"
