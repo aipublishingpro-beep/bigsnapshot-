@@ -27,14 +27,14 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.8"
+VERSION = "11.0"
 LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
 if 'positions' not in st.session_state:
     st.session_state.positions = []
 
-TEAM_COLORS = {"DUKE": "#003087", "UNC": "#7BAFD4", "KANSAS": "#0051BA", "KENTUCKY": "#0033A0", "UCLA": "#2D68C4", "GONZ": "#002967", "ARIZ": "#CC0033", "PURDUE": "#CEB888", "TENN": "#FF8200", "CONN": "#000E2F", "HOUSTON": "#C8102E", "TEXAS": "#BF5700", "BAYLOR": "#154734", "AUBURN": "#0C2340", "MICH": "#00274C", "MSU": "#18453B", "NOVA": "#00205B", "CREIGH": "#005CA9", "MARQ": "#003366", "SDSU": "#A6192E", "FAU": "#003366", "MIAMI": "#F47321", "IND": "#990000", "IOWA": "#FFCD00", "ILLINOIS": "#13294B", "OHIOST": "#BB0000", "WISC": "#C5050C", "ORE": "#154733", "ALA": "#9E1B32", "ARK": "#9D2235", "LSU": "#461D7C", "MISS": "#14213D", "OKLA": "#841617", "TEXTECH": "#CC0000", "TCU": "#4D1979", "OKST": "#FF7300"}
+TEAM_COLORS = {"DUKE": "#003087", "UNC": "#7BAFD4", "KANSAS": "#0051BA", "KENTUCKY": "#0033A0", "UCLA": "#2D68C4", "GONZ": "#002967", "ARIZ": "#CC0033", "PURDUE": "#CEB888", "TENN": "#FF8200", "CONN": "#000E2F", "HOUSTON": "#C8102E", "TEXAS": "#BF5700", "BAYLOR": "#154734", "AUBURN": "#0C2340", "MICH": "#00274C", "MSU": "#18453B", "NOVA": "#00205B", "CREIGH": "#005CA9", "MARQ": "#003366", "SDSU": "#A6192E", "FAU": "#003366", "MIAMI": "#F47321", "IND": "#990000", "IOWA": "#FFCD00", "ILLINOIS": "#13294B", "OHIOST": "#BB0000", "WISC": "#C5050C", "ORE": "#154733", "ALA": "#9E1B32", "ARK": "#9D2235", "LSU": "#461D7C", "MISS": "#14213D", "OKLA": "#841617", "TEXTECH": "#CC0000", "TCU": "#4D1979", "OKST": "#FF7300", "NYK": "#006BB6", "SAC": "#5A2D81"}
 
 POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC", "Big East"}
 HIGH_MAJOR = {"American Athletic", "Mountain West", "Atlantic 10", "West Coast", "Missouri Valley"}
@@ -126,17 +126,105 @@ def fetch_plays(game_id):
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
-        plays = [{"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", "")} for p in data.get("plays", [])[-15:]]
-        poss_team_id = data.get("situation", {}).get("possession", "")
-        return plays[-10:], poss_team_id
+        plays = []
+        for p in data.get("plays", [])[-15:]:
+            # Try to get team info from play
+            team_data = p.get("team", {})
+            team_abbrev = ""
+            if isinstance(team_data, dict):
+                team_abbrev = team_data.get("abbreviation", "") or team_data.get("displayName", "")
+            plays.append({"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", ""), "team": team_abbrev.upper() if team_abbrev else ""})
+        poss_team = ""
+        situation = data.get("situation", {})
+        if situation:
+            poss_text = situation.get("possessionText", "") or ""
+            poss_team = poss_text.split()[0] if poss_text else ""
+        return plays[-10:], poss_team
     except: return [], ""
 
-def render_ncaa_court(away_abbrev, home_abbrev, away_score, home_score, possession, period, clock):
-    away_color, home_color = TEAM_COLORS.get(away_abbrev, "#666666"), TEAM_COLORS.get(home_abbrev, "#666666")
-    poss_away = "visible" if possession == away_abbrev else "hidden"
-    poss_home = "visible" if possession == home_abbrev else "hidden"
+def get_play_badge(last_play):
+    """Generate SVG badge for the last play"""
+    if not last_play: return ""
+    play_text = (last_play.get("text", "") or "").lower()
+    score_value = last_play.get("score_value", 0)
+    if score_value == 3 or ("three point" in play_text and "makes" in play_text):
+        return '<rect x="175" y="25" width="150" height="30" fill="#22c55e" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">3PT MADE!</text>'
+    elif score_value == 2 or ("makes" in play_text and any(w in play_text for w in ["layup", "dunk", "shot", "jumper", "hook"])):
+        return '<rect x="175" y="25" width="150" height="30" fill="#22c55e" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">BUCKET!</text>'
+    elif score_value == 1 or ("makes" in play_text and "free throw" in play_text):
+        return '<rect x="175" y="25" width="150" height="30" fill="#22c55e" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">FT MADE</text>'
+    elif "misses" in play_text:
+        if "three point" in play_text:
+            return '<rect x="175" y="25" width="150" height="30" fill="#ef4444" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">3PT MISS</text>'
+        elif "free throw" in play_text:
+            return '<rect x="175" y="25" width="150" height="30" fill="#ef4444" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">FT MISS</text>'
+        else:
+            return '<rect x="175" y="25" width="150" height="30" fill="#ef4444" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">MISSED SHOT</text>'
+    elif "block" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#f97316" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">BLOCKED!</text>'
+    elif "turnover" in play_text or "steal" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#f97316" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">TURNOVER</text>'
+    elif "offensive rebound" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#3b82f6" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">OFF REBOUND</text>'
+    elif "defensive rebound" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#3b82f6" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">DEF REBOUND</text>'
+    elif "rebound" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#3b82f6" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">REBOUND</text>'
+    elif "foul" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#eab308" rx="6"/><text x="250" y="46" fill="#000" font-size="14" font-weight="bold" text-anchor="middle">FOUL</text>'
+    elif "timeout" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#a855f7" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">TIMEOUT</text>'
+    return ""
+
+def infer_possession_ncaa(plays, away_abbrev, home_abbrev, espn_poss):
+    """Infer possession from plays or ESPN data"""
+    # First try ESPN's possession data
+    if espn_poss:
+        espn_upper = espn_poss.upper()
+        if away_abbrev.upper() in espn_upper or espn_upper in away_abbrev.upper():
+            return away_abbrev, f"🏀 {away_abbrev}"
+        elif home_abbrev.upper() in espn_upper or espn_upper in home_abbrev.upper():
+            return home_abbrev, f"🏀 {home_abbrev}"
+    # Fallback: infer from last play
+    if not plays: return None, None
+    last_play = plays[-1]
+    play_text = (last_play.get("text", "") or "").lower()
+    play_team = last_play.get("team", "").upper()
+    # Try to match team from play
+    acting_team = None
+    if play_team:
+        if play_team == away_abbrev.upper() or away_abbrev.upper() in play_team:
+            acting_team = away_abbrev
+        elif play_team == home_abbrev.upper() or home_abbrev.upper() in play_team:
+            acting_team = home_abbrev
+    if not acting_team: return None, None
+    other_team = home_abbrev if acting_team == away_abbrev else away_abbrev
+    # After made basket → other team gets ball
+    if last_play.get("score_value", 0) > 0 or "makes" in play_text:
+        return other_team, f"→ {other_team}"
+    # After defensive rebound → rebounding team has ball
+    if "defensive rebound" in play_text:
+        return acting_team, f"🏀 {acting_team}"
+    # After offensive rebound → same team keeps ball
+    if "offensive rebound" in play_text:
+        return acting_team, f"🏀 {acting_team}"
+    # After turnover/steal → other team gets ball
+    if "turnover" in play_text or "steal" in play_text:
+        return other_team, f"→ {other_team}"
+    # After miss → unclear
+    if "misses" in play_text:
+        return None, "⏳ LOOSE"
+    # After foul → other team
+    if "foul" in play_text:
+        return other_team, f"FT {other_team}"
+    return acting_team, f"🏀 {acting_team}"
+
+def render_ncaa_court(away_abbrev, home_abbrev, away_score, home_score, period, clock, last_play=None):
+    away_color = TEAM_COLORS.get(away_abbrev, "#666666")
+    home_color = TEAM_COLORS.get(home_abbrev, "#666666")
     period_text = f"H{period}" if period <= 2 else f"OT{period-2}"
-    return f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;"><svg viewBox="0 0 500 280" style="width:100%;max-width:500px;"><rect x="20" y="20" width="460" height="200" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/><circle cx="250" cy="120" r="35" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="120" r="4" fill="#fff"/><line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="2"/><path d="M 20 50 Q 100 120 20 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/><text x="85" y="250" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">{away_abbrev[:6]}</text><text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text><circle cx="135" cy="252" r="8" fill="#ffd700" visibility="{poss_away}"/><rect x="370" y="228" width="90" height="48" fill="{home_color}" rx="6"/><text x="415" y="250" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">{home_abbrev[:6]}</text><text x="415" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{home_score}</text><circle cx="365" cy="252" r="8" fill="#ffd700" visibility="{poss_home}"/><text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text></svg></div>'''
+    play_badge = get_play_badge(last_play)
+    return f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;"><svg viewBox="0 0 500 280" style="width:100%;max-width:500px;"><rect x="20" y="20" width="460" height="200" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/><circle cx="250" cy="120" r="35" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="120" r="4" fill="#fff"/><line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="2"/><path d="M 20 50 Q 100 120 20 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>{play_badge}<rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/><text x="85" y="250" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">{away_abbrev[:6]}</text><text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text><rect x="370" y="228" width="90" height="48" fill="{home_color}" rx="6"/><text x="415" y="250" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">{home_abbrev[:6]}</text><text x="415" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{home_score}</text><text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text></svg></div>'''
 
 def get_play_icon(play_type, score_value):
     play_lower = play_type.lower() if play_type else ""
@@ -156,18 +244,14 @@ def get_kalshi_game_link(away_abbrev, home_abbrev):
     return f"https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game/{ticker.lower()}"
 
 def calc_projection(total_score, minutes_played, vegas_ou=None):
-    """Calculate projection - uses Vegas O/U for pregame, pace-based for live"""
     if minutes_played >= 5:
         pace = total_score / minutes_played
         weight = min(1.0, (minutes_played - 5) / 15)
         blended_pace = (pace * weight) + ((LEAGUE_AVG_TOTAL / 40) * (1 - weight))
         return max(100, min(200, round(blended_pace * 40)))
     elif vegas_ou:
-        # Use Vegas O/U for pregame if available
-        try:
-            return round(float(vegas_ou))
-        except:
-            return LEAGUE_AVG_TOTAL
+        try: return round(float(vegas_ou))
+        except: return LEAGUE_AVG_TOTAL
     return LEAGUE_AVG_TOTAL
 
 def get_pace_label(pace):
@@ -277,14 +361,17 @@ if live_games:
     for g in live_games:
         away_abbrev, home_abbrev = g['away_abbrev'], g['home_abbrev']
         total, mins, game_id = g['total_score'], g['minutes_played'], g['game_id']
-        plays, poss_team_id = fetch_plays(game_id)
-        possession = ""
-        if poss_team_id:
-            possession = away_abbrev if away_abbrev.lower() in str(poss_team_id).lower() else (home_abbrev if home_abbrev.lower() in str(poss_team_id).lower() else "")
+        plays, espn_poss = fetch_plays(game_id)
         st.markdown(f"### {g['away']} @ {g['home']}")
         col1, col2 = st.columns([1, 1])
         with col1:
-            st.markdown(render_ncaa_court(away_abbrev, home_abbrev, g['away_score'], g['home_score'], possession, g['period'], g['clock']), unsafe_allow_html=True)
+            last_play = plays[-1] if plays else None
+            st.markdown(render_ncaa_court(away_abbrev, home_abbrev, g['away_score'], g['home_score'], g['period'], g['clock'], last_play), unsafe_allow_html=True)
+            # Possession indicator below court
+            poss_team, poss_text = infer_possession_ncaa(plays, away_abbrev, home_abbrev, espn_poss)
+            if poss_text:
+                poss_color = TEAM_COLORS.get(poss_team, "#ffd700") if poss_team else "#888"
+                st.markdown(f"<div style='text-align:center;padding:8px;background:#1a1a2e;border-radius:6px;margin-top:4px'><span style='color:{poss_color};font-size:1.3em;font-weight:bold'>{poss_text} BALL</span></div>", unsafe_allow_html=True)
         with col2:
             st.markdown("**📋 LAST 10 PLAYS**")
             if plays:
@@ -310,9 +397,8 @@ if live_games:
             else:
                 st.caption(f"⏳ Wait for larger lead (currently {leader} +{abs(lead)})")
             st.markdown("**📊 TOTALS**")
-            # YES = lower brackets are safer (sort ascending), NO = higher brackets are safer (sort descending)
-            yes_lines = [(t, proj - t) for t in sorted(THRESHOLDS) if proj - t >= 6]  # Lowest first = safest
-            no_lines = [(t, t - proj) for t in sorted(THRESHOLDS, reverse=True) if t - proj >= 6]  # Highest first = safest
+            yes_lines = [(t, proj - t) for t in sorted(THRESHOLDS) if proj - t >= 6]
+            no_lines = [(t, t - proj) for t in sorted(THRESHOLDS, reverse=True) if t - proj >= 6]
             tc1, tc2 = st.columns(2)
             with tc1:
                 st.markdown("<span style='color:#22c55e;font-weight:bold'>🟢 YES (Over) — go LOW</span>", unsafe_allow_html=True)
@@ -339,19 +425,15 @@ if live_games:
 else:
     st.info("No live games right now")
 
-# CUSHION SCANNER - ALL GAMES
+# CUSHION SCANNER
 st.subheader("🎯 CUSHION SCANNER (Totals)")
-
-# All non-final games
 scanner_games = [g for g in games if g['status'] not in ['STATUS_FINAL', 'STATUS_FULL_TIME']]
-
 all_game_options = ["All Games"] + [f"{g['away_abbrev']} @ {g['home_abbrev']}" for g in scanner_games]
 cush_col1, cush_col2, cush_col3 = st.columns(3)
 with cush_col1: selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
 with cush_col2: min_mins = st.selectbox("Min PLAY TIME:", [8, 12, 16, 20], index=1, key="cush_mins")
 with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
 
-# Warning for 8 min selection
 if min_mins == 8:
     st.info("🦈 SHARK MODE: 8 min played = early entry. Only buy if cushion ≥12 (✅ SAFE or 🔒 FORTRESS)")
 elif min_mins == 12:
@@ -362,11 +444,8 @@ for g in scanner_games:
     game_name = f"{g['away_abbrev']} @ {g['home_abbrev']}"
     if selected_game != "All Games" and game_name != selected_game: continue
     if g['minutes_played'] < min_mins: continue
-    
     total, mins = g['total_score'], g['minutes_played']
     vegas_ou = g.get('vegas_odds', {}).get('overUnder')
-    
-    # Use pace for live games (8+ min), Vegas O/U for pregame/early
     if mins >= 8:
         proj = calc_projection(total, mins)
         pace_label = get_pace_label(total / mins)[0]
@@ -376,50 +455,25 @@ for g in scanner_games:
             proj = round(float(vegas_ou))
             pace_label = "📊 VEGAS"
             status_text = "Scheduled" if mins == 0 else f"H{g['period']} {g['clock']} (early)"
-        except:
-            continue  # Skip if no valid projection
-    else:
-        continue  # Skip games with no Vegas O/U and not enough minutes
-    
-    # For YES: lower lines are safer (sort ascending by threshold)
-    # For NO: higher lines are safer (sort descending by threshold)
-    if side_choice == "YES (Over)":
-        thresh_sorted = sorted(THRESHOLDS)  # Ascending = lowest (safest) first
-    else:
-        thresh_sorted = sorted(THRESHOLDS, reverse=True)  # Descending = highest (safest) first
-    
+        except: continue
+    else: continue
+    if side_choice == "YES (Over)": thresh_sorted = sorted(THRESHOLDS)
+    else: thresh_sorted = sorted(THRESHOLDS, reverse=True)
     for idx, thresh in enumerate(thresh_sorted):
         cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
         if cushion >= 6 or (selected_game != "All Games"):
-            # Label based on cushion
             if cushion >= 20: safety_label = "🔒 FORTRESS"
             elif cushion >= 12: safety_label = "✅ SAFE"
             elif cushion >= 6: safety_label = "🎯 TIGHT"
             else: safety_label = "⚠️ RISKY"
-            
-            cushion_data.append({
-                "game": game_name, 
-                "status": status_text, 
-                "proj": proj, 
-                "line": thresh, 
-                "cushion": cushion, 
-                "pace": pace_label, 
-                "link": get_kalshi_game_link(g['away_abbrev'], g['home_abbrev']), 
-                "mins": mins,
-                "is_live": mins >= 8,
-                "safety": safety_label,
-                "is_recommended": idx == 0 and cushion >= 12  # First safe line = recommended
-            })
+            cushion_data.append({"game": game_name, "status": status_text, "proj": proj, "line": thresh, "cushion": cushion, "pace": pace_label, "link": get_kalshi_game_link(g['away_abbrev'], g['home_abbrev']), "mins": mins, "is_live": mins >= 8, "safety": safety_label, "is_recommended": idx == 0 and cushion >= 12})
 
-# Sort: Live first, then by safety (FORTRESS > SAFE > TIGHT), then by cushion
 safety_order = {"🔒 FORTRESS": 0, "✅ SAFE": 1, "🎯 TIGHT": 2, "⚠️ RISKY": 3}
 cushion_data.sort(key=lambda x: (not x['is_live'], safety_order.get(x['safety'], 3), -x['cushion']))
 
 if cushion_data:
-    # Show direction hint
     direction = "go LOW for safety" if side_choice == "YES (Over)" else "go HIGH for safety"
     st.caption(f"💡 {side_choice.split()[0]} bets: {direction}")
-    
     max_results = 20 if selected_game != "All Games" else 15
     for cd in cushion_data[:max_results]:
         cc1, cc2, cc3, cc4 = st.columns([3, 1.2, 1.3, 2])
@@ -434,13 +488,10 @@ if cushion_data:
         with cc4: st.link_button(f"BUY {'NO' if 'NO' in side_choice else 'YES'} {cd['line']}", cd['link'], use_container_width=True)
 else:
     if selected_game != "All Games": st.info(f"Select a side and see all lines for {selected_game}")
-    else: 
-        # Count live games
+    else:
         live_count = sum(1 for g in scanner_games if g['minutes_played'] >= min_mins)
-        if live_count == 0:
-            st.info(f"⏳ No games have reached {min_mins}+ min play time yet. Waiting for tip-off...")
-        else:
-            st.info(f"No {side_choice.split()[0]} opportunities with 6+ cushion. Try switching sides or wait for pace to develop.")
+        if live_count == 0: st.info(f"⏳ No games have reached {min_mins}+ min play time yet. Waiting for tip-off...")
+        else: st.info(f"No {side_choice.split()[0]} opportunities with 6+ cushion. Try switching sides or wait for pace to develop.")
 
 st.divider()
 
@@ -459,7 +510,7 @@ else: st.info("No live games with 5+ minutes played")
 
 st.divider()
 
-# PREGAME TOTALS PREVIEW (NEW - uses Vegas O/U)
+# PREGAME TOTALS PREVIEW
 with st.expander("📊 PREGAME TOTALS PREVIEW", expanded=False):
     st.caption("Based on Vegas Over/Under — for reference only until games start")
     pregame_totals = []
@@ -468,14 +519,8 @@ with st.expander("📊 PREGAME TOTALS PREVIEW", expanded=False):
         if vegas_ou:
             try:
                 proj = round(float(vegas_ou))
-                pregame_totals.append({
-                    "game": f"{g['away_abbrev']} @ {g['home_abbrev']}",
-                    "time": g.get('game_datetime', 'TBD'),
-                    "vegas_ou": proj,
-                    "link": get_kalshi_game_link(g['away_abbrev'], g['home_abbrev'])
-                })
+                pregame_totals.append({"game": f"{g['away_abbrev']} @ {g['home_abbrev']}", "time": g.get('game_datetime', 'TBD'), "vegas_ou": proj, "link": get_kalshi_game_link(g['away_abbrev'], g['home_abbrev'])})
             except: pass
-    
     if pregame_totals:
         pregame_totals.sort(key=lambda x: x['vegas_ou'])
         for pt in pregame_totals[:20]:
@@ -483,12 +528,9 @@ with st.expander("📊 PREGAME TOTALS PREVIEW", expanded=False):
             with pt1:
                 st.markdown(f"**{pt['game']}**")
                 st.caption(pt['time'])
-            with pt2:
-                st.write(f"O/U: {pt['vegas_ou']}")
-            with pt3:
-                st.link_button("🎯 View on Kalshi", pt['link'], use_container_width=True)
-    else:
-        st.info("No Vegas O/U lines available yet")
+            with pt2: st.write(f"O/U: {pt['vegas_ou']}")
+            with pt3: st.link_button("🎯 View on Kalshi", pt['link'], use_container_width=True)
+    else: st.info("No Vegas O/U lines available yet")
 
 st.divider()
 
