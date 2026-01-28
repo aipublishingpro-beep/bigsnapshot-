@@ -46,12 +46,23 @@ if default_city not in CITY_LIST:
     default_city = "New York City"
 is_owner = query_params.get("mode") == "owner"
 
-# VIEW MODE: URL is the SINGLE SOURCE OF TRUTH (survives meta refresh)
-url_view = query_params.get("view", "")
+# DEBUG: Show what we're reading from URL
+# st.write(f"DEBUG URL params: {dict(query_params)}")
+
+# VIEW MODE: Read from URL FIRST, ALWAYS
+# This runs on EVERY page load before anything else
+url_view = str(query_params.get("view", "")).lower().strip()
+
 if url_view in ["city", "today", "tomorrow", "shark", "night"]:
+    # URL has valid view - USE IT (this is the source of truth)
     st.session_state.view_mode = url_view
 elif "view_mode" not in st.session_state:
+    # No URL param and no session - default to city
     st.session_state.view_mode = "city"
+# else: keep existing session_state.view_mode
+
+# DEBUG: Show what we ended up with
+# st.write(f"DEBUG view_mode: {st.session_state.view_mode}")
 if "night_scan_on" not in st.session_state:
     st.session_state.night_scan_on = False
 if "night_locked_city" not in st.session_state:
@@ -560,27 +571,27 @@ if is_owner:
     with c1:
         if st.button("📍 City", use_container_width=True, type="primary" if st.session_state.view_mode == "city" else "secondary"):
             st.session_state.view_mode = "city"
-            st.query_params["view"] = "city"
+            st.query_params.update({"mode": "owner", "view": "city"})
             st.rerun()
     with c2:
         if st.button("🔍 Today", use_container_width=True, type="primary" if st.session_state.view_mode == "today" else "secondary"):
             st.session_state.view_mode = "today"
-            st.query_params["view"] = "today"
+            st.query_params.update({"mode": "owner", "view": "today"})
             st.rerun()
     with c3:
         if st.button("🎰 Tomorrow", use_container_width=True, type="primary" if st.session_state.view_mode == "tomorrow" else "secondary"):
             st.session_state.view_mode = "tomorrow"
-            st.query_params["view"] = "tomorrow"
+            st.query_params.update({"mode": "owner", "view": "tomorrow"})
             st.rerun()
     with c4:
         if st.button("🦈 SHARK", use_container_width=True, type="primary" if st.session_state.view_mode == "shark" else "secondary"):
             st.session_state.view_mode = "shark"
-            st.query_params["view"] = "shark"
+            st.query_params.update({"mode": "owner", "view": "shark"})
             st.rerun()
     with c5:
         if st.button("🌙 Night", use_container_width=True, type="primary" if st.session_state.view_mode == "night" else "secondary"):
             st.session_state.view_mode = "night"
-            st.query_params["view"] = "night"
+            st.query_params.update({"mode": "owner", "view": "night"})
             st.rerun()
     st.markdown("---")
 
@@ -1144,4 +1155,4 @@ else:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#8b5cf6,#6366f1);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#fff">🦈 SHARK EDITION</b> <span style="color:#e0e0e0">— LOW Temperature Edge Finder v8.6</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#8b5cf6,#6366f1);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#fff">🦈 SHARK EDITION</b> <span style="color:#e0e0e0">— LOW Temperature Edge Finder v8.7</span></div>', unsafe_allow_html=True)
