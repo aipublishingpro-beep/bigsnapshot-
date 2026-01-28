@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "11.7"
+VERSION = "11.8"
 LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
@@ -123,7 +123,6 @@ def fetch_yesterday_teams():
 def fetch_plays(game_id, known_away="", known_home=""):
     if not game_id: return [], "", {}
     try:
-        # Fetch summary for plays
         url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event={game_id}"
         resp = requests.get(url, timeout=10)
         data = resp.json()
@@ -140,25 +139,59 @@ def fetch_plays(game_id, known_away="", known_home=""):
         if situation:
             poss_text = situation.get("possessionText", "") or ""
             poss_team = poss_text.split()[0] if poss_text else ""
+        # Get records from header
         half_scores = {"away": [], "home": [], "away_record": "", "home_record": ""}
-        # Try boxscore endpoint for half scores
-        box_url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event={game_id}"
-        box_resp = requests.get(box_url, timeout=10)
-        box_data = box_resp.json()
-        header = box_data.get("header", {})
+        header = data.get("header", {})
         competitions = header.get("competitions", [{}])
+        api_away, api_home = "", ""
         if competitions:
             for comp in competitions[0].get("competitors", []):
-                linescores = comp.get("linescores", [])
                 record = comp.get("record", [{}])
                 record_str = record[0].get("summary", "") if record else ""
-                scores = [int(ls.get("value", 0)) for ls in linescores] if linescores else []
+                team_info = comp.get("team", {})
+                abbrev = team_info.get("abbreviation", "").upper()
                 if comp.get("homeAway") == "home":
+                    api_home = abbrev
                     half_scores["home_record"] = record_str
-                    half_scores["home"] = scores if scores else []
                 else:
+                    api_away = abbrev
                     half_scores["away_record"] = record_str
-                    half_scores["away"] = scores if scores else []
+        # Use known abbreviations or API abbreviations
+        away_abbrev = known_away.upper() if known_away else api_away
+        home_abbrev = known_home.upper() if known_home else api_home
+        # CALCULATE half scores from play-by-play
+        away_h1, away_h2, home_h1, home_h2 = 0, 0, 0, 0
+        for p in all_plays:
+            score_val = p.get("scoreValue", 0)
+            if score_val > 0:
+                period_num = p.get("period", {}).get("number", 1)
+                team_data = p.get("team", {})
+                scoring_team = ""
+                if isinstance(team_data, dict):
+                    scoring_team = team_data.get("abbreviation", "").upper()
+                if not scoring_team:
+                    continue
+                # Match scoring team to home or away
+                is_home = False
+                is_away = False
+                if home_abbrev:
+                    if scoring_team == home_abbrev or home_abbrev in scoring_team or scoring_team in home_abbrev:
+                        is_home = True
+                if away_abbrev:
+                    if scoring_team == away_abbrev or away_abbrev in scoring_team or scoring_team in away_abbrev:
+                        is_away = True
+                if is_home and not is_away:
+                    if period_num == 1:
+                        home_h1 += score_val
+                    else:
+                        home_h2 += score_val
+                elif is_away and not is_home:
+                    if period_num == 1:
+                        away_h1 += score_val
+                    else:
+                        away_h2 += score_val
+        half_scores["away"] = [away_h1, away_h2]
+        half_scores["home"] = [home_h1, home_h2]
         return plays[-10:], poss_team, half_scores
     except: return [], "", {}
 
