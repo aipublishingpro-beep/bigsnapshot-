@@ -155,6 +155,36 @@ def fetch_nws_tomorrow_low(lat, lon):
     except:
         return None
 
+@st.cache_data(ttl=300)
+def fetch_nws_today_low(lat, lon):
+    try:
+        points_url = f"https://api.weather.gov/points/{lat},{lon}"
+        resp = requests.get(points_url, headers={"User-Agent": "TempEdge/7.0"}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        forecast_url = resp.json().get("properties", {}).get("forecast")
+        if not forecast_url:
+            return None
+        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/7.0"}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        periods = resp.json().get("properties", {}).get("periods", [])
+        today = datetime.now(eastern).date()
+        for p in periods:
+            start_time = p.get("startTime", "")
+            is_day = p.get("isDaytime", True)
+            temp = p.get("temperature")
+            if start_time and not is_day:
+                try:
+                    period_date = datetime.fromisoformat(start_time.replace("Z", "+00:00")).date()
+                    if period_date == today:
+                        return temp
+                except:
+                    continue
+        return None
+    except:
+        return None
+
 @st.cache_data(ttl=60)
 def fetch_kalshi_brackets(series_ticker):
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
@@ -397,8 +427,16 @@ if is_owner and st.session_state.view_mode == "today":
 # TOMORROW'S LOTTERY (OWNER ONLY)
 # ============================================================
 elif is_owner and st.session_state.view_mode == "tomorrow":
-    tomorrow_str = (datetime.now(eastern) + timedelta(days=1)).strftime('%A, %b %d')
-    st.subheader(f"🎰 TOMORROW'S LOTTERY ({tomorrow_str})")
+    # If before 5 AM, show today's markets (the ones about to lock)
+    # After 5 AM, show tomorrow's markets
+    if now.hour < 5:
+        target_date = now.date()
+        lottery_label = "TODAY'S"
+    else:
+        target_date = (now + timedelta(days=1)).date()
+        lottery_label = "TOMORROW'S"
+    target_str = target_date.strftime('%A, %b %d')
+    st.subheader(f"🎰 {lottery_label} LOTTERY ({target_str})")
     st.caption("Scout targets now → Wait for LOW to lock → Buy confirmed winners")
     if st.button("🔄 Refresh All", use_container_width=True):
         st.cache_data.clear()
@@ -408,8 +446,13 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
     all_cities = []
     for city_name, cfg in CITY_CONFIG.items():
         pattern_icon = "🌙" if cfg.get("pattern") == "midnight" else "☀️"
-        forecast_low = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
-        brackets = fetch_kalshi_tomorrow_brackets(cfg["low"])
+        # Use target_date for forecast and brackets
+        if now.hour < 5:
+            forecast_low = fetch_nws_today_low(cfg["lat"], cfg["lon"])
+            brackets = fetch_kalshi_brackets(cfg["low"])
+        else:
+            forecast_low = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
+            brackets = fetch_kalshi_tomorrow_brackets(cfg["low"])
         if forecast_low is None:
             all_cities.append({"city": city_name, "pattern": pattern_icon, "status": "NO FORECAST"})
             continue
@@ -434,7 +477,7 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
     else:
         st.info("No cheap entries found. All brackets priced above 60¢.")
     
-    st.markdown(f"### 📋 ALL CITIES - {tomorrow_str}")
+    st.markdown(f"### 📋 ALL CITIES - {target_str}")
     for c in all_cities:
         check_time = CHECK_TIMES_ET.get(c['city'], "7-10 AM ET")
         if c.get("status") == "NO FORECAST":
@@ -638,4 +681,4 @@ else:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v7.6</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v7.7</span></div>', unsafe_allow_html=True)
