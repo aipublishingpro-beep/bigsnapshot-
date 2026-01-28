@@ -399,12 +399,13 @@ if live_games:
             if plays:
                 for i, p in enumerate(reversed(plays)):
                     icon, color = get_play_icon(p['play_type'], p['score_value'])
-                    play_text = p['text'][:50] if p['text'] else "Play"
+                    play_text = p['text'][:45] if p['text'] else "Play"
                     play_team = p.get('team', '')
                     team_code = KALSHI_CODES.get(play_team, '')
-                    team_color = TEAM_COLORS.get(play_team, '#888')
-                    team_badge = f"<span style='background:{team_color};color:#fff;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:bold;margin-right:6px'>{team_code}</span>" if team_code else ""
-                    st.markdown(f"<div style='padding:4px 8px;margin:2px 0;background:#1e1e2e;border-radius:4px;border-left:3px solid {team_color}'>{team_badge}<span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
+                    team_color = TEAM_COLORS.get(play_team, '#555')
+                    badge_text = team_code if team_code else (play_team[:3].upper() if play_team else "")
+                    team_badge = f"<span style='background:{team_color};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:bold;margin-right:6px;display:inline-block;min-width:35px;text-align:center'>{badge_text}</span>" if badge_text else "<span style='display:inline-block;min-width:47px'></span>"
+                    st.markdown(f"<div style='padding:6px 10px;margin:3px 0;background:#1e1e2e;border-radius:6px;border-left:4px solid {team_color}'>{team_badge}<span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
                     if i == 0 and tts_on and p['text']:
                         speak_play(f"Q{p['period']} {p['clock']}. {p['text']}")
             else:
