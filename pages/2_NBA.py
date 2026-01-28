@@ -28,14 +28,14 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.3"
+VERSION = "10.5"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
 if 'positions' not in st.session_state:
     st.session_state.positions = []
 
-TEAM_ABBREVS = {"Atlanta Hawks": "Atlanta", "Boston Celtics": "Boston", "Brooklyn Nets": "Brooklyn", "Charlotte Hornets": "Charlotte", "Chicago Bulls": "Chicago", "Cleveland Cavaliers": "Cleveland", "Dallas Mavericks": "Dallas", "Denver Nuggets": "Denver", "Detroit Pistons": "Detroit", "Golden State Warriors": "Golden State", "Houston Rockets": "Houston", "Indiana Pacers": "Indiana", "LA Clippers": "LA Clippers", "Los Angeles Clippers": "LA Clippers", "LA Lakers": "LA Lakers", "Los Angeles Lakers": "LA Lakers", "Memphis Grizzlies": "Memphis", "Miami Heat": "Miami", "Milwaukee Bucks": "Milwaukee", "Minnesota Timberwolves": "Minnesota", "New Orleans Pelicans": "New Orleans", "New York Knicks": "New York", "Oklahoma City Thunder": "Oklahoma City", "Orlando Magic": "Orlando", "Philadelphia 76ers": "Philadelphia", "Phoenix Suns": "Phoenix", "Portland Trail Blazers": "Portland", "Sacramento Kings": "Sacramento", "San Antonio Spurs": "San Antonio", "Toronto Raptors": "Toronto", "Utah Jazz": "Utah", "Washington Wizards": "Washington"}
+TEAM_ABBREVS = {"Atlanta Hawks": "Atlanta", "Boston Celtics": "Boston", "Brooklyn Nets": "Brooklyn", "Charlotte Hornets": "Charlotte", "Chicago Bulls": "Chicago", "Cleveland Cavaliers": "Cleveland", "Dallas Mavericks": "Dallas", "Denver Nuggets": "Denver", "Detroit Pistons": "Detroit", "Golden State Warriors": "Golden State", "Houston Rockets": "Houston", "Indiana Pacers": "Indiana", "LA Clippers": "LA Clippers", "Los Angeles Clippers": "LA Clippers", "LA Lakers": "LA Lakers", "Los Angeles Lakers": "LA Lakers", "Memphis Grizzlies": "Memphis", "Miami Heat": "Miami", "Milwaukee Bucks": "Milwaukee", "Minnesota Timberwolves": "Minnesota", "New Orleans Pelicans": "New Orleans", "New York Knicks": "New York", "Oklahoma City Thunder": "Oklahoma City", "Orlando Magic": "Orlando", "Philadelphia 76ers": "Philadelphia", "Phoenix Suns": "Phoenix", "Portland Trail Blazers": "Portland", "Sacramento Kings": "Sacramento", "San Antonio Spurs": "San Antonio", "Toronto Raptors": "Toronto", "Utah Jazz": "Utah", "Washington Wizards": "Washington", "MIL": "Milwaukee", "PHI": "Philadelphia", "BOS": "Boston", "NYK": "New York", "CLE": "Cleveland", "ORL": "Orlando", "ATL": "Atlanta", "MIA": "Miami", "CHI": "Chicago", "BKN": "Brooklyn", "TOR": "Toronto", "IND": "Indiana", "DET": "Detroit", "CHA": "Charlotte", "WAS": "Washington", "OKC": "Oklahoma City", "HOU": "Houston", "MEM": "Memphis", "DAL": "Dallas", "DEN": "Denver", "MIN": "Minnesota", "LAC": "LA Clippers", "LAL": "LA Lakers", "SAC": "Sacramento", "PHX": "Phoenix", "GSW": "Golden State", "POR": "Portland", "UTA": "Utah", "SAS": "San Antonio", "NOP": "New Orleans"}
 
 KALSHI_CODES = {"Atlanta": "ATL", "Boston": "BOS", "Brooklyn": "BKN", "Charlotte": "CHA", "Chicago": "CHI", "Cleveland": "CLE", "Dallas": "DAL", "Denver": "DEN", "Detroit": "DET", "Golden State": "GSW", "Houston": "HOU", "Indiana": "IND", "LA Clippers": "LAC", "LA Lakers": "LAL", "Memphis": "MEM", "Miami": "MIA", "Milwaukee": "MIL", "Minnesota": "MIN", "New Orleans": "NOP", "New York": "NYK", "Oklahoma City": "OKC", "Orlando": "ORL", "Philadelphia": "PHI", "Phoenix": "PHX", "Portland": "POR", "Sacramento": "SAC", "San Antonio": "SAS", "Toronto": "TOR", "Utah": "UTA", "Washington": "WAS"}
 
@@ -222,11 +222,14 @@ def fetch_plays(game_id):
         data = resp.json()
         plays = []
         for p in data.get("plays", [])[-15:]:
-            team_data = p.get("team", {})
+            team_data = p.get("team")
             team_name = ""
-            if isinstance(team_data, dict) and team_data:
-                raw_name = team_data.get("displayName", "")
-                team_name = TEAM_ABBREVS.get(raw_name, raw_name)
+            if team_data:
+                if isinstance(team_data, dict):
+                    raw_name = team_data.get("displayName", "") or team_data.get("abbreviation", "") or team_data.get("name", "")
+                    team_name = TEAM_ABBREVS.get(raw_name, raw_name)
+                elif isinstance(team_data, str):
+                    team_name = TEAM_ABBREVS.get(team_data, team_data)
             plays.append({"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", ""), "team": team_name})
         poss_team = ""
         for p in reversed(plays):
@@ -422,7 +425,17 @@ if live_games:
             if possession:
                 poss_code = KALSHI_CODES.get(possession, possession[:3].upper() if possession else "")
                 poss_text = f" • <b style='color:#ffd700'>🏀 Ball: {poss_code}</b>"
-            st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> {total} pts in {mins} min • <b>Pace:</b> <span style='color:{pace_color}'>{pace_label}</span> ({pace:.1f}/min)<br><b>Projection:</b> {proj} pts • <b>Lead:</b> {leader} +{abs(lead)}{poss_text}</div>", unsafe_allow_html=True)
+            else:
+                # Fallback: get team from most recent play with a team color
+                for p in reversed(plays):
+                    if p.get("team"):
+                        fallback_team = p["team"]
+                        fallback_code = KALSHI_CODES.get(fallback_team, fallback_team[:3].upper() if len(fallback_team) >= 3 else fallback_team)
+                        poss_text = f" • <b style='color:#ffd700'>🏀 Ball: {fallback_code}</b>"
+                        break
+            # Debug: show raw possession value
+            debug_teams = [p.get("team", "NONE") for p in plays[-3:]]
+            st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> {total} pts in {mins} min • <b>Pace:</b> <span style='color:{pace_color}'>{pace_label}</span> ({pace:.1f}/min)<br><b>Projection:</b> {proj} pts • <b>Lead:</b> {leader} +{abs(lead)}{poss_text}<br><small style='color:#666'>Debug teams: {debug_teams}</small></div>", unsafe_allow_html=True)
             away_code, home_code = KALSHI_CODES.get(away, "XXX"), KALSHI_CODES.get(home, "XXX")
             kalshi_data = kalshi_ml.get(away_code + "@" + home_code, {})
             st.markdown("**🎯 MONEYLINE**")
