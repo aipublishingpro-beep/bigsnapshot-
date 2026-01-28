@@ -595,7 +595,7 @@ if is_owner and st.session_state.view_mode == "shark":
     with col1:
         shark_city = st.selectbox("🎯 Target City", SHARK_CITIES, index=0)
     with col2:
-        if st.button("🔄 REFRESH METAR", use_container_width=True, type="primary"):
+        if st.button("🔄 REFRESH METAR (every 5 min ideal)", use_container_width=True, type="primary"):
             st.cache_data.clear()
             st.rerun()
     
@@ -618,8 +618,11 @@ if is_owner and st.session_state.view_mode == "shark":
         # Calculate early lock probability
         early_prob, prob_reason = calculate_early_lock_probability(metar, forecast_low, metar_temp)
         
-        # Detect upticks
-        uptick_count, uptick_msg, rise_amount = detect_upticks(shark_city, metar_temp) if metar_temp else (0, "No temp", 0)
+        # Detect upticks (returns 3 values: count, message, rise_amount)
+        if metar_temp:
+            uptick_count, uptick_msg, rise_amount = detect_upticks(shark_city, metar_temp)
+        else:
+            uptick_count, uptick_msg, rise_amount = 0, "No temp", 0
         
         # Sky condition
         sky_cond, sky_prob = parse_sky_condition(metar)
@@ -805,20 +808,44 @@ if is_owner and st.session_state.view_mode == "shark":
     
     guide_items = []
     if metar:
-        early_prob, _ = calculate_early_lock_probability(metar, forecast_low, metar.get("temp_f"))
-        uptick_count, _ = detect_upticks(shark_city, metar.get("temp_f")) if metar.get("temp_f") else (0, "")
+        # Re-calculate for guide (these may have been calculated above but let's be explicit)
+        early_prob_guide, _ = calculate_early_lock_probability(metar, forecast_low, metar.get("temp_f"))
         
-        if early_prob >= 60 and uptick_count >= 2:
-            guide_items.append(("🦈 POUNCE!", "#22c55e", "High probability + upticks confirmed. BUY NOW if ask < 50¢"))
-        elif early_prob >= 60:
-            guide_items.append(("👀 WATCH CLOSELY", "#f59e0b", "High probability but no upticks yet. Wait for first rise."))
-        elif early_prob >= 40:
+        # Detect upticks - returns 3 values
+        if metar.get("temp_f"):
+            uptick_count_guide, _, rise_amt = detect_upticks(shark_city, metar.get("temp_f"))
+        else:
+            uptick_count_guide, rise_amt = 0, 0
+        ask_price = 100
+        if brackets:
+            winning_guide = find_winning_bracket(metar.get("temp_f"), brackets)
+            if winning_guide:
+                ask_price = winning_guide["ask"]
+        
+        # Sky/wind for night type assessment
+        sky_cond_guide, sky_prob_guide = parse_sky_condition(metar)
+        wind_cond_guide, wind_prob_guide = parse_wind_condition(metar)
+        
+        # SHARK ALERT CONDITIONS
+        if early_prob_guide >= 70 and uptick_count_guide >= 1 and ask_price < 30:
+            guide_items.append(("🦈 POUNCE NOW!", "#22c55e", f"ALL CONDITIONS MET: {early_prob_guide}% prob + upticks + {ask_price}¢ ask. BUY IMMEDIATELY!"))
+        elif early_prob_guide >= 60 and uptick_count_guide >= 2:
+            guide_items.append(("🔥 STRONG SIGNAL", "#22c55e", f"High probability + confirmed upticks. Check ask - if <50¢, consider buying."))
+        elif early_prob_guide >= 60:
+            guide_items.append(("👀 WATCH CLOSELY", "#f59e0b", "High probability but waiting for uptick confirmation."))
+        elif early_prob_guide >= 40 and uptick_count_guide >= 1:
+            guide_items.append(("📊 DEVELOPING", "#3b82f6", "Medium probability with early signs. Keep watching."))
+        elif early_prob_guide >= 40:
             guide_items.append(("⏳ PATIENCE", "#3b82f6", "Medium probability. Could go either way."))
         else:
-            guide_items.append(("😴 WAIT FOR SUNRISE", "#6b7280", "Clear/calm night = low locks at sunrise. Sleep."))
+            guide_items.append(("😴 WAIT FOR SUNRISE", "#6b7280", "Clear/calm night = low locks at sunrise. Consider sleeping."))
+        
+        # Add specific condition notes
+        if sky_prob_guide <= 20 and wind_prob_guide <= 20:
+            guide_items.append(("🌙 CLEAR + CALM NIGHT", "#ef4444", "Radiative cooling continues until dawn. Early lock unlikely."))
         
         if cfg.get("pattern") == "midnight":
-            guide_items.append(("⚠️ MIDNIGHT CITY", "#ef4444", "Extra caution - can drop for hours after 'rising'"))
+            guide_items.append(("⚠️ MIDNIGHT CITY", "#ef4444", "Extra caution - can drop for hours after 'rising'. Consider safer cities."))
     
     for label, color, desc in guide_items:
         st.markdown(f"""
@@ -831,6 +858,20 @@ if is_owner and st.session_state.view_mode == "shark":
     # Auto-refresh
     st.markdown(f"<div style='color:#6b7280;font-size:0.8em;text-align:center;margin-top:20px'>Auto-refresh: 60s | {now.strftime('%I:%M:%S %p ET')}</div>", unsafe_allow_html=True)
     st.markdown('<meta http-equiv="refresh" content="60">', unsafe_allow_html=True)
+    
+    # METAR History (for manual verification)
+    if shark_city in st.session_state.metar_history and len(st.session_state.metar_history[shark_city]) > 1:
+        with st.expander("📊 METAR Temperature History (Last 60 min)", expanded=False):
+            history = st.session_state.metar_history[shark_city]
+            st.markdown("<div style='font-size:0.85em'>", unsafe_allow_html=True)
+            for i, h in enumerate(reversed(history[-10:])):  # Last 10 readings
+                time_str = h["time"].strftime("%H:%M:%S")
+                temp = h["temp"]
+                if i == 0:
+                    st.markdown(f"<div style='padding:4px 8px;background:#1a2e1a;border-radius:4px;margin:2px 0'><b style='color:#22c55e'>{time_str}</b> → <b style='color:#fff'>{temp}°F</b> (latest)</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<div style='padding:4px 8px;border-bottom:1px solid #30363d'><span style='color:#6b7280'>{time_str}</span> → <span style='color:#9ca3af'>{temp}°F</span></div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================================
 # TODAY'S SCANNER (OWNER ONLY)
@@ -1091,4 +1132,4 @@ else:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#8b5cf6,#6366f1);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#fff">🦈 SHARK EDITION</b> <span style="color:#e0e0e0">— LOW Temperature Edge Finder v8.1</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#8b5cf6,#6366f1);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#fff">🦈 SHARK EDITION</b> <span style="color:#e0e0e0">— LOW Temperature Edge Finder v8.2</span></div>', unsafe_allow_html=True)
