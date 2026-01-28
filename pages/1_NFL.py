@@ -28,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.6"
+VERSION = "10.7"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -482,11 +482,7 @@ if live_games:
             lead = g['home_score'] - g['away_score']
             leader = home if g['home_score'] > g['away_score'] else away
             kalshi_link = get_kalshi_game_link(away, home)
-            poss_text = ""
-            if possession:
-                poss_code = KALSHI_CODES.get(possession, possession[:3].upper() if len(str(possession)) >= 3 else str(possession))
-                poss_text = f" • <b style='color:#ffd700'>🏀 Ball: {poss_code}</b>"
-            st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> {total} pts in {mins} min • <b>Pace:</b> <span style='color:{pace_color}'>{pace_label}</span> ({pace:.1f}/min)<br><b>Projection:</b> {proj} pts • <b>Lead:</b> {leader} +{abs(lead)}{poss_text}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> {total} pts in {mins} min • <b>Pace:</b> <span style='color:{pace_color}'>{pace_label}</span> ({pace:.1f}/min)<br><b>Projection:</b> {proj} pts • <b>Lead:</b> {leader} +{abs(lead)}</div>", unsafe_allow_html=True)
             away_code, home_code = KALSHI_CODES.get(away, "XXX"), KALSHI_CODES.get(home, "XXX")
             kalshi_data = kalshi_ml.get(away_code + "@" + home_code, {})
             st.markdown("**🎯 MONEYLINE**")
