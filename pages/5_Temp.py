@@ -286,23 +286,41 @@ def find_winning_bracket(temp, brackets):
             return b
     return None
 
+def count_rising_readings(readings, obs_low):
+    """
+    Count readings NEWER than the low that are HIGHER than the low.
+    readings = list sorted newest first (index 0 = newest)
+    """
+    if not readings or obs_low is None:
+        return 0
+    
+    # Find the index of the MOST RECENT occurrence of obs_low
+    low_idx = None
+    for i, r in enumerate(readings):
+        if r["temp"] == obs_low:
+            low_idx = i
+            break
+    
+    if low_idx is None:
+        return 0
+    
+    # Count readings BEFORE low_idx (which are NEWER in time) that are higher than obs_low
+    rising_count = 0
+    for i in range(low_idx):
+        if readings[i]["temp"] > obs_low:
+            rising_count += 1
+    
+    return rising_count
+
 def get_lock_status(cfg, confirm_time, obs_low, readings):
     if obs_low is None or not readings:
         return "no_data", "❌ NO DATA", 0
-    rising_count = 0
-    found_low = False
-    for r in readings:
-        if r["temp"] == obs_low:
-            found_low = True
-        elif found_low and r["temp"] > obs_low:
-            rising_count += 1
-            if rising_count >= 5:
-                break
-    if confirm_time and rising_count >= 2:
+    
+    rising_count = count_rising_readings(readings, obs_low)
+    
+    if rising_count >= 2:
         return "locked", "🔒 LOCKED", 95
-    elif confirm_time or rising_count >= 2:
-        return "likely", "🔒 LIKELY", 80
-    elif rising_count >= 1:
+    elif rising_count == 1:
         return "watching", "👀 RISING", 60
     else:
         return "waiting", "⏳ WAITING", 30
@@ -316,8 +334,7 @@ if is_owner:
         <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
             <div style="color:#22c55e;font-weight:700;margin-bottom:8px">🎯 CONFIRMATION SIGNALS</div>
             <div style="color:#c9d1d9;font-size:0.85em;line-height:1.5">
-                <b>🔒 LOCKED (95%):</b> Confirmed + 2 rising<br>
-                <b>🔒 LIKELY (80%):</b> Confirmation OR 2+ rising<br>
+                <b>🔒 LOCKED (95%):</b> 2+ rising after low<br>
                 <b>👀 RISING (60%):</b> 1 rising reading<br>
                 <b>⏳ WAITING:</b> No rising yet
             </div>
@@ -338,6 +355,13 @@ if is_owner:
                 <b>✅ 85-90¢</b> = Good (+10-15¢)<br>
                 <b>⚠️ 90-95¢</b> = Small edge (+5-10¢)<br>
                 <b>❌ 95¢+</b> = Skip it
+            </div>
+        </div>
+        <div style="background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;padding:12px;margin-bottom:15px">
+            <div style="color:#ef4444;font-weight:700;margin-bottom:8px">🚨 RULE: NO LOCK = NO BUY</div>
+            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
+                Only buy when 🔒 LOCKED<br>
+                Verify in City View yourself!
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -399,14 +423,14 @@ if is_owner and st.session_state.view_mode == "today":
         status_code, lock_status, confidence = get_lock_status(cfg, confirm_time, obs_low, readings)
         winning = find_winning_bracket(obs_low, brackets)
         if winning:
-            edge = (100 - winning["ask"]) if status_code in ["locked", "likely"] else 0
+            edge = (100 - winning["ask"]) if status_code == "locked" else 0
             results.append({"city": city_name, "pattern": pattern_icon, "obs_low": obs_low, "bracket": winning["name"], "ask": winning["ask"], "edge": edge, "lock_status": lock_status, "status_code": status_code, "url": winning["url"]})
         else:
             results.append({"city": city_name, "pattern": pattern_icon, "obs_low": obs_low, "bracket": "NO MATCH", "ask": 0, "edge": 0, "lock_status": lock_status, "status_code": status_code})
     
-    opps = [r for r in results if r.get("edge", 0) >= 5]
+    opps = [r for r in results if r.get("edge", 0) >= 5 and r.get("status_code") == "locked"]
     if opps:
-        st.markdown("### 🔥 OPPORTUNITIES (Edge ≥ 5¢)")
+        st.markdown("### 🔥 LOCKED OPPORTUNITIES (Edge ≥ 5¢)")
         for o in sorted(opps, key=lambda x: x["edge"], reverse=True):
             color = "#22c55e" if o["edge"] >= 15 else "#fbbf24"
             st.markdown(f'<div style="background:#0d1117;border:2px solid {color};border-radius:8px;padding:15px;margin:10px 0"><b style="color:{color}">{o["pattern"]} {o["city"]}</b> | {o["lock_status"]} | Low: {o["obs_low"]}°F → <b>{o["bracket"]}</b> | Ask: {o["ask"]}¢ | <b style="color:#22c55e">+{o["edge"]}¢ edge</b> | <a href="{o.get("url", "#")}" target="_blank" style="color:#fbbf24">BUY →</a></div>', unsafe_allow_html=True)
@@ -414,7 +438,7 @@ if is_owner and st.session_state.view_mode == "today":
         if now.hour >= 10:
             st.warning("⏰ TODAY'S MARKETS LIKELY DONE - Check Tomorrow's Lottery!")
         else:
-            st.info("No mispricing found yet. Markets may already be priced efficiently.")
+            st.info("No LOCKED opportunities found yet. Wait for confirmation.")
     
     st.markdown("### 📊 ALL CITIES STATUS")
     for r in results:
@@ -514,6 +538,7 @@ elif is_owner and st.session_state.view_mode == "night":
         st.markdown('<div style="background:#7f1d1d;border:2px solid #ef4444;border-radius:8px;padding:10px;text-align:center;margin:10px 0"><b style="color:#fca5a5">● SCAN OFF</b></div>', unsafe_allow_html=True)
     
     st.caption(f"Watching: Chicago, Denver | Window: 11:50 PM - 5 AM ET")
+    st.markdown('<div style="background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;padding:10px;margin:10px 0;text-align:center"><b style="color:#ef4444">⚠️ ALWAYS VERIFY IN CITY VIEW BEFORE BUYING!</b></div>', unsafe_allow_html=True)
     
     if not in_window:
         st.markdown(f'<div style="background:#7f1d1d;border:2px solid #ef4444;border-radius:8px;padding:15px;text-align:center;margin:10px 0"><div style="color:#fca5a5;font-weight:700">⏰ OUTSIDE SCAN WINDOW</div><div style="color:#9ca3af;font-size:0.9em">Current: {now.strftime("%I:%M %p ET")} | Window: 11:50 PM - 5:00 AM ET</div></div>', unsafe_allow_html=True)
@@ -574,20 +599,19 @@ elif is_owner and st.session_state.view_mode == "night":
             if obs_low is None:
                 st.write(f"⚪ **{city_name}** — No data yet for {target_date.strftime('%b %d')}")
                 continue
-            rising_count = 0
-            found_low = False
-            for r in readings:
-                if r["temp"] == obs_low:
-                    found_low = True
-                elif found_low and r["temp"] > obs_low:
-                    rising_count += 1
+            
+            # FIXED: Count rising readings correctly (newer than low, higher than low)
+            rising_count = count_rising_readings(readings, obs_low)
+            
             winning = find_winning_bracket(obs_low, brackets)
             if rising_count >= 2 and winning and winning["ask"] < 90:
                 st.session_state.night_locked_city = {"city": city_name, "obs_low": obs_low, "bracket": winning["name"], "bid": winning["bid"], "ask": winning["ask"], "url": winning["url"]}
                 st.rerun()
             elif rising_count >= 2 and winning and winning["ask"] >= 90:
                 st.write(f"🔒 **{city_name}** | {obs_low}°F | LOCKED but NO EDGE (Ask {winning['ask']}¢)")
-            elif rising_count >= 1:
+            elif rising_count >= 2:
+                st.write(f"🔒 **{city_name}** | {obs_low}°F | Rising: {rising_count} ✅ LOCKED")
+            elif rising_count == 1:
                 st.write(f"👀 **{city_name}** | {obs_low}°F | Rising: {rising_count}")
             else:
                 st.write(f"⏳ **{city_name}** | {obs_low}°F | Waiting...")
@@ -616,26 +640,28 @@ else:
     
     if obs_low is not None and current_temp is not None:
         status_code, lock_status, confidence = get_lock_status(cfg, confirm_time, obs_low, readings)
+        rising_count = count_rising_readings(readings, obs_low)
         
         if is_owner:
             city_tz = pytz.timezone(cfg.get("tz", "US/Eastern"))
-            if confirm_time:
-                mins_ago = int((datetime.now(city_tz) - confirm_time).total_seconds() / 60)
-                time_ago_text = f"Confirmed {mins_ago} minutes ago" if 0 <= mins_ago < 1440 else "Check readings below"
+            if rising_count >= 2:
+                time_ago_text = f"Rising: {rising_count} readings after low"
+            elif rising_count == 1:
+                time_ago_text = f"Rising: {rising_count} reading after low"
             else:
                 time_ago_text = "Awaiting rise after low..."
             data_warning = ""
             if oldest_time and oldest_time.hour >= 7:
                 data_warning = f"⚠️ Data only from {oldest_time.strftime('%H:%M')} - early low may be missing!"
             if status_code == "locked":
-                box_status, lock_color, box_bg = "✅ LOCKED IN", "#22c55e", "linear-gradient(135deg,#1a2e1a,#0d1117)"
-            elif status_code == "likely":
-                box_status, lock_color, box_bg = "🔒 LIKELY LOCKED", "#3b82f6", "linear-gradient(135deg,#1a1a2e,#0d1117)"
+                box_status, lock_color, box_bg = "🔒 LOCKED", "#22c55e", "linear-gradient(135deg,#1a2e1a,#0d1117)"
+            elif status_code == "watching":
+                box_status, lock_color, box_bg = "👀 RISING", "#3b82f6", "linear-gradient(135deg,#1a1a2e,#0d1117)"
             else:
-                box_status, lock_color, box_bg = "⏳ MAY STILL DROP", "#f59e0b", "linear-gradient(135deg,#2d1f0a,#0d1117)"
+                box_status, lock_color, box_bg = "⏳ WAITING", "#f59e0b", "linear-gradient(135deg,#2d1f0a,#0d1117)"
             st.markdown(f'<div style="background:{box_bg};border:3px solid {lock_color};border-radius:16px;padding:30px;margin:20px 0;text-align:center"><div style="color:{lock_color};font-size:1.2em;font-weight:700;margin-bottom:10px">{box_status}</div><div style="color:#6b7280;font-size:0.9em">Today\'s Low (from available data)</div><div style="color:#fff;font-size:4em;font-weight:800;margin:10px 0">{obs_low}°F</div><div style="color:#9ca3af;font-size:0.9em">{time_ago_text}</div><div style="color:#f59e0b;font-size:0.85em;margin-top:10px">{data_warning}</div></div>', unsafe_allow_html=True)
         else:
-            lock_color = "#22c55e" if status_code == "locked" else "#3b82f6" if status_code == "likely" else "#fbbf24" if status_code == "watching" else "#6b7280"
+            lock_color = "#22c55e" if status_code == "locked" else "#3b82f6" if status_code == "watching" else "#6b7280"
             st.markdown(f'<div style="background:linear-gradient(135deg,#1a1a2e,#0d1117);border:3px solid {lock_color};border-radius:16px;padding:25px;margin:20px 0;text-align:center"><div style="color:#6b7280;font-size:1em;margin-bottom:5px">📊 Today\'s Recorded Low</div><div style="color:{lock_color};font-size:4.5em;font-weight:800;margin:10px 0">{obs_low}°F</div><div style="color:#9ca3af;font-size:0.9em">From NWS Station: <span style="color:#22c55e;font-weight:600">{cfg.get("station", "N/A")}</span></div></div>', unsafe_allow_html=True)
         
         st.markdown(f'<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0"><div style="display:flex;justify-content:space-around;text-align:center"><div><div style="color:#6b7280;font-size:0.8em">CURRENT TEMP</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div><div><div style="color:#6b7280;font-size:0.8em">TODAY\'S HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div></div></div>', unsafe_allow_html=True)
@@ -644,7 +670,7 @@ else:
         winning = find_winning_bracket(obs_low, brackets)
         if winning:
             st.markdown("### 🎯 Kalshi Market")
-            edge = (100 - winning["ask"]) if status_code in ["locked", "likely"] else 0
+            edge = (100 - winning["ask"]) if status_code == "locked" else 0
             edge_text = f" | **+{edge}¢ edge**" if edge > 0 else ""
             st.markdown(f'<div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:15px;margin:10px 0"><b style="color:#22c55e">Winning Bracket: {winning["name"]}</b><br>Bid: {winning["bid"]}¢ | Ask: {winning["ask"]}¢{edge_text}<br><a href="{winning["url"]}" target="_blank" style="color:#fbbf24">View on Kalshi →</a></div>', unsafe_allow_html=True)
         
@@ -653,10 +679,20 @@ else:
                 if oldest_time and newest_time:
                     st.markdown(f"<div style='color:#6b7280;font-size:0.8em;margin-bottom:10px;text-align:center'>📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local</div>", unsafe_allow_html=True)
                 display_list = readings if is_owner else readings[:8]
-                low_idx = next((i for i, r in enumerate(display_list) if r['temp'] == obs_low), None)
+                
+                # Find the index of the LOW in display_list
+                low_idx = None
+                for i, r in enumerate(display_list):
+                    if r['temp'] == obs_low:
+                        low_idx = i
+                        break
+                
                 for i, r in enumerate(display_list):
                     if i == low_idx:
                         st.markdown(f'<div style="display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:#2d1f0a;border:1px solid #f59e0b;margin:2px 0"><span style="color:#9ca3af">{r["time"]}</span><span style="color:#fbbf24;font-weight:700">{r["temp"]}°F ↩️ LOW</span></div>', unsafe_allow_html=True)
+                    elif low_idx is not None and i < low_idx and r["temp"] > obs_low:
+                        # This is a RISING reading (newer than low, higher than low)
+                        st.markdown(f'<div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d;background:#1a2e1a"><span style="color:#9ca3af">{r["time"]}</span><span style="color:#22c55e;font-weight:600">{r["temp"]}°F ↗️</span></div>', unsafe_allow_html=True)
                     else:
                         st.markdown(f'<div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"><span style="color:#9ca3af">{r["time"]}</span><span style="color:#fff;font-weight:600">{r["temp"]}°F</span></div>', unsafe_allow_html=True)
     else:
@@ -681,4 +717,4 @@ else:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v7.7</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v7.8</span></div>', unsafe_allow_html=True)
