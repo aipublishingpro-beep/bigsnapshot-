@@ -223,17 +223,16 @@ def fetch_plays(game_id):
         plays = []
         for p in data.get("plays", [])[-15:]:
             team_data = p.get("team", {})
-            if isinstance(team_data, dict):
-                team_name = TEAM_ABBREVS.get(team_data.get("displayName", ""), team_data.get("displayName", ""))
-            else:
-                team_name = str(team_data) if team_data else ""
+            team_name = ""
+            if isinstance(team_data, dict) and team_data:
+                raw_name = team_data.get("displayName", "")
+                team_name = TEAM_ABBREVS.get(raw_name, raw_name)
             plays.append({"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", ""), "team": team_name})
         poss_team = ""
-        if plays:
-            for p in reversed(plays):
-                if p.get("team"):
-                    poss_team = p["team"]
-                    break
+        for p in reversed(plays):
+            if p.get("team") and p["team"].strip():
+                poss_team = p["team"]
+                break
         return plays[-10:], poss_team
     except: return [], ""
 
@@ -243,12 +242,7 @@ def render_nba_court(away, home, away_score, home_score, possession, period, clo
     poss_away = "visible" if possession == away else "hidden"
     poss_home = "visible" if possession == home else "hidden"
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
-    if possession:
-        poss_code = KALSHI_CODES.get(possession, possession[:3].upper())
-        poss_text = f"🏀 {poss_code} BALL"
-    else:
-        poss_text = ""
-    return f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;"><svg viewBox="0 0 500 280" style="width:100%;max-width:500px;"><rect x="20" y="20" width="460" height="200" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/><circle cx="250" cy="120" r="35" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="120" r="4" fill="#fff"/><line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="2"/><path d="M 20 50 Q 100 120 20 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/><text x="85" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text><text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text><circle cx="135" cy="252" r="10" fill="#ffd700" visibility="{poss_away}"/><rect x="370" y="228" width="90" height="48" fill="{home_color}" rx="6"/><text x="415" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text><text x="415" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{home_score}</text><circle cx="365" cy="252" r="10" fill="#ffd700" visibility="{poss_home}"/><text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text></svg><div style="text-align:center;color:#ffd700;font-weight:bold;margin-top:10px;font-size:1.3em;background:#2d2d4a;padding:8px;border-radius:6px">{poss_text}</div></div>'''
+    return f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;"><svg viewBox="0 0 500 280" style="width:100%;max-width:500px;"><rect x="20" y="20" width="460" height="200" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/><circle cx="250" cy="120" r="35" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="120" r="4" fill="#fff"/><line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="2"/><path d="M 20 50 Q 100 120 20 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/><text x="85" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text><text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text><circle cx="135" cy="252" r="10" fill="#ffd700" visibility="{poss_away}"/><rect x="370" y="228" width="90" height="48" fill="{home_color}" rx="6"/><text x="415" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text><text x="415" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{home_score}</text><circle cx="365" cy="252" r="10" fill="#ffd700" visibility="{poss_home}"/><text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text></svg></div>'''
 
 def get_play_icon(play_type, score_value):
     play_lower = play_type.lower() if play_type else ""
@@ -412,10 +406,7 @@ if live_games:
                 for i, p in enumerate(reversed(plays)):
                     icon, color = get_play_icon(p['play_type'], p['score_value'])
                     play_text = p['text'][:60] if p['text'] else "Play"
-                    if i == 0:
-                        st.markdown(f"<div style='padding:6px 10px;margin:2px 0;background:#2d2d4a;border-radius:4px;border-left:4px solid #ffd700;border-right:4px solid #ffd700'><span style='color:#ffd700;font-weight:bold'>🏀 BALL</span> <span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"<div style='padding:4px 8px;margin:2px 0;background:#1e1e2e;border-radius:4px;border-left:3px solid {color}'><span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='padding:4px 8px;margin:2px 0;background:#1e1e2e;border-radius:4px;border-left:3px solid {color}'><span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
                     if i == 0 and tts_on and p['text']:
                         speak_play(f"Q{p['period']} {p['clock']}. {p['text']}")
             else:
@@ -427,8 +418,11 @@ if live_games:
             lead = g['home_score'] - g['away_score']
             leader = home if g['home_score'] > g['away_score'] else away
             kalshi_link = get_kalshi_game_link(away, home)
-            poss_code = KALSHI_CODES.get(possession, "???") if possession else "???"
-            st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> {total} pts in {mins} min • <b>Pace:</b> <span style='color:{pace_color}'>{pace_label}</span> ({pace:.1f}/min)<br><b>Projection:</b> {proj} pts • <b>Lead:</b> {leader} +{abs(lead)} • <b style='color:#ffd700'>🏀 Possession: {poss_code}</b></div>", unsafe_allow_html=True)
+            poss_text = ""
+            if possession:
+                poss_code = KALSHI_CODES.get(possession, possession[:3].upper() if possession else "")
+                poss_text = f" • <b style='color:#ffd700'>🏀 Ball: {poss_code}</b>"
+            st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> {total} pts in {mins} min • <b>Pace:</b> <span style='color:{pace_color}'>{pace_label}</span> ({pace:.1f}/min)<br><b>Projection:</b> {proj} pts • <b>Lead:</b> {leader} +{abs(lead)}{poss_text}</div>", unsafe_allow_html=True)
             away_code, home_code = KALSHI_CODES.get(away, "XXX"), KALSHI_CODES.get(home, "XXX")
             kalshi_data = kalshi_ml.get(away_code + "@" + home_code, {})
             st.markdown("**🎯 MONEYLINE**")
