@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 from datetime import datetime, timedelta
 import pytz
@@ -71,6 +72,86 @@ if "shark_mode_on" not in st.session_state:
     st.session_state.shark_mode_on = False
 if "metar_history" not in st.session_state:
     st.session_state.metar_history = {}
+
+# ============================================================
+# SOUND ALERT FUNCTION (uses iframe to bypass Streamlit JS block)
+# ============================================================
+def play_alert_sound(alert_type="normal"):
+    """Play sound using iframe - bypasses Streamlit's JS restrictions"""
+    if alert_type == "shark":
+        # Loud urgent beeps for SHARK ALERT
+        sound_html = """
+        <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function beep(freq, duration, time) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.value = freq;
+            osc.type = 'square';
+            gain.gain.setValueAtTime(0.5, time);
+            gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+            osc.start(time);
+            osc.stop(time + duration);
+        }
+        const t = audioCtx.currentTime;
+        beep(1000, 0.15, t);
+        beep(1200, 0.15, t+0.2);
+        beep(1000, 0.15, t+0.4);
+        beep(1200, 0.15, t+0.6);
+        beep(1400, 0.3, t+0.8);
+        beep(1000, 0.15, t+1.3);
+        beep(1200, 0.15, t+1.5);
+        beep(1400, 0.4, t+1.7);
+        </script>
+        """
+    elif alert_type == "high_prob":
+        # Medium alert for 70%+ probability
+        sound_html = """
+        <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function beep(freq, duration, time) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.value = freq;
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0.4, time);
+            gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+            osc.start(time);
+            osc.stop(time + duration);
+        }
+        const t = audioCtx.currentTime;
+        beep(880, 0.25, t);
+        beep(880, 0.25, t+0.35);
+        beep(1100, 0.4, t+0.7);
+        </script>
+        """
+    else:
+        # Test beep
+        sound_html = """
+        <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function beep(freq, duration, time) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.value = freq;
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0.3, time);
+            gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+            osc.start(time);
+            osc.stop(time + duration);
+        }
+        const t = audioCtx.currentTime;
+        beep(660, 0.2, t);
+        beep(880, 0.3, t+0.25);
+        </script>
+        """
+    components.html(sound_html, height=0)
 
 # ============================================================
 # METAR FUNCTIONS - RAW AIRPORT DATA (FASTER!)
@@ -548,13 +629,11 @@ if is_owner:
             </div>
         </div>
         <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">⏰ ALERT SETUP</div>
+            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🔊 SOUND ALERTS</div>
             <div style="color:#c9d1d9;font-size:0.75em;line-height:1.5">
-                Sound blocked by browser.<br>
-                <b>Use phone alarm:</b><br>
-                • 2 AM - Check conditions<br>
-                • 4 AM - Check for upticks<br>
-                • 6 AM - Sunrise lock window
+                <b>3 beeps</b> = Prob ≥70%<br>
+                <b>8 rapid beeps</b> = SHARK ALERT!<br>
+                Click 🔊 TEST to verify sound works
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -735,6 +814,7 @@ if is_owner and st.session_state.view_mode == "shark":
             </div>
             """, unsafe_allow_html=True)
             st.toast(f"🚨 HIGH PROBABILITY: {early_prob}%!", icon="🔊")
+            play_alert_sound("high_prob")
         
         # Uptick Alert
         if uptick_count >= 2:
@@ -781,7 +861,10 @@ if is_owner and st.session_state.view_mode == "shark":
             if early_prob >= 70 and uptick_count >= 1 and ask < 30:
                 shark_alert = True
                 
-                # Visual + Toast alert (JS audio blocked by Streamlit)
+                # 🔊 PLAY SHARK ALERT SOUND
+                play_alert_sound("shark")
+                
+                # Visual + Toast alert
                 st.toast("🦈🚨 SHARK ALERT! ALL CONDITIONS MET!", icon="🦈")
                 st.toast(f"Prob: {early_prob}% | Upticks: ✓ | Ask: {ask}¢", icon="💰")
                 
@@ -917,12 +1000,9 @@ if is_owner and st.session_state.view_mode == "shark":
             st.toast(f"🔄 METAR refreshed at {datetime.now(eastern).strftime('%I:%M:%S %p ET')}", icon="✅")
             st.rerun()
     with col_ref2:
-        st.markdown("""
-        <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:8px;text-align:center">
-            <div style="color:#f59e0b;font-size:0.75em">⏰ SET PHONE ALARM</div>
-            <div style="color:#9ca3af;font-size:0.65em">for sound alerts</div>
-        </div>
-        """, unsafe_allow_html=True)
+        if st.button("🔊 TEST", use_container_width=True, key="test_sound"):
+            play_alert_sound("test")
+            st.toast("🔊 Sound test!", icon="🔔")
     
     # METAR History (for manual verification)
     if shark_city in st.session_state.metar_history and len(st.session_state.metar_history[shark_city]) > 1:
@@ -1197,4 +1277,4 @@ else:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#8b5cf6,#6366f1);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#fff">🦈 SHARK EDITION</b> <span style="color:#e0e0e0">— LOW Temperature Edge Finder v9.0</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#8b5cf6,#6366f1);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#fff">🦈 SHARK EDITION</b> <span style="color:#e0e0e0">— LOW Temperature Edge Finder v9.1</span></div>', unsafe_allow_html=True)
