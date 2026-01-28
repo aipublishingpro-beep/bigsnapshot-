@@ -28,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.9"
+VERSION = "11.0"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -46,6 +46,9 @@ TEAM_STATS = {"Oklahoma City": {"net": 12.0, "pace": 98.8}, "Cleveland": {"net":
 STAR_PLAYERS = {"Boston": ["Jayson Tatum", "Jaylen Brown"], "Cleveland": ["Donovan Mitchell", "Darius Garland"], "Oklahoma City": ["Shai Gilgeous-Alexander", "Chet Holmgren"], "New York": ["Jalen Brunson", "Karl-Anthony Towns"], "Milwaukee": ["Giannis Antetokounmpo", "Damian Lillard"], "Denver": ["Nikola Jokic", "Jamal Murray"], "Minnesota": ["Anthony Edwards", "Rudy Gobert"], "Dallas": ["Luka Doncic", "Kyrie Irving"], "Phoenix": ["Kevin Durant", "Devin Booker"], "LA Lakers": ["LeBron James", "Anthony Davis"], "Golden State": ["Stephen Curry"], "Miami": ["Bam Adebayo", "Tyler Herro"], "Philadelphia": ["Joel Embiid", "Tyrese Maxey"], "Memphis": ["Ja Morant"], "New Orleans": ["Zion Williamson"], "Sacramento": ["Domantas Sabonis", "De'Aaron Fox"], "Indiana": ["Tyrese Haliburton", "Pascal Siakam"], "Orlando": ["Paolo Banchero", "Franz Wagner"], "Houston": ["Jalen Green", "Alperen Sengun"], "Atlanta": ["Trae Young"], "Charlotte": ["LaMelo Ball"], "Detroit": ["Cade Cunningham"], "San Antonio": ["Victor Wembanyama"], "LA Clippers": ["James Harden", "Kawhi Leonard"]}
 
 STAR_TIERS = {"Nikola Jokic": 3, "Shai Gilgeous-Alexander": 3, "Giannis Antetokounmpo": 3, "Luka Doncic": 3, "Joel Embiid": 3, "Jayson Tatum": 3, "LeBron James": 3, "Stephen Curry": 3, "Kevin Durant": 3, "Anthony Edwards": 3, "Donovan Mitchell": 2, "Jaylen Brown": 2, "Damian Lillard": 2, "Anthony Davis": 2, "Kyrie Irving": 2, "Devin Booker": 2, "Ja Morant": 2, "Trae Young": 2, "Tyrese Haliburton": 2, "De'Aaron Fox": 2, "Jalen Brunson": 2, "Paolo Banchero": 2, "Victor Wembanyama": 2, "LaMelo Ball": 2, "Cade Cunningham": 2, "Tyrese Maxey": 2}
+
+# Player to team mapping for possession detection
+PLAYER_TEAMS = {"Jalen Brunson": "New York", "Karl-Anthony Towns": "New York", "OG Anunoby": "New York", "Mikal Bridges": "New York", "Josh Hart": "New York", "Miles McBride": "New York", "Donte DiVincenzo": "New York", "Mitchell Robinson": "New York", "Precious Achiuwa": "New York", "Landry Shamet": "New York", "Domantas Sabonis": "Sacramento", "De'Aaron Fox": "Sacramento", "Keegan Murray": "Sacramento", "Malik Monk": "Sacramento", "DeMar DeRozan": "Sacramento", "Kevin Huerter": "Sacramento", "Trey Lyles": "Sacramento", "Keon Ellis": "Sacramento", "Russell Westbrook": "Sacramento", "Dylan Cardwell": "Sacramento", "Jayson Tatum": "Boston", "Jaylen Brown": "Boston", "Derrick White": "Boston", "Jrue Holiday": "Boston", "Kristaps Porzingis": "Boston", "Al Horford": "Boston", "Payton Pritchard": "Boston", "Sam Hauser": "Boston", "Donovan Mitchell": "Cleveland", "Darius Garland": "Cleveland", "Evan Mobley": "Cleveland", "Jarrett Allen": "Cleveland", "Max Strus": "Cleveland", "Caris LeVert": "Cleveland", "Shai Gilgeous-Alexander": "Oklahoma City", "Chet Holmgren": "Oklahoma City", "Jalen Williams": "Oklahoma City", "Lu Dort": "Oklahoma City", "Isaiah Hartenstein": "Oklahoma City", "Alex Caruso": "Oklahoma City", "Giannis Antetokounmpo": "Milwaukee", "Damian Lillard": "Milwaukee", "Khris Middleton": "Milwaukee", "Brook Lopez": "Milwaukee", "Bobby Portis": "Milwaukee", "Pat Connaughton": "Milwaukee", "Nikola Jokic": "Denver", "Jamal Murray": "Denver", "Michael Porter Jr.": "Denver", "Aaron Gordon": "Denver", "Christian Braun": "Denver", "Luka Doncic": "Dallas", "Kyrie Irving": "Dallas", "PJ Washington": "Dallas", "Daniel Gafford": "Dallas", "Dereck Lively II": "Dallas", "Klay Thompson": "Dallas", "Anthony Edwards": "Minnesota", "Rudy Gobert": "Minnesota", "Julius Randle": "Minnesota", "Jaden McDaniels": "Minnesota", "Mike Conley": "Minnesota", "Naz Reid": "Minnesota", "Kevin Durant": "Phoenix", "Devin Booker": "Phoenix", "Bradley Beal": "Phoenix", "Jusuf Nurkic": "Phoenix", "Grayson Allen": "Phoenix", "LeBron James": "LA Lakers", "Anthony Davis": "LA Lakers", "Austin Reaves": "LA Lakers", "D'Angelo Russell": "LA Lakers", "Rui Hachimura": "LA Lakers", "Stephen Curry": "Golden State", "Draymond Green": "Golden State", "Andrew Wiggins": "Golden State", "Jonathan Kuminga": "Golden State", "Brandin Podziemski": "Golden State", "Bam Adebayo": "Miami", "Tyler Herro": "Miami", "Jimmy Butler": "Miami", "Terry Rozier": "Miami", "Jaime Jaquez Jr.": "Miami", "Joel Embiid": "Philadelphia", "Tyrese Maxey": "Philadelphia", "Paul George": "Philadelphia", "Caleb Martin": "Philadelphia", "Kelly Oubre Jr.": "Philadelphia", "Ja Morant": "Memphis", "Jaren Jackson Jr.": "Memphis", "Desmond Bane": "Memphis", "Marcus Smart": "Memphis", "Zion Williamson": "New Orleans", "Brandon Ingram": "New Orleans", "CJ McCollum": "New Orleans", "Trey Murphy III": "New Orleans", "Trae Young": "Atlanta", "Jalen Johnson": "Atlanta", "De'Andre Hunter": "Atlanta", "Clint Capela": "Atlanta", "LaMelo Ball": "Charlotte", "Miles Bridges": "Charlotte", "Brandon Miller": "Charlotte", "Mark Williams": "Charlotte", "Cade Cunningham": "Detroit", "Jaden Ivey": "Detroit", "Ausar Thompson": "Detroit", "Jalen Duren": "Detroit", "Victor Wembanyama": "San Antonio", "Devin Vassell": "San Antonio", "Jeremy Sochan": "San Antonio", "Keldon Johnson": "San Antonio", "James Harden": "LA Clippers", "Kawhi Leonard": "LA Clippers", "Norman Powell": "LA Clippers", "Ivica Zubac": "LA Clippers", "Tyrese Haliburton": "Indiana", "Pascal Siakam": "Indiana", "Myles Turner": "Indiana", "Aaron Nesmith": "Indiana", "Benedict Mathurin": "Indiana", "Paolo Banchero": "Orlando", "Franz Wagner": "Orlando", "Jalen Suggs": "Orlando", "Wendell Carter Jr.": "Orlando", "Moritz Wagner": "Orlando", "Jalen Green": "Houston", "Alperen Sengun": "Houston", "Jabari Smith Jr.": "Houston", "Fred VanVleet": "Houston", "Dillon Brooks": "Houston", "Anfernee Simons": "Portland", "Scoot Henderson": "Portland", "Jerami Grant": "Portland", "Deandre Ayton": "Portland", "Lauri Markkanen": "Utah", "Collin Sexton": "Utah", "Jordan Clarkson": "Utah", "John Collins": "Utah", "Kyle Kuzma": "Washington", "Jordan Poole": "Washington", "Bilal Coulibaly": "Washington", "Cameron Johnson": "Brooklyn", "Mikal Bridges": "Brooklyn", "Cam Thomas": "Brooklyn", "Nic Claxton": "Brooklyn", "Scottie Barnes": "Toronto", "RJ Barrett": "Toronto", "Immanuel Quickley": "Toronto", "Jakob Poeltl": "Toronto"}
 
 def american_to_implied_prob(odds):
     if odds is None: return None
@@ -222,6 +225,45 @@ def fetch_plays(game_id):
             plays.append({"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", "")})
         return plays[-10:]
     except: return []
+
+def get_team_from_play(play_text, away, home):
+    """Try to identify which team made the play by matching player names"""
+    if not play_text: return None
+    play_text_lower = play_text.lower()
+    for player, team in PLAYER_TEAMS.items():
+        if player.lower() in play_text_lower:
+            if team == away or team == home:
+                return team
+    return None
+
+def infer_possession(plays, away, home):
+    """Infer which team has the ball based on the most recent play"""
+    if not plays: return None, None
+    last_play = plays[-1]
+    play_text = (last_play.get("text", "") or "").lower()
+    acting_team = get_team_from_play(last_play.get("text", ""), away, home)
+    if not acting_team: return None, None
+    other_team = home if acting_team == away else away
+    # After made basket → other team gets ball
+    if last_play.get("score_value", 0) > 0 or "makes" in play_text:
+        return other_team, f"→ {KALSHI_CODES.get(other_team, other_team[:3].upper())}"
+    # After defensive rebound → rebounding team gets ball
+    if "defensive rebound" in play_text:
+        return acting_team, f"🏀 {KALSHI_CODES.get(acting_team, acting_team[:3].upper())}"
+    # After offensive rebound → rebounding team keeps ball
+    if "offensive rebound" in play_text:
+        return acting_team, f"🏀 {KALSHI_CODES.get(acting_team, acting_team[:3].upper())}"
+    # After turnover/steal → other team gets ball
+    if "turnover" in play_text or "steal" in play_text:
+        return other_team, f"→ {KALSHI_CODES.get(other_team, other_team[:3].upper())}"
+    # After miss → unclear until rebound
+    if "misses" in play_text:
+        return None, "⏳ LOOSE"
+    # After foul → fouled team gets ball (usually)
+    if "foul" in play_text:
+        return other_team, f"FT {KALSHI_CODES.get(other_team, other_team[:3].upper())}"
+    # Default: acting team has ball
+    return acting_team, f"🏀 {KALSHI_CODES.get(acting_team, acting_team[:3].upper())}"
 
 def get_play_badge(last_play):
     if not last_play: return ""
@@ -420,6 +462,11 @@ if live_games:
         with col1:
             last_play = plays[-1] if plays else None
             st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], g['period'], g['clock'], last_play), unsafe_allow_html=True)
+            # Possession indicator
+            poss_team, poss_text = infer_possession(plays, away, home)
+            if poss_text:
+                poss_color = TEAM_COLORS.get(poss_team, "#ffd700") if poss_team else "#888"
+                st.markdown(f"<div style='text-align:center;padding:8px;background:#1a1a2e;border-radius:6px;margin-top:4px'><span style='color:{poss_color};font-size:1.3em;font-weight:bold'>{poss_text} BALL</span></div>", unsafe_allow_html=True)
         with col2:
             st.markdown("**📋 LAST 10 PLAYS**")
             tts_on = st.checkbox("🔊 Announce plays", key=f"tts_{game_id}")
