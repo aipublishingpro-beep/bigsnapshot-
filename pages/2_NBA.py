@@ -28,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.0"
+VERSION = "10.1"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -137,68 +137,46 @@ def fetch_kalshi_ml():
 
 @st.cache_data(ttl=60)
 def fetch_kalshi_spreads():
-    """Fetch NBA spread markets from Kalshi"""
     url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNBASPREAD&status=open&limit=200"
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
-        spreads = {}  # game_key -> list of {line, team, ticker, yes_bid, yes_ask}
+        spreads = {}
         for m in data.get("markets", []):
             ticker = m.get("ticker", "")
             subtitle = m.get("subtitle", "")
             title = m.get("title", "")
             yes_bid, yes_ask = m.get("yes_bid", 0) or 0, m.get("yes_ask", 0) or 0
-            
-            # Try to parse game and spread from ticker/title
-            # Format varies, so we try multiple approaches
             if "KXNBASPREAD-" in ticker:
                 parts = ticker.replace("KXNBASPREAD-", "")
-                # Extract date and teams
                 if len(parts) >= 13:
-                    date_part = parts[:7]  # e.g., "27JAN26"
+                    date_part = parts[:7]
                     rest = parts[7:]
-                    # Find team codes and spread line
-                    # Ticker might be like: KXNBASPREAD-27JAN26SACNYK-NYK-7
                     if "-" in rest:
                         game_teams, spread_info = rest.split("-", 1)
                         if len(game_teams) >= 6:
                             away_code = game_teams[:3].upper()
                             home_code = game_teams[3:6].upper()
                             game_key = f"{away_code}@{home_code}"
-                            
-                            # Parse spread line from spread_info (e.g., "NYK-7" or "SAC+7")
                             spread_line = None
                             spread_team = None
                             if "-" in spread_info:
                                 sp_parts = spread_info.rsplit("-", 1)
                                 if len(sp_parts) == 2:
                                     spread_team = sp_parts[0].upper()
-                                    try:
-                                        spread_line = f"-{sp_parts[1]}"
+                                    try: spread_line = f"-{sp_parts[1]}"
                                     except: pass
                             elif "+" in spread_info:
                                 sp_parts = spread_info.split("+", 1)
                                 if len(sp_parts) == 2:
                                     spread_team = sp_parts[0].upper()
-                                    try:
-                                        spread_line = f"+{sp_parts[1]}"
+                                    try: spread_line = f"+{sp_parts[1]}"
                                     except: pass
-                            
                             if spread_line and spread_team:
-                                if game_key not in spreads:
-                                    spreads[game_key] = []
-                                spreads[game_key].append({
-                                    "line": spread_line,
-                                    "team_code": spread_team,
-                                    "ticker": ticker,
-                                    "yes_bid": yes_bid,
-                                    "yes_ask": yes_ask,
-                                    "yes_price": yes_ask if yes_ask > 0 else (yes_bid if yes_bid > 0 else 50)
-                                })
+                                if game_key not in spreads: spreads[game_key] = []
+                                spreads[game_key].append({"line": spread_line, "team_code": spread_team, "ticker": ticker, "yes_bid": yes_bid, "yes_ask": yes_ask, "yes_price": yes_ask if yes_ask > 0 else (yes_bid if yes_bid > 0 else 50)})
         return spreads
-    except Exception as e: 
-        # Silently fail - spreads may not be available
-        return {}
+    except Exception as e: return {}
 
 @st.cache_data(ttl=300)
 def fetch_injuries():
@@ -243,7 +221,6 @@ def fetch_plays(game_id):
         resp = requests.get(url, timeout=10)
         data = resp.json()
         plays = [{"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", ""), "team": TEAM_ABBREVS.get(p.get("team", {}).get("displayName", ""), p.get("team", {}).get("displayName", ""))} for p in data.get("plays", [])[-15:]]
-        # Get last team that had the ball
         poss_team = ""
         if plays:
             for p in reversed(plays):
@@ -259,7 +236,8 @@ def render_nba_court(away, home, away_score, home_score, possession, period, clo
     poss_away = "visible" if possession == away else "hidden"
     poss_home = "visible" if possession == home else "hidden"
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
-    return f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;"><svg viewBox="0 0 500 280" style="width:100%;max-width:500px;"><rect x="20" y="20" width="460" height="200" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/><circle cx="250" cy="120" r="35" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="120" r="4" fill="#fff"/><line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="2"/><path d="M 20 50 Q 100 120 20 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/><text x="85" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text><text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text><circle cx="135" cy="252" r="8" fill="#ffd700" visibility="{poss_away}"/><rect x="370" y="228" width="90" height="48" fill="{home_color}" rx="6"/><text x="415" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text><text x="415" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{home_score}</text><circle cx="365" cy="252" r="8" fill="#ffd700" visibility="{poss_home}"/><text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text></svg></div>'''
+    poss_text = f"🏀 {possession} has the ball" if possession else ""
+    return f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;"><svg viewBox="0 0 500 280" style="width:100%;max-width:500px;"><rect x="20" y="20" width="460" height="200" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/><circle cx="250" cy="120" r="35" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="120" r="4" fill="#fff"/><line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="2"/><path d="M 20 50 Q 100 120 20 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/><text x="85" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text><text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text><circle cx="135" cy="252" r="8" fill="#ffd700" visibility="{poss_away}"/><rect x="370" y="228" width="90" height="48" fill="{home_color}" rx="6"/><text x="415" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text><text x="415" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{home_score}</text><circle cx="365" cy="252" r="8" fill="#ffd700" visibility="{poss_home}"/><text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text></svg><div style="text-align:center;color:#ffd700;font-weight:bold;margin-top:8px;font-size:1.1em">{poss_text}</div></div>'''
 
 def get_play_icon(play_type, score_value):
     play_lower = play_type.lower() if play_type else ""
@@ -423,7 +401,8 @@ if live_games:
                 for i, p in enumerate(reversed(plays)):
                     icon, color = get_play_icon(p['play_type'], p['score_value'])
                     play_text = p['text'][:60] if p['text'] else "Play"
-                    st.markdown(f"<div style='padding:4px 8px;margin:2px 0;background:#1e1e2e;border-radius:4px;border-left:3px solid {color}'><span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
+                    ball_indicator = " 🏀" if i == 0 else ""
+                    st.markdown(f"<div style='padding:4px 8px;margin:2px 0;background:#1e1e2e;border-radius:4px;border-left:3px solid {color}'><span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}{ball_indicator}</div>", unsafe_allow_html=True)
                     if i == 0 and tts_on and p['text']:
                         speak_play(f"Q{p['period']} {p['clock']}. {p['text']}")
             else:
@@ -449,9 +428,8 @@ if live_games:
                 else: st.link_button(f"{ml_confidence} {ml_pick} ML • Lead +{abs(lead)}", kalshi_link, use_container_width=True)
             else: st.caption(f"⏳ Wait for larger lead (currently {leader} +{abs(lead)})")
             st.markdown("**📊 TOTALS**")
-            # YES = lower brackets are safer (sort ascending), NO = higher brackets are safer (sort descending)
-            yes_lines = [(t, proj - t) for t in sorted(THRESHOLDS) if proj - t >= 6]  # Lowest first = safest
-            no_lines = [(t, t - proj) for t in sorted(THRESHOLDS, reverse=True) if t - proj >= 6]  # Highest first = safest
+            yes_lines = [(t, proj - t) for t in sorted(THRESHOLDS) if proj - t >= 6]
+            no_lines = [(t, t - proj) for t in sorted(THRESHOLDS, reverse=True) if t - proj >= 6]
             tc1, tc2 = st.columns(2)
             with tc1:
                 st.markdown("<span style='color:#22c55e;font-weight:bold'>🟢 YES (Over) — go LOW</span>", unsafe_allow_html=True)
@@ -486,7 +464,6 @@ with cush_col1: selected_game = st.selectbox("Select Game:", all_game_options, k
 with cush_col2: min_mins = st.selectbox("Min PLAY TIME:", [8, 12, 16, 20, 24], index=1, key="cush_mins")
 with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
 
-# Warning for 8 min selection
 if min_mins == 8:
     st.info("🦈 SHARK MODE: 8 min played = early entry. Only buy if cushion ≥12 (✅ SAFE or 🔒 FORTRESS)")
 elif min_mins == 12:
@@ -500,8 +477,6 @@ for g in games:
     if g['minutes_played'] < min_mins: continue
     total, mins = g['total_score'], g['minutes_played']
     vegas_ou = g.get('vegas_odds', {}).get('overUnder')
-    
-    # Use pace for live games (8+ min), Vegas O/U for pregame/early
     if mins >= 8:
         proj = calc_projection(total, mins)
         pace_label = get_pace_label(total / mins)[0]
@@ -519,45 +494,24 @@ for g in games:
         proj = LEAGUE_AVG_TOTAL
         pace_label = "⏳ PRE"
         status_text = "Scheduled"
-    
-    # For YES: lower lines are safer (sort ascending by threshold)
-    # For NO: higher lines are safer (sort descending by threshold)
     if side_choice == "YES (Over)":
-        thresh_sorted = sorted(THRESHOLDS)  # Ascending = lowest (safest) first
+        thresh_sorted = sorted(THRESHOLDS)
     else:
-        thresh_sorted = sorted(THRESHOLDS, reverse=True)  # Descending = highest (safest) first
-    
+        thresh_sorted = sorted(THRESHOLDS, reverse=True)
     for idx, thresh in enumerate(thresh_sorted):
         cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
         if cushion >= 6 or (selected_game != "All Games"):
-            # Label based on cushion
             if cushion >= 20: safety_label = "🔒 FORTRESS"
             elif cushion >= 12: safety_label = "✅ SAFE"
             elif cushion >= 6: safety_label = "🎯 TIGHT"
             else: safety_label = "⚠️ RISKY"
-            
-            cushion_data.append({
-                "game": game_name, 
-                "status": status_text, 
-                "proj": proj, 
-                "line": thresh, 
-                "cushion": cushion, 
-                "pace": pace_label, 
-                "link": get_kalshi_game_link(g['away'], g['home']), 
-                "mins": mins,
-                "is_live": mins >= 8,
-                "safety": safety_label,
-                "is_recommended": idx == 0 and cushion >= 12
-            })
+            cushion_data.append({"game": game_name, "status": status_text, "proj": proj, "line": thresh, "cushion": cushion, "pace": pace_label, "link": get_kalshi_game_link(g['away'], g['home']), "mins": mins, "is_live": mins >= 8, "safety": safety_label, "is_recommended": idx == 0 and cushion >= 12})
 
-# Sort: Live first, then by safety (FORTRESS > SAFE > TIGHT), then by cushion
 safety_order = {"🔒 FORTRESS": 0, "✅ SAFE": 1, "🎯 TIGHT": 2, "⚠️ RISKY": 3}
 cushion_data.sort(key=lambda x: (not x['is_live'], safety_order.get(x['safety'], 3), -x['cushion']))
 if cushion_data:
-    # Show direction hint
     direction = "go LOW for safety" if side_choice == "YES (Over)" else "go HIGH for safety"
     st.caption(f"💡 {side_choice.split()[0]} bets: {direction}")
-    
     max_results = 20 if selected_game != "All Games" else 10
     for cd in cushion_data[:max_results]:
         cc1, cc2, cc3, cc4 = st.columns([3, 1.2, 1.3, 2])
@@ -574,7 +528,6 @@ if cushion_data:
 else:
     if selected_game != "All Games": st.info(f"Select a side and see all lines for {selected_game}")
     else:
-        # Count live games
         live_count = sum(1 for g in games if g['minutes_played'] >= min_mins and g['status'] not in ['STATUS_FINAL', 'STATUS_FULL_TIME'])
         if live_count == 0:
             st.info(f"⏳ No games have reached {min_mins}+ min play time yet. Waiting for tip-off...")
@@ -678,24 +631,19 @@ with st.expander("➕ ADD NEW POSITION", expanded=False):
             else: pick = st.selectbox("Pick", ["YES (Over)", "NO (Under)"], key="add_totals_pick")
         with ac4:
             if bet_type == "Spread":
-                # Try to get Kalshi spreads for this game
                 if sel_game:
                     away_code = KALSHI_CODES.get(sel_game[1], "XXX")
                     home_code = KALSHI_CODES.get(sel_game[2], "XXX")
                     game_spread_key = f"{away_code}@{home_code}"
                     kalshi_spread_list = kalshi_spreads.get(game_spread_key, [])
-                    
                     if kalshi_spread_list:
-                        # Build spread options from Kalshi
                         spread_options = []
                         for sp in kalshi_spread_list:
                             spread_options.append(f"{sp['line']} ({sp['team_code']}) @ {sp['yes_price']}¢")
                         line = st.selectbox("Kalshi Spreads", spread_options, key="add_spread_line")
-                        # Extract just the line value
                         line = line.split()[0] if line else "-7.5"
                         st.caption(f"✅ {len(kalshi_spread_list)} spreads from Kalshi")
                     else:
-                        # Fallback to manual
                         spread_options = ["-1.5", "-2.5", "-3.5", "-4.5", "-5.5", "-6.5", "-7.5", "-8.5", "-9.5", "-10.5", "-11.5", "-12.5", "+1.5", "+2.5", "+3.5", "+4.5", "+5.5", "+6.5", "+7.5", "+8.5", "+9.5", "+10.5", "+11.5", "+12.5"]
                         line = st.selectbox("Spread Line (Manual)", spread_options, index=5, key="add_spread_line")
                         st.caption("⚠️ No Kalshi spreads found - manual entry")
@@ -740,7 +688,6 @@ if st.session_state.positions:
                 elif new_type == "Spread":
                     parts = pos['game'].split("@")
                     new_pick = st.selectbox("Pick", [parts[0], parts[1]], index=[parts[0], parts[1]].index(pos['pick']) if pos['pick'] in parts else 0, key=f"edit_pick_{pos['id']}")
-                    # Try to get Kalshi spreads
                     away_code = KALSHI_CODES.get(parts[0], "XXX")
                     home_code = KALSHI_CODES.get(parts[1], "XXX")
                     game_spread_key = f"{away_code}@{home_code}"
