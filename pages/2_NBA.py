@@ -28,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.3"
+VERSION = "10.4"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -235,11 +235,10 @@ def render_nba_court(away, home, away_score, home_score, possession, period, clo
     away_color, home_color = TEAM_COLORS.get(away, "#666"), TEAM_COLORS.get(home, "#666")
     away_code, home_code = KALSHI_CODES.get(away, "AWY"), KALSHI_CODES.get(home, "HME")
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
-    # Arrow pointing to team with ball
     if possession == away:
-        arrow = '<polygon points="200,120 240,100 240,140" fill="#ffd700" stroke="#fff" stroke-width="2"/><text x="220" y="125" fill="#000" font-size="12" font-weight="bold" text-anchor="middle">BALL</text>'
+        arrow = '<polygon points="200,120 240,100 240,140" fill="#ffd700" stroke="#fff" stroke-width="2"/><text x="175" y="125" fill="#ffd700" font-size="14" font-weight="bold" text-anchor="middle">◀ BALL</text>'
     elif possession == home:
-        arrow = '<polygon points="300,120 260,100 260,140" fill="#ffd700" stroke="#fff" stroke-width="2"/><text x="280" y="125" fill="#000" font-size="12" font-weight="bold" text-anchor="middle">BALL</text>'
+        arrow = '<polygon points="300,120 260,100 260,140" fill="#ffd700" stroke="#fff" stroke-width="2"/><text x="325" y="125" fill="#ffd700" font-size="14" font-weight="bold" text-anchor="middle">BALL ▶</text>'
     else:
         arrow = ''
     return f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;"><svg viewBox="0 0 500 280" style="width:100%;max-width:500px;"><rect x="20" y="20" width="460" height="200" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/><circle cx="250" cy="120" r="35" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="120" r="4" fill="#fff"/><line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="2"/><path d="M 20 50 Q 100 120 20 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>{arrow}<rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/><text x="85" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text><text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text><rect x="370" y="228" width="90" height="48" fill="{home_color}" rx="6"/><text x="415" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text><text x="415" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{home_score}</text><text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text></svg></div>'''
@@ -403,22 +402,10 @@ if live_games:
             st.markdown("**📋 LAST 10 PLAYS**")
             tts_on = st.checkbox("🔊 Announce plays", key=f"tts_{game_id}")
             if plays:
-                away_color = TEAM_COLORS.get(away, '#E03A3E')
-                home_color = TEAM_COLORS.get(home, '#006BB6')
                 for i, p in enumerate(reversed(plays)):
                     icon, color = get_play_icon(p['play_type'], p['score_value'])
-                    play_text = p['text'][:42] if p['text'] else "Play"
-                    play_team = p.get('team', '')
-                    if play_team == away:
-                        team_label = "A"
-                        border_color = away_color
-                    elif play_team == home:
-                        team_label = "H"
-                        border_color = home_color
-                    else:
-                        team_label = "•"
-                        border_color = '#555'
-                    st.markdown(f"<div style='padding:6px 10px;margin:3px 0;background:#1e1e2e;border-radius:6px;border-left:4px solid {border_color}'><b style='color:{border_color}'>[{team_label}]</b> <span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
+                    play_text = p['text'][:50] if p['text'] else "Play"
+                    st.markdown(f"<div style='padding:4px 8px;margin:2px 0;background:#1e1e2e;border-radius:4px;border-left:3px solid {color}'><span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
                     if i == 0 and tts_on and p['text']:
                         speak_play(f"Q{p['period']} {p['clock']}. {p['text']}")
             else:
