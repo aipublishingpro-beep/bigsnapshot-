@@ -46,17 +46,12 @@ if default_city not in CITY_LIST:
     default_city = "New York City"
 is_owner = query_params.get("mode") == "owner"
 
-# Persist view_mode in URL to survive meta refresh
-default_view = query_params.get("view", "city")
-if default_view not in ["city", "today", "tomorrow", "shark", "night"]:
-    default_view = "city"
-
-if "view_mode" not in st.session_state:
-    st.session_state.view_mode = default_view
-else:
-    # Sync from URL on refresh (URL wins)
-    if query_params.get("view") and query_params.get("view") != st.session_state.view_mode:
-        st.session_state.view_mode = query_params.get("view")
+# VIEW MODE: URL is the SINGLE SOURCE OF TRUTH (survives meta refresh)
+url_view = query_params.get("view", "")
+if url_view in ["city", "today", "tomorrow", "shark", "night"]:
+    st.session_state.view_mode = url_view
+elif "view_mode" not in st.session_state:
+    st.session_state.view_mode = "city"
 if "night_scan_on" not in st.session_state:
     st.session_state.night_scan_on = False
 if "night_locked_city" not in st.session_state:
@@ -869,9 +864,12 @@ if is_owner and st.session_state.view_mode == "shark":
         </div>
         """, unsafe_allow_html=True)
     
-    # Auto-refresh
-    st.markdown(f"<div style='color:#6b7280;font-size:0.8em;text-align:center;margin-top:20px'>Auto-refresh: 60s | {now.strftime('%I:%M:%S %p ET')}</div>", unsafe_allow_html=True)
-    st.markdown('<meta http-equiv="refresh" content="60">', unsafe_allow_html=True)
+    # Manual refresh (auto-refresh removed to preserve session_state)
+    st.markdown(f"<div style='color:#6b7280;font-size:0.8em;text-align:center;margin-top:20px'>Last updated: {now.strftime('%I:%M:%S %p ET')} | Click refresh every 60s for fresh METAR</div>", unsafe_allow_html=True)
+    
+    if st.button("🔄 REFRESH METAR DATA", use_container_width=True, type="primary", key="bottom_refresh"):
+        st.cache_data.clear()
+        st.rerun()
     
     # METAR History (for manual verification)
     if shark_city in st.session_state.metar_history and len(st.session_state.metar_history[shark_city]) > 1:
@@ -1146,4 +1144,4 @@ else:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#8b5cf6,#6366f1);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#fff">🦈 SHARK EDITION</b> <span style="color:#e0e0e0">— LOW Temperature Edge Finder v8.3</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#8b5cf6,#6366f1);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#fff">🦈 SHARK EDITION</b> <span style="color:#e0e0e0">— LOW Temperature Edge Finder v8.6</span></div>', unsafe_allow_html=True)
