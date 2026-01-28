@@ -28,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.5"
+VERSION = "10.9"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -144,8 +144,6 @@ def fetch_kalshi_spreads():
         spreads = {}
         for m in data.get("markets", []):
             ticker = m.get("ticker", "")
-            subtitle = m.get("subtitle", "")
-            title = m.get("title", "")
             yes_bid, yes_ask = m.get("yes_bid", 0) or 0, m.get("yes_ask", 0) or 0
             if "KXNBASPREAD-" in ticker:
                 parts = ticker.replace("KXNBASPREAD-", "")
@@ -158,8 +156,7 @@ def fetch_kalshi_spreads():
                             away_code = game_teams[:3].upper()
                             home_code = game_teams[3:6].upper()
                             game_key = f"{away_code}@{home_code}"
-                            spread_line = None
-                            spread_team = None
+                            spread_line, spread_team = None, None
                             if "-" in spread_info:
                                 sp_parts = spread_info.rsplit("-", 1)
                                 if len(sp_parts) == 2:
@@ -176,7 +173,7 @@ def fetch_kalshi_spreads():
                                 if game_key not in spreads: spreads[game_key] = []
                                 spreads[game_key].append({"line": spread_line, "team_code": spread_team, "ticker": ticker, "yes_bid": yes_bid, "yes_ask": yes_ask, "yes_price": yes_ask if yes_ask > 0 else (yes_bid if yes_bid > 0 else 50)})
         return spreads
-    except Exception as e: return {}
+    except: return {}
 
 @st.cache_data(ttl=300)
 def fetch_injuries():
@@ -215,37 +212,57 @@ def fetch_yesterday_teams():
 
 @st.cache_data(ttl=30)
 def fetch_plays(game_id):
-    if not game_id: return [], ""
+    if not game_id: return []
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={game_id}"
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
         plays = []
         for p in data.get("plays", [])[-15:]:
-            team_data = p.get("team")
-            team_name = ""
-            if team_data:
-                if isinstance(team_data, dict):
-                    raw_name = team_data.get("displayName", "") or team_data.get("abbreviation", "") or team_data.get("name", "")
-                    team_name = TEAM_ABBREVS.get(raw_name, raw_name)
-                elif isinstance(team_data, str):
-                    team_name = TEAM_ABBREVS.get(team_data, team_data)
-            plays.append({"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", ""), "team": team_name})
-        poss_team = ""
-        for p in reversed(plays):
-            if p.get("team") and p["team"].strip():
-                poss_team = p["team"]
-                break
-        return plays[-10:], poss_team
-    except: return [], ""
+            plays.append({"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", "")})
+        return plays[-10:]
+    except: return []
 
-def render_nba_court(away, home, away_score, home_score, possession, period, clock):
+def get_play_badge(last_play):
+    if not last_play: return ""
+    play_text = (last_play.get("text", "") or "").lower()
+    score_value = last_play.get("score_value", 0)
+    play_type = (last_play.get("play_type", "") or "").lower()
+    if score_value == 3 or ("three point" in play_text and "makes" in play_text):
+        return '<rect x="175" y="25" width="150" height="30" fill="#22c55e" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">3PT MADE!</text>'
+    elif score_value == 2 or ("makes" in play_text and any(w in play_text for w in ["layup", "dunk", "shot", "jumper", "hook"])):
+        return '<rect x="175" y="25" width="150" height="30" fill="#22c55e" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">BUCKET!</text>'
+    elif score_value == 1 or ("makes" in play_text and "free throw" in play_text):
+        return '<rect x="175" y="25" width="150" height="30" fill="#22c55e" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">FT MADE</text>'
+    elif "misses" in play_text:
+        if "three point" in play_text:
+            return '<rect x="175" y="25" width="150" height="30" fill="#ef4444" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">3PT MISS</text>'
+        elif "free throw" in play_text:
+            return '<rect x="175" y="25" width="150" height="30" fill="#ef4444" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">FT MISS</text>'
+        else:
+            return '<rect x="175" y="25" width="150" height="30" fill="#ef4444" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">MISSED SHOT</text>'
+    elif "block" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#f97316" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">BLOCKED!</text>'
+    elif "turnover" in play_text or "steal" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#f97316" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">TURNOVER</text>'
+    elif "offensive rebound" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#3b82f6" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">OFF REBOUND</text>'
+    elif "defensive rebound" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#3b82f6" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">DEF REBOUND</text>'
+    elif "rebound" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#3b82f6" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">REBOUND</text>'
+    elif "foul" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#eab308" rx="6"/><text x="250" y="46" fill="#000" font-size="14" font-weight="bold" text-anchor="middle">FOUL</text>'
+    elif "timeout" in play_text:
+        return '<rect x="175" y="25" width="150" height="30" fill="#a855f7" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">TIMEOUT</text>'
+    return ""
+
+def render_nba_court(away, home, away_score, home_score, period, clock, last_play=None):
     away_color, home_color = TEAM_COLORS.get(away, "#666"), TEAM_COLORS.get(home, "#666")
     away_code, home_code = KALSHI_CODES.get(away, "AWY"), KALSHI_CODES.get(home, "HME")
-    poss_away = "visible" if possession == away else "hidden"
-    poss_home = "visible" if possession == home else "hidden"
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
-    return f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;"><svg viewBox="0 0 500 280" style="width:100%;max-width:500px;"><rect x="20" y="20" width="460" height="200" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/><circle cx="250" cy="120" r="35" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="120" r="4" fill="#fff"/><line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="2"/><path d="M 20 50 Q 100 120 20 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/><text x="85" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text><text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text><circle cx="135" cy="252" r="10" fill="#ffd700" visibility="{poss_away}"/><rect x="370" y="228" width="90" height="48" fill="{home_color}" rx="6"/><text x="415" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text><text x="415" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{home_score}</text><circle cx="365" cy="252" r="10" fill="#ffd700" visibility="{poss_home}"/><text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text></svg></div>'''
+    play_badge = get_play_badge(last_play)
+    return f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;"><svg viewBox="0 0 500 280" style="width:100%;max-width:500px;"><rect x="20" y="20" width="460" height="200" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/><circle cx="250" cy="120" r="35" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="120" r="4" fill="#fff"/><line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="2"/><path d="M 20 50 Q 100 120 20 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>{play_badge}<rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/><text x="85" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text><text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text><rect x="370" y="228" width="90" height="48" fill="{home_color}" rx="6"/><text x="415" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text><text x="415" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{home_score}</text><text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text></svg></div>'''
 
 def get_play_icon(play_type, score_value):
     play_lower = play_type.lower() if play_type else ""
@@ -397,11 +414,12 @@ st.subheader("🎮 LIVE EDGE MONITOR")
 if live_games:
     for g in live_games:
         away, home, total, mins, game_id = g['away'], g['home'], g['total_score'], g['minutes_played'], g['game_id']
-        plays, possession = fetch_plays(game_id)
+        plays = fetch_plays(game_id)
         st.markdown(f"### {away} @ {home}")
         col1, col2 = st.columns([1, 1])
         with col1:
-            st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], possession, g['period'], g['clock']), unsafe_allow_html=True)
+            last_play = plays[-1] if plays else None
+            st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], g['period'], g['clock'], last_play), unsafe_allow_html=True)
         with col2:
             st.markdown("**📋 LAST 10 PLAYS**")
             tts_on = st.checkbox("🔊 Announce plays", key=f"tts_{game_id}")
@@ -421,21 +439,7 @@ if live_games:
             lead = g['home_score'] - g['away_score']
             leader = home if g['home_score'] > g['away_score'] else away
             kalshi_link = get_kalshi_game_link(away, home)
-            poss_text = ""
-            if possession:
-                poss_code = KALSHI_CODES.get(possession, possession[:3].upper() if possession else "")
-                poss_text = f" • <b style='color:#ffd700'>🏀 Ball: {poss_code}</b>"
-            else:
-                # Fallback: get team from most recent play with a team color
-                for p in reversed(plays):
-                    if p.get("team"):
-                        fallback_team = p["team"]
-                        fallback_code = KALSHI_CODES.get(fallback_team, fallback_team[:3].upper() if len(fallback_team) >= 3 else fallback_team)
-                        poss_text = f" • <b style='color:#ffd700'>🏀 Ball: {fallback_code}</b>"
-                        break
-            # Debug: show raw possession value
-            debug_teams = [p.get("team", "NONE") for p in plays[-3:]]
-            st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> {total} pts in {mins} min • <b>Pace:</b> <span style='color:{pace_color}'>{pace_label}</span> ({pace:.1f}/min)<br><b>Projection:</b> {proj} pts • <b>Lead:</b> {leader} +{abs(lead)}{poss_text}<br><small style='color:#666'>Debug teams: {debug_teams}</small></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> {total} pts in {mins} min • <b>Pace:</b> <span style='color:{pace_color}'>{pace_label}</span> ({pace:.1f}/min)<br><b>Projection:</b> {proj} pts • <b>Lead:</b> {leader} +{abs(lead)}</div>", unsafe_allow_html=True)
             away_code, home_code = KALSHI_CODES.get(away, "XXX"), KALSHI_CODES.get(home, "XXX")
             kalshi_data = kalshi_ml.get(away_code + "@" + home_code, {})
             st.markdown("**🎯 MONEYLINE**")
