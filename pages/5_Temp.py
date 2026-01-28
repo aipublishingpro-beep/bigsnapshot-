@@ -486,7 +486,6 @@ elif is_owner and st.session_state.view_mode == "night":
         
         st.markdown(f'<div style="background:#0d1117;border:4px solid #22c55e;border-radius:16px;padding:30px;margin:20px 0;text-align:center;box-shadow:0 0 40px rgba(34,197,94,0.5)"><div style="color:#22c55e;font-size:2em;font-weight:800;margin-bottom:10px">🔒 LOW LOCKED</div><div style="color:#fff;font-size:3em;font-weight:800">{locked["city"]}</div><div style="color:#fbbf24;font-size:1.5em;margin:15px 0">{locked["obs_low"]}°F → {locked["bracket"]}</div><div style="color:#9ca3af;font-size:1.2em">Bid: <b style="color:#3b82f6">{current_bid}¢</b> | Ask: <b style="color:#22c55e">{current_ask}¢</b></div><div style="color:#22c55e;font-size:1.8em;font-weight:800;margin-top:15px">+{100 - current_ask}¢ EDGE</div></div>', unsafe_allow_html=True)
         
-        # Test beep button instead of auto-play
         if st.button("🔊 TEST BEEP", use_container_width=True):
             st.toast("🔔 BEEP! LOW LOCKED!", icon="🚨")
         
@@ -498,14 +497,39 @@ elif is_owner and st.session_state.view_mode == "night":
     
     elif st.session_state.night_scan_on and in_window:
         st.markdown("### 🔍 Scanning...")
+        
+        # Target date is current ET date (after midnight ET = new trading day)
+        if now.hour >= 23:
+            target_date = (now + timedelta(days=1)).date()
+        else:
+            target_date = now.date()
+        
+        st.caption(f"📅 Trading Date: {target_date.strftime('%b %d, %Y')}")
+        
         for city_name in NIGHT_SCAN_CITIES:
             cfg = CITY_CONFIG.get(city_name, {})
             if not cfg:
                 continue
+            
+            # Check if city has reached the target date yet
+            city_tz = pytz.timezone(cfg["tz"])
+            city_now = datetime.now(city_tz)
+            city_date = city_now.date()
+            
+            if city_date < target_date:
+                # City hasn't hit midnight yet - show waiting message
+                midnight_city = datetime.combine(target_date, datetime.min.time())
+                midnight_city = city_tz.localize(midnight_city)
+                city_now_aware = city_now if city_now.tzinfo else city_tz.localize(city_now)
+                diff = (midnight_city - city_now_aware).total_seconds()
+                mins_until = max(0, int(diff / 60))
+                st.write(f"🕐 **{city_name}** — Waiting for midnight ({city_now.strftime('%I:%M %p')} local, ~{mins_until} min)")
+                continue
+            
             current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg["station"], cfg["tz"])
             brackets = fetch_kalshi_brackets(cfg["low"])
             if obs_low is None:
-                st.write(f"⚪ **{city_name}** — No data")
+                st.write(f"⚪ **{city_name}** — No data yet for {target_date.strftime('%b %d')}")
                 continue
             rising_count = 0
             found_low = False
@@ -614,4 +638,4 @@ else:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v7.5</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v7.6</span></div>', unsafe_allow_html=True)
