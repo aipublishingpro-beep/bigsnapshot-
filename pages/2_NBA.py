@@ -28,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "10.1"
+VERSION = "10.2"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -40,6 +40,9 @@ TEAM_ABBREVS = {"Atlanta Hawks": "Atlanta", "Boston Celtics": "Boston", "Brookly
 KALSHI_CODES = {"Atlanta": "ATL", "Boston": "BOS", "Brooklyn": "BKN", "Charlotte": "CHA", "Chicago": "CHI", "Cleveland": "CLE", "Dallas": "DAL", "Denver": "DEN", "Detroit": "DET", "Golden State": "GSW", "Houston": "HOU", "Indiana": "IND", "LA Clippers": "LAC", "LA Lakers": "LAL", "Memphis": "MEM", "Miami": "MIA", "Milwaukee": "MIL", "Minnesota": "MIN", "New Orleans": "NOP", "New York": "NYK", "Oklahoma City": "OKC", "Orlando": "ORL", "Philadelphia": "PHI", "Phoenix": "PHX", "Portland": "POR", "Sacramento": "SAC", "San Antonio": "SAS", "Toronto": "TOR", "Utah": "UTA", "Washington": "WAS"}
 
 TEAM_COLORS = {"Atlanta": "#E03A3E", "Boston": "#007A33", "Brooklyn": "#000000", "Charlotte": "#1D1160", "Chicago": "#CE1141", "Cleveland": "#860038", "Dallas": "#00538C", "Denver": "#0E2240", "Detroit": "#C8102E", "Golden State": "#1D428A", "Houston": "#CE1141", "Indiana": "#002D62", "LA Clippers": "#C8102E", "LA Lakers": "#552583", "Memphis": "#5D76A9", "Miami": "#98002E", "Milwaukee": "#00471B", "Minnesota": "#0C2340", "New Orleans": "#0C2340", "New York": "#006BB6", "Oklahoma City": "#007AC1", "Orlando": "#0077C0", "Philadelphia": "#006BB6", "Phoenix": "#1D1160", "Portland": "#E03A3E", "Sacramento": "#5A2D81", "San Antonio": "#C4CED4", "Toronto": "#CE1141", "Utah": "#002B5C", "Washington": "#002B5C"}
+
+# Reverse lookup: abbreviation -> team color
+ABBR_COLORS = {"ATL": "#E03A3E", "BOS": "#007A33", "BKN": "#000000", "CHA": "#1D1160", "CHI": "#CE1141", "CLE": "#860038", "DAL": "#00538C", "DEN": "#0E2240", "DET": "#C8102E", "GSW": "#1D428A", "HOU": "#CE1141", "IND": "#002D62", "LAC": "#C8102E", "LAL": "#552583", "MEM": "#5D76A9", "MIA": "#98002E", "MIL": "#00471B", "MIN": "#0C2340", "NOP": "#0C2340", "NYK": "#006BB6", "OKC": "#007AC1", "ORL": "#0077C0", "PHI": "#006BB6", "PHX": "#1D1160", "POR": "#E03A3E", "SAC": "#5A2D81", "SAS": "#C4CED4", "TOR": "#CE1141", "UTA": "#002B5C", "WAS": "#002B5C"}
 
 TEAM_STATS = {"Oklahoma City": {"net": 12.0, "pace": 98.8}, "Cleveland": {"net": 10.5, "pace": 97.2}, "Boston": {"net": 9.5, "pace": 99.8}, "Denver": {"net": 7.8, "pace": 98.5}, "New York": {"net": 5.5, "pace": 97.5}, "Houston": {"net": 5.2, "pace": 99.5}, "LA Lakers": {"net": 4.5, "pace": 98.5}, "Phoenix": {"net": 4.0, "pace": 98.2}, "Minnesota": {"net": 4.0, "pace": 98.2}, "Golden State": {"net": 3.5, "pace": 100.2}, "Dallas": {"net": 3.0, "pace": 99.0}, "Milwaukee": {"net": 2.5, "pace": 98.8}, "Miami": {"net": 2.0, "pace": 97.2}, "Philadelphia": {"net": 1.5, "pace": 97.5}, "Sacramento": {"net": 1.0, "pace": 100.5}, "Orlando": {"net": 0.5, "pace": 96.8}, "LA Clippers": {"net": 0.0, "pace": 97.8}, "Indiana": {"net": -0.5, "pace": 102.5}, "Memphis": {"net": -1.0, "pace": 99.8}, "San Antonio": {"net": -1.5, "pace": 99.2}, "Detroit": {"net": -2.0, "pace": 99.5}, "Atlanta": {"net": -2.5, "pace": 100.5}, "Chicago": {"net": -3.0, "pace": 98.8}, "Toronto": {"net": -3.5, "pace": 97.8}, "Brooklyn": {"net": -5.0, "pace": 98.2}, "Portland": {"net": -5.5, "pace": 98.8}, "Charlotte": {"net": -6.5, "pace": 99.5}, "Utah": {"net": -7.0, "pace": 98.5}, "New Orleans": {"net": -8.0, "pace": 99.0}, "Washington": {"net": -10.0, "pace": 100.8}}
 
@@ -144,13 +147,10 @@ def fetch_kalshi_spreads():
         spreads = {}
         for m in data.get("markets", []):
             ticker = m.get("ticker", "")
-            subtitle = m.get("subtitle", "")
-            title = m.get("title", "")
             yes_bid, yes_ask = m.get("yes_bid", 0) or 0, m.get("yes_ask", 0) or 0
             if "KXNBASPREAD-" in ticker:
                 parts = ticker.replace("KXNBASPREAD-", "")
                 if len(parts) >= 13:
-                    date_part = parts[:7]
                     rest = parts[7:]
                     if "-" in rest:
                         game_teams, spread_info = rest.split("-", 1)
@@ -158,8 +158,7 @@ def fetch_kalshi_spreads():
                             away_code = game_teams[:3].upper()
                             home_code = game_teams[3:6].upper()
                             game_key = f"{away_code}@{home_code}"
-                            spread_line = None
-                            spread_team = None
+                            spread_line, spread_team = None, None
                             if "-" in spread_info:
                                 sp_parts = spread_info.rsplit("-", 1)
                                 if len(sp_parts) == 2:
@@ -176,7 +175,7 @@ def fetch_kalshi_spreads():
                                 if game_key not in spreads: spreads[game_key] = []
                                 spreads[game_key].append({"line": spread_line, "team_code": spread_team, "ticker": ticker, "yes_bid": yes_bid, "yes_ask": yes_ask, "yes_price": yes_ask if yes_ask > 0 else (yes_bid if yes_bid > 0 else 50)})
         return spreads
-    except Exception as e: return {}
+    except: return {}
 
 @st.cache_data(ttl=300)
 def fetch_injuries():
@@ -220,11 +219,17 @@ def fetch_plays(game_id):
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
-        plays = [{"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", ""), "team": TEAM_ABBREVS.get(p.get("team", {}).get("displayName", ""), p.get("team", {}).get("displayName", ""))} for p in data.get("plays", [])[-15:]]
+        plays = []
+        for p in data.get("plays", [])[-15:]:
+            team_data = p.get("team", {})
+            team_abbr = team_data.get("abbreviation", "") if team_data else ""
+            team_name = team_data.get("displayName", "") if team_data else ""
+            team_short = TEAM_ABBREVS.get(team_name, team_name)
+            plays.append({"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", ""), "team": team_short, "team_abbr": team_abbr})
         poss_team = ""
         if plays:
             for p in reversed(plays):
-                if p.get("team"):
+                if p.get("team_abbr"):
                     poss_team = p["team"]
                     break
         return plays[-10:], poss_team
@@ -399,13 +404,14 @@ if live_games:
             if plays:
                 for i, p in enumerate(reversed(plays)):
                     icon, color = get_play_icon(p['play_type'], p['score_value'])
-                    play_text = p['text'][:45] if p['text'] else "Play"
-                    play_team = p.get('team', '')
-                    team_code = KALSHI_CODES.get(play_team, '')
-                    team_color = TEAM_COLORS.get(play_team, '#555')
-                    badge_text = team_code if team_code else (play_team[:3].upper() if play_team else "")
-                    team_badge = f"<span style='background:{team_color};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:bold;margin-right:6px;display:inline-block;min-width:35px;text-align:center'>{badge_text}</span>" if badge_text else "<span style='display:inline-block;min-width:47px'></span>"
-                    st.markdown(f"<div style='padding:6px 10px;margin:3px 0;background:#1e1e2e;border-radius:6px;border-left:4px solid {team_color}'>{team_badge}<span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
+                    play_text = p['text'][:42] if p['text'] else "Play"
+                    team_abbr = p.get('team_abbr', '')
+                    team_color = ABBR_COLORS.get(team_abbr, '#555')
+                    if team_abbr:
+                        badge = f"<b style='color:#fff;background:{team_color};padding:2px 6px;border-radius:4px;margin-right:6px'>{team_abbr}</b>"
+                    else:
+                        badge = ""
+                    st.markdown(f"<div style='padding:6px 10px;margin:3px 0;background:#1e1e2e;border-radius:6px;border-left:4px solid {team_color}'>{badge}<span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
                     if i == 0 and tts_on and p['text']:
                         speak_play(f"Q{p['period']} {p['clock']}. {p['text']}")
             else:
@@ -497,10 +503,8 @@ for g in games:
         proj = LEAGUE_AVG_TOTAL
         pace_label = "⏳ PRE"
         status_text = "Scheduled"
-    if side_choice == "YES (Over)":
-        thresh_sorted = sorted(THRESHOLDS)
-    else:
-        thresh_sorted = sorted(THRESHOLDS, reverse=True)
+    if side_choice == "YES (Over)": thresh_sorted = sorted(THRESHOLDS)
+    else: thresh_sorted = sorted(THRESHOLDS, reverse=True)
     for idx, thresh in enumerate(thresh_sorted):
         cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
         if cushion >= 6 or (selected_game != "All Games"):
@@ -532,10 +536,8 @@ else:
     if selected_game != "All Games": st.info(f"Select a side and see all lines for {selected_game}")
     else:
         live_count = sum(1 for g in games if g['minutes_played'] >= min_mins and g['status'] not in ['STATUS_FINAL', 'STATUS_FULL_TIME'])
-        if live_count == 0:
-            st.info(f"⏳ No games have reached {min_mins}+ min play time yet. Waiting for tip-off...")
-        else:
-            st.info(f"No {side_choice.split()[0]} opportunities with 6+ cushion. Try switching sides or wait for pace to develop.")
+        if live_count == 0: st.info(f"⏳ No games have reached {min_mins}+ min play time yet. Waiting for tip-off...")
+        else: st.info(f"No {side_choice.split()[0]} opportunities with 6+ cushion. Try switching sides or wait for pace to develop.")
 
 st.divider()
 
@@ -640,9 +642,7 @@ with st.expander("➕ ADD NEW POSITION", expanded=False):
                     game_spread_key = f"{away_code}@{home_code}"
                     kalshi_spread_list = kalshi_spreads.get(game_spread_key, [])
                     if kalshi_spread_list:
-                        spread_options = []
-                        for sp in kalshi_spread_list:
-                            spread_options.append(f"{sp['line']} ({sp['team_code']}) @ {sp['yes_price']}¢")
+                        spread_options = [f"{sp['line']} ({sp['team_code']}) @ {sp['yes_price']}¢" for sp in kalshi_spread_list]
                         line = st.selectbox("Kalshi Spreads", spread_options, key="add_spread_line")
                         line = line.split()[0] if line else "-7.5"
                         st.caption(f"✅ {len(kalshi_spread_list)} spreads from Kalshi")
@@ -650,24 +650,18 @@ with st.expander("➕ ADD NEW POSITION", expanded=False):
                         spread_options = ["-1.5", "-2.5", "-3.5", "-4.5", "-5.5", "-6.5", "-7.5", "-8.5", "-9.5", "-10.5", "-11.5", "-12.5", "+1.5", "+2.5", "+3.5", "+4.5", "+5.5", "+6.5", "+7.5", "+8.5", "+9.5", "+10.5", "+11.5", "+12.5"]
                         line = st.selectbox("Spread Line (Manual)", spread_options, index=5, key="add_spread_line")
                         st.caption("⚠️ No Kalshi spreads found - manual entry")
-                else:
-                    line = "-7.5"
-            elif "Totals" in bet_type:
-                line = st.selectbox("Line", THRESHOLDS, key="add_line")
-            else:
-                line = "-"
+                else: line = "-7.5"
+            elif "Totals" in bet_type: line = st.selectbox("Line", THRESHOLDS, key="add_line")
+            else: line = "-"
         ac5, ac6, ac7 = st.columns(3)
         with ac5: entry_price = st.number_input("Entry Price (¢)", 1, 99, 50, key="add_price")
         with ac6: contracts = st.number_input("Contracts", 1, 10000, 10, key="add_contracts")
         with ac7: cost = entry_price * contracts / 100; st.metric("Cost", f"${cost:.2f}"); st.caption(f"Win: +${contracts - cost:.2f}")
         if st.button("✅ ADD POSITION", use_container_width=True, key="add_pos_btn"):
             if sel_game:
-                if bet_type == "ML (Moneyline)":
-                    pos_type, pos_pick, pos_line = "ML", pick, "-"
-                elif bet_type == "Spread":
-                    pos_type, pos_pick, pos_line = "Spread", pick, str(line)
-                else:
-                    pos_type, pos_pick, pos_line = "Totals", pick.split()[0], str(line)
+                if bet_type == "ML (Moneyline)": pos_type, pos_pick, pos_line = "ML", pick, "-"
+                elif bet_type == "Spread": pos_type, pos_pick, pos_line = "Spread", pick, str(line)
+                else: pos_type, pos_pick, pos_line = "Totals", pick.split()[0], str(line)
                 st.session_state.positions.append({"game": f"{sel_game[1]}@{sel_game[2]}", "pick": pos_pick, "type": pos_type, "line": pos_line, "price": entry_price, "contracts": contracts, "link": get_kalshi_game_link(sel_game[1], sel_game[2]), "id": str(uuid.uuid4())[:8]})
                 st.success("Added!"); st.rerun()
 
