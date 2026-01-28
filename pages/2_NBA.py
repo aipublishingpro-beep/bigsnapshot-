@@ -404,18 +404,18 @@ if live_games:
                 home_color = TEAM_COLORS.get(home, '#006BB6')
                 for i, p in enumerate(reversed(plays)):
                     icon, color = get_play_icon(p['play_type'], p['score_value'])
-                    play_text = p['text'][:40] if p['text'] else "Play"
+                    play_text = p['text'][:38] if p['text'] else "Play"
                     play_team = p.get('team', '')
                     if play_team == away:
-                        badge = f"<b style='color:#fff;background:{away_color};padding:2px 6px;border-radius:4px;margin-right:6px'>{away_code}</b>"
+                        team_label = away_code
                         border_color = away_color
                     elif play_team == home:
-                        badge = f"<b style='color:#fff;background:{home_color};padding:2px 6px;border-radius:4px;margin-right:6px'>{home_code}</b>"
+                        team_label = home_code
                         border_color = home_color
                     else:
-                        badge = ""
+                        team_label = "---"
                         border_color = '#555'
-                    st.markdown(f"<div style='padding:6px 10px;margin:3px 0;background:#1e1e2e;border-radius:6px;border-left:4px solid {border_color}'>{badge}<span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='padding:6px 10px;margin:3px 0;background:#1e1e2e;border-radius:6px;border-left:4px solid {border_color}'><span style='color:{border_color};font-weight:bold'>[{team_label}]</span> <span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
                     if i == 0 and tts_on and p['text']:
                         speak_play(f"Q{p['period']} {p['clock']}. {p['text']}")
             else:
