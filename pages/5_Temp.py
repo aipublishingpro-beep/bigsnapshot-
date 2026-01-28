@@ -3,6 +3,9 @@ import requests
 from datetime import datetime, timedelta
 import pytz
 import re
+import struct
+import base64
+import math
 
 st.set_page_config(page_title="LOW Temp Edge Finder", page_icon="🌡️", layout="wide", initial_sidebar_state="expanded")
 
@@ -17,41 +20,15 @@ eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
 # ============================================================
-# CITY CONFIG - 29 CITIES
+# CITY CONFIG - 6 VERIFIED KALSHI LOW TEMP MARKETS ONLY
 # ============================================================
 CITY_CONFIG = {
-    "Atlanta": {"low": "KXLOWTATL", "station": "KATL", "lat": 33.63, "lon": -84.44, "tz": "US/Eastern", "pattern": "sunrise"},
-    "Austin": {"low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central", "pattern": "sunrise"},
-    "Boston": {"low": "KXLOWTBOS", "station": "KBOS", "lat": 42.36, "lon": -71.01, "tz": "US/Eastern", "pattern": "sunrise"},
-    "Charlotte": {"low": "KXLOWTCLT", "station": "KCLT", "lat": 35.21, "lon": -80.94, "tz": "US/Eastern", "pattern": "sunrise"},
     "Chicago": {"low": "KXLOWTCHI", "station": "KMDW", "lat": 41.79, "lon": -87.75, "tz": "US/Central", "pattern": "midnight"},
-    "Cincinnati": {"low": "KXLOWTCVG", "station": "KCVG", "lat": 39.05, "lon": -84.67, "tz": "US/Eastern", "pattern": "sunrise"},
-    "Columbus": {"low": "KXLOWTCMH", "station": "KCMH", "lat": 40.00, "lon": -82.88, "tz": "US/Eastern", "pattern": "sunrise"},
-    "Dallas": {"low": "KXLOWTDFW", "station": "KDFW", "lat": 32.90, "lon": -97.04, "tz": "US/Central", "pattern": "sunrise"},
     "Denver": {"low": "KXLOWTDEN", "station": "KDEN", "lat": 39.86, "lon": -104.67, "tz": "US/Mountain", "pattern": "midnight"},
-    "Detroit": {"low": "KXLOWTDTW", "station": "KDTW", "lat": 42.21, "lon": -83.35, "tz": "US/Eastern", "pattern": "sunrise"},
-    "Houston": {"low": "KXLOWTHOU", "station": "KHOU", "lat": 29.65, "lon": -95.28, "tz": "US/Central", "pattern": "sunrise"},
-    "Indianapolis": {"low": "KXLOWTIND", "station": "KIND", "lat": 39.73, "lon": -86.27, "tz": "US/Eastern", "pattern": "sunrise"},
-    "Kansas City": {"low": "KXLOWTMCI", "station": "KMCI", "lat": 39.30, "lon": -94.71, "tz": "US/Central", "pattern": "midnight"},
-    "Las Vegas": {"low": "KXLOWTLAS", "station": "KLAS", "lat": 36.08, "lon": -115.15, "tz": "US/Pacific", "pattern": "sunrise"},
     "Los Angeles": {"low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific", "pattern": "sunrise"},
-    "Louisville": {"low": "KXLOWTSDF", "station": "KSDF", "lat": 38.17, "lon": -85.74, "tz": "US/Eastern", "pattern": "sunrise"},
-    "Memphis": {"low": "KXLOWTMEM", "station": "KMEM", "lat": 35.05, "lon": -89.98, "tz": "US/Central", "pattern": "sunrise"},
     "Miami": {"low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern", "pattern": "sunrise"},
-    "Milwaukee": {"low": "KXLOWTMKE", "station": "KMKE", "lat": 42.95, "lon": -87.90, "tz": "US/Central", "pattern": "midnight"},
-    "Minneapolis": {"low": "KXLOWTMSP", "station": "KMSP", "lat": 44.88, "lon": -93.22, "tz": "US/Central", "pattern": "midnight"},
-    "Nashville": {"low": "KXLOWTBNA", "station": "KBNA", "lat": 36.12, "lon": -86.69, "tz": "US/Central", "pattern": "sunrise"},
     "New York City": {"low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern", "pattern": "sunrise"},
-    "Oklahoma City": {"low": "KXLOWTOKC", "station": "KOKC", "lat": 35.39, "lon": -97.60, "tz": "US/Central", "pattern": "midnight"},
-    "Philadelphia": {"low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern", "pattern": "sunrise"},
-    "Phoenix": {"low": "KXLOWTPHX", "station": "KPHX", "lat": 33.43, "lon": -112.02, "tz": "US/Arizona", "pattern": "sunrise"},
-    "Portland": {"low": "KXLOWTPDX", "station": "KPDX", "lat": 45.59, "lon": -122.60, "tz": "US/Pacific", "pattern": "sunrise"},
-    "Salt Lake City": {"low": "KXLOWTSLC", "station": "KSLC", "lat": 40.79, "lon": -111.98, "tz": "US/Mountain", "pattern": "midnight"},
-    "San Antonio": {"low": "KXLOWTSAT", "station": "KSAT", "lat": 29.53, "lon": -98.47, "tz": "US/Central", "pattern": "sunrise"},
-    "Seattle": {"low": "KXLOWTSEA", "station": "KSEA", "lat": 47.45, "lon": -122.31, "tz": "US/Pacific", "pattern": "sunrise"},
-    "St. Louis": {"low": "KXLOWTSTL", "station": "KSTL", "lat": 38.75, "lon": -90.37, "tz": "US/Central", "pattern": "midnight"},
-    "Tucson": {"low": "KXLOWTTUS", "station": "KTUS", "lat": 32.13, "lon": -110.95, "tz": "US/Arizona", "pattern": "sunrise"},
-    "Tulsa": {"low": "KXLOWTTUL", "station": "KTUL", "lat": 36.20, "lon": -95.89, "tz": "US/Central", "pattern": "midnight"},
+    "Philadelphia": {"low": "KXLOWTPHIL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern", "pattern": "sunrise"},
 }
 CITY_LIST = sorted(CITY_CONFIG.keys())
 
@@ -347,13 +324,11 @@ if is_owner:
         </div>
         <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:15px">
             <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 YOUR TRADING SCHEDULE (ET)</div>
-            <div style="color:#c9d1d9;font-size:0.75em;line-height:1.5">
-                <b>🌙 1-2 AM</b> → Chicago, Milwaukee, Minneapolis<br>
-                <b>🌙 2-3 AM</b> → Denver, KC, OKC, STL, Tulsa<br>
-                <b>🌙 3-4 AM</b> → Salt Lake City<br>
-                <b>☀️ 7-8 AM</b> → ATL, Austin, Boston, Charlotte, Cincy, Columbus, Dallas, Detroit, Houston, Indy, Louisville, Memphis, Miami, Nashville, NYC, Philly, San Antonio<br>
-                <b>☀️ 8-9 AM</b> → Phoenix, Tucson<br>
-                <b>☀️ 9-10 AM</b> → LA, Las Vegas, Portland, Seattle
+            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
+                <b>🌙 1-2 AM</b> → Chicago<br>
+                <b>🌙 2-3 AM</b> → Denver<br>
+                <b>☀️ 7-8 AM</b> → Miami, NYC, Philly<br>
+                <b>☀️ 9-10 AM</b> → Los Angeles
             </div>
         </div>
         <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
@@ -382,8 +357,8 @@ else:
         <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
             <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW WINDOWS</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>🌙 Midnight:</b> Chicago, Denver, KC, Milwaukee, Minneapolis, OKC, SLC, STL, Tulsa<br>
-                <b>☀️ Sunrise:</b> All other cities
+                <b>🌙 Midnight:</b> Chicago, Denver<br>
+                <b>☀️ Sunrise:</b> LA, Miami, NYC, Philly
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -392,7 +367,7 @@ else:
 # HEADER
 # ============================================================
 st.title("🌡️ LOW TEMP EDGE FINDER")
-st.caption(f"Live NWS + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')} | 32 Cities")
+st.caption(f"Live NWS + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')} | 6 Cities")
 
 if is_owner:
     c1, c2, c3, c4 = st.columns(4)
@@ -424,10 +399,7 @@ if is_owner and st.session_state.view_mode == "today":
         st.rerun()
     
     results = []
-    progress = st.progress(0)
-    city_items = list(CITY_CONFIG.items())
-    for idx, (city_name, cfg) in enumerate(city_items):
-        progress.progress((idx + 1) / len(city_items))
+    for city_name, cfg in CITY_CONFIG.items():
         current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg["station"], cfg["tz"])
         brackets = fetch_kalshi_brackets(cfg["low"])
         pattern_icon = "🌙" if cfg.get("pattern") == "midnight" else "☀️"
@@ -463,7 +435,6 @@ if is_owner and st.session_state.view_mode == "today":
                 "lock_status": lock_status,
                 "status_code": status_code
             })
-    progress.empty()
     
     opps = [r for r in results if r.get("edge", 0) >= 5]
     if opps:
@@ -515,10 +486,7 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
     
     tickets = []
     all_cities = []
-    progress = st.progress(0)
-    city_items = list(CITY_CONFIG.items())
-    for idx, (city_name, cfg) in enumerate(city_items):
-        progress.progress((idx + 1) / len(city_items))
+    for city_name, cfg in CITY_CONFIG.items():
         pattern_icon = "🌙" if cfg.get("pattern") == "midnight" else "☀️"
         forecast_low = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
         brackets = fetch_kalshi_tomorrow_brackets(cfg["low"])
@@ -545,7 +513,6 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
                 tickets.append(data)
         else:
             all_cities.append({"city": city_name, "pattern": pattern_icon, "status": "NO BRACKET", "forecast": forecast_low})
-    progress.empty()
     
     if tickets:
         st.markdown("### 🎰 CHEAP ENTRIES (<60¢)")
@@ -588,7 +555,12 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
 elif is_owner and st.session_state.view_mode == "night":
     st.subheader("🦈 NIGHT SCAN")
     
-    # Toggle button
+    # Time window check: 11:50 PM - 5:00 AM ET
+    current_hour = now.hour
+    current_min = now.minute
+    in_window = (current_hour == 23 and current_min >= 50) or (0 <= current_hour < 5)
+    
+    # Toggle button (always visible)
     if st.session_state.night_scan_on:
         if st.button("🦈 Night Scan ON", use_container_width=True, type="primary"):
             st.session_state.night_scan_on = False
@@ -603,7 +575,25 @@ elif is_owner and st.session_state.view_mode == "night":
             st.rerun()
         st.markdown('<div style="background:#7f1d1d;border:2px solid #ef4444;border-radius:8px;padding:10px;text-align:center;margin:10px 0"><b style="color:#fca5a5">● SCAN OFF</b></div>', unsafe_allow_html=True)
     
-    st.caption(f"Watching: {', '.join(NIGHT_SCAN_CITIES)} | Auto-refresh: 5 min")
+    st.caption(f"Watching: {', '.join(NIGHT_SCAN_CITIES)} | Auto-refresh: 5 min | Window: 11:50 PM - 5 AM ET")
+    
+    # Window status
+    if not in_window:
+        st.markdown(f"""
+        <div style="background:#7f1d1d;border:2px solid #ef4444;border-radius:8px;padding:15px;text-align:center;margin:10px 0">
+            <div style="color:#fca5a5;font-weight:700">⏰ OUTSIDE SCAN WINDOW</div>
+            <div style="color:#9ca3af;font-size:0.9em">Current: {now.strftime('%I:%M %p ET')} | Window: 11:50 PM - 5:00 AM ET</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:15px;margin-top:15px">
+            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">🌙 LOCK TIMES (ET)</div>
+            <div style="color:#c9d1d9;font-size:0.85em;line-height:1.6">
+                <b>1-2 AM</b> → Chicago<br>
+                <b>2-3 AM</b> → Denver
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     
     # If already locked, show hold list
     if st.session_state.night_locked_city:
@@ -620,24 +610,12 @@ elif is_owner and st.session_state.view_mode == "night":
             <div style="color:#fff;font-size:3em;font-weight:800">{locked['city']}</div>
             <div style="color:#fbbf24;font-size:1.5em;margin:15px 0">{locked['obs_low']}°F → {locked['bracket']}</div>
             <div style="color:#9ca3af;font-size:1.2em">Bid: <b style="color:#3b82f6">{current_bid}¢</b> | Ask: <b style="color:#22c55e">{current_ask}¢</b></div>
+            <div style="color:#22c55e;font-size:1.8em;font-weight:800;margin-top:15px">+{100 - current_ask}¢ EDGE</div>
         </div>
         <style>@keyframes pulse{{0%,100%{{box-shadow:0 0 20px rgba(34,197,94,0.3)}}50%{{box-shadow:0 0 60px rgba(34,197,94,0.8)}}}}</style>
-        <script>
-        (function(){{
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const duration = 5;
-            const freq = 800;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.frequency.value = freq;
-            osc.type = 'sine';
-            gain.gain.value = 0.3;
-            osc.start();
-            osc.stop(audioCtx.currentTime + duration);
-        }})();
-        </script>
+        <audio autoplay>
+            <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1sbHCAgIF9d3d7f4GBgH18fYGDhYWDf3x7fYGEhoaEgX58fYCDhYWEgn99fX+ChIWFg4B+fX6BhIWFg4F+fX6Ag4WFhIKAfn1+gYSFhYOBfn1+gYOFhYOBfn5+gYOFhYOBf35+gIOFhIOBf35/gYOFhIOBf35/gYOFhIOBf35/gYOFhIOBf35/gYOFhIOBf39/gYOEhIOBf39/gYOEhIOBf39/gYOEhIOBf39/gYOEhIOBf39/gYOEhIOBf39/gYOEhIOBf39/gYOEhIOBf39/gYOEhIOBf39/gYOEhIOBf39/gYOEhIOBf39/gYOEhIOBf39/gYOEhIOBgH9/gYOEg4OBgH9/gYOEg4OBgH+AgYOEg4OBgH+AgYOEg4OBgH+AgYOEg4OBgICAgoOEg4KBgICAgoOEg4KBgICAgoODg4KBgICAgoODg4KBgICAgYODg4KBgICAgYODg4KBgICBgYODg4KBgICBgYODgoKBgICBgYODgoKBgICBgYODgoKBgYCBgYODgoKBgYCBgYKDgoKBgYCBgYKDgoKBgYCBgYKDgoKBgYCBgYKDgoKBgYCBgYKDgoKBgYCBgYKCgoKBgYCBgYKCgoKBgYGBgYKCgoKBgYGBgYKCgoKBgYGBgYKCgoKBgYGBgYKCgoGBgYGBgYKCgoGBgYGBgYKCgoGBgYGBgYKCgoGBgYGBgYKCgoGBgYGBgYKCgYGBgYGBgYKCgYGBgYGBgYGCgYGBgYGBgYGCgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgQ==" type="audio/wav">
+        </audio>
         """, unsafe_allow_html=True)
         
         st.markdown(f'<a href="{locked["url"]}" target="_blank"><div style="background:#22c55e;color:#000;font-size:1.5em;font-weight:800;padding:20px;border-radius:12px;text-align:center;margin:20px 0;cursor:pointer">🚀 BUY NOW →</div></a>', unsafe_allow_html=True)
@@ -664,8 +642,8 @@ elif is_owner and st.session_state.view_mode == "night":
         </div>
         """, unsafe_allow_html=True)
     
-    # Active scanning
-    elif st.session_state.night_scan_on:
+    # Active scanning (only during window)
+    elif st.session_state.night_scan_on and in_window:
         st.markdown("### 🔍 Scanning...")
         
         for city_name in NIGHT_SCAN_CITIES:
@@ -687,32 +665,37 @@ elif is_owner and st.session_state.view_mode == "night":
             
             winning = find_winning_bracket(obs_low, brackets)
             
-            if rising_count >= 2 and winning:
-                # LOCKED - First city wins
+            if rising_count >= 2 and winning and winning["ask"] < 90:
+                # LOCKED with EDGE - First city wins
+                edge = 100 - winning["ask"]
                 st.session_state.night_locked_city = {
                     "city": city_name,
                     "obs_low": obs_low,
                     "bracket": winning["name"],
                     "bid": winning["bid"],
                     "ask": winning["ask"],
+                    "edge": edge,
                     "url": winning["url"]
                 }
                 st.session_state.hold_list.append(st.session_state.night_locked_city)
                 st.rerun()
+            elif rising_count >= 2 and winning and winning["ask"] >= 90:
+                st.write(f"🔒 **{city_name}** | {obs_low}°F | LOCKED but NO EDGE (Ask {winning['ask']}¢)")
             elif rising_count >= 1:
                 st.write(f"👀 **{city_name}** | {obs_low}°F | Rising: {rising_count}")
             else:
                 st.write(f"⏳ **{city_name}** | {obs_low}°F | Waiting...")
         
         # Auto-refresh every 5 minutes
-        import time
-        time.sleep(0.1)
         st.markdown(f"<div style='color:#6b7280;font-size:0.8em;text-align:center;margin-top:20px'>Next refresh in 5 min | {now.strftime('%I:%M:%S %p ET')}</div>", unsafe_allow_html=True)
         st_autorefresh = st.empty()
         st.markdown("""<meta http-equiv="refresh" content="300">""", unsafe_allow_html=True)
     
     else:
-        st.info("Toggle Night Scan ON to start watching for locks.")
+        if st.session_state.night_scan_on and not in_window:
+            st.warning("⏰ Scan is ON but outside window (11:50 PM - 5 AM ET). Will auto-scan when window opens.")
+        else:
+            st.info("Toggle Night Scan ON to start watching for locks.")
 
 # ============================================================
 # CITY VIEW (DEFAULT)
@@ -833,5 +816,5 @@ else:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v7.3</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v7.4</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment purposes only. Not financial advice. Verify on Kalshi before trading.</div>', unsafe_allow_html=True)
