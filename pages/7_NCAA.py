@@ -27,14 +27,14 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "11.2"
+VERSION = "11.3"
 LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
 if 'positions' not in st.session_state:
     st.session_state.positions = []
 
-TEAM_COLORS = {"DUKE": "#003087", "UNC": "#7BAFD4", "KANSAS": "#0051BA", "KENTUCKY": "#0033A0", "UCLA": "#2D68C4", "GONZ": "#002967", "ARIZ": "#CC0033", "PURDUE": "#CEB888", "TENN": "#FF8200", "CONN": "#000E2F", "HOUSTON": "#C8102E", "TEXAS": "#BF5700", "BAYLOR": "#154734", "AUBURN": "#0C2340", "MICH": "#00274C", "MSU": "#18453B", "NOVA": "#00205B", "CREIGH": "#005CA9", "MARQ": "#003366", "SDSU": "#A6192E", "FAU": "#003366", "MIAMI": "#F47321", "IND": "#990000", "IOWA": "#FFCD00", "ILLINOIS": "#13294B", "OHIOST": "#BB0000", "WISC": "#C5050C", "ORE": "#154733", "ALA": "#9E1B32", "ARK": "#9D2235", "LSU": "#461D7C", "MISS": "#14213D", "OKLA": "#841617", "TEXTECH": "#CC0000", "TCU": "#4D1979", "OKST": "#FF7300", "NYK": "#006BB6", "SAC": "#5A2D81"}
+TEAM_COLORS = {"DUKE": "#003087", "UNC": "#7BAFD4", "KANSAS": "#0051BA", "KENTUCKY": "#0033A0", "UCLA": "#2D68C4", "GONZ": "#002967", "ARIZ": "#CC0033", "PURDUE": "#CEB888", "PUR": "#CEB888", "TENN": "#FF8200", "CONN": "#000E2F", "HOUSTON": "#C8102E", "TEXAS": "#BF5700", "BAYLOR": "#154734", "AUBURN": "#0C2340", "MICH": "#00274C", "MSU": "#18453B", "NOVA": "#00205B", "CREIGH": "#005CA9", "MARQ": "#003366", "SDSU": "#A6192E", "FAU": "#003366", "MIAMI": "#F47321", "IND": "#990000", "IU": "#990000", "IOWA": "#FFCD00", "ILLINOIS": "#13294B", "OHIOST": "#BB0000", "WISC": "#C5050C", "ORE": "#154733", "ALA": "#9E1B32", "ARK": "#9D2235", "LSU": "#461D7C", "MISS": "#14213D", "OKLA": "#841617", "TEXTECH": "#CC0000", "TCU": "#4D1979", "OKST": "#FF7300"}
 
 POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC", "Big East"}
 HIGH_MAJOR = {"American Athletic", "Mountain West", "Atlantic 10", "West Coast", "Missouri Valley"}
@@ -138,9 +138,8 @@ def fetch_plays(game_id):
         if situation:
             poss_text = situation.get("possessionText", "") or ""
             poss_team = poss_text.split()[0] if poss_text else ""
-        # Get half scores - try multiple paths
+        # Get half scores - ESPN NCAA doesn't provide linescores reliably
         half_scores = {"away": [], "home": [], "away_record": "", "home_record": ""}
-        # Path 1: header.competitions.competitors.linescores
         header = data.get("header", {})
         competitions = header.get("competitions", [{}])
         if competitions:
@@ -149,79 +148,41 @@ def fetch_plays(game_id):
                 record = comp.get("record", [{}])
                 record_str = record[0].get("summary", "") if record else ""
                 scores = [int(ls.get("value", 0)) for ls in linescores] if linescores else []
-                if comp.get("homeAway") == "home":
-                    half_scores["home"] = scores
-                    half_scores["home_record"] = record_str
+                # Only use if scores are non-zero
+                if scores and any(s > 0 for s in scores):
+                    if comp.get("homeAway") == "home":
+                        half_scores["home"] = scores
+                        half_scores["home_record"] = record_str
+                    else:
+                        half_scores["away"] = scores
+                        half_scores["away_record"] = record_str
                 else:
-                    half_scores["away"] = scores
-                    half_scores["away_record"] = record_str
-        # Path 2: If linescores empty, try boxscore.teams
-        if not half_scores["home"] and not half_scores["away"]:
-            boxscore = data.get("boxscore", {})
-            teams = boxscore.get("teams", [])
-            for team in teams:
-                team_info = team.get("team", {})
-                team_ha = team_info.get("homeAway", "") or team.get("homeAway", "")
-                # Try to find period stats
-                stats = team.get("statistics", [])
-                for stat in stats:
-                    if stat.get("name") == "pointsFirstHalf" or stat.get("label") == "1st Half":
-                        pass  # Would need to parse this
-        # Path 3: Calculate from plays if still empty
-        if not half_scores["home"] and not half_scores["away"]:
-            h1_away, h1_home, h2_away, h2_home = 0, 0, 0, 0
-            for p in data.get("plays", []):
-                score_val = p.get("scoreValue", 0)
-                period = p.get("period", {}).get("number", 0)
-                team_data = p.get("team", {})
-                if isinstance(team_data, dict):
-                    home_away = team_data.get("homeAway", "")
-                    if period == 1:
-                        if home_away == "home": h1_home += score_val
-                        else: h1_away += score_val
-                    elif period == 2:
-                        if home_away == "home": h2_home += score_val
-                        else: h2_away += score_val
-            if h1_away > 0 or h1_home > 0:
-                half_scores["away"] = [h1_away, h2_away] if h2_away > 0 or h2_home > 0 else [h1_away]
-                half_scores["home"] = [h1_home, h2_home] if h2_away > 0 or h2_home > 0 else [h1_home]
+                    if comp.get("homeAway") == "home":
+                        half_scores["home_record"] = record_str
+                    else:
+                        half_scores["away_record"] = record_str
         return plays[-10:], poss_team, half_scores
     except: return [], "", {}
 
 def render_scoreboard_ncaa(away_abbrev, home_abbrev, away_score, home_score, period, clock, half_scores):
-    """Render ESPN-style half-by-half scoreboard for NCAA"""
+    """Render scoreboard - simple version since ESPN NCAA doesn't provide half scores"""
     away_color = TEAM_COLORS.get(away_abbrev, "#666")
     home_color = TEAM_COLORS.get(home_abbrev, "#666")
-    away_hs = half_scores.get("away", [])
-    home_hs = half_scores.get("home", [])
     away_record = half_scores.get("away_record", "")
     home_record = half_scores.get("home_record", "")
-    # Build period headers (1, 2, OT1, OT2, etc.)
-    num_periods = max(len(away_hs), len(home_hs), period)
-    p_headers = ""
-    away_p_scores = ""
-    home_p_scores = ""
-    for i in range(num_periods):
-        p_label = str(i+1) if i < 2 else f"OT{i-1}"
-        p_headers += f"<th style='padding:4px 8px;color:#888;font-size:12px'>{p_label}</th>"
-        away_val = int(away_hs[i]) if i < len(away_hs) else "-"
-        home_val = int(home_hs[i]) if i < len(home_hs) else "-"
-        away_p_scores += f"<td style='padding:4px 8px;color:#fff'>{away_val}</td>"
-        home_p_scores += f"<td style='padding:4px 8px;color:#fff'>{home_val}</td>"
     period_text = f"H{period}" if period <= 2 else f"OT{period-2}"
+    
+    # Simple clean scoreboard without half breakdown (ESPN NCAA doesn't provide it)
     return f'''<div style="background:#0f172a;border-radius:8px;padding:12px;margin-bottom:8px">
     <div style="text-align:center;color:#ffd700;font-weight:bold;margin-bottom:8px">{period_text} - {clock}</div>
     <table style="width:100%;border-collapse:collapse;color:#fff;font-size:14px">
-    <tr style="border-bottom:1px solid #333"><th></th>{p_headers}<th style='padding:4px 12px;color:#888'>T</th></tr>
     <tr style="border-bottom:1px solid #333">
-        <td style="padding:8px;text-align:left"><span style="color:{away_color};font-weight:bold">{away_abbrev}</span> <span style="color:#666;font-size:11px">{away_record}</span></td>
-        {away_p_scores}
-        <td style="padding:8px 12px;font-weight:bold;font-size:18px;color:#fff">{away_score}</td>
+        <td style="padding:12px;text-align:left;width:70%"><span style="color:{away_color};font-weight:bold;font-size:16px">{away_abbrev}</span> <span style="color:#666;font-size:11px">{away_record}</span></td>
+        <td style="padding:12px;text-align:right;font-weight:bold;font-size:24px;color:#fff">{away_score}</td>
     </tr>
     <tr>
-        <td style="padding:8px;text-align:left"><span style="color:{home_color};font-weight:bold">{home_abbrev}</span> <span style="color:#666;font-size:11px">{home_record}</span></td>
-        {home_p_scores}
-        <td style="padding:8px 12px;font-weight:bold;font-size:18px;color:#fff">{home_score}</td>
+        <td style="padding:12px;text-align:left;width:70%"><span style="color:{home_color};font-weight:bold;font-size:16px">{home_abbrev}</span> <span style="color:#666;font-size:11px">{home_record}</span></td>
+        <td style="padding:12px;text-align:right;font-weight:bold;font-size:24px;color:#fff">{home_score}</td>
     </tr>
     </table></div>'''
 
@@ -261,19 +222,16 @@ def get_play_badge(last_play):
 
 def infer_possession_ncaa(plays, away_abbrev, home_abbrev, espn_poss):
     """Infer possession from plays or ESPN data"""
-    # First try ESPN's possession data
     if espn_poss:
         espn_upper = espn_poss.upper()
         if away_abbrev.upper() in espn_upper or espn_upper in away_abbrev.upper():
             return away_abbrev, f"🏀 {away_abbrev}"
         elif home_abbrev.upper() in espn_upper or espn_upper in home_abbrev.upper():
             return home_abbrev, f"🏀 {home_abbrev}"
-    # Fallback: infer from last play
     if not plays: return None, None
     last_play = plays[-1]
     play_text = (last_play.get("text", "") or "").lower()
     play_team = last_play.get("team", "").upper()
-    # Try to match team from play
     acting_team = None
     if play_team:
         if play_team == away_abbrev.upper() or away_abbrev.upper() in play_team:
@@ -282,22 +240,16 @@ def infer_possession_ncaa(plays, away_abbrev, home_abbrev, espn_poss):
             acting_team = home_abbrev
     if not acting_team: return None, None
     other_team = home_abbrev if acting_team == away_abbrev else away_abbrev
-    # After made basket → other team gets ball
     if last_play.get("score_value", 0) > 0 or "makes" in play_text:
         return other_team, f"→ {other_team}"
-    # After defensive rebound → rebounding team has ball
     if "defensive rebound" in play_text:
         return acting_team, f"🏀 {acting_team}"
-    # After offensive rebound → same team keeps ball
     if "offensive rebound" in play_text:
         return acting_team, f"🏀 {acting_team}"
-    # After turnover/steal → other team gets ball
     if "turnover" in play_text or "steal" in play_text:
         return other_team, f"→ {other_team}"
-    # After miss → unclear
     if "misses" in play_text:
         return None, "⏳ LOOSE"
-    # After foul → other team
     if "foul" in play_text:
         return other_team, f"FT {other_team}"
     return acting_team, f"🏀 {acting_team}"
@@ -446,13 +398,12 @@ if live_games:
         total, mins, game_id = g['total_score'], g['minutes_played'], g['game_id']
         plays, espn_poss, half_scores = fetch_plays(game_id)
         st.markdown(f"### {g['away']} @ {g['home']}")
-        # Half-by-half scoreboard
+        # Scoreboard
         st.markdown(render_scoreboard_ncaa(away_abbrev, home_abbrev, g['away_score'], g['home_score'], g['period'], g['clock'], half_scores), unsafe_allow_html=True)
         col1, col2 = st.columns([1, 1])
         with col1:
             last_play = plays[-1] if plays else None
             st.markdown(render_ncaa_court(away_abbrev, home_abbrev, g['away_score'], g['home_score'], g['period'], g['clock'], last_play), unsafe_allow_html=True)
-            # Possession indicator below court
             poss_team, poss_text = infer_possession_ncaa(plays, away_abbrev, home_abbrev, espn_poss)
             if poss_text:
                 poss_color = TEAM_COLORS.get(poss_team, "#ffd700") if poss_team else "#888"
