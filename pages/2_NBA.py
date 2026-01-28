@@ -398,24 +398,22 @@ if live_games:
             st.markdown("**📋 LAST 10 PLAYS**")
             tts_on = st.checkbox("🔊 Announce plays", key=f"tts_{game_id}")
             if plays:
-                away_code = KALSHI_CODES.get(away, away[:3].upper())
-                home_code = KALSHI_CODES.get(home, home[:3].upper())
                 away_color = TEAM_COLORS.get(away, '#E03A3E')
                 home_color = TEAM_COLORS.get(home, '#006BB6')
                 for i, p in enumerate(reversed(plays)):
                     icon, color = get_play_icon(p['play_type'], p['score_value'])
-                    play_text = p['text'][:38] if p['text'] else "Play"
+                    play_text = p['text'][:42] if p['text'] else "Play"
                     play_team = p.get('team', '')
                     if play_team == away:
-                        team_label = away_code
+                        team_label = "A"
                         border_color = away_color
                     elif play_team == home:
-                        team_label = home_code
+                        team_label = "H"
                         border_color = home_color
                     else:
-                        team_label = "---"
+                        team_label = "•"
                         border_color = '#555'
-                    st.markdown(f"<div style='padding:6px 10px;margin:3px 0;background:#1e1e2e;border-radius:6px;border-left:4px solid {border_color}'><span style='color:{border_color};font-weight:bold'>[{team_label}]</span> <span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='padding:6px 10px;margin:3px 0;background:#1e1e2e;border-radius:6px;border-left:4px solid {border_color}'><b style='color:{border_color}'>[{team_label}]</b> <span style='color:{color}'>{icon}</span> Q{p['period']} {p['clock']} • {play_text}</div>", unsafe_allow_html=True)
                     if i == 0 and tts_on and p['text']:
                         speak_play(f"Q{p['period']} {p['clock']}. {p['text']}")
             else:
