@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "11.1"
+VERSION = "11.2"
 LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
@@ -138,8 +138,9 @@ def fetch_plays(game_id):
         if situation:
             poss_text = situation.get("possessionText", "") or ""
             poss_team = poss_text.split()[0] if poss_text else ""
-        # Get half scores from header
+        # Get half scores - try multiple paths
         half_scores = {"away": [], "home": [], "away_record": "", "home_record": ""}
+        # Path 1: header.competitions.competitors.linescores
         header = data.get("header", {})
         competitions = header.get("competitions", [{}])
         if competitions:
@@ -147,13 +148,43 @@ def fetch_plays(game_id):
                 linescores = comp.get("linescores", [])
                 record = comp.get("record", [{}])
                 record_str = record[0].get("summary", "") if record else ""
-                scores = [ls.get("value", 0) for ls in linescores]
+                scores = [int(ls.get("value", 0)) for ls in linescores] if linescores else []
                 if comp.get("homeAway") == "home":
                     half_scores["home"] = scores
                     half_scores["home_record"] = record_str
                 else:
                     half_scores["away"] = scores
                     half_scores["away_record"] = record_str
+        # Path 2: If linescores empty, try boxscore.teams
+        if not half_scores["home"] and not half_scores["away"]:
+            boxscore = data.get("boxscore", {})
+            teams = boxscore.get("teams", [])
+            for team in teams:
+                team_info = team.get("team", {})
+                team_ha = team_info.get("homeAway", "") or team.get("homeAway", "")
+                # Try to find period stats
+                stats = team.get("statistics", [])
+                for stat in stats:
+                    if stat.get("name") == "pointsFirstHalf" or stat.get("label") == "1st Half":
+                        pass  # Would need to parse this
+        # Path 3: Calculate from plays if still empty
+        if not half_scores["home"] and not half_scores["away"]:
+            h1_away, h1_home, h2_away, h2_home = 0, 0, 0, 0
+            for p in data.get("plays", []):
+                score_val = p.get("scoreValue", 0)
+                period = p.get("period", {}).get("number", 0)
+                team_data = p.get("team", {})
+                if isinstance(team_data, dict):
+                    home_away = team_data.get("homeAway", "")
+                    if period == 1:
+                        if home_away == "home": h1_home += score_val
+                        else: h1_away += score_val
+                    elif period == 2:
+                        if home_away == "home": h2_home += score_val
+                        else: h2_away += score_val
+            if h1_away > 0 or h1_home > 0:
+                half_scores["away"] = [h1_away, h2_away] if h2_away > 0 or h2_home > 0 else [h1_away]
+                half_scores["home"] = [h1_home, h2_home] if h2_away > 0 or h2_home > 0 else [h1_home]
         return plays[-10:], poss_team, half_scores
     except: return [], "", {}
 
