@@ -28,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "11.0"
+VERSION = "11.1"
 LEAGUE_AVG_TOTAL = 225
 THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 
@@ -215,7 +215,7 @@ def fetch_yesterday_teams():
 
 @st.cache_data(ttl=30)
 def fetch_plays(game_id):
-    if not game_id: return []
+    if not game_id: return [], {}
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={game_id}"
     try:
         resp = requests.get(url, timeout=10)
@@ -223,8 +223,30 @@ def fetch_plays(game_id):
         plays = []
         for p in data.get("plays", [])[-15:]:
             plays.append({"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", "")})
-        return plays[-10:]
-    except: return []
+        # Get quarter scores from boxscore
+        quarter_scores = {"away": [], "home": [], "away_record": "", "home_record": ""}
+        boxscore = data.get("boxscore", {})
+        teams = boxscore.get("teams", [])
+        for team in teams:
+            team_info = team.get("team", {})
+            stats = team.get("statistics", [])
+            # Get linescores (quarter by quarter)
+            header = data.get("header", {})
+            competitions = header.get("competitions", [{}])
+            if competitions:
+                for comp in competitions[0].get("competitors", []):
+                    linescores = comp.get("linescores", [])
+                    record = comp.get("record", [{}])
+                    record_str = record[0].get("summary", "") if record else ""
+                    scores = [ls.get("value", 0) for ls in linescores]
+                    if comp.get("homeAway") == "home":
+                        quarter_scores["home"] = scores
+                        quarter_scores["home_record"] = record_str
+                    else:
+                        quarter_scores["away"] = scores
+                        quarter_scores["away_record"] = record_str
+        return plays[-10:], quarter_scores
+    except: return [], {}
 
 def get_team_from_play(play_text, away, home):
     """Try to identify which team made the play by matching player names"""
@@ -264,6 +286,45 @@ def infer_possession(plays, away, home):
         return other_team, f"FT {KALSHI_CODES.get(other_team, other_team[:3].upper())}"
     # Default: acting team has ball
     return acting_team, f"🏀 {KALSHI_CODES.get(acting_team, acting_team[:3].upper())}"
+
+def render_scoreboard(away, home, away_score, home_score, period, clock, quarter_scores):
+    """Render ESPN-style quarter-by-quarter scoreboard"""
+    away_code = KALSHI_CODES.get(away, away[:3].upper())
+    home_code = KALSHI_CODES.get(home, home[:3].upper())
+    away_color = TEAM_COLORS.get(away, "#666")
+    home_color = TEAM_COLORS.get(home, "#666")
+    away_qs = quarter_scores.get("away", [])
+    home_qs = quarter_scores.get("home", [])
+    away_record = quarter_scores.get("away_record", "")
+    home_record = quarter_scores.get("home_record", "")
+    # Build quarter headers
+    num_periods = max(len(away_qs), len(home_qs), period)
+    q_headers = ""
+    away_q_scores = ""
+    home_q_scores = ""
+    for i in range(num_periods):
+        q_label = str(i+1) if i < 4 else f"OT{i-3}"
+        q_headers += f"<th style='padding:4px 8px;color:#888;font-size:12px'>{q_label}</th>"
+        away_val = int(away_qs[i]) if i < len(away_qs) else "-"
+        home_val = int(home_qs[i]) if i < len(home_qs) else "-"
+        away_q_scores += f"<td style='padding:4px 8px;color:#fff'>{away_val}</td>"
+        home_q_scores += f"<td style='padding:4px 8px;color:#fff'>{home_val}</td>"
+    period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
+    return f'''<div style="background:#0f172a;border-radius:8px;padding:12px;margin-bottom:8px">
+    <div style="text-align:center;color:#ffd700;font-weight:bold;margin-bottom:8px">{period_text} - {clock}</div>
+    <table style="width:100%;border-collapse:collapse;color:#fff;font-size:14px">
+    <tr style="border-bottom:1px solid #333"><th></th>{q_headers}<th style='padding:4px 12px;color:#888'>T</th></tr>
+    <tr style="border-bottom:1px solid #333">
+        <td style="padding:8px;text-align:left"><span style="color:{away_color};font-weight:bold">{away_code}</span> <span style="color:#666;font-size:11px">{away_record}</span></td>
+        {away_q_scores}
+        <td style="padding:8px 12px;font-weight:bold;font-size:18px;color:#fff">{away_score}</td>
+    </tr>
+    <tr>
+        <td style="padding:8px;text-align:left"><span style="color:{home_color};font-weight:bold">{home_code}</span> <span style="color:#666;font-size:11px">{home_record}</span></td>
+        {home_q_scores}
+        <td style="padding:8px 12px;font-weight:bold;font-size:18px;color:#fff">{home_score}</td>
+    </tr>
+    </table></div>'''
 
 def get_play_badge(last_play):
     if not last_play: return ""
@@ -456,8 +517,10 @@ st.subheader("🎮 LIVE EDGE MONITOR")
 if live_games:
     for g in live_games:
         away, home, total, mins, game_id = g['away'], g['home'], g['total_score'], g['minutes_played'], g['game_id']
-        plays = fetch_plays(game_id)
+        plays, quarter_scores = fetch_plays(game_id)
         st.markdown(f"### {away} @ {home}")
+        # Quarter-by-quarter scoreboard
+        st.markdown(render_scoreboard(away, home, g['away_score'], g['home_score'], g['period'], g['clock'], quarter_scores), unsafe_allow_html=True)
         col1, col2 = st.columns([1, 1])
         with col1:
             last_play = plays[-1] if plays else None
