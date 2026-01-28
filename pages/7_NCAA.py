@@ -27,7 +27,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "11.8"
+VERSION = "11.9"
 LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
@@ -139,59 +139,17 @@ def fetch_plays(game_id, known_away="", known_home=""):
         if situation:
             poss_text = situation.get("possessionText", "") or ""
             poss_team = poss_text.split()[0] if poss_text else ""
-        # Get records from header
-        half_scores = {"away": [], "home": [], "away_record": "", "home_record": ""}
+        half_scores = {"away_record": "", "home_record": ""}
         header = data.get("header", {})
         competitions = header.get("competitions", [{}])
-        api_away, api_home = "", ""
         if competitions:
             for comp in competitions[0].get("competitors", []):
                 record = comp.get("record", [{}])
                 record_str = record[0].get("summary", "") if record else ""
-                team_info = comp.get("team", {})
-                abbrev = team_info.get("abbreviation", "").upper()
                 if comp.get("homeAway") == "home":
-                    api_home = abbrev
                     half_scores["home_record"] = record_str
                 else:
-                    api_away = abbrev
                     half_scores["away_record"] = record_str
-        # Use known abbreviations or API abbreviations
-        away_abbrev = known_away.upper() if known_away else api_away
-        home_abbrev = known_home.upper() if known_home else api_home
-        # CALCULATE half scores from play-by-play
-        away_h1, away_h2, home_h1, home_h2 = 0, 0, 0, 0
-        for p in all_plays:
-            score_val = p.get("scoreValue", 0)
-            if score_val > 0:
-                period_num = p.get("period", {}).get("number", 1)
-                team_data = p.get("team", {})
-                scoring_team = ""
-                if isinstance(team_data, dict):
-                    scoring_team = team_data.get("abbreviation", "").upper()
-                if not scoring_team:
-                    continue
-                # Match scoring team to home or away
-                is_home = False
-                is_away = False
-                if home_abbrev:
-                    if scoring_team == home_abbrev or home_abbrev in scoring_team or scoring_team in home_abbrev:
-                        is_home = True
-                if away_abbrev:
-                    if scoring_team == away_abbrev or away_abbrev in scoring_team or scoring_team in away_abbrev:
-                        is_away = True
-                if is_home and not is_away:
-                    if period_num == 1:
-                        home_h1 += score_val
-                    else:
-                        home_h2 += score_val
-                elif is_away and not is_home:
-                    if period_num == 1:
-                        away_h1 += score_val
-                    else:
-                        away_h2 += score_val
-        half_scores["away"] = [away_h1, away_h2]
-        half_scores["home"] = [home_h1, home_h2]
         return plays[-10:], poss_team, half_scores
     except: return [], "", {}
 
@@ -200,34 +158,17 @@ def render_scoreboard_ncaa(away_abbrev, home_abbrev, away_score, home_score, per
     home_color = TEAM_COLORS.get(home_abbrev, "#666")
     away_record = half_scores.get("away_record", "")
     home_record = half_scores.get("home_record", "")
-    away_hs = half_scores.get("away", [])
-    home_hs = half_scores.get("home", [])
     period_text = f"H{period}" if period <= 2 else f"OT{period-2}"
-    # ALWAYS show H1/H2 columns
-    away_h1 = away_hs[0] if len(away_hs) > 0 else "-"
-    away_h2 = away_hs[1] if len(away_hs) > 1 else "-"
-    home_h1 = home_hs[0] if len(home_hs) > 0 else "-"
-    home_h2 = home_hs[1] if len(home_hs) > 1 else "-"
-    return f'''<div style="background:#0f172a;border-radius:12px;padding:16px;margin-bottom:8px">
-    <div style="text-align:center;color:#ffd700;font-weight:bold;font-size:20px;margin-bottom:12px">{period_text} - {clock}</div>
+    return f'''<div style="background:#0f172a;border-radius:12px;padding:20px;margin-bottom:8px">
+    <div style="text-align:center;color:#ffd700;font-weight:bold;font-size:22px;margin-bottom:16px">{period_text} - {clock}</div>
     <table style="width:100%;border-collapse:collapse;color:#fff">
     <tr style="border-bottom:2px solid #333">
-        <th style="padding:8px;text-align:left;width:40%"></th>
-        <th style="padding:8px 16px;color:#888;font-size:14px;text-align:center;width:15%">H1</th>
-        <th style="padding:8px 16px;color:#888;font-size:14px;text-align:center;width:15%">H2</th>
-        <th style="padding:8px 16px;color:#888;font-size:14px;text-align:center;width:15%">T</th>
-    </tr>
-    <tr style="border-bottom:1px solid #333">
-        <td style="padding:12px;text-align:left"><span style="color:{away_color};font-weight:bold;font-size:20px">{away_abbrev}</span><span style="color:#666;font-size:12px;margin-left:8px">{away_record}</span></td>
-        <td style="padding:8px 16px;color:#fff;text-align:center;font-size:18px">{away_h1}</td>
-        <td style="padding:8px 16px;color:#fff;text-align:center;font-size:18px">{away_h2}</td>
-        <td style="padding:8px 16px;font-weight:bold;font-size:28px;color:#fff;text-align:center">{away_score}</td>
+        <td style="padding:16px;text-align:left;width:70%"><span style="color:{away_color};font-weight:bold;font-size:28px">{away_abbrev}</span><span style="color:#666;font-size:14px;margin-left:12px">{away_record}</span></td>
+        <td style="padding:16px;text-align:right;font-weight:bold;font-size:52px;color:#fff">{away_score}</td>
     </tr>
     <tr>
-        <td style="padding:12px;text-align:left"><span style="color:{home_color};font-weight:bold;font-size:20px">{home_abbrev}</span><span style="color:#666;font-size:12px;margin-left:8px">{home_record}</span></td>
-        <td style="padding:8px 16px;color:#fff;text-align:center;font-size:18px">{home_h1}</td>
-        <td style="padding:8px 16px;color:#fff;text-align:center;font-size:18px">{home_h2}</td>
-        <td style="padding:8px 16px;font-weight:bold;font-size:28px;color:#fff;text-align:center">{home_score}</td>
+        <td style="padding:16px;text-align:left;width:70%"><span style="color:{home_color};font-weight:bold;font-size:28px">{home_abbrev}</span><span style="color:#666;font-size:14px;margin-left:12px">{home_record}</span></td>
+        <td style="padding:16px;text-align:right;font-weight:bold;font-size:52px;color:#fff">{home_score}</td>
     </tr>
     </table></div>'''
 
