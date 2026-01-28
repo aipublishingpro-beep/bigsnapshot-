@@ -61,8 +61,8 @@ elif "view_mode" not in st.session_state:
     st.session_state.view_mode = "city"
 # else: keep existing session_state.view_mode
 
-# DEBUG: Show what we ended up with
-# st.write(f"DEBUG view_mode: {st.session_state.view_mode}")
+# DEBUG: Show what we're reading from URL (uncomment to troubleshoot)
+st.caption(f"🔧 DEBUG: URL view='{url_view}' | session view='{st.session_state.view_mode}'")
 if "night_scan_on" not in st.session_state:
     st.session_state.night_scan_on = False
 if "night_locked_city" not in st.session_state:
@@ -617,6 +617,7 @@ if is_owner and st.session_state.view_mode == "shark":
     with col2:
         if st.button("🔄 REFRESH METAR (every 5 min ideal)", use_container_width=True, type="primary"):
             st.cache_data.clear()
+            st.toast(f"🔄 METAR refreshed at {datetime.now(eastern).strftime('%I:%M:%S %p ET')}", icon="✅")
             st.rerun()
     
     cfg = CITY_CONFIG.get(shark_city, {})
@@ -716,6 +717,51 @@ if is_owner and st.session_state.view_mode == "shark":
         </div>
         """, unsafe_allow_html=True)
         
+        # 🔊 SOUND ALERT when probability >= 70%
+        if early_prob >= 70:
+            st.markdown("""
+            <script>
+            (function() {
+                // Only beep once per page load
+                if (window.hasPlayedBeep) return;
+                window.hasPlayedBeep = true;
+                
+                // Create audio context and play beep
+                try {
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Play 3 beeps
+                    function playBeep(startTime, freq, duration) {
+                        const oscillator = audioCtx.createOscillator();
+                        const gainNode = audioCtx.createGain();
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+                        oscillator.frequency.value = freq;
+                        oscillator.type = 'sine';
+                        gainNode.gain.setValueAtTime(0.5, startTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+                        oscillator.start(startTime);
+                        oscillator.stop(startTime + duration);
+                    }
+                    
+                    const now = audioCtx.currentTime;
+                    playBeep(now, 880, 0.2);        // High beep
+                    playBeep(now + 0.3, 880, 0.2);  // High beep
+                    playBeep(now + 0.6, 1100, 0.4); // Higher longer beep
+                    
+                } catch(e) {
+                    console.log('Audio not supported');
+                }
+            })();
+            </script>
+            """, unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div style="background:#166534;border:2px solid #22c55e;border-radius:8px;padding:10px;margin:10px 0;text-align:center;animation:pulse 1s infinite">
+                <div style="color:#22c55e;font-size:1.2em;font-weight:700">🔊 HIGH PROBABILITY ALERT! 🔊</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
         # Uptick Alert
         if uptick_count >= 2:
             st.markdown(f"""
@@ -760,6 +806,51 @@ if is_owner and st.session_state.view_mode == "shark":
             shark_alert = False
             if early_prob >= 70 and uptick_count >= 1 and ask < 30:
                 shark_alert = True
+                
+                # 🔊 LOUD SHARK ALERT SOUND - 5 rapid beeps!
+                st.markdown("""
+                <script>
+                (function() {
+                    if (window.hasPlayedSharkAlert) return;
+                    window.hasPlayedSharkAlert = true;
+                    
+                    try {
+                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        
+                        function playBeep(startTime, freq, duration) {
+                            const oscillator = audioCtx.createOscillator();
+                            const gainNode = audioCtx.createGain();
+                            oscillator.connect(gainNode);
+                            gainNode.connect(audioCtx.destination);
+                            oscillator.frequency.value = freq;
+                            oscillator.type = 'square';
+                            gainNode.gain.setValueAtTime(0.6, startTime);
+                            gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+                            oscillator.start(startTime);
+                            oscillator.stop(startTime + duration);
+                        }
+                        
+                        const now = audioCtx.currentTime;
+                        // 5 urgent beeps - SHARK ALERT!
+                        playBeep(now, 1000, 0.15);
+                        playBeep(now + 0.2, 1200, 0.15);
+                        playBeep(now + 0.4, 1000, 0.15);
+                        playBeep(now + 0.6, 1200, 0.15);
+                        playBeep(now + 0.8, 1400, 0.3);
+                        // Repeat after 1 second
+                        playBeep(now + 1.5, 1000, 0.15);
+                        playBeep(now + 1.7, 1200, 0.15);
+                        playBeep(now + 1.9, 1000, 0.15);
+                        playBeep(now + 2.1, 1200, 0.15);
+                        playBeep(now + 2.3, 1400, 0.5);
+                        
+                    } catch(e) {
+                        console.log('Audio not supported');
+                    }
+                })();
+                </script>
+                """, unsafe_allow_html=True)
+                
                 st.markdown(f"""
                 <div style="background:linear-gradient(135deg,#166534,#22c55e);border:4px solid #4ade80;border-radius:16px;padding:30px;margin:15px 0;text-align:center;box-shadow:0 0 60px rgba(34,197,94,0.6);animation:pulse 0.5s infinite alternate">
                     <div style="color:#fff;font-size:2.5em;font-weight:900">🦈🚨 SHARK ALERT 🚨🦈</div>
@@ -876,11 +967,50 @@ if is_owner and st.session_state.view_mode == "shark":
         """, unsafe_allow_html=True)
     
     # Manual refresh (auto-refresh removed to preserve session_state)
-    st.markdown(f"<div style='color:#6b7280;font-size:0.8em;text-align:center;margin-top:20px'>Last updated: {now.strftime('%I:%M:%S %p ET')} | Click refresh every 60s for fresh METAR</div>", unsafe_allow_html=True)
+    refresh_time = now.strftime('%I:%M:%S %p ET')
+    st.markdown(f"""
+    <div style='background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin:20px 0;text-align:center'>
+        <div style='color:#3b82f6;font-size:0.9em'>🕐 Last Data Pull</div>
+        <div style='color:#fff;font-size:1.5em;font-weight:700'>{refresh_time}</div>
+        <div style='color:#6b7280;font-size:0.8em'>Click refresh every 60s for fresh METAR</div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    if st.button("🔄 REFRESH METAR DATA", use_container_width=True, type="primary", key="bottom_refresh"):
-        st.cache_data.clear()
-        st.rerun()
+    col_ref1, col_ref2 = st.columns([3, 1])
+    with col_ref1:
+        if st.button("🔄 REFRESH METAR DATA", use_container_width=True, type="primary", key="bottom_refresh"):
+            st.cache_data.clear()
+            st.toast(f"🔄 METAR refreshed at {datetime.now(eastern).strftime('%I:%M:%S %p ET')}", icon="✅")
+            st.rerun()
+    with col_ref2:
+        if st.button("🔊 Test Sound", use_container_width=True, key="test_sound"):
+            st.markdown("""
+            <script>
+            (function() {
+                try {
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    function playBeep(startTime, freq, duration) {
+                        const oscillator = audioCtx.createOscillator();
+                        const gainNode = audioCtx.createGain();
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+                        oscillator.frequency.value = freq;
+                        oscillator.type = 'sine';
+                        gainNode.gain.setValueAtTime(0.5, startTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+                        oscillator.start(startTime);
+                        oscillator.stop(startTime + duration);
+                    }
+                    const now = audioCtx.currentTime;
+                    playBeep(now, 880, 0.3);
+                    playBeep(now + 0.4, 1100, 0.3);
+                } catch(e) {
+                    alert('Sound not supported in this browser');
+                }
+            })();
+            </script>
+            """, unsafe_allow_html=True)
+            st.toast("🔊 Beep!", icon="🔔")
     
     # METAR History (for manual verification)
     if shark_city in st.session_state.metar_history and len(st.session_state.metar_history[shark_city]) > 1:
@@ -1155,4 +1285,4 @@ else:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#8b5cf6,#6366f1);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#fff">🦈 SHARK EDITION</b> <span style="color:#e0e0e0">— LOW Temperature Edge Finder v8.7</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#8b5cf6,#6366f1);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#fff">🦈 SHARK EDITION</b> <span style="color:#e0e0e0">— LOW Temperature Edge Finder v8.9</span></div>', unsafe_allow_html=True)
