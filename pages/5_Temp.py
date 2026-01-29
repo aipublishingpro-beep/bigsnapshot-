@@ -85,7 +85,7 @@ def get_bracket_bounds(range_str):
         return int(nums[0]) - 0.5, int(nums[0]) + 0.5
     return 0, 100
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=60)
 def fetch_nws_6hr_extremes(station, city_tz_str):
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
@@ -123,18 +123,22 @@ def fetch_nws_6hr_extremes(station, city_tz_str):
     except:
         return {}
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=60)
 def fetch_nws_observations(station, city_tz_str):
-    url = f"https://api.weather.gov/stations/{station}/observations?limit=200"
+    url = f"https://api.weather.gov/stations/{station}/observations?limit=500"
     try:
         city_tz = pytz.timezone(city_tz_str)
-        resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
+        resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0", "Cache-Control": "no-cache"}, timeout=15)
         if resp.status_code != 200:
             return None, None, None, [], None, None, None, None
         observations = resp.json().get("features", [])
         if not observations:
             return None, None, None, [], None, None, None, None
-        today = datetime.now(city_tz).date()
+        
+        # Get TODAY's midnight in city timezone
+        now_local = datetime.now(city_tz)
+        today_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        
         readings = []
         for obs in observations:
             props = obs.get("properties", {})
@@ -145,7 +149,8 @@ def fetch_nws_observations(station, city_tz_str):
             try:
                 ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
                 ts_local = ts.astimezone(city_tz)
-                if ts_local.date() == today:
+                # Only include readings from TODAY's midnight to NOW
+                if ts_local >= today_midnight and ts_local <= now_local:
                     temp_f = round(temp_c * 9/5 + 32, 1)
                     readings.append({"time": ts_local, "temp": temp_f})
             except:
@@ -669,5 +674,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.1</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.2</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment only. Not financial advice.</div>', unsafe_allow_html=True)
