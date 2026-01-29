@@ -125,15 +125,15 @@ def fetch_nws_6hr_extremes(station, city_tz_str):
 
 @st.cache_data(ttl=120)
 def fetch_nws_observations(station, city_tz_str):
-    url = f"https://api.weather.gov/stations/{station}/observations"
+    url = f"https://api.weather.gov/stations/{station}/observations?limit=200"
     try:
         city_tz = pytz.timezone(city_tz_str)
         resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
         if resp.status_code != 200:
-            return None, None, None, [], None, None, None
+            return None, None, None, [], None, None, None, None
         observations = resp.json().get("features", [])
         if not observations:
-            return None, None, None, [], None, None, None
+            return None, None, None, [], None, None, None, None
         today = datetime.now(city_tz).date()
         readings = []
         for obs in observations:
@@ -151,26 +151,28 @@ def fetch_nws_observations(station, city_tz_str):
             except:
                 continue
         if not readings:
-            return None, None, None, [], None, None, None
+            return None, None, None, [], None, None, None, None
         readings.sort(key=lambda x: x["time"], reverse=True)
         current = readings[0]["temp"]
         low = min(r["temp"] for r in readings)
         high = max(r["temp"] for r in readings)
         readings_chrono = sorted(readings, key=lambda x: x["time"])
         confirm_time = None
+        mins_since_confirm = None
         low_found = False
         for r in readings_chrono:
             if r["temp"] == low:
                 low_found = True
             elif low_found and r["temp"] > low:
                 confirm_time = r["time"]
+                mins_since_confirm = int((datetime.now(city_tz) - confirm_time).total_seconds() / 60)
                 break
         oldest_time = readings_chrono[0]["time"] if readings_chrono else None
         newest_time = readings_chrono[-1]["time"] if readings_chrono else None
         display_readings = [{"time": r["time"].strftime("%H:%M"), "temp": r["temp"]} for r in readings]
-        return current, low, high, display_readings, confirm_time, oldest_time, newest_time
+        return current, low, high, display_readings, confirm_time, oldest_time, newest_time, mins_since_confirm
     except:
-        return None, None, None, [], None, None, None
+        return None, None, None, [], None, None, None, None
 
 @st.cache_data(ttl=300)
 def fetch_nws_forecast(lat, lon):
@@ -192,7 +194,6 @@ def fetch_nws_forecast(lat, lon):
 
 @st.cache_data(ttl=300)
 def fetch_nws_tomorrow_low(lat, lon):
-    """Get tomorrow's forecasted low from NWS 7-day forecast"""
     try:
         points_url = f"https://api.weather.gov/points/{lat},{lon}"
         resp = requests.get(points_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
@@ -205,9 +206,7 @@ def fetch_nws_tomorrow_low(lat, lon):
         if resp.status_code != 200:
             return None, None
         periods = resp.json().get("properties", {}).get("periods", [])
-        
         tomorrow = (datetime.now(eastern) + timedelta(days=1)).date()
-        
         for p in periods:
             start_time = p.get("startTime", "")
             is_day = p.get("isDaytime", True)
@@ -226,7 +225,6 @@ def fetch_nws_tomorrow_low(lat, lon):
 
 @st.cache_data(ttl=60)
 def fetch_kalshi_tomorrow_brackets(series_ticker):
-    """Fetch tomorrow's Kalshi brackets"""
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
     try:
         resp = requests.get(url, timeout=10)
@@ -235,14 +233,11 @@ def fetch_kalshi_tomorrow_brackets(series_ticker):
         markets = resp.json().get("markets", [])
         if not markets:
             return []
-        
         tomorrow = datetime.now(eastern) + timedelta(days=1)
         tomorrow_str = tomorrow.strftime('%y%b%d').upper()
-        
         tomorrow_markets = [m for m in markets if tomorrow_str in m.get("event_ticker", "").upper()]
         if not tomorrow_markets:
             return []
-        
         brackets = []
         for m in tomorrow_markets:
             title = m.get("title", "")
@@ -250,7 +245,6 @@ def fetch_kalshi_tomorrow_brackets(series_ticker):
             yes_bid = m.get("yes_bid", 0) or 0
             yes_ask = m.get("yes_ask", 0) or 0
             low_bound, high_bound, bracket_name = None, None, ""
-            
             range_match = re.search(r'(\d+)\s*[-–to]+\s*(\d+)°', title)
             if range_match:
                 low_bound = int(range_match.group(1))
@@ -266,12 +260,9 @@ def fetch_kalshi_tomorrow_brackets(series_ticker):
                 high_bound = int(below_match.group(2))
                 low_bound = -999
                 bracket_name = f"below {high_bound}°"
-            
             if low_bound is not None and high_bound is not None:
-                event_ticker = m.get("event_ticker", "")
                 kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}"
                 brackets.append({"name": bracket_name, "low": low_bound, "high": high_bound, "bid": yes_bid, "ask": yes_ask, "url": kalshi_url, "ticker": ticker})
-        
         brackets.sort(key=lambda x: x['low'])
         return brackets
     except:
@@ -315,8 +306,7 @@ def fetch_kalshi_brackets(series_ticker):
                 low_bound = -999
                 bracket_name = f"below {high_bound}°"
             if low_bound is not None and high_bound is not None:
-                event_ticker = m.get("event_ticker", "")
-                kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}" if series_ticker else f"https://kalshi.com/markets/{event_ticker}"
+                kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}" if series_ticker else f"https://kalshi.com/markets/{m.get('event_ticker', '')}"
                 brackets.append({"name": bracket_name, "low": low_bound, "high": high_bound, "bid": yes_bid, "ask": yes_ask, "url": kalshi_url, "ticker": ticker})
         brackets.sort(key=lambda x: x['low'])
         return brackets
@@ -341,7 +331,7 @@ def check_low_locked(city_tz_str):
     return city_now.hour >= 7
 
 # ============================================================
-# SIDEBAR LEGENDS (OWNER ONLY - BOTH VIEWS)
+# SIDEBAR LEGENDS
 # ============================================================
 if is_owner:
     with st.sidebar:
@@ -362,35 +352,11 @@ if is_owner:
             <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 YOUR TRADING SCHEDULE (ET)</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
                 <b>🌙 1-2 AM</b> → Chicago, Denver<br>
-                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">Midnight LOWs - trade while they sleep!</span><br>
+                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">Midnight LOWs</span><br>
                 <b>☀️ 7-8 AM</b> → Austin, Miami, NYC, Philly<br>
-                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">Sunrise LOWs - Eastern cities</span><br>
+                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">Sunrise LOWs</span><br>
                 <b>☀️ 9-10 AM</b> → Los Angeles<br>
-                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">West coast sunrise</span>
-            </div>
-        </div>
-        <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES</div>
-            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>🌙 MIDNIGHT CITIES:</b><br>
-                • Chicago ~00:15 CT (1:15 AM ET)<br>
-                • Denver ~00:40 MT (2:40 AM ET)<br><br>
-                <b>☀️ SUNRISE CITIES:</b><br>
-                • Austin ~06:40 CT (7:40 AM ET)<br>
-                • Miami ~07:40 ET<br>
-                • NYC ~07:51 ET<br>
-                • Philly ~07:54 ET<br>
-                • LA ~06:00 PT (9:00 AM ET)
-            </div>
-        </div>
-        <div style="background:#1a1a2e;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">💰 ENTRY THRESHOLDS (Ask)</div>
-            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>🔥 &lt;85¢</b> = JUMP IN (+15¢)<br>
-                <b>✅ 85-90¢</b> = Good (+10-15¢)<br>
-                <b>⚠️ 90-95¢</b> = Small edge (+5-10¢)<br>
-                <b>❌ 95¢+</b> = Skip it<br><br>
-                <span style="color:#9ca3af">Only showing 10¢+ edge opps</span>
+                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">West coast</span>
             </div>
         </div>
         <div style="background:#1a2e1a;border:2px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
@@ -401,6 +367,15 @@ if is_owner:
                 <span style="color:#6b7280">⬛ GRAY</span> = No data
             </div>
         </div>
+        <div style="background:#1a1a2e;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
+            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">💰 ENTRY THRESHOLDS</div>
+            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
+                <b>🔥 &lt;85¢</b> = JUMP IN (+15¢)<br>
+                <b>✅ 85-90¢</b> = Good (+10-15¢)<br>
+                <b>⚠️ 90-95¢</b> = Small edge<br>
+                <b>❌ 95¢+</b> = Skip it
+            </div>
+        </div>
         """, unsafe_allow_html=True)
 else:
     with st.sidebar:
@@ -408,28 +383,21 @@ else:
         <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
             <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES (ET)</div>
             <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>🌙 MIDNIGHT CITIES:</b><br>
-                • Chicago ~1:15 AM ET<br>
-                • Denver ~2:40 AM ET<br><br>
-                <b>☀️ SUNRISE CITIES:</b><br>
-                • Austin ~7:40 AM ET<br>
-                • Miami ~7:40 AM ET<br>
-                • NYC ~7:51 AM ET<br>
-                • Philly ~7:54 AM ET<br>
-                • LA ~9:00 AM ET
+                <b>🌙 MIDNIGHT:</b> Chicago ~1:15 AM, Denver ~2:40 AM<br>
+                <b>☀️ SUNRISE:</b> Austin/Miami ~7:40 AM, NYC ~7:51 AM, Philly ~7:54 AM, LA ~9:00 AM
             </div>
         </div>
         """, unsafe_allow_html=True)
 
 # ============================================================
-# HEADER + OWNER TOGGLE
+# HEADER
 # ============================================================
 st.title("🌡️ LOW TEMP EDGE FINDER")
 st.caption(f"Live NWS Observations + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')}")
 
 if is_owner:
-    col_toggle1, col_toggle2, col_toggle3 = st.columns([1, 2, 1])
-    with col_toggle2:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
         view_label = "🔍 SCANNER VIEW" if st.session_state.scanner_view else "📍 CITY VIEW"
         if st.button(f"Switch to {'📍 City View' if st.session_state.scanner_view else '🔍 Scanner View'}", use_container_width=True):
             st.session_state.scanner_view = not st.session_state.scanner_view
@@ -442,7 +410,6 @@ if is_owner:
 # ============================================================
 if is_owner and st.session_state.scanner_view:
     st.subheader("🔍 All Cities Scanner")
-    st.caption("Scans all 7 cities for LOW temp mispricings")
     
     if st.button("🔄 Refresh Scan", use_container_width=True):
         st.cache_data.clear()
@@ -451,11 +418,11 @@ if is_owner and st.session_state.scanner_view:
     results = []
     with st.spinner("Scanning all 7 cities..."):
         for city_name, cfg in CITY_CONFIG.items():
-            current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg["station"], cfg["tz"])
+            current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg["station"], cfg["tz"])
             brackets = fetch_kalshi_brackets(cfg["low"])
             
             if obs_low is None:
-                results.append({"city": city_name, "status": "❌ NO DATA", "obs_low": None, "bracket": None, "price": None, "edge": None, "url": None, "locked": False, "confirm_time": None})
+                results.append({"city": city_name, "status": "❌ NO DATA", "obs_low": None, "bracket": None, "bid": 0, "ask": 100, "edge": 0, "url": None, "locked": False, "confirm_time": None, "mins_since_confirm": None})
                 continue
             
             winning = find_winning_bracket(obs_low, brackets)
@@ -473,17 +440,17 @@ if is_owner and st.session_state.scanner_view:
                     rating = "⚠️"
                 else:
                     rating = "❌"
-                results.append({"city": city_name, "status": "✅", "obs_low": obs_low, "bracket": winning["name"], "bid": bid, "ask": ask, "edge": edge, "rating": rating, "url": winning["url"], "locked": is_locked, "confirm_time": confirm_time})
+                results.append({"city": city_name, "status": "✅", "obs_low": obs_low, "bracket": winning["name"], "bid": bid, "ask": ask, "edge": edge, "rating": rating, "url": winning["url"], "locked": is_locked, "confirm_time": confirm_time, "mins_since_confirm": mins_since_confirm})
             else:
-                results.append({"city": city_name, "status": "⚠️ NO BRACKET", "obs_low": obs_low, "bracket": None, "price": None, "edge": None, "url": None, "locked": is_locked, "confirm_time": confirm_time})
+                results.append({"city": city_name, "status": "⚠️ NO BRACKET", "obs_low": obs_low, "bracket": None, "bid": 0, "ask": 100, "edge": 0, "url": None, "locked": is_locked, "confirm_time": confirm_time, "mins_since_confirm": mins_since_confirm})
     
-    results_with_edge = sorted([r for r in results if r["edge"] and r["edge"] >= 10], key=lambda x: x["edge"], reverse=True)
+    results_with_edge = sorted([r for r in results if r.get("edge") and r["edge"] >= 10], key=lambda x: x["edge"], reverse=True)
     
     st.markdown("### 🔥 OPPORTUNITIES")
     if results_with_edge:
         for r in results_with_edge:
             lock_icon = "🔒" if r["locked"] else "⏳"
-            confirm_text = "Confirmed ✓" if r.get("confirm_time") else "Awaiting confirmation..."
+            confirm_text = f"✅ {r['mins_since_confirm']}m ago" if r.get("mins_since_confirm") else "⏳ Awaiting..."
             rating_color = "#22c55e" if r["rating"] == "🔥" else "#3b82f6" if r["rating"] == "✅" else "#f59e0b"
             st.markdown(f"""
             <div style="background:linear-gradient(135deg,#1a2e1a,#0d1117);border:2px solid {rating_color};border-radius:12px;padding:20px;margin:10px 0">
@@ -491,45 +458,30 @@ if is_owner and st.session_state.scanner_view:
                     <div>
                         <span style="color:{rating_color};font-size:1.5em;font-weight:700">{r['rating']} {r['city']}</span>
                         <span style="color:#6b7280;margin-left:10px">{lock_icon}</span>
+                        <span style="color:#22c55e;margin-left:10px">{confirm_text}</span>
                     </div>
                     <div style="text-align:right">
                         <div style="color:#fbbf24;font-size:1.8em;font-weight:800">+{r['edge']:.0f}¢ EDGE</div>
                     </div>
                 </div>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:15px;flex-wrap:wrap;gap:10px">
-                    <div>
-                        <span style="color:#9ca3af">Actual Low:</span>
-                        <span style="color:#3b82f6;font-weight:700;margin-left:5px">{r['obs_low']}°F</span>
-                        <span style="color:#6b7280;margin-left:10px;font-size:0.85em">{confirm_text}</span>
-                    </div>
-                    <div>
-                        <span style="color:#9ca3af">Winner:</span>
-                        <span style="color:#fbbf24;font-weight:700;margin-left:5px">{r['bracket']}</span>
-                    </div>
+                    <div><span style="color:#9ca3af">Low:</span><span style="color:#3b82f6;font-weight:700;margin-left:5px">{r['obs_low']}°F</span></div>
+                    <div><span style="color:#9ca3af">Winner:</span><span style="color:#fbbf24;font-weight:700;margin-left:5px">{r['bracket']}</span></div>
                 </div>
                 <div style="display:flex;justify-content:center;gap:20px;margin-top:15px;padding:10px;background:#161b22;border-radius:8px">
-                    <div style="text-align:center">
-                        <div style="color:#6b7280;font-size:0.75em">BID</div>
-                        <div style="color:#22c55e;font-size:1.2em;font-weight:700">{r['bid']:.0f}¢</div>
-                    </div>
-                    <div style="text-align:center">
-                        <div style="color:#6b7280;font-size:0.75em">ASK (You Pay)</div>
-                        <div style="color:#ef4444;font-size:1.2em;font-weight:700">{r['ask']:.0f}¢</div>
-                    </div>
-                    <div style="text-align:center">
-                        <div style="color:#6b7280;font-size:0.75em">SPREAD</div>
-                        <div style="color:#fbbf24;font-size:1.2em;font-weight:700">{r['ask'] - r['bid']:.0f}¢</div>
-                    </div>
+                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.75em">BID</div><div style="color:#22c55e;font-size:1.2em;font-weight:700">{r['bid']:.0f}¢</div></div>
+                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.75em">ASK</div><div style="color:#ef4444;font-size:1.2em;font-weight:700">{r['ask']:.0f}¢</div></div>
+                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.75em">SPREAD</div><div style="color:#fbbf24;font-size:1.2em;font-weight:700">{r['ask'] - r['bid']:.0f}¢</div></div>
                 </div>
                 <a href="{r['url']}" target="_blank" style="text-decoration:none;display:block;margin-top:15px">
                     <div style="background:linear-gradient(135deg,#22c55e,#16a34a);padding:12px 20px;border-radius:8px;text-align:center;cursor:pointer">
-                        <span style="color:#000;font-weight:800;font-size:1.1em">🛒 BUY YES ON KALSHI → {r['bracket']}</span>
+                        <span style="color:#000;font-weight:800;font-size:1.1em">🛒 BUY YES → {r['bracket']}</span>
                     </div>
                 </a>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("No opportunities with 10¢+ edge found. Markets may be efficiently priced or LOWs not yet locked.")
+        st.info("No opportunities with 10¢+ edge found.")
     
     st.markdown("### 📊 ALL CITIES")
     for r in results:
@@ -537,60 +489,44 @@ if is_owner and st.session_state.scanner_view:
             st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#ef4444'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— No NWS data</span></div>", unsafe_allow_html=True)
         elif r["status"] == "⚠️ NO BRACKET":
             lock_icon = "🔒" if r["locked"] else "⏳"
-            # GREEN = locked + confirmed, AMBER = not locked/waiting
             row_bg = "#1a2e1a" if r["locked"] and r.get("confirm_time") else "#2d1f0a" if not r["locked"] else "#1a1a2e"
             row_border = "#22c55e" if r["locked"] and r.get("confirm_time") else "#f59e0b" if not r["locked"] else "#30363d"
-            st.markdown(f"<div style='background:{row_bg};border:2px solid {row_border};border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span><span style='color:#6b7280;margin-left:10px'>— Low: {r['obs_low']}°F — No matching Kalshi bracket</span></div>", unsafe_allow_html=True)
+            confirm_display = f"<span style='color:#22c55e;font-weight:700'>✅ {r['mins_since_confirm']}m</span>" if r.get("mins_since_confirm") else ""
+            st.markdown(f"<div style='background:{row_bg};border:2px solid {row_border};border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span><span style='margin-left:8px'>{confirm_display}</span><span style='color:#6b7280;margin-left:10px'>— Low: {r['obs_low']}°F — No bracket</span></div>", unsafe_allow_html=True)
         else:
             lock_icon = "🔒" if r["locked"] else "⏳"
-            # GREEN = locked + confirmed, AMBER = not locked/waiting
             row_bg = "#1a2e1a" if r["locked"] and r.get("confirm_time") else "#2d1f0a" if not r["locked"] else "#0d1117"
             row_border = "#22c55e" if r["locked"] and r.get("confirm_time") else "#f59e0b" if not r["locked"] else "#30363d"
-            edge_display = f"<span style='color:#22c55e;font-weight:700'>{r['rating']} +{r['edge']:.0f}¢</span>" if r["edge"] and r["edge"] >= 10 else "<span style='color:#6b7280'>—</span>"
-            ask_color = "#22c55e" if r["ask"] and r["ask"] < 85 else "#3b82f6" if r["ask"] and r["ask"] < 90 else "#f59e0b" if r["ask"] and r["ask"] < 95 else "#9ca3af"
-            st.markdown(f"<div style='background:{row_bg};border:2px solid {row_border};border-radius:8px;padding:12px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'><div><span style='color:#fff;font-weight:600'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span></div><div><span style='color:#3b82f6'>{r['obs_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#fbbf24'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:#9ca3af'>Bid:</span><span style='color:#22c55e;margin:0 3px'>{r['bid']:.0f}¢</span><span style='color:#9ca3af'>Ask:</span><span style='color:{ask_color};margin:0 3px'>{r['ask']:.0f}¢</span><span style='color:#6b7280;margin:0 5px'>|</span>{edge_display}</div></div>", unsafe_allow_html=True)
+            edge_display = f"<span style='color:#22c55e;font-weight:700'>{r.get('rating','')} +{r['edge']:.0f}¢</span>" if r.get("edge") and r["edge"] >= 10 else "<span style='color:#6b7280'>—</span>"
+            ask_color = "#22c55e" if r["ask"] < 85 else "#3b82f6" if r["ask"] < 90 else "#f59e0b" if r["ask"] < 95 else "#9ca3af"
+            confirm_display = f"<span style='color:#22c55e;font-weight:700'>✅ {r['mins_since_confirm']}m</span>" if r.get("mins_since_confirm") else "<span style='color:#f59e0b'>⏳</span>" if r["locked"] else ""
+            st.markdown(f"<div style='background:{row_bg};border:2px solid {row_border};border-radius:8px;padding:12px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'><div><span style='color:#fff;font-weight:600'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span><span style='margin-left:8px'>{confirm_display}</span></div><div><span style='color:#3b82f6'>{r['obs_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#fbbf24'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:#9ca3af'>Bid:</span><span style='color:#22c55e;margin:0 3px'>{r['bid']:.0f}¢</span><span style='color:#9ca3af'>Ask:</span><span style='color:{ask_color};margin:0 3px'>{r['ask']:.0f}¢</span><span style='color:#6b7280;margin:0 5px'>|</span>{edge_display}</div></div>", unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown(f"<div style='text-align:center;color:#6b7280;font-size:0.8em'>Last scan: {now.strftime('%I:%M %p ET')} | 🟢 = LOCKED + Confirmed | 🟡 = Waiting/Pre-peak</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:center;color:#6b7280;font-size:0.8em'>Last scan: {now.strftime('%I:%M %p ET')} | 🟢 = LOCKED + Confirmed | 🟡 = Waiting</div>", unsafe_allow_html=True)
 
-    # ============================================================
-    # TOMORROW'S LOW SECTION (OWNER ONLY)
-    # ============================================================
+    # TOMORROW'S LOW SECTION
     st.markdown("---")
     tomorrow_date = (datetime.now(eastern) + timedelta(days=1)).strftime('%A, %b %d')
     st.subheader(f"🔮 TOMORROW'S LOW ({tomorrow_date})")
-    st.caption("Buy now, sell tomorrow 7 AM when LOW locks in")
     
     tomorrow_results = []
     with st.spinner("Scanning tomorrow's markets..."):
         for city_name, cfg in CITY_CONFIG.items():
             forecast_low, forecast_desc = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
             brackets = fetch_kalshi_tomorrow_brackets(cfg["low"])
-            
             if forecast_low is None:
-                tomorrow_results.append({"city": city_name, "status": "❌ NO FORECAST", "forecast_low": None, "bracket": None, "ask": None, "url": None, "desc": None})
+                tomorrow_results.append({"city": city_name, "status": "❌", "forecast_low": None, "bracket": None, "ask": None, "url": None})
                 continue
-            
             if not brackets:
-                tomorrow_results.append({"city": city_name, "status": "⚠️ NO MARKET", "forecast_low": forecast_low, "bracket": None, "ask": None, "url": None, "desc": forecast_desc})
+                tomorrow_results.append({"city": city_name, "status": "⚠️", "forecast_low": forecast_low, "bracket": None, "ask": None, "url": None})
                 continue
-            
             winning = find_winning_bracket(forecast_low, brackets)
             if winning:
-                tomorrow_results.append({
-                    "city": city_name, 
-                    "status": "✅", 
-                    "forecast_low": forecast_low, 
-                    "bracket": winning["name"], 
-                    "bid": winning["bid"],
-                    "ask": winning["ask"], 
-                    "url": winning["url"],
-                    "desc": forecast_desc
-                })
+                tomorrow_results.append({"city": city_name, "status": "✅", "forecast_low": forecast_low, "bracket": winning["name"], "bid": winning["bid"], "ask": winning["ask"], "url": winning["url"]})
             else:
-                tomorrow_results.append({"city": city_name, "status": "⚠️ NO BRACKET", "forecast_low": forecast_low, "bracket": None, "ask": None, "url": None, "desc": forecast_desc})
+                tomorrow_results.append({"city": city_name, "status": "⚠️", "forecast_low": forecast_low, "bracket": None, "ask": None, "url": None})
     
-    # Show cheap opportunities (ask < 40¢)
     cheap_opps = [r for r in tomorrow_results if r.get("ask") and r["ask"] < 40]
     cheap_opps.sort(key=lambda x: x["ask"])
     
@@ -598,65 +534,28 @@ if is_owner and st.session_state.scanner_view:
         st.markdown("### 💰 CHEAP ENTRIES (Ask < 40¢)")
         for r in cheap_opps:
             potential = 100 - r["ask"]
-            bracket_low, bracket_high = 0, 100
-            range_match = re.search(r'(\d+)-(\d+)', r["bracket"])
-            if range_match:
-                bracket_low, bracket_high = int(range_match.group(1)), int(range_match.group(2))
-            mid = (bracket_low + bracket_high) / 2
-            buffer = abs(r["forecast_low"] - mid)
-            safety = "🎯 CENTERED" if buffer <= 1 else "⚠️ EDGE" if buffer <= 2 else "🔴 RISKY"
-            
             st.markdown(f"""
             <div style="background:linear-gradient(135deg,#1a1a2e,#0d1117);border:2px solid #3b82f6;border-radius:12px;padding:20px;margin:10px 0">
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-                    <div>
-                        <span style="color:#3b82f6;font-size:1.4em;font-weight:700">{r['city']}</span>
-                    </div>
-                    <div style="text-align:right">
-                        <span style="color:#9ca3af;font-size:0.9em">Ask:</span>
-                        <span style="color:#22c55e;font-size:1.8em;font-weight:800;margin-left:5px">{r['ask']:.0f}¢</span>
-                    </div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:#3b82f6;font-size:1.4em;font-weight:700">{r['city']}</span>
+                    <span style="color:#22c55e;font-size:1.8em;font-weight:800">{r['ask']:.0f}¢</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:15px;flex-wrap:wrap;gap:10px">
-                    <div>
-                        <span style="color:#9ca3af">NWS Forecast:</span>
-                        <span style="color:#fbbf24;font-weight:700;margin-left:5px">{r['forecast_low']}°F</span>
-                        <span style="color:#6b7280;margin-left:8px;font-size:0.85em">{r.get('desc', '')}</span>
-                    </div>
-                    <div>
-                        <span style="color:#9ca3af">Winner:</span>
-                        <span style="color:#22c55e;font-weight:700;margin-left:5px">{r['bracket']}</span>
-                        <span style="margin-left:8px">{safety}</span>
-                    </div>
-                </div>
-                <div style="margin-top:15px;padding:10px;background:#161b22;border-radius:8px;text-align:center">
-                    <span style="color:#9ca3af">Potential profit:</span>
-                    <span style="color:#22c55e;font-weight:700;margin-left:5px">+{potential:.0f}¢</span>
-                    <span style="color:#6b7280;margin-left:10px">|</span>
-                    <span style="color:#9ca3af;margin-left:10px">Sell at 35-40¢ = </span>
-                    <span style="color:#fbbf24;font-weight:700">+{35 - r['ask']:.0f}¢ to +{40 - r['ask']:.0f}¢</span>
-                </div>
-                <a href="{r['url']}" target="_blank" style="text-decoration:none;display:block;margin-top:15px">
-                    <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);padding:12px 20px;border-radius:8px;text-align:center;cursor:pointer">
-                        <span style="color:#fff;font-weight:800;font-size:1.1em">🛒 BUY TOMORROW'S {r['bracket']} → {r['ask']:.0f}¢</span>
-                    </div>
-                </a>
+                <div style="margin-top:10px"><span style="color:#9ca3af">NWS:</span><span style="color:#fbbf24;font-weight:700;margin-left:5px">{r['forecast_low']}°F</span><span style="color:#6b7280;margin:0 10px">→</span><span style="color:#22c55e;font-weight:700">{r['bracket']}</span></div>
+                <div style="margin-top:10px;color:#9ca3af">Potential: <span style="color:#22c55e;font-weight:700">+{potential:.0f}¢</span></div>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("No cheap entries found (all brackets > 40¢). Check back later or prices may already be efficient.")
+        st.info("No cheap entries (all > 40¢)")
     
     st.markdown("### 📋 ALL CITIES - TOMORROW")
     for r in tomorrow_results:
-        if r["status"] == "❌ NO FORECAST":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#ef4444'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— No NWS forecast</span></div>", unsafe_allow_html=True)
-        elif r["status"] == "⚠️ NO MARKET":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— Forecast: {r['forecast_low']}°F — Market not open yet</span></div>", unsafe_allow_html=True)
-        elif r["status"] == "⚠️ NO BRACKET":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— Forecast: {r['forecast_low']}°F — No matching bracket</span></div>", unsafe_allow_html=True)
+        if r["status"] == "❌":
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#ef4444'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— No forecast</span></div>", unsafe_allow_html=True)
+        elif r["status"] == "⚠️":
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— {r.get('forecast_low', '?')}°F — No bracket</span></div>", unsafe_allow_html=True)
         else:
             ask_color = "#22c55e" if r["ask"] < 30 else "#3b82f6" if r["ask"] < 40 else "#f59e0b" if r["ask"] < 50 else "#9ca3af"
-            st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'><div><span style='color:#fff;font-weight:600'>{r['city']}</span></div><div><span style='color:#fbbf24'>NWS: {r['forecast_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#22c55e'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:#9ca3af'>Ask:</span><span style='color:{ask_color};margin-left:3px;font-weight:700'>{r['ask']:.0f}¢</span></div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0;display:flex;justify-content:space-between;align-items:center'><span style='color:#fff;font-weight:600'>{r['city']}</span><div><span style='color:#fbbf24'>{r['forecast_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#22c55e'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:{ask_color};font-weight:700'>{r['ask']:.0f}¢</span></div></div>", unsafe_allow_html=True)
 
 # ============================================================
 # CITY VIEW (DEFAULT)
@@ -674,19 +573,18 @@ else:
 
     if st.button("⭐ Set as Default City", use_container_width=False):
         st.query_params["city"] = city
-        st.success(f"✓ Bookmark this page to save {city} as default!")
+        st.success(f"✓ Bookmark to save {city} as default!")
 
-    current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
+    current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
     extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern")) if is_owner else {}
 
     if is_owner and obs_low and current_temp:
         city_tz = pytz.timezone(cfg.get("tz", "US/Eastern"))
         hour = datetime.now(city_tz).hour
-        if confirm_time:
-            mins_ago = int((datetime.now(city_tz) - confirm_time).total_seconds() / 60)
-            time_ago_text = f"Confirmed {mins_ago} minutes ago" if 0 <= mins_ago < 1440 else "Check readings below"
+        if mins_since_confirm is not None:
+            time_ago_text = f"✅ Confirmed {mins_since_confirm} minutes ago"
         else:
-            time_ago_text = "Awaiting rise after low..."
+            time_ago_text = "⏳ Awaiting rise after low..."
         data_warning = ""
         if oldest_time and oldest_time.hour >= 7:
             data_warning = f"⚠️ Data only from {oldest_time.strftime('%H:%M')} - early low may be missing!"
@@ -699,7 +597,7 @@ else:
         st.markdown(f"""
         <div style="background:{box_bg};border:3px solid {lock_color};border-radius:16px;padding:30px;margin:20px 0;text-align:center">
             <div style="color:{lock_color};font-size:1.2em;font-weight:700;margin-bottom:10px">{lock_status}</div>
-            <div style="color:#6b7280;font-size:0.9em">Today's Low (from available data)</div>
+            <div style="color:#6b7280;font-size:0.9em">Today's Low</div>
             <div style="color:#fff;font-size:4em;font-weight:800;margin:10px 0">{obs_low}°F</div>
             <div style="color:#9ca3af;font-size:0.9em">{time_ago_text}</div>
             <div style="color:#f59e0b;font-size:0.85em;margin-top:10px">{data_warning}</div>
@@ -708,9 +606,9 @@ else:
 
     if not is_owner and obs_low and current_temp:
         st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#1a1a2e,#0d1117);border:3px solid #3b82f6;border-radius:16px;padding:25px;margin:20px 0;text-align:center;box-shadow:0 0 20px rgba(59,130,246,0.3)">
+        <div style="background:linear-gradient(135deg,#1a1a2e,#0d1117);border:3px solid #3b82f6;border-radius:16px;padding:25px;margin:20px 0;text-align:center">
             <div style="color:#6b7280;font-size:1em;margin-bottom:5px">📊 Today's Recorded Low</div>
-            <div style="color:#3b82f6;font-size:4.5em;font-weight:800;margin:10px 0;text-shadow:0 0 20px rgba(59,130,246,0.5)">{obs_low}°F</div>
+            <div style="color:#3b82f6;font-size:4.5em;font-weight:800;margin:10px 0">{obs_low}°F</div>
             <div style="color:#9ca3af;font-size:0.9em">From NWS Station: <span style="color:#22c55e;font-weight:600">{cfg.get('station', 'N/A')}</span></div>
         </div>
         """, unsafe_allow_html=True)
@@ -718,9 +616,9 @@ else:
     if current_temp:
         st.markdown(f"""
         <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
-            <div style="display:flex;justify-content:space-around;text-align:center;flex-wrap:wrap;gap:15px">
-                <div><div style="color:#6b7280;font-size:0.8em">CURRENT TEMP</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
-                <div><div style="color:#6b7280;font-size:0.8em">TODAY'S HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
+            <div style="display:flex;justify-content:space-around;text-align:center">
+                <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
+                <div><div style="color:#6b7280;font-size:0.8em">HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -728,10 +626,10 @@ else:
         if readings:
             with st.expander("📊 Recent NWS Observations", expanded=True):
                 if oldest_time and newest_time:
-                    st.markdown(f"<div style='color:#6b7280;font-size:0.8em;margin-bottom:10px;text-align:center'>📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local</div>", unsafe_allow_html=True)
-                display_list = readings if is_owner else readings[:8]
+                    st.markdown(f"<div style='color:#6b7280;font-size:0.8em;margin-bottom:10px;text-align:center'>📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local | {len(readings)} readings</div>", unsafe_allow_html=True)
+                display_list = readings if is_owner else readings[:12]
                 low_idx = next((i for i, r in enumerate(display_list) if r['temp'] == obs_low), None)
-                confirm_idx = (low_idx - 2) if (low_idx is not None and low_idx >= 2) else None
+                confirm_idx = low_idx if (low_idx is not None and low_idx > 0 and confirm_time) else None
                 for i, r in enumerate(display_list):
                     time_key = r['time']
                     six_hr = extremes_6hr.get(time_key, {})
@@ -741,7 +639,8 @@ else:
                     if six_hr.get('min') is not None:
                         six_hr_display += f"<span style='color:#3b82f6'>6hr↓{six_hr['min']:.0f}°</span>"
                     if is_owner and confirm_idx is not None and i == confirm_idx:
-                        st.markdown(f'<div style="display:flex;justify-content:center;padding:8px;border-radius:4px;background:#166534;border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW</span></div>', unsafe_allow_html=True)
+                        confirm_mins_text = f" — {mins_since_confirm}m ago" if mins_since_confirm else ""
+                        st.markdown(f'<div style="display:flex;justify-content:center;padding:8px;border-radius:4px;background:#166534;border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW{confirm_mins_text}</span></div>', unsafe_allow_html=True)
                     if i == low_idx:
                         row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:#2d1f0a;border:1px solid #f59e0b;margin:2px 0"
                         temp_style = "color:#fbbf24;font-weight:700"
@@ -770,5 +669,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v5.9</span></div>', unsafe_allow_html=True)
-st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment purposes only. Not financial advice. Verify on Kalshi before trading.</div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.1</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment only. Not financial advice.</div>', unsafe_allow_html=True)
