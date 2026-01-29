@@ -53,6 +53,21 @@ if "scanner_view" not in st.session_state:
     st.session_state.scanner_view = False
 
 # ============================================================
+# HELPER: FORMAT TIME AGO (FIXED!)
+# ============================================================
+def format_time_ago(mins):
+    """Convert minutes to human-readable format"""
+    if mins is None:
+        return None
+    if mins < 60:
+        return f"{mins}m"
+    hours = mins // 60
+    remaining_mins = mins % 60
+    if remaining_mins == 0:
+        return f"{hours}h"
+    return f"{hours}h {remaining_mins}m"
+
+# ============================================================
 # SHARED FUNCTIONS
 # ============================================================
 def get_bracket_bounds(range_str):
@@ -135,7 +150,6 @@ def fetch_nws_observations(station, city_tz_str):
         if not observations:
             return None, None, None, [], None, None, None, None
         
-        # Get TODAY's midnight in city timezone
         now_local = datetime.now(city_tz)
         today_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
         
@@ -149,7 +163,6 @@ def fetch_nws_observations(station, city_tz_str):
             try:
                 ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
                 ts_local = ts.astimezone(city_tz)
-                # Only include readings from TODAY's midnight to NOW
                 if ts_local >= today_midnight and ts_local <= now_local:
                     temp_f = round(temp_c * 9/5 + 32, 1)
                     readings.append({"time": ts_local, "temp": temp_f})
@@ -455,7 +468,8 @@ if is_owner and st.session_state.scanner_view:
     if results_with_edge:
         for r in results_with_edge:
             lock_icon = "🔒" if r["locked"] else "⏳"
-            confirm_text = f"✅ {r['mins_since_confirm']}m ago" if r.get("mins_since_confirm") else "⏳ Awaiting..."
+            time_ago_str = format_time_ago(r.get('mins_since_confirm'))
+            confirm_text = f"✅ {time_ago_str} ago" if time_ago_str else "⏳ Awaiting..."
             rating_color = "#22c55e" if r["rating"] == "🔥" else "#3b82f6" if r["rating"] == "✅" else "#f59e0b"
             st.markdown(f"""
             <div style="background:linear-gradient(135deg,#1a2e1a,#0d1117);border:2px solid {rating_color};border-radius:12px;padding:20px;margin:10px 0">
@@ -496,7 +510,8 @@ if is_owner and st.session_state.scanner_view:
             lock_icon = "🔒" if r["locked"] else "⏳"
             row_bg = "#1a2e1a" if r["locked"] and r.get("confirm_time") else "#2d1f0a" if not r["locked"] else "#1a1a2e"
             row_border = "#22c55e" if r["locked"] and r.get("confirm_time") else "#f59e0b" if not r["locked"] else "#30363d"
-            confirm_display = f"<span style='color:#22c55e;font-weight:700'>✅ {r['mins_since_confirm']}m</span>" if r.get("mins_since_confirm") else ""
+            time_ago_str = format_time_ago(r.get('mins_since_confirm'))
+            confirm_display = f"<span style='color:#22c55e;font-weight:700'>✅ {time_ago_str}</span>" if time_ago_str else ""
             st.markdown(f"<div style='background:{row_bg};border:2px solid {row_border};border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span><span style='margin-left:8px'>{confirm_display}</span><span style='color:#6b7280;margin-left:10px'>— Low: {r['obs_low']}°F — No bracket</span></div>", unsafe_allow_html=True)
         else:
             lock_icon = "🔒" if r["locked"] else "⏳"
@@ -504,7 +519,8 @@ if is_owner and st.session_state.scanner_view:
             row_border = "#22c55e" if r["locked"] and r.get("confirm_time") else "#f59e0b" if not r["locked"] else "#30363d"
             edge_display = f"<span style='color:#22c55e;font-weight:700'>{r.get('rating','')} +{r['edge']:.0f}¢</span>" if r.get("edge") and r["edge"] >= 10 else "<span style='color:#6b7280'>—</span>"
             ask_color = "#22c55e" if r["ask"] < 85 else "#3b82f6" if r["ask"] < 90 else "#f59e0b" if r["ask"] < 95 else "#9ca3af"
-            confirm_display = f"<span style='color:#22c55e;font-weight:700'>✅ {r['mins_since_confirm']}m</span>" if r.get("mins_since_confirm") else "<span style='color:#f59e0b'>⏳</span>" if r["locked"] else ""
+            time_ago_str = format_time_ago(r.get('mins_since_confirm'))
+            confirm_display = f"<span style='color:#22c55e;font-weight:700'>✅ {time_ago_str}</span>" if time_ago_str else "<span style='color:#f59e0b'>⏳</span>" if r["locked"] else ""
             st.markdown(f"<div style='background:{row_bg};border:2px solid {row_border};border-radius:8px;padding:12px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'><div><span style='color:#fff;font-weight:600'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span><span style='margin-left:8px'>{confirm_display}</span></div><div><span style='color:#3b82f6'>{r['obs_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#fbbf24'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:#9ca3af'>Bid:</span><span style='color:#22c55e;margin:0 3px'>{r['bid']:.0f}¢</span><span style='color:#9ca3af'>Ask:</span><span style='color:{ask_color};margin:0 3px'>{r['ask']:.0f}¢</span><span style='color:#6b7280;margin:0 5px'>|</span>{edge_display}</div></div>", unsafe_allow_html=True)
     
     st.markdown("---")
@@ -586,8 +602,9 @@ else:
     if is_owner and obs_low and current_temp:
         city_tz = pytz.timezone(cfg.get("tz", "US/Eastern"))
         hour = datetime.now(city_tz).hour
-        if mins_since_confirm is not None:
-            time_ago_text = f"✅ Confirmed {mins_since_confirm} minutes ago"
+        time_ago_str = format_time_ago(mins_since_confirm)
+        if time_ago_str:
+            time_ago_text = f"✅ Confirmed {time_ago_str} ago"
         else:
             time_ago_text = "⏳ Awaiting rise after low..."
         data_warning = ""
@@ -644,7 +661,8 @@ else:
                     if six_hr.get('min') is not None:
                         six_hr_display += f"<span style='color:#3b82f6'>6hr↓{six_hr['min']:.0f}°</span>"
                     if is_owner and confirm_idx is not None and i == confirm_idx:
-                        confirm_mins_text = f" — {mins_since_confirm}m ago" if mins_since_confirm else ""
+                        confirm_time_ago = format_time_ago(mins_since_confirm)
+                        confirm_mins_text = f" — {confirm_time_ago} ago" if confirm_time_ago else ""
                         st.markdown(f'<div style="display:flex;justify-content:center;padding:8px;border-radius:4px;background:#166534;border:2px solid #22c55e;margin:4px 0"><span style="color:#4ade80;font-weight:700">✅ CONFIRMED LOW{confirm_mins_text}</span></div>', unsafe_allow_html=True)
                     if i == low_idx:
                         row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:#2d1f0a;border:1px solid #f59e0b;margin:2px 0"
@@ -674,5 +692,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.2</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.3</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment only. Not financial advice.</div>', unsafe_allow_html=True)
