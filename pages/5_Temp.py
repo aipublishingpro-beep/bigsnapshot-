@@ -162,12 +162,9 @@ def check_low_locked_6hr(extremes_6hr, city_tz_str):
 @st.cache_data(ttl=60)
 def fetch_nws_6hr_extremes(station, city_tz_str):
     """
-    CRITICAL: This is the settlement data source.
     Scrapes 6hr Max and 6hr Min from NWS obhistory HTML table.
-    These are the values Kalshi uses for settlement.
-    
-    FIXED: Very flexible parsing - finds ALL numbers after "6hr" text.
-    NWS format is always: 6hr↑MAX° 6hr↓MIN° (max first, min second)
+    Works reliably for hourly stations (NYC, Miami, etc.)
+    Denver/Chicago use 5-min intervals - check manually.
     """
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
@@ -175,7 +172,6 @@ def fetch_nws_6hr_extremes(station, city_tz_str):
         resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
         if resp.status_code != 200:
             return {}
-        
         soup = BeautifulSoup(resp.text, 'html.parser')
         table = soup.find('table')
         if not table:
@@ -183,60 +179,25 @@ def fetch_nws_6hr_extremes(station, city_tz_str):
         rows = table.find_all('tr')
         extremes = {}
         today = datetime.now(city_tz).day
-        
         for row in rows[3:]:
             cells = row.find_all('td')
-            if len(cells) < 3:
-                continue
-            try:
-                date_val = cells[0].text.strip()
-                time_val = cells[1].text.strip()
-                
-                # Skip if not today
-                if date_val:
-                    try:
-                        if int(date_val) != today:
-                            continue
-                    except:
+            if len(cells) >= 10:
+                try:
+                    date_val = cells[0].text.strip()
+                    time_val = cells[1].text.strip()
+                    if date_val and int(date_val) != today:
                         continue
-                
-                row_text = row.get_text()
-                
-                # Check if this row has 6hr data at all
-                if '6hr' not in row_text.lower():
+                    max_6hr_text = cells[8].text.strip() if len(cells) > 8 else ""
+                    min_6hr_text = cells[9].text.strip() if len(cells) > 9 else ""
+                    if max_6hr_text or min_6hr_text:
+                        max_val = float(max_6hr_text) if max_6hr_text else None
+                        min_val = float(min_6hr_text) if min_6hr_text else None
+                        if max_val is not None or min_val is not None:
+                            time_key = time_val.replace(":", "")[:4]
+                            time_key = time_key[:2] + ":" + time_key[2:]
+                            extremes[time_key] = {"max": max_val, "min": min_val}
+                except:
                     continue
-                
-                max_val = None
-                min_val = None
-                
-                # VERY flexible pattern: find "6hr" followed by any non-digits, then capture the number
-                # This handles any arrow encoding: ↑ ↓ + - or whatever
-                all_6hr_matches = re.findall(r'6hr\D*(\d+)', row_text, re.IGNORECASE)
-                
-                if len(all_6hr_matches) >= 2:
-                    # NWS format: Max comes first, Min comes second
-                    max_val = float(all_6hr_matches[0])
-                    min_val = float(all_6hr_matches[1])
-                elif len(all_6hr_matches) == 1:
-                    # Only one value - try to determine if max or min from context
-                    # Usually if only one appears, check the surrounding text
-                    if 'max' in row_text.lower():
-                        max_val = float(all_6hr_matches[0])
-                    else:
-                        min_val = float(all_6hr_matches[0])
-                
-                # If we found any 6hr values, store them
-                if max_val is not None or min_val is not None:
-                    # Format time key consistently
-                    time_key = time_val.strip().replace(":", "")
-                    if len(time_key) >= 4:
-                        time_key = time_key[:2] + ":" + time_key[2:4]
-                    
-                    extremes[time_key] = {"max": max_val, "min": min_val}
-                    
-            except Exception as e:
-                continue
-        
         return extremes
     except:
         return {}
@@ -525,13 +486,39 @@ st.caption(f"6hr Settlement Data | {now.strftime('%b %d, %Y %I:%M %p ET')}")
 # ============================================================
 # HERO BOX - THE ONLY THING THAT MATTERS
 # Shows current city's 6hr settlement status prominently
+# NOTE: Denver & Chicago excluded - check manually due to 5-min intervals
 # ============================================================
+MANUAL_CHECK_CITIES = ["Denver", "Chicago"]
+
 def render_hero_box(city_name, cfg):
     """Render the big settlement status box at top of page"""
     city_tz = pytz.timezone(cfg.get("tz", "US/Eastern"))
     city_now = datetime.now(city_tz)
     today_str = city_now.strftime("%A, %B %d, %Y")
     
+    # Denver & Chicago - show manual check message
+    if city_name in MANUAL_CHECK_CITIES:
+        station = cfg.get("station", "KDEN")
+        nws_link = f"https://forecast.weather.gov/data/obhistory/{station}.html"
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#1e1e3f,#2d2d5f);border:4px solid #8b5cf6;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(139,92,246,0.3)">
+            <div style="color:#8b5cf6;font-size:2em;font-weight:800;margin-bottom:10px">👁️ CHECK MANUALLY</div>
+            <div style="color:#c4b5fd;font-size:1.2em;margin-bottom:5px">{city_name}</div>
+            <div style="color:#a78bfa;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div>
+            <div style="color:#e9d5ff;font-size:1.3em;margin:20px 0">5-minute intervals = unreliable parsing</div>
+            <a href="{nws_link}" target="_blank" style="text-decoration:none">
+                <div style="background:#8b5cf6;padding:20px 40px;border-radius:12px;margin-top:20px;display:inline-block">
+                    <span style="color:#fff;font-size:1.3em;font-weight:800">📡 VIEW NWS OBHISTORY →</span>
+                </div>
+            </a>
+            <div style="margin-top:20px;padding:15px;background:rgba(0,0,0,0.3);border-radius:10px">
+                <span style="color:#fbbf24;font-size:1em">⚠️ Find the LOWEST 6hr↓ value for today. That's your settlement.</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+    
+    # Other cities - use parsed 6hr data
     extremes = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
     settlement_low, settlement_time = get_settlement_from_6hr(extremes, "low")
     is_locked, lock_time = check_low_locked_6hr(extremes, cfg.get("tz", "US/Eastern"))
