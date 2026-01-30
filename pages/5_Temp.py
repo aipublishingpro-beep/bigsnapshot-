@@ -253,8 +253,9 @@ def fetch_nws_tomorrow_low(lat, lon):
     except:
         return None, None
 
+# FIXED: Added city_tz_str parameter to use city timezone for date calculation
 @st.cache_data(ttl=60)
-def fetch_kalshi_tomorrow_brackets(series_ticker):
+def fetch_kalshi_tomorrow_brackets(series_ticker, city_tz_str="US/Eastern"):
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
     try:
         resp = requests.get(url, timeout=10)
@@ -263,7 +264,9 @@ def fetch_kalshi_tomorrow_brackets(series_ticker):
         markets = resp.json().get("markets", [])
         if not markets:
             return []
-        tomorrow = datetime.now(eastern) + timedelta(days=1)
+        # FIXED: Use city timezone instead of hardcoded Eastern
+        city_tz = pytz.timezone(city_tz_str)
+        tomorrow = datetime.now(city_tz) + timedelta(days=1)
         tomorrow_str = tomorrow.strftime('%y%b%d').upper()
         tomorrow_markets = [m for m in markets if tomorrow_str in m.get("event_ticker", "").upper()]
         if not tomorrow_markets:
@@ -298,8 +301,9 @@ def fetch_kalshi_tomorrow_brackets(series_ticker):
     except:
         return []
 
+# FIXED: Added city_tz_str parameter to use city timezone for date calculation
 @st.cache_data(ttl=60)
-def fetch_kalshi_brackets(series_ticker):
+def fetch_kalshi_brackets(series_ticker, city_tz_str="US/Eastern"):
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
     try:
         resp = requests.get(url, timeout=10)
@@ -308,7 +312,9 @@ def fetch_kalshi_brackets(series_ticker):
         markets = resp.json().get("markets", [])
         if not markets:
             return []
-        today_str = datetime.now(eastern).strftime('%y%b%d').upper()
+        # FIXED: Use city timezone instead of hardcoded Eastern
+        city_tz = pytz.timezone(city_tz_str)
+        today_str = datetime.now(city_tz).strftime('%y%b%d').upper()
         today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
         if not today_markets:
             first_event = markets[0].get("event_ticker", "")
@@ -454,7 +460,8 @@ if is_owner and st.session_state.view_mode == "today":
     with st.spinner("Scanning all 7 cities..."):
         for city_name, cfg in CITY_CONFIG.items():
             current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg["station"], cfg["tz"])
-            brackets = fetch_kalshi_brackets(cfg["low"])
+            # FIXED: Pass city timezone to Kalshi fetch
+            brackets = fetch_kalshi_brackets(cfg["low"], cfg["tz"])
             
             if obs_low is None:
                 results.append({"city": city_name, "status": "❌ NO DATA", "obs_low": None, "bracket": None, "bid": 0, "ask": 100, "edge": 0, "url": None, "locked": False, "confirm_time": None, "mins_since_confirm": None})
@@ -551,7 +558,8 @@ if is_owner and st.session_state.view_mode == "today":
     with st.spinner("Scanning tomorrow's markets..."):
         for city_name, cfg in CITY_CONFIG.items():
             forecast_low, forecast_desc = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
-            brackets = fetch_kalshi_tomorrow_brackets(cfg["low"])
+            # FIXED: Pass city timezone to Kalshi fetch
+            brackets = fetch_kalshi_tomorrow_brackets(cfg["low"], cfg["tz"])
             if forecast_low is None:
                 tomorrow_results.append({"city": city_name, "status": "❌", "forecast_low": None, "bracket": None, "ask": None, "url": None})
                 continue
@@ -615,7 +623,8 @@ elif is_owner and st.session_state.view_mode == "shark":
     
     for city_name, cfg in CITY_CONFIG.items():
         current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg["station"], cfg["tz"])
-        brackets = fetch_kalshi_brackets(cfg["low"])
+        # FIXED: Pass city timezone to Kalshi fetch
+        brackets = fetch_kalshi_brackets(cfg["low"], cfg["tz"])
         
         if obs_low is None:
             st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#ef4444'>❌ {city_name}</span><span style='color:#6b7280;margin-left:10px'>— No NWS data</span></div>", unsafe_allow_html=True)
@@ -727,7 +736,8 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
         for city_name, cfg in CITY_CONFIG.items():
             pattern_icon = "🌙" if city_name in ["Chicago", "Denver"] else "☀️"
             forecast_low, forecast_desc = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
-            brackets = fetch_kalshi_tomorrow_brackets(cfg["low"])
+            # FIXED: Pass city timezone to Kalshi fetch
+            brackets = fetch_kalshi_tomorrow_brackets(cfg["low"], cfg["tz"])
             
             if forecast_low is None:
                 all_cities.append({"city": city_name, "pattern": pattern_icon, "status": "NO FORECAST", "forecast": None})
@@ -835,7 +845,9 @@ elif is_owner and st.session_state.view_mode == "night":
         st.markdown("### 📊 CITY STATUS")
         for city_name, cfg in NIGHT_SCAN_CITIES.items():
             current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg["station"], cfg["tz"])
-            brackets = fetch_kalshi_brackets(CITY_CONFIG.get(city_name, {}).get("low", ""))
+            # FIXED: Pass city timezone to Kalshi fetch
+            city_low_ticker = CITY_CONFIG.get(city_name, {}).get("low", "")
+            brackets = fetch_kalshi_brackets(city_low_ticker, cfg["tz"])
             
             if obs_low is None:
                 st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#ef4444'>🌙 {city_name}</span><span style='color:#6b7280;margin-left:10px'>— No NWS data</span></div>", unsafe_allow_html=True)
@@ -979,7 +991,7 @@ elif is_owner and st.session_state.view_mode == "city":
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 else:
-    # PUBLIC VIEW - FIXED: Added c1, c2 definition
+    # PUBLIC VIEW
     c1, c2 = st.columns([4, 1])
     with c1:
         city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
@@ -1090,5 +1102,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.5</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.6</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment only. Not financial advice.</div>', unsafe_allow_html=True)
