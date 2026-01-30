@@ -433,7 +433,7 @@ st.title("🌡️ LOW TEMP EDGE FINDER")
 st.caption(f"Live NWS Observations + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')}")
 
 if is_owner:
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         if st.button("📍 City", use_container_width=True, type="primary" if st.session_state.view_mode == "city" else "secondary"):
             st.session_state.view_mode = "city"
@@ -447,7 +447,11 @@ if is_owner:
             st.session_state.view_mode = "tomorrow"
             st.rerun()
     with col4:
-        if st.button("🦈 Night", use_container_width=True, type="primary" if st.session_state.view_mode == "night" else "secondary"):
+        if st.button("🦈 SHARK", use_container_width=True, type="primary" if st.session_state.view_mode == "shark" else "secondary"):
+            st.session_state.view_mode = "shark"
+            st.rerun()
+    with col5:
+        if st.button("🌙 Night", use_container_width=True, type="primary" if st.session_state.view_mode == "night" else "secondary"):
             st.session_state.view_mode = "night"
             st.rerun()
     st.markdown("---")
@@ -606,6 +610,132 @@ if is_owner and st.session_state.view_mode == "today":
         else:
             ask_color = "#22c55e" if r["ask"] < 30 else "#3b82f6" if r["ask"] < 40 else "#f59e0b" if r["ask"] < 50 else "#9ca3af"
             st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0;display:flex;justify-content:space-between;align-items:center'><span style='color:#fff;font-weight:600'>{r['city']}</span><div><span style='color:#fbbf24'>{r['forecast_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#22c55e'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:{ask_color};font-weight:700'>{r['ask']:.0f}¢</span></div></div>", unsafe_allow_html=True)
+
+# ============================================================
+# 🦈 SHARK MODE - RAW METAR + EARLY LOCK DETECTION
+# ============================================================
+elif is_owner and st.session_state.view_mode == "shark":
+    st.subheader("🦈 SHARK MODE - Hunt Early Locks")
+    
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,#1a1a2e,#2d1f5e);border:2px solid #8b5cf6;border-radius:12px;padding:20px;margin:10px 0">
+        <div style="color:#8b5cf6;font-size:1.3em;font-weight:800;text-align:center">BE THE SHARK, NOT THE PREY</div>
+        <div style="color:#c9d1d9;font-size:0.9em;margin-top:10px;text-align:center">
+            Raw METAR data • Early lock detection • Uptick alerts<br>
+            <b>Buy at 10-30¢ while others sleep.</b>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if st.button("🔄 Refresh All Cities", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+    
+    # Scan all cities
+    st.markdown("### 📊 ALL CITIES - SHARK SCAN")
+    
+    for city_name, cfg in CITY_CONFIG.items():
+        current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg["station"], cfg["tz"])
+        brackets = fetch_kalshi_brackets(cfg["low"])
+        
+        if obs_low is None:
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#ef4444'>❌ {city_name}</span><span style='color:#6b7280;margin-left:10px'>— No NWS data</span></div>", unsafe_allow_html=True)
+            continue
+        
+        winning = find_winning_bracket(obs_low, brackets)
+        is_locked = check_low_locked(cfg["tz"])
+        
+        # Calculate upticks (temp rising)
+        uptick_count = 0
+        if readings and len(readings) >= 3:
+            recent = readings[:5]
+            for i in range(len(recent) - 1):
+                if recent[i]["temp"] > recent[i+1]["temp"]:
+                    uptick_count += 1
+        
+        # Determine status
+        city_tz = pytz.timezone(cfg["tz"])
+        city_hour = datetime.now(city_tz).hour
+        
+        if winning:
+            ask = winning["ask"]
+            time_ago_str = format_time_ago(mins_since_confirm)
+            
+            # Calculate early lock probability
+            prob = 0
+            if is_locked and confirm_time:
+                prob = 95
+            elif is_locked and uptick_count >= 2:
+                prob = 85
+            elif is_locked:
+                prob = 70
+            elif uptick_count >= 2:
+                prob = 50
+            elif city_hour >= 6:
+                prob = 40
+            
+            # Color coding
+            if prob >= 85 and ask <= 30:
+                row_bg = "#1a2e1a"
+                row_border = "#22c55e"
+                status_icon = "🦈"
+                status_text = f"SHARK ALERT! Prob: {prob}%"
+            elif prob >= 70:
+                row_bg = "#1a1a2e"
+                row_border = "#3b82f6"
+                status_icon = "🔒"
+                status_text = f"Likely locked ({prob}%)"
+            elif uptick_count >= 2:
+                row_bg = "#2d1f0a"
+                row_border = "#f59e0b"
+                status_icon = "🔥"
+                status_text = f"Upticks! ({uptick_count})"
+            else:
+                row_bg = "#0d1117"
+                row_border = "#30363d"
+                status_icon = "⏳"
+                status_text = "Watching..."
+            
+            confirm_display = f"✅ {time_ago_str}" if time_ago_str else "⏳"
+            
+            st.markdown(f"""
+            <div style="background:{row_bg};border:2px solid {row_border};border-radius:8px;padding:15px;margin:8px 0">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                    <div>
+                        <span style="color:#fff;font-size:1.1em;font-weight:700">{status_icon} {city_name}</span>
+                        <span style="color:#9ca3af;margin-left:10px;font-size:0.9em">{status_text}</span>
+                    </div>
+                    <div style="text-align:right">
+                        <span style="color:#3b82f6;font-weight:700">{obs_low}°F</span>
+                        <span style="color:#6b7280;margin:0 5px">→</span>
+                        <span style="color:#fbbf24;font-weight:700">{winning['name']}</span>
+                        <span style="color:#6b7280;margin:0 5px">|</span>
+                        <span style="color:#22c55e;font-weight:700">{ask}¢</span>
+                        <span style="color:#6b7280;margin:0 5px">|</span>
+                        <span style="color:#9ca3af">{confirm_display}</span>
+                    </div>
+                </div>
+                <div style="margin-top:10px;padding:8px;background:#161b22;border-radius:6px;display:flex;justify-content:space-around;font-size:0.85em">
+                    <span style="color:#6b7280">Current: <b style="color:#fff">{current_temp}°F</b></span>
+                    <span style="color:#6b7280">Upticks: <b style="color:{'#22c55e' if uptick_count >= 2 else '#9ca3af'}">{uptick_count}</b></span>
+                    <span style="color:#6b7280">Hour: <b style="color:#fff">{city_hour}</b></span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>⚠️ {city_name}</span><span style='color:#3b82f6;margin-left:10px'>{obs_low}°F</span><span style='color:#6b7280;margin-left:10px'>— No bracket match</span></div>", unsafe_allow_html=True)
+    
+    # Legend
+    st.markdown("""
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin-top:20px">
+        <div style="color:#9ca3af;font-size:0.85em;line-height:1.8">
+            🦈 <b style="color:#22c55e">SHARK ALERT</b> = Prob ≥85% + Ask ≤30¢ → BUY NOW<br>
+            🔒 <b style="color:#3b82f6">Likely Locked</b> = Prob ≥70% → Watch closely<br>
+            🔥 <b style="color:#f59e0b">Upticks</b> = Temp rising, lock forming<br>
+            ⏳ <b style="color:#9ca3af">Watching</b> = Too early to call
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ============================================================
 # TOMORROW LOTTERY (OWNER ONLY)
@@ -1006,5 +1136,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.4</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.5</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment only. Not financial advice.</div>', unsafe_allow_html=True)
