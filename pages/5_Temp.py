@@ -492,33 +492,13 @@ MANUAL_CHECK_CITIES = ["Denver", "Chicago"]
 
 def render_hero_box(city_name, cfg):
     """Render the big settlement status box at top of page"""
+    # Denver & Chicago - no hero box, check manually
+    if city_name in MANUAL_CHECK_CITIES:
+        return
+    
     city_tz = pytz.timezone(cfg.get("tz", "US/Eastern"))
     city_now = datetime.now(city_tz)
     today_str = city_now.strftime("%A, %B %d, %Y")
-    
-    # Denver & Chicago - show manual check message
-    if city_name in MANUAL_CHECK_CITIES:
-        station = cfg.get("station", "KDEN")
-        nws_link = f"https://forecast.weather.gov/data/obhistory/{station}.html"
-        st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#1e1e3f,#2d2d5f);border:4px solid #8b5cf6;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(139,92,246,0.3)">
-            <div style="color:#8b5cf6;font-size:2em;font-weight:800;margin-bottom:10px">👁️ CHECK MANUALLY</div>
-            <div style="color:#c4b5fd;font-size:1.2em;margin-bottom:5px">{city_name}</div>
-            <div style="color:#a78bfa;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div>
-            <div style="color:#e9d5ff;font-size:1.3em;margin:20px 0">5-minute intervals = unreliable parsing</div>
-            <a href="{nws_link}" target="_blank" style="text-decoration:none">
-                <div style="background:#8b5cf6;padding:20px 40px;border-radius:12px;margin-top:20px;display:inline-block">
-                    <span style="color:#fff;font-size:1.3em;font-weight:800">📡 VIEW NWS OBHISTORY →</span>
-                </div>
-            </a>
-            <div style="margin-top:20px;padding:15px;background:rgba(0,0,0,0.3);border-radius:10px">
-                <span style="color:#fbbf24;font-size:1em">⚠️ Find the LOWEST 6hr↓ value for today. That's your settlement.</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        return
-    
-    # Other cities - use parsed 6hr data
     extremes = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
     settlement_low, settlement_time = get_settlement_from_6hr(extremes, "low")
     is_locked, lock_time = check_low_locked_6hr(extremes, cfg.get("tz", "US/Eastern"))
@@ -1018,8 +998,7 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
             st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0;display:flex;justify-content:space-between;align-items:center'><span style='color:#fff;font-weight:600'>{c['pattern']} {c['city']}</span><div><span style='color:#fbbf24'>{c['forecast']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#22c55e'>{c['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:{ask_color};font-weight:700'>{c['ask']}¢</span></div></div>", unsafe_allow_html=True)
 
 elif is_owner and st.session_state.view_mode == "night":
-    # Show hero box for Denver (main night city)
-    render_hero_box("Denver", CITY_CONFIG.get("Denver", {}))
+    # No hero box for night mode (Denver/Chicago are manual check)
     st.subheader("🦈 NIGHT SCAN (6hr Settlement)")
     st.caption("Watches Chicago (1-2 AM) and Denver (2-3 AM) for midnight LOWs")
     
@@ -1169,12 +1148,16 @@ elif is_owner and st.session_state.view_mode == "city":
                 if oldest_time and newest_time:
                     st.markdown(f"<div style='color:#6b7280;font-size:0.8em;margin-bottom:10px;text-align:center'>📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local | {len(readings)} readings</div>", unsafe_allow_html=True)
                 
-                # Show 6hr settlement prominently if available
-                if settlement_low is not None:
+                # Show 6hr settlement prominently if available (not for Denver/Chicago)
+                if city not in MANUAL_CHECK_CITIES and settlement_low is not None:
                     st.markdown(f"<div style='background:#1a2e1a;border:2px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px;text-align:center'><span style='color:#22c55e;font-weight:700;font-size:1.1em'>📍 SETTLEMENT: 6hr↓{settlement_low}° @ {settlement_time}</span></div>", unsafe_allow_html=True)
                 
                 display_list = readings
-                low_idx = next((i for i, r in enumerate(display_list) if r['temp'] == obs_low), None)
+                # Only highlight hourly low for non-manual cities
+                if city not in MANUAL_CHECK_CITIES:
+                    low_idx = next((i for i, r in enumerate(display_list) if r['temp'] == obs_low), None)
+                else:
+                    low_idx = None
                 for i, r in enumerate(display_list):
                     time_key = r['time']
                     six_hr = extremes_6hr.get(time_key, {})
@@ -1211,7 +1194,7 @@ elif is_owner and st.session_state.view_mode == "city":
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 else:
-    # PUBLIC VIEW
+    # PUBLIC VIEW - No hero box, no settlement data, just basic info
     c1, c2 = st.columns([4, 1])
     with c1:
         city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
@@ -1227,25 +1210,14 @@ else:
         st.success(f"✓ Bookmark to save {city} as default!")
 
     current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
-    extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
-    
-    # Get settlement for public view too
-    settlement_low, settlement_time = get_settlement_from_6hr(extremes_6hr, "low")
 
-    if settlement_low is not None:
+    # Simple display for public - no settlement, no hero box
+    if obs_low and current_temp:
         st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#1a2e1a,#0d1117);border:3px solid #22c55e;border-radius:16px;padding:25px;margin:20px 0;text-align:center">
-            <div style="color:#6b7280;font-size:1em;margin-bottom:5px">📊 Today's Settlement LOW (6hr)</div>
-            <div style="color:#22c55e;font-size:4.5em;font-weight:800;margin:10px 0">{settlement_low}°F</div>
-            <div style="color:#9ca3af;font-size:0.9em">From NWS Station: <span style="color:#22c55e;font-weight:600">{cfg.get('station', 'N/A')}</span> @ {settlement_time}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    elif obs_low and current_temp:
-        st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#2d1f0a,#0d1117);border:3px solid #f59e0b;border-radius:16px;padding:25px;margin:20px 0;text-align:center">
-            <div style="color:#6b7280;font-size:1em;margin-bottom:5px">📊 Today's Hourly Low (Preview)</div>
-            <div style="color:#f59e0b;font-size:4.5em;font-weight:800;margin:10px 0">{obs_low}°F</div>
-            <div style="color:#9ca3af;font-size:0.9em">6hr settlement data not yet available</div>
+        <div style="background:linear-gradient(135deg,#1a1a2e,#0d1117);border:3px solid #3b82f6;border-radius:16px;padding:25px;margin:20px 0;text-align:center">
+            <div style="color:#6b7280;font-size:1em;margin-bottom:5px">📊 Today's Observed Low</div>
+            <div style="color:#3b82f6;font-size:4.5em;font-weight:800;margin:10px 0">{obs_low}°F</div>
+            <div style="color:#9ca3af;font-size:0.9em">From NWS Station: <span style="color:#22c55e;font-weight:600">{cfg.get('station', 'N/A')}</span></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1260,28 +1232,14 @@ else:
         """, unsafe_allow_html=True)
         
         if readings:
-            with st.expander("📊 Recent NWS Observations", expanded=True):
+            with st.expander("📊 Recent NWS Observations", expanded=False):
                 if oldest_time and newest_time:
                     st.markdown(f"<div style='color:#6b7280;font-size:0.8em;margin-bottom:10px;text-align:center'>📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local | {len(readings)} readings</div>", unsafe_allow_html=True)
                 display_list = readings[:12]
-                low_idx = next((i for i, r in enumerate(display_list) if r['temp'] == obs_low), None)
                 for i, r in enumerate(display_list):
-                    time_key = r['time']
-                    six_hr = extremes_6hr.get(time_key, {})
-                    six_hr_display = ""
-                    if six_hr.get('max') is not None:
-                        six_hr_display += f"<span style='color:#ef4444'>6hr↑{six_hr['max']:.0f}°</span> "
-                    if six_hr.get('min') is not None:
-                        six_hr_display += f"<span style='color:#22c55e'>6hr↓{six_hr['min']:.0f}°</span>"
-                    if i == low_idx:
-                        row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:#2d1f0a;border:1px solid #f59e0b;margin:2px 0"
-                        temp_style = "color:#fbbf24;font-weight:700"
-                        label = " ↩️ LOW"
-                    else:
-                        row_style = "display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"
-                        temp_style = "color:#fff;font-weight:600"
-                        label = ""
-                    st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:50px'>{r['time']}</span><span style='flex:1;text-align:center;font-size:0.85em'>{six_hr_display}</span><span style='{temp_style}'>{r['temp']}°F{label}</span></div>", unsafe_allow_html=True)
+                    row_style = "display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"
+                    temp_style = "color:#fff;font-weight:600"
+                    st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:50px'>{r['time']}</span><span style='{temp_style}'>{r['temp']}°F</span></div>", unsafe_allow_html=True)
     else:
         st.warning("⚠️ Could not fetch NWS observations")
 
