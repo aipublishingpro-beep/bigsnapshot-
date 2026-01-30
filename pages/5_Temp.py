@@ -71,11 +71,7 @@ CHECK_TIMES_ET = {
     "Philadelphia": "7-8 AM ET",
 }
 
-# ============================================================
-# HELPER: FORMAT TIME AGO (FIXED!)
-# ============================================================
 def format_time_ago(mins):
-    """Convert minutes to human-readable format"""
     if mins is None:
         return None
     if mins < 60:
@@ -86,9 +82,6 @@ def format_time_ago(mins):
         return f"{hours}h"
     return f"{hours}h {remaining_mins}m"
 
-# ============================================================
-# SHARED FUNCTIONS
-# ============================================================
 def get_bracket_bounds(range_str):
     tl = range_str.lower()
     below_match = re.search(r'<\s*(\d+)°', range_str)
@@ -367,9 +360,6 @@ def check_low_locked(city_tz_str):
     city_now = datetime.now(city_tz)
     return city_now.hour >= 7
 
-# ============================================================
-# SIDEBAR LEGENDS
-# ============================================================
 if is_owner:
     with st.sidebar:
         st.markdown("""
@@ -426,9 +416,6 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-# ============================================================
-# HEADER
-# ============================================================
 st.title("🌡️ LOW TEMP EDGE FINDER")
 st.caption(f"Live NWS Observations + Kalshi | {now.strftime('%b %d, %Y %I:%M %p ET')}")
 
@@ -456,9 +443,6 @@ if is_owner:
             st.rerun()
     st.markdown("---")
 
-# ============================================================
-# SCANNER VIEW (OWNER ONLY)
-# ============================================================
 if is_owner and st.session_state.view_mode == "today":
     st.subheader("🔍 All Cities Scanner")
     
@@ -559,7 +543,6 @@ if is_owner and st.session_state.view_mode == "today":
     st.markdown("---")
     st.markdown(f"<div style='text-align:center;color:#6b7280;font-size:0.8em'>Last scan: {now.strftime('%I:%M %p ET')} | 🟢 = LOCKED + Confirmed | 🟡 = Waiting</div>", unsafe_allow_html=True)
 
-    # TOMORROW'S LOW SECTION
     st.markdown("---")
     tomorrow_date = (datetime.now(eastern) + timedelta(days=1)).strftime('%A, %b %d')
     st.subheader(f"🔮 TOMORROW'S LOW ({tomorrow_date})")
@@ -611,9 +594,6 @@ if is_owner and st.session_state.view_mode == "today":
             ask_color = "#22c55e" if r["ask"] < 30 else "#3b82f6" if r["ask"] < 40 else "#f59e0b" if r["ask"] < 50 else "#9ca3af"
             st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0;display:flex;justify-content:space-between;align-items:center'><span style='color:#fff;font-weight:600'>{r['city']}</span><div><span style='color:#fbbf24'>{r['forecast_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#22c55e'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:{ask_color};font-weight:700'>{r['ask']:.0f}¢</span></div></div>", unsafe_allow_html=True)
 
-# ============================================================
-# 🦈 SHARK MODE - RAW METAR + EARLY LOCK DETECTION
-# ============================================================
 elif is_owner and st.session_state.view_mode == "shark":
     st.subheader("🦈 SHARK MODE - Hunt Early Locks")
     
@@ -631,7 +611,6 @@ elif is_owner and st.session_state.view_mode == "shark":
         st.cache_data.clear()
         st.rerun()
     
-    # Scan all cities
     st.markdown("### 📊 ALL CITIES - SHARK SCAN")
     
     for city_name, cfg in CITY_CONFIG.items():
@@ -645,7 +624,6 @@ elif is_owner and st.session_state.view_mode == "shark":
         winning = find_winning_bracket(obs_low, brackets)
         is_locked = check_low_locked(cfg["tz"])
         
-        # Calculate upticks (temp rising)
         uptick_count = 0
         if readings and len(readings) >= 3:
             recent = readings[:5]
@@ -653,7 +631,6 @@ elif is_owner and st.session_state.view_mode == "shark":
                 if recent[i]["temp"] > recent[i+1]["temp"]:
                     uptick_count += 1
         
-        # Determine status
         city_tz = pytz.timezone(cfg["tz"])
         city_hour = datetime.now(city_tz).hour
         
@@ -661,7 +638,6 @@ elif is_owner and st.session_state.view_mode == "shark":
             ask = winning["ask"]
             time_ago_str = format_time_ago(mins_since_confirm)
             
-            # Calculate early lock probability
             prob = 0
             if is_locked and confirm_time:
                 prob = 95
@@ -674,7 +650,6 @@ elif is_owner and st.session_state.view_mode == "shark":
             elif city_hour >= 6:
                 prob = 40
             
-            # Color coding
             if prob >= 85 and ask <= 30:
                 row_bg = "#1a2e1a"
                 row_border = "#22c55e"
@@ -725,7 +700,6 @@ elif is_owner and st.session_state.view_mode == "shark":
         else:
             st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>⚠️ {city_name}</span><span style='color:#3b82f6;margin-left:10px'>{obs_low}°F</span><span style='color:#6b7280;margin-left:10px'>— No bracket match</span></div>", unsafe_allow_html=True)
     
-    # Legend
     st.markdown("""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin-top:20px">
         <div style="color:#9ca3af;font-size:0.85em;line-height:1.8">
@@ -737,9 +711,6 @@ elif is_owner and st.session_state.view_mode == "shark":
     </div>
     """, unsafe_allow_html=True)
 
-# ============================================================
-# TOMORROW LOTTERY (OWNER ONLY)
-# ============================================================
 elif is_owner and st.session_state.view_mode == "tomorrow":
     tomorrow_date = (datetime.now(eastern) + timedelta(days=1)).strftime('%A, %b %d')
     st.subheader(f"🎰 TOMORROW'S LOTTERY ({tomorrow_date})")
@@ -819,9 +790,6 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
             ask_color = "#22c55e" if c["ask"] <= 5 else "#fbbf24" if c["ask"] <= 10 else "#3b82f6" if c["ask"] < 40 else "#9ca3af"
             st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0;display:flex;justify-content:space-between;align-items:center'><span style='color:#fff;font-weight:600'>{c['pattern']} {c['city']}</span><div><span style='color:#fbbf24'>{c['forecast']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#22c55e'>{c['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:{ask_color};font-weight:700'>{c['ask']}¢</span></div></div>", unsafe_allow_html=True)
 
-# ============================================================
-# NIGHT SCAN (OWNER ONLY)
-# ============================================================
 elif is_owner and st.session_state.view_mode == "night":
     st.subheader("🦈 NIGHT SCAN")
     st.caption("Watches Chicago (1-2 AM) and Denver (2-3 AM) for midnight LOWs")
@@ -829,7 +797,6 @@ elif is_owner and st.session_state.view_mode == "night":
     current_hour = now.hour
     in_window = (current_hour >= 23) or (0 <= current_hour < 5)
     
-    # Toggle button
     col1, col2 = st.columns(2)
     with col1:
         if st.session_state.night_scan_on:
@@ -846,17 +813,14 @@ elif is_owner and st.session_state.view_mode == "night":
             st.cache_data.clear()
             st.rerun()
     
-    # Status display
     if st.session_state.night_scan_on:
         st.markdown('<div style="background:#166534;border:2px solid #22c55e;border-radius:8px;padding:15px;text-align:center;margin:15px 0"><b style="color:#4ade80;font-size:1.2em">● NIGHT SCAN ACTIVE</b></div>', unsafe_allow_html=True)
     else:
         st.markdown('<div style="background:#1a1a2e;border:2px solid #6b7280;border-radius:8px;padding:15px;text-align:center;margin:15px 0"><b style="color:#9ca3af;font-size:1.2em">○ NIGHT SCAN OFF</b></div>', unsafe_allow_html=True)
     
-    # Window warning
     if not in_window:
         st.warning(f"⚠️ Outside scan window. Best time: 11:50 PM - 5:00 AM ET. Current: {now.strftime('%I:%M %p ET')}")
     
-    # Lock times reference
     st.markdown("""
     <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:15px;margin:15px 0">
         <div style="color:#3b82f6;font-weight:700;margin-bottom:10px">⏰ LOCK TIMES (ET)</div>
@@ -867,8 +831,7 @@ elif is_owner and st.session_state.view_mode == "night":
     </div>
     """, unsafe_allow_html=True)
     
-    # Scan cities
-    if st.session_state.night_scan_on or True:  # Always show status
+    if st.session_state.night_scan_on or True:
         st.markdown("### 📊 CITY STATUS")
         for city_name, cfg in NIGHT_SCAN_CITIES.items():
             current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg["station"], cfg["tz"])
@@ -886,7 +849,6 @@ elif is_owner and st.session_state.view_mode == "night":
                 time_ago_str = format_time_ago(mins_since_confirm)
                 
                 if is_locked and ask <= 90:
-                    # LOCKED WITH EDGE
                     st.markdown(f"""
                     <div style="background:#166534;border:2px solid #22c55e;border-radius:12px;padding:20px;margin:10px 0">
                         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -904,25 +866,18 @@ elif is_owner and st.session_state.view_mode == "night":
                     </div>
                     """, unsafe_allow_html=True)
                 else:
-                    # Waiting
                     lock_icon = "🔒" if is_locked else "⏳"
                     status_text = f"Confirmed {time_ago_str} ago" if time_ago_str else "Awaiting confirmation..."
                     st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#fff;font-weight:600'>🌙 {city_name}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span><span style='color:#3b82f6;margin-left:10px'>{obs_low}°F</span><span style='color:#6b7280;margin:0 5px'>→</span><span style='color:#fbbf24'>{winning['name']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:#9ca3af'>{ask}¢</span><span style='color:#6b7280;margin:0 10px'>|</span><span style='color:#9ca3af'>{status_text}</span></div>", unsafe_allow_html=True)
             else:
                 st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>🌙 {city_name}</span><span style='color:#3b82f6;margin-left:10px'>{obs_low}°F</span><span style='color:#6b7280;margin-left:10px'>— No bracket match</span></div>", unsafe_allow_html=True)
     
-    # Auto-refresh during window
     if st.session_state.night_scan_on and in_window:
         st.markdown('<div style="color:#6b7280;font-size:0.8em;text-align:center;margin-top:20px">🔄 Auto-refreshes every 5 minutes during scan window</div>', unsafe_allow_html=True)
         time_module = __import__('time')
-        time_module.sleep(0.1)  # Small delay to prevent rapid refresh
-        # st.rerun()  # Uncomment to enable auto-refresh
+        time_module.sleep(0.1)
 
-# ============================================================
-# CITY VIEW (DEFAULT)
-# ============================================================
 elif is_owner and st.session_state.view_mode == "city":
-    # Owner city view
     c1, c2 = st.columns([4, 1])
     with c1:
         city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
@@ -1023,10 +978,9 @@ elif is_owner and st.session_state.view_mode == "city":
                 temp_color = "#3b82f6" if "night" in name.lower() else "#ef4444"
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
-# ============================================================
-# PUBLIC VIEW (NON-OWNER)
-# ============================================================
 else:
+    # PUBLIC VIEW - FIXED: Added c1, c2 definition
+    c1, c2 = st.columns([4, 1])
     with c1:
         city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
     with c2:
