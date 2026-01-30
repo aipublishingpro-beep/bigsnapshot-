@@ -166,8 +166,8 @@ def fetch_nws_6hr_extremes(station, city_tz_str):
     Scrapes 6hr Max and 6hr Min from NWS obhistory HTML table.
     These are the values Kalshi uses for settlement.
     
-    FIXED: Now searches for "6hr" text pattern in any cell rather than
-    assuming fixed column positions (which varies by station).
+    FIXED: Very flexible parsing - finds ALL numbers after "6hr" text.
+    NWS format is always: 6hr↑MAX° 6hr↓MIN° (max first, min second)
     """
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
@@ -175,6 +175,7 @@ def fetch_nws_6hr_extremes(station, city_tz_str):
         resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
         if resp.status_code != 200:
             return {}
+        
         soup = BeautifulSoup(resp.text, 'html.parser')
         table = soup.find('table')
         if not table:
@@ -199,44 +200,36 @@ def fetch_nws_6hr_extremes(station, city_tz_str):
                     except:
                         continue
                 
-                # Search ALL cells for 6hr values (don't assume column position)
                 row_text = row.get_text()
                 
-                # Look for 6hr Max pattern: "6hr↑XX" or variations
+                # Check if this row has 6hr data at all
+                if '6hr' not in row_text.lower():
+                    continue
+                
                 max_val = None
                 min_val = None
                 
-                # Pattern 1: Look for 6hr with arrow symbols
-                max_match = re.search(r'6hr[↑+](\d+)', row_text)
-                min_match = re.search(r'6hr[↓-](\d+)', row_text)
+                # VERY flexible pattern: find "6hr" followed by any non-digits, then capture the number
+                # This handles any arrow encoding: ↑ ↓ + - or whatever
+                all_6hr_matches = re.findall(r'6hr\D*(\d+)', row_text, re.IGNORECASE)
                 
-                # Pattern 2: Also try looking in specific cells for just numbers
-                # where the header indicates 6hr Max/Min
-                if not max_match and not min_match:
-                    # Try cells that might contain standalone 6hr values
-                    for i, cell in enumerate(cells):
-                        cell_text = cell.text.strip()
-                        # Check if cell has 6hr indicator
-                        if '6hr' in cell_text.lower():
-                            max_m = re.search(r'6hr[↑+](\d+)', cell_text)
-                            min_m = re.search(r'6hr[↓-](\d+)', cell_text)
-                            if max_m:
-                                max_val = float(max_m.group(1))
-                            if min_m:
-                                min_val = float(min_m.group(1))
-                
-                if max_match:
-                    max_val = float(max_match.group(1))
-                if min_match:
-                    min_val = float(min_match.group(1))
+                if len(all_6hr_matches) >= 2:
+                    # NWS format: Max comes first, Min comes second
+                    max_val = float(all_6hr_matches[0])
+                    min_val = float(all_6hr_matches[1])
+                elif len(all_6hr_matches) == 1:
+                    # Only one value - try to determine if max or min from context
+                    # Usually if only one appears, check the surrounding text
+                    if 'max' in row_text.lower():
+                        max_val = float(all_6hr_matches[0])
+                    else:
+                        min_val = float(all_6hr_matches[0])
                 
                 # If we found any 6hr values, store them
                 if max_val is not None or min_val is not None:
                     # Format time key consistently
-                    time_key = time_val.strip()
-                    if len(time_key) == 4 and ':' not in time_key:
-                        time_key = time_key[:2] + ":" + time_key[2:]
-                    elif len(time_key) >= 4 and ':' not in time_key:
+                    time_key = time_val.strip().replace(":", "")
+                    if len(time_key) >= 4:
                         time_key = time_key[:2] + ":" + time_key[2:4]
                     
                     extremes[time_key] = {"max": max_val, "min": min_val}
