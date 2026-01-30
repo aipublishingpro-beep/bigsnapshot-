@@ -457,8 +457,24 @@ if is_owner and st.session_state.view_mode == "today":
         st.rerun()
     
     results = []
+    
+    # Get user's ET date to compare
+    et_date = datetime.now(eastern).date()
+    
     with st.spinner("Scanning all 7 cities..."):
         for city_name, cfg in CITY_CONFIG.items():
+            # Get city's local date
+            city_tz = pytz.timezone(cfg["tz"])
+            city_date = datetime.now(city_tz).date()
+            city_date_str = datetime.now(city_tz).strftime("%b %d")
+            
+            # SKIP if city is still on yesterday
+            if city_date < et_date:
+                time_until_midnight = (datetime.now(city_tz).replace(hour=23, minute=59, second=59) - datetime.now(city_tz)).total_seconds()
+                mins_left = int(time_until_midnight / 60) + 1
+                results.append({"city": city_name, "status": "⏸️ YESTERDAY", "city_date_str": city_date_str, "mins_left": mins_left})
+                continue
+            
             current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg["station"], cfg["tz"])
             # FIXED: Pass city timezone to Kalshi fetch
             brackets = fetch_kalshi_brackets(cfg["low"], cfg["tz"])
@@ -528,7 +544,9 @@ if is_owner and st.session_state.view_mode == "today":
     
     st.markdown("### 📊 ALL CITIES")
     for r in results:
-        if r["status"] == "❌ NO DATA":
+        if r["status"] == "⏸️ YESTERDAY":
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #6b7280;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#6b7280'>⏸️ {r['city']}</span><span style='color:#9ca3af;margin-left:10px'>— Still on {r['city_date_str']} (rolls over in ~{r['mins_left']} min)</span></div>", unsafe_allow_html=True)
+        elif r["status"] == "❌ NO DATA":
             st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#ef4444'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— No NWS data</span></div>", unsafe_allow_html=True)
         elif r["status"] == "⚠️ NO BRACKET":
             lock_icon = "🔒" if r["locked"] else "⏳"
@@ -1133,5 +1151,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.9</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v7.0</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment only. Not financial advice.</div>', unsafe_allow_html=True)
