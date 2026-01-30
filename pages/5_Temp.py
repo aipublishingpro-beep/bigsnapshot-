@@ -620,19 +620,29 @@ elif is_owner and st.session_state.view_mode == "shark":
         st.rerun()
     
     st.markdown("### 📊 ALL CITIES - SHARK SCAN")
-    st.markdown("<div style='color:#fbbf24;font-size:0.85em;margin-bottom:15px;padding:8px;background:#2d1f0a;border-radius:6px;text-align:center'>⚠️ Date shown is each city's LOCAL date — not your ET date</div>", unsafe_allow_html=True)
+    
+    # Get user's ET date to compare
+    et_date = datetime.now(eastern).date()
     
     for city_name, cfg in CITY_CONFIG.items():
+        # Get city's local date
+        city_tz = pytz.timezone(cfg["tz"])
+        city_date = datetime.now(city_tz).date()
+        city_date_str = datetime.now(city_tz).strftime("%b %d")
+        
+        # SKIP if city is still on yesterday
+        if city_date < et_date:
+            time_until = datetime.now(city_tz).replace(hour=23, minute=59) - datetime.now(city_tz)
+            mins_left = int(time_until.total_seconds() / 60) + 1
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #6b7280;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#6b7280'>⏸️ {city_name}</span><span style='color:#9ca3af;margin-left:10px'>— Still on {city_date_str} (rolls over in ~{mins_left} min)</span></div>", unsafe_allow_html=True)
+            continue
+        
         current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg["station"], cfg["tz"])
         # FIXED: Pass city timezone to Kalshi fetch
         brackets = fetch_kalshi_brackets(cfg["low"], cfg["tz"])
         
-        # Get city's local date for display
-        city_tz = pytz.timezone(cfg["tz"])
-        city_date = datetime.now(city_tz).strftime("%b %d")
-        
         if obs_low is None:
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#ef4444'>❌ {city_name}</span><span style='color:#6b7280;margin-left:10px'>({city_date})</span><span style='color:#6b7280;margin-left:10px'>— No NWS data</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#ef4444'>❌ {city_name}</span><span style='color:#6b7280;margin-left:10px'>— No NWS data</span></div>", unsafe_allow_html=True)
             continue
         
         winning = find_winning_bracket(obs_low, brackets)
@@ -692,7 +702,6 @@ elif is_owner and st.session_state.view_mode == "shark":
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
                     <div>
                         <span style="color:#fff;font-size:1.1em;font-weight:700">{status_icon} {city_name}</span>
-                        <span style="color:#fbbf24;margin-left:8px;font-size:0.85em;background:#2d1f0a;padding:2px 6px;border-radius:4px">{city_date}</span>
                         <span style="color:#9ca3af;margin-left:10px;font-size:0.9em">{status_text}</span>
                     </div>
                     <div style="text-align:right">
@@ -713,7 +722,7 @@ elif is_owner and st.session_state.view_mode == "shark":
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>⚠️ {city_name}</span><span style='color:#fbbf24;margin-left:8px;font-size:0.85em;background:#2d1f0a;padding:2px 6px;border-radius:4px'>{city_date}</span><span style='color:#3b82f6;margin-left:10px'>{obs_low}°F</span><span style='color:#6b7280;margin-left:10px'>— No bracket match</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>⚠️ {city_name}</span><span style='color:#3b82f6;margin-left:10px'>{obs_low}°F</span><span style='color:#6b7280;margin-left:10px'>— No bracket match</span></div>", unsafe_allow_html=True)
     
     st.markdown("""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin-top:20px">
@@ -849,7 +858,23 @@ elif is_owner and st.session_state.view_mode == "night":
     
     if st.session_state.night_scan_on or True:
         st.markdown("### 📊 CITY STATUS")
+        
+        # Get user's ET date to compare
+        et_date = datetime.now(eastern).date()
+        
         for city_name, cfg in NIGHT_SCAN_CITIES.items():
+            # Get city's local date
+            city_tz = pytz.timezone(cfg["tz"])
+            city_date = datetime.now(city_tz).date()
+            city_date_str = datetime.now(city_tz).strftime("%b %d")
+            
+            # SKIP if city is still on yesterday
+            if city_date < et_date:
+                time_until = datetime.now(city_tz).replace(hour=23, minute=59) - datetime.now(city_tz)
+                mins_left = int(time_until.total_seconds() / 60) + 1
+                st.markdown(f"<div style='background:#1a1a2e;border:1px solid #6b7280;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#6b7280'>⏸️ {city_name}</span><span style='color:#9ca3af;margin-left:10px'>— Still on {city_date_str} (rolls over in ~{mins_left} min)</span></div>", unsafe_allow_html=True)
+                continue
+            
             current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg["station"], cfg["tz"])
             # FIXED: Pass city timezone to Kalshi fetch
             city_low_ticker = CITY_CONFIG.get(city_name, {}).get("low", "")
@@ -1108,5 +1133,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.7</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v6.9</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment only. Not financial advice.</div>', unsafe_allow_html=True)
