@@ -31,7 +31,6 @@ div[data-testid="stMarkdownContainer"] p {color: #c9d1d9;}
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-# 5 cities only - Denver & Chicago removed (5-min intervals unreliable)
 CITY_CONFIG = {
     "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central"},
     "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific"},
@@ -71,13 +70,13 @@ def format_time_ago(mins):
 
 def get_bracket_bounds(range_str):
     tl = range_str.lower()
-    below_match = re.search(r'<\s*(\d+)°', range_str)
+    below_match = re.search(r'<\s*(\d+)', range_str)
     if below_match:
         return -999, int(below_match.group(1)) - 0.5
-    above_match = re.search(r'>\s*(\d+)°', range_str)
+    above_match = re.search(r'>\s*(\d+)', range_str)
     if above_match:
         return int(above_match.group(1)) + 0.5, 999
-    range_match = re.search(r'(\d+)[-–]\s*(\d+)°|(\d+)°?\s*to\s*(\d+)°', range_str)
+    range_match = re.search(r'(\d+)[-\u2013]\s*(\d+)|(\d+)\s*to\s*(\d+)', range_str)
     if range_match:
         if range_match.group(1) and range_match.group(2):
             low, high = int(range_match.group(1)), int(range_match.group(2))
@@ -85,14 +84,14 @@ def get_bracket_bounds(range_str):
             low, high = int(range_match.group(3)), int(range_match.group(4))
         return low - 0.5, high + 0.5
     if "or below" in tl or "below" in tl:
-        nums = re.findall(r'(\d+)°', range_str)
+        nums = re.findall(r'(\d+)', range_str)
         if nums:
             return -999, int(nums[0]) + 0.5
     if "or above" in tl or "above" in tl:
-        nums = re.findall(r'(\d+)°', range_str)
+        nums = re.findall(r'(\d+)', range_str)
         if nums:
             return int(nums[0]) - 0.5, 999
-    nums = re.findall(r'(\d+)°', range_str)
+    nums = re.findall(r'(\d+)', range_str)
     if len(nums) >= 2:
         return int(nums[0]) - 0.5, int(nums[1]) + 0.5
     elif nums:
@@ -289,21 +288,21 @@ def fetch_kalshi_tomorrow_brackets(series_ticker, city_tz_str="US/Eastern"):
             yes_bid = m.get("yes_bid", 0) or 0
             yes_ask = m.get("yes_ask", 0) or 0
             low_bound, high_bound, bracket_name = None, None, ""
-            range_match = re.search(r'(\d+)\s*[-–to]+\s*(\d+)°', title)
+            range_match = re.search(r'(\d+)\s*[-\u2013to]+\s*(\d+)', title)
             if range_match:
                 low_bound = int(range_match.group(1))
                 high_bound = int(range_match.group(2))
-                bracket_name = f"{low_bound}-{high_bound}°"
-            above_match = re.search(r'(\d+)°?\s*(or above|or more|at least|\+)', title, re.IGNORECASE)
+                bracket_name = f"{low_bound}-{high_bound}"
+            above_match = re.search(r'(\d+)\s*(or above|or more|at least|\+)', title, re.IGNORECASE)
             if above_match and not range_match:
                 low_bound = int(above_match.group(1))
                 high_bound = 999
-                bracket_name = f"{low_bound}° or above"
-            below_match = re.search(r'(below|under|less than)\s*(\d+)°', title, re.IGNORECASE)
+                bracket_name = f"{low_bound} or above"
+            below_match = re.search(r'(below|under|less than)\s*(\d+)', title, re.IGNORECASE)
             if below_match and not range_match:
                 high_bound = int(below_match.group(2))
                 low_bound = -999
-                bracket_name = f"below {high_bound}°"
+                bracket_name = f"below {high_bound}"
             if low_bound is not None and high_bound is not None:
                 kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}"
                 brackets.append({"name": bracket_name, "low": low_bound, "high": high_bound, "bid": yes_bid, "ask": yes_ask, "url": kalshi_url, "ticker": ticker})
@@ -335,21 +334,21 @@ def fetch_kalshi_brackets(series_ticker, city_tz_str="US/Eastern"):
             yes_bid = m.get("yes_bid", 0) or 0
             yes_ask = m.get("yes_ask", 0) or 0
             low_bound, high_bound, bracket_name = None, None, ""
-            range_match = re.search(r'(\d+)\s*[-–to]+\s*(\d+)°', title)
+            range_match = re.search(r'(\d+)\s*[-\u2013to]+\s*(\d+)', title)
             if range_match:
                 low_bound = int(range_match.group(1))
                 high_bound = int(range_match.group(2))
-                bracket_name = f"{low_bound}-{high_bound}°"
-            above_match = re.search(r'(\d+)°?\s*(or above|or more|at least|\+)', title, re.IGNORECASE)
+                bracket_name = f"{low_bound}-{high_bound}"
+            above_match = re.search(r'(\d+)\s*(or above|or more|at least|\+)', title, re.IGNORECASE)
             if above_match and not range_match:
                 low_bound = int(above_match.group(1))
                 high_bound = 999
-                bracket_name = f"{low_bound}° or above"
-            below_match = re.search(r'(below|under|less than)\s*(\d+)°', title, re.IGNORECASE)
+                bracket_name = f"{low_bound} or above"
+            below_match = re.search(r'(below|under|less than)\s*(\d+)', title, re.IGNORECASE)
             if below_match and not range_match:
                 high_bound = int(below_match.group(2))
                 low_bound = -999
-                bracket_name = f"below {high_bound}°"
+                bracket_name = f"below {high_bound}"
             if low_bound is not None and high_bound is not None:
                 kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}" if series_ticker else f"https://kalshi.com/markets/{m.get('event_ticker', '')}"
                 brackets.append({"name": bracket_name, "low": low_bound, "high": high_bound, "bid": yes_bid, "ask": yes_ask, "url": kalshi_url, "ticker": ticker})
@@ -944,14 +943,21 @@ else:
         </div>
         """, unsafe_allow_html=True)
         if readings:
-            with st.expander("📊 Recent NWS Observations", expanded=False):
+            with st.expander("📊 Recent NWS Observations", expanded=True):
                 if oldest_time and newest_time:
                     st.markdown(f"<div style='color:#6b7280;font-size:0.8em;margin-bottom:10px;text-align:center'>📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local | {len(readings)} readings</div>", unsafe_allow_html=True)
-                display_list = readings[:12]
+                display_list = readings
+                low_idx = next((i for i, r in enumerate(display_list) if r['temp'] == obs_low), None)
                 for i, r in enumerate(display_list):
-                    row_style = "display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"
-                    temp_style = "color:#fff;font-weight:600"
-                    st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:50px'>{r['time']}</span><span style='{temp_style}'>{r['temp']}°F</span></div>", unsafe_allow_html=True)
+                    if i == low_idx:
+                        row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:#2d1f0a;border:1px solid #f59e0b;margin:2px 0"
+                        temp_style = "color:#fbbf24;font-weight:700"
+                        label = " ↩️ HOURLY LOW"
+                    else:
+                        row_style = "display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"
+                        temp_style = "color:#fff;font-weight:600"
+                        label = ""
+                    st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:50px'>{r['time']}</span><span style='{temp_style}'>{r['temp']}°F{label}</span></div>", unsafe_allow_html=True)
     else:
         st.warning("⚠️ Could not fetch NWS observations")
     st.markdown("---")
@@ -970,5 +976,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v9.1 (5 Cities)</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v9.2 (5 Cities)</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment only. Not financial advice. Now using 6hr settlement data.</div>', unsafe_allow_html=True)
