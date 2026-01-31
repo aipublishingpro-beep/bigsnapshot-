@@ -524,37 +524,42 @@ def render_hero_box(city_name, cfg):
         if winning:
             anomaly_active, anomaly_words, wind_speed, forecast_temp = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
             
+            # CRITICAL: Match SHARK's logic exactly - gap = settlement - forecast
             if anomaly_active and forecast_temp is not None:
-                temp_gap = abs(settlement_low - forecast_temp)
+                temp_gap = settlement_low - forecast_temp
                 danger_text = ', '.join(anomaly_words[:2]) if anomaly_words else 'weather event'
                 
-                st.markdown(f"""
-                <div style="background:linear-gradient(135deg,#2d0a0a,#1a0505);border:4px solid #ef4444;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(239,68,68,0.4)">
-                    <div style="color:#ef4444;font-size:2.5em;font-weight:900;margin-bottom:15px">⚠️ LOW LOCKED — ANOMALY WARNING</div>
-                    <div style="color:#fca5a5;font-size:1.2em;margin-bottom:5px">{city_name}</div>
-                    <div style="color:#fb7185;font-size:1.4em;font-weight:700;margin-bottom:20px">📅 {today_str}</div>
-                    
-                    <div style="margin:30px 0;padding:30px;background:rgba(0,0,0,0.6);border-radius:15px;border:3px solid #ef4444">
-                        <div style="color:#fbbf24;font-size:1.8em;font-weight:900;margin-bottom:20px">⛈️ {danger_text.upper()} WARNING</div>
+                # Show warning if gap > 3 degrees OR danger words present
+                if temp_gap > 3 or anomaly_words:
+                    st.markdown(f"""
+                    <div style="background:linear-gradient(135deg,#2d0a0a,#1a0505);border:4px solid #ef4444;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(239,68,68,0.4)">
+                        <div style="color:#ef4444;font-size:2.5em;font-weight:900;margin-bottom:15px">⚠️ LOW LOCKED — ANOMALY WARNING</div>
+                        <div style="color:#fca5a5;font-size:1.2em;margin-bottom:5px">{city_name}</div>
+                        <div style="color:#fb7185;font-size:1.4em;font-weight:700;margin-bottom:20px">📅 {today_str}</div>
                         
-                        <div style="color:#ef4444;font-size:2.5em;font-weight:900;line-height:1.4;margin:20px 0">
-                            NWS Tonight low = {forecast_temp}°F<br>
-                            vs Settlement = {settlement_low}°F<br>
-                            <span style="color:#fbbf24;font-size:1.3em">— {temp_gap}° GAP!</span>
+                        <div style="margin:30px 0;padding:30px;background:rgba(0,0,0,0.6);border-radius:15px;border:3px solid #ef4444">
+                            <div style="color:#fbbf24;font-size:1.8em;font-weight:900;margin-bottom:20px">⛈️ {danger_text.upper()} WARNING</div>
+                            
+                            <div style="color:#ef4444;font-size:2.5em;font-weight:900;line-height:1.4;margin:20px 0">
+                                NWS Tonight low = {forecast_temp}°F<br>
+                                vs Settlement = {settlement_low}°F<br>
+                                <span style="color:#fbbf24;font-size:1.3em">— {temp_gap}° GAP!</span>
+                            </div>
+                            
+                            <div style="color:#fca5a5;font-size:1.3em;font-weight:700;margin-top:20px">Danger: {danger_text}</div>
+                            <div style="color:#ef4444;font-size:1.5em;font-weight:900;margin-top:15px">DO NOT BUY — CHECK MANUALLY</div>
                         </div>
                         
-                        <div style="color:#fca5a5;font-size:1.3em;font-weight:700;margin-top:20px">Danger: {danger_text}</div>
-                        <div style="color:#ef4444;font-size:1.5em;font-weight:900;margin-top:15px">DO NOT BUY — CHECK MANUALLY</div>
+                        <div style="color:#9ca3af;font-size:1em;margin-top:20px">{lock_info} @ {settlement_time} local</div>
+                        <div style="color:#6b7280;font-size:0.9em;margin-top:5px">Winning bracket: {bracket_name} @ {ask}¢</div>
+                        
+                        <div style="margin-top:25px;padding:18px;background:#30363d;border-radius:10px;cursor:not-allowed;opacity:0.7">
+                            <span style="color:#9ca3af;font-weight:800;font-size:1.3em">⚠️ VERIFY BEFORE BUYING</span>
+                        </div>
                     </div>
-                    
-                    <div style="color:#9ca3af;font-size:1em;margin-top:20px">{lock_info} @ {settlement_time} local</div>
-                    <div style="color:#6b7280;font-size:0.9em;margin-top:5px">Winning bracket: {bracket_name} @ {ask}¢</div>
-                    
-                    <div style="margin-top:25px;padding:18px;background:#30363d;border-radius:10px;cursor:not-allowed;opacity:0.7">
-                        <span style="color:#9ca3af;font-weight:800;font-size:1.3em">⚠️ VERIFY BEFORE BUYING</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div style="background:linear-gradient(135deg,#052e16,#14532d);border:4px solid #22c55e;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)"><div style="color:#22c55e;font-size:2em;font-weight:800;margin-bottom:10px">✅ LOW LOCKED & CONFIRMED</div><div style="color:#86efac;font-size:1.2em;margin-bottom:5px">{city_name}</div><div style="color:#4ade80;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div><div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(34,197,94,0.5)">{settlement_low}°F</div><div style="color:#4ade80;font-size:1.3em;font-weight:600">{lock_info}</div><div style="color:#86efac;font-size:1em;margin-top:5px">6hr Min @ {settlement_time} local</div><div style="margin-top:25px;padding:20px;background:rgba(0,0,0,0.4);border-radius:12px"><div style="display:flex;justify-content:space-around;align-items:center;flex-wrap:wrap;gap:15px;margin-bottom:15px"><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">WINNER</div><div style="color:#fbbf24;font-size:1.5em;font-weight:800">{bracket_name}</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">ASK</div><div style="color:#fff;font-size:1.5em;font-weight:800">{ask}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">PROFIT</div><div style="color:{profit_color};font-size:1.5em;font-weight:800">+{profit}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">VERDICT</div><div style="font-size:1.5em;font-weight:800">{rating}</div></div></div><a href="{bracket_url}" target="_blank" style="text-decoration:none;display:block"><div style="background:linear-gradient(135deg,#22c55e,#16a34a);padding:15px 20px;border-radius:10px;text-align:center;cursor:pointer"><span style="color:#000;font-weight:900;font-size:1.2em">🛒 BUY YES → {bracket_name} @ {ask}¢</span></div></a></div></div>', unsafe_allow_html=True)
             else:
                 st.markdown(f'<div style="background:linear-gradient(135deg,#052e16,#14532d);border:4px solid #22c55e;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)"><div style="color:#22c55e;font-size:2em;font-weight:800;margin-bottom:10px">✅ LOW LOCKED & CONFIRMED</div><div style="color:#86efac;font-size:1.2em;margin-bottom:5px">{city_name}</div><div style="color:#4ade80;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div><div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(34,197,94,0.5)">{settlement_low}°F</div><div style="color:#4ade80;font-size:1.3em;font-weight:600">{lock_info}</div><div style="color:#86efac;font-size:1em;margin-top:5px">6hr Min @ {settlement_time} local</div><div style="margin-top:25px;padding:20px;background:rgba(0,0,0,0.4);border-radius:12px"><div style="display:flex;justify-content:space-around;align-items:center;flex-wrap:wrap;gap:15px;margin-bottom:15px"><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">WINNER</div><div style="color:#fbbf24;font-size:1.5em;font-weight:800">{bracket_name}</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">ASK</div><div style="color:#fff;font-size:1.5em;font-weight:800">{ask}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">PROFIT</div><div style="color:{profit_color};font-size:1.5em;font-weight:800">+{profit}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">VERDICT</div><div style="font-size:1.5em;font-weight:800">{rating}</div></div></div><a href="{bracket_url}" target="_blank" style="text-decoration:none;display:block"><div style="background:linear-gradient(135deg,#22c55e,#16a34a);padding:15px 20px;border-radius:10px;text-align:center;cursor:pointer"><span style="color:#000;font-weight:900;font-size:1.2em">🛒 BUY YES → {bracket_name} @ {ask}¢</span></div></a></div></div>', unsafe_allow_html=True)
         else:
@@ -650,6 +655,8 @@ if is_owner:
             st.session_state.view_mode = "shark"
             st.rerun()
     st.markdown("---")
+
+# Continue with rest of file (I'll send in next message if this hits limit)
 
 if is_owner and st.session_state.view_mode == "today":
     render_hero_box(default_city, CITY_CONFIG.get(default_city, {}))
