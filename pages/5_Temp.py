@@ -268,20 +268,21 @@ def fetch_nws_tomorrow_low(lat, lon):
 
 @st.cache_data(ttl=300)
 def check_forecast_anomalies(lat, lon):
-    """Check NWS forecast for weather anomalies that could invalidate temperature predictions"""
+    """Check NWS forecast for weather anomalies. Returns (is_anomaly, matched_words, max_wind_speed, forecast_low_temp)"""
     danger_words = [
         'freeze', 'frost', 'freezing', 'ice', 'icy', 'snow', 'sleet', 
         'extreme', 'severe', 'advisory', 'warning', 'watch', 'blizzard',
-        'wind chill', 'arctic', 'polar', 'storm'
+        'wind chill', 'arctic', 'polar', 'storm', 'cold front', 'warm front'
     ]
     
     try:
         periods = fetch_nws_forecast(lat, lon)
         if not periods:
-            return False, [], None
+            return False, [], None, None
         
         matched_words = []
         max_wind_speed = 0
+        forecast_low_temp = None
         
         for period in periods[:4]:
             text = period.get('shortForecast', '').lower() + ' ' + period.get('detailedForecast', '').lower()
@@ -296,13 +297,16 @@ def check_forecast_anomalies(lat, lon):
                 if numbers:
                     speed = max([int(n) for n in numbers])
                     max_wind_speed = max(max_wind_speed, speed)
+            
+            if forecast_low_temp is None and not period.get('isDaytime', True):
+                forecast_low_temp = period.get('temperature')
         
         is_anomaly = len(matched_words) > 0 or max_wind_speed > 25
         
-        return is_anomaly, matched_words, max_wind_speed if max_wind_speed > 0 else None
+        return is_anomaly, matched_words, max_wind_speed if max_wind_speed > 0 else None, forecast_low_temp
         
     except:
-        return False, [], None
+        return False, [], None, None
 
 @st.cache_data(ttl=60)
 def fetch_kalshi_tomorrow_brackets(series_ticker, city_tz_str="US/Eastern"):
@@ -478,6 +482,7 @@ def render_hero_box(city_name, cfg):
     profit = 100 - ask
     bracket_name = winning.get("name", "?") if winning else "?"
     bracket_url = winning.get("url", "#") if winning else "#"
+    
     if ask < 85:
         rating = "🔥 GREAT"
         profit_color = "#22c55e"
@@ -490,6 +495,7 @@ def render_hero_box(city_name, cfg):
     else:
         rating = "😐 MEH"
         profit_color = "#9ca3af"
+    
     mins_since_lock = None
     if settlement_time and is_locked:
         try:
@@ -500,6 +506,7 @@ def render_hero_box(city_name, cfg):
                 mins_since_lock = int((city_now - lock_datetime).total_seconds() / 60)
         except:
             pass
+    
     if mins_since_lock is not None:
         if mins_since_lock < 60:
             time_ago_str = f"{mins_since_lock} mins ago"
@@ -512,25 +519,58 @@ def render_hero_box(city_name, cfg):
                 time_ago_str = f"{hours}h {mins}m ago"
     else:
         time_ago_str = None
+    
     if settlement_low is not None and is_locked:
         lock_info = f"🔒 Locked {time_ago_str}" if time_ago_str else "🔒 Locked"
         if winning:
-            anomaly_active, anomaly_words, wind_speed = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
-            anomaly_warning = ""
-            if anomaly_active:
-                warning_text = f"⚠️ WEATHER ANOMALY: {', '.join(anomaly_words[:3])}"
-                if wind_speed and wind_speed > 25:
-                    warning_text += f" | Wind: {wind_speed} mph"
-                anomaly_warning = f"""
-                <div style="margin-top:20px;padding:15px;background:#2d0a0a;border:2px solid #ef4444;border-radius:10px">
-                    <div style="color:#ef4444;font-weight:800;font-size:1.1em;text-align:center">{warning_text}</div>
-                    <div style="color:#fca5a5;font-size:0.9em;text-align:center;margin-top:5px">Unusual weather may affect settlement - verify forecast before trading</div>
-                </div>"""
-            st.markdown(f'<div style="background:linear-gradient(135deg,#052e16,#14532d);border:4px solid #22c55e;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)"><div style="color:#22c55e;font-size:2em;font-weight:800;margin-bottom:10px">✅ LOW LOCKED & CONFIRMED</div><div style="color:#86efac;font-size:1.2em;margin-bottom:5px">{city_name}</div><div style="color:#4ade80;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div><div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(34,197,94,0.5)">{settlement_low}°F</div><div style="color:#4ade80;font-size:1.3em;font-weight:600">{lock_info}</div><div style="color:#86efac;font-size:1em;margin-top:5px">6hr Min @ {settlement_time} local</div><div style="margin-top:25px;padding:20px;background:rgba(0,0,0,0.4);border-radius:12px"><div style="display:flex;justify-content:space-around;align-items:center;flex-wrap:wrap;gap:15px;margin-bottom:15px"><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">WINNER</div><div style="color:#fbbf24;font-size:1.5em;font-weight:800">{bracket_name}</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">ASK</div><div style="color:#fff;font-size:1.5em;font-weight:800">{ask}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">PROFIT</div><div style="color:{profit_color};font-size:1.5em;font-weight:800">+{profit}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">VERDICT</div><div style="font-size:1.5em;font-weight:800">{rating}</div></div></div><a href="{bracket_url}" target="_blank" style="text-decoration:none;display:block"><div style="background:linear-gradient(135deg,#22c55e,#16a34a);padding:15px 20px;border-radius:10px;text-align:center;cursor:pointer"><span style="color:#000;font-weight:900;font-size:1.2em">🛒 BUY YES → {bracket_name} @ {ask}¢</span></div></a></div>{anomaly_warning}</div>', unsafe_allow_html=True)
+            anomaly_active, anomaly_words, wind_speed, forecast_temp = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
+            
+            if anomaly_active and forecast_temp is not None:
+                temp_gap = abs(forecast_temp - settlement_low)
+                danger_text = ', '.join(anomaly_words[:2]) if anomaly_words else 'weather event'
+                wind_text = f" + {wind_speed} mph wind" if wind_speed and wind_speed > 25 else ""
+                
+                st.markdown(f"""
+                <div style="background:linear-gradient(135deg,#2d0a0a,#1a0505);border:4px solid #ef4444;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(239,68,68,0.4)">
+                    <div style="color:#ef4444;font-size:2em;font-weight:800;margin-bottom:10px">⛈️ WEATHER ANOMALY DETECTED</div>
+                    <div style="color:#fca5a5;font-size:1.2em;margin-bottom:5px">{city_name}</div>
+                    <div style="color:#fb7185;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div>
+                    
+                    <div style="margin:25px 0;padding:20px;background:rgba(0,0,0,0.5);border-radius:12px;border:2px solid #ef4444">
+                        <div style="color:#fbbf24;font-size:1.3em;font-weight:800;margin-bottom:10px">🚨 {danger_text.upper()}{wind_text}</div>
+                        <div style="display:flex;justify-content:center;gap:30px;margin:15px 0;flex-wrap:wrap">
+                            <div style="text-align:center">
+                                <div style="color:#9ca3af;font-size:0.9em">NWS FORECAST LOW</div>
+                                <div style="color:#3b82f6;font-size:2.5em;font-weight:800">{forecast_temp}°F</div>
+                            </div>
+                            <div style="text-align:center;padding-top:20px">
+                                <div style="color:#ef4444;font-size:2em">VS</div>
+                            </div>
+                            <div style="text-align:center">
+                                <div style="color:#9ca3af;font-size:0.9em">SETTLEMENT LOW (6hr)</div>
+                                <div style="color:#22c55e;font-size:2.5em;font-weight:800">{settlement_low}°F</div>
+                            </div>
+                        </div>
+                        <div style="color:#ef4444;font-size:1.8em;font-weight:900;margin-top:10px">{temp_gap}° GAP!</div>
+                        <div style="color:#fca5a5;font-size:1.1em;margin-top:10px">⚠️ CHECK MANUALLY BEFORE TRADING</div>
+                    </div>
+                    
+                    <div style="color:#4ade80;font-size:1em;margin-top:15px">{lock_info} @ {settlement_time}</div>
+                    <div style="color:#86efac;font-size:0.9em">Winning bracket: {bracket_name} @ {ask}¢</div>
+                    
+                    <div style="margin-top:20px;padding:15px;background:#30363d;border-radius:10px;cursor:not-allowed;opacity:0.6">
+                        <span style="color:#9ca3af;font-weight:800;font-size:1.2em">🚫 DO NOT TRADE - ANOMALY ACTIVE</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div style="background:linear-gradient(135deg,#052e16,#14532d);border:4px solid #22c55e;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)"><div style="color:#22c55e;font-size:2em;font-weight:800;margin-bottom:10px">✅ LOW LOCKED & CONFIRMED</div><div style="color:#86efac;font-size:1.2em;margin-bottom:5px">{city_name}</div><div style="color:#4ade80;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div><div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(34,197,94,0.5)">{settlement_low}°F</div><div style="color:#4ade80;font-size:1.3em;font-weight:600">{lock_info}</div><div style="color:#86efac;font-size:1em;margin-top:5px">6hr Min @ {settlement_time} local</div><div style="margin-top:25px;padding:20px;background:rgba(0,0,0,0.4);border-radius:12px"><div style="display:flex;justify-content:space-around;align-items:center;flex-wrap:wrap;gap:15px;margin-bottom:15px"><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">WINNER</div><div style="color:#fbbf24;font-size:1.5em;font-weight:800">{bracket_name}</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">ASK</div><div style="color:#fff;font-size:1.5em;font-weight:800">{ask}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">PROFIT</div><div style="color:{profit_color};font-size:1.5em;font-weight:800">+{profit}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">VERDICT</div><div style="font-size:1.5em;font-weight:800">{rating}</div></div></div><a href="{bracket_url}" target="_blank" style="text-decoration:none;display:block"><div style="background:linear-gradient(135deg,#22c55e,#16a34a);padding:15px 20px;border-radius:10px;text-align:center;cursor:pointer"><span style="color:#000;font-weight:900;font-size:1.2em">🛒 BUY YES → {bracket_name} @ {ask}¢</span></div></a></div></div>', unsafe_allow_html=True)
         else:
             st.markdown(f'<div style="background:linear-gradient(135deg,#052e16,#14532d);border:4px solid #22c55e;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)"><div style="color:#22c55e;font-size:2em;font-weight:800;margin-bottom:10px">✅ LOW LOCKED & CONFIRMED</div><div style="color:#86efac;font-size:1.2em;margin-bottom:5px">{city_name}</div><div style="color:#4ade80;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div><div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(34,197,94,0.5)">{settlement_low}°F</div><div style="color:#4ade80;font-size:1.3em;font-weight:600">{lock_info}</div><div style="color:#86efac;font-size:1em;margin-top:5px">6hr Min @ {settlement_time} local</div><div style="margin-top:20px;padding:15px;background:rgba(0,0,0,0.3);border-radius:10px"><span style="color:#f59e0b;font-size:1.1em">⚠️ No matching bracket found on Kalshi</span></div></div>', unsafe_allow_html=True)
+    
     elif settlement_low is not None:
-        anomaly_active, anomaly_words, wind_speed = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
+        anomaly_active, anomaly_words, wind_speed, forecast_temp = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
+        
         if winning:
             ask = winning.get("ask", 0)
             profit = 100 - ask
@@ -545,20 +585,21 @@ def render_hero_box(city_name, cfg):
                 </div>
                 <div style="color:#fbbf24;font-size:0.9em;text-align:center;margin-bottom:10px">⏳ Wait for 06:53 lock before buying</div>
             </div>"""
+            
             if anomaly_active:
-                warning_text = f"⚠️ ANOMALY: {', '.join(anomaly_words[:3])}"
-                if wind_speed and wind_speed > 25:
-                    warning_text += f" | Wind: {wind_speed} mph"
+                danger_text = ', '.join(anomaly_words[:2]) if anomaly_words else 'weather event'
+                wind_text = f" | {wind_speed} mph wind" if wind_speed and wind_speed > 25 else ""
                 trade_section += f"""
-                <div style="margin-top:15px;padding:12px;background:#2d1f0a;border:2px solid #f59e0b;border-radius:10px">
-                    <div style="color:#f59e0b;font-weight:800;font-size:1em;text-align:center">{warning_text}</div>
-                    <div style="color:#fcd34d;font-size:0.85em;text-align:center;margin-top:5px">Check detailed forecast before entry</div>
+                <div style="margin-top:15px;padding:15px;background:#2d1f0a;border:2px solid #f59e0b;border-radius:10px">
+                    <div style="color:#f59e0b;font-weight:800;font-size:1.1em;text-align:center">⚠️ {danger_text.upper()}{wind_text}</div>
+                    <div style="color:#fcd34d;font-size:0.9em;text-align:center;margin-top:5px">Check forecast - may invalidate settlement prediction</div>
                 </div>"""
         else:
             trade_section = """
             <div style="margin-top:20px;padding:15px;background:rgba(0,0,0,0.3);border-radius:10px">
                 <span style="color:#fbbf24;font-size:1.1em">⏳ Early 6hr data - may update at next reading</span>
             </div>"""
+        
         st.markdown(f"""
         <div style="background:linear-gradient(135deg,#0c1929,#1e3a5f);border:4px solid #3b82f6;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(59,130,246,0.3)">
             <div style="color:#3b82f6;font-size:2em;font-weight:800;margin-bottom:10px">📊 6hr DATA AVAILABLE</div>
@@ -569,19 +610,21 @@ def render_hero_box(city_name, cfg):
             {trade_section}
         </div>
         """, unsafe_allow_html=True)
+    
     else:
         current_temp, obs_low, _, _, _, _, _, _ = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
         preview_text = f"Hourly preview: {obs_low}°F (NOT settlement)" if obs_low else "No data yet"
-        anomaly_active, anomaly_words, wind_speed = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
+        anomaly_active, anomaly_words, wind_speed, forecast_temp = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
         anomaly_div = ""
+        
         if anomaly_active:
-            warning_text = f"🌪️ {', '.join(anomaly_words[:3]).upper()}"
-            if wind_speed and wind_speed > 25:
-                warning_text += f" + {wind_speed} MPH WIND"
+            danger_text = ', '.join(anomaly_words[:2]) if anomaly_words else 'weather event'
+            wind_text = f" + {wind_speed} MPH" if wind_speed and wind_speed > 25 else ""
             anomaly_div = f"""
             <div style="margin-top:15px;padding:12px;background:#2d0a0a;border:2px solid #ef4444;border-radius:8px">
-                <span style="color:#ef4444;font-weight:800;font-size:1em">{warning_text}</span>
+                <span style="color:#ef4444;font-weight:800;font-size:1em">🌪️ {danger_text.upper()}{wind_text}</span>
             </div>"""
+        
         st.markdown(f"""
         <div style="background:linear-gradient(135deg,#292211,#44330d);border:4px solid #f59e0b;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(245,158,11,0.3)">
             <div style="color:#f59e0b;font-size:2em;font-weight:800;margin-bottom:10px">⏳ WAITING FOR 6hr DATA</div>
@@ -865,7 +908,7 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
             pattern_icon = "☀️"
             forecast_low, forecast_desc = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
             brackets = fetch_kalshi_tomorrow_brackets(cfg["low"], cfg["tz"])
-            anomaly_active, anomaly_words, wind_speed = check_forecast_anomalies(cfg['lat'], cfg['lon'])
+            anomaly_active, anomaly_words, wind_speed, forecast_temp = check_forecast_anomalies(cfg['lat'], cfg['lon'])
             if forecast_low is None:
                 all_cities.append({"city": city_name, "pattern": pattern_icon, "status": "NO FORECAST", "forecast": None, "anomaly": anomaly_active})
                 continue
@@ -972,7 +1015,7 @@ elif is_owner and st.session_state.view_mode == "city":
     else:
         st.warning("⚠️ Could not fetch NWS observations")
     st.markdown("---")
-    anomaly_active, anomaly_words, wind_speed = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
+    anomaly_active, anomaly_words, wind_speed, forecast_temp = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
     if anomaly_active:
         warning_text = f"⚠️ WEATHER ANOMALY DETECTED: {', '.join(anomaly_words)}"
         if wind_speed and wind_speed > 25:
@@ -1036,7 +1079,7 @@ else:
     else:
         st.warning("⚠️ Could not fetch NWS observations")
     st.markdown("---")
-    anomaly_active, anomaly_words, wind_speed = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
+    anomaly_active, anomaly_words, wind_speed, forecast_temp = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
     if anomaly_active:
         warning_text = f"⚠️ WEATHER ANOMALY DETECTED: {', '.join(anomaly_words)}"
         if wind_speed and wind_speed > 25:
