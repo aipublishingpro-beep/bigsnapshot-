@@ -31,7 +31,6 @@ div[data-testid="stMarkdownContainer"] p {color: #c9d1d9;}
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-# 5 cities only - Denver & Chicago removed (5-min intervals unreliable)
 CITY_CONFIG = {
     "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central"},
     "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific"},
@@ -526,40 +525,33 @@ def render_hero_box(city_name, cfg):
             anomaly_active, anomaly_words, wind_speed, forecast_temp = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
             
             if anomaly_active and forecast_temp is not None:
-                temp_gap = abs(forecast_temp - settlement_low)
+                temp_gap = abs(settlement_low - forecast_temp)
                 danger_text = ', '.join(anomaly_words[:2]) if anomaly_words else 'weather event'
-                wind_text = f" + {wind_speed} mph wind" if wind_speed and wind_speed > 25 else ""
                 
                 st.markdown(f"""
                 <div style="background:linear-gradient(135deg,#2d0a0a,#1a0505);border:4px solid #ef4444;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(239,68,68,0.4)">
-                    <div style="color:#ef4444;font-size:2em;font-weight:800;margin-bottom:10px">⛈️ WEATHER ANOMALY DETECTED</div>
+                    <div style="color:#ef4444;font-size:2.5em;font-weight:900;margin-bottom:15px">⚠️ LOW LOCKED — ANOMALY WARNING</div>
                     <div style="color:#fca5a5;font-size:1.2em;margin-bottom:5px">{city_name}</div>
-                    <div style="color:#fb7185;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div>
+                    <div style="color:#fb7185;font-size:1.4em;font-weight:700;margin-bottom:20px">📅 {today_str}</div>
                     
-                    <div style="margin:25px 0;padding:20px;background:rgba(0,0,0,0.5);border-radius:12px;border:2px solid #ef4444">
-                        <div style="color:#fbbf24;font-size:1.3em;font-weight:800;margin-bottom:10px">🚨 {danger_text.upper()}{wind_text}</div>
-                        <div style="display:flex;justify-content:center;gap:30px;margin:15px 0;flex-wrap:wrap">
-                            <div style="text-align:center">
-                                <div style="color:#9ca3af;font-size:0.9em">NWS FORECAST LOW</div>
-                                <div style="color:#3b82f6;font-size:2.5em;font-weight:800">{forecast_temp}°F</div>
-                            </div>
-                            <div style="text-align:center;padding-top:20px">
-                                <div style="color:#ef4444;font-size:2em">VS</div>
-                            </div>
-                            <div style="text-align:center">
-                                <div style="color:#9ca3af;font-size:0.9em">SETTLEMENT LOW (6hr)</div>
-                                <div style="color:#22c55e;font-size:2.5em;font-weight:800">{settlement_low}°F</div>
-                            </div>
+                    <div style="margin:30px 0;padding:30px;background:rgba(0,0,0,0.6);border-radius:15px;border:3px solid #ef4444">
+                        <div style="color:#fbbf24;font-size:1.8em;font-weight:900;margin-bottom:20px">⛈️ {danger_text.upper()} WARNING</div>
+                        
+                        <div style="color:#ef4444;font-size:2.5em;font-weight:900;line-height:1.4;margin:20px 0">
+                            NWS Tonight low = {forecast_temp}°F<br>
+                            vs Settlement = {settlement_low}°F<br>
+                            <span style="color:#fbbf24;font-size:1.3em">— {temp_gap}° GAP!</span>
                         </div>
-                        <div style="color:#ef4444;font-size:1.8em;font-weight:900;margin-top:10px">{temp_gap}° GAP!</div>
-                        <div style="color:#fca5a5;font-size:1.1em;margin-top:10px">⚠️ CHECK MANUALLY BEFORE TRADING</div>
+                        
+                        <div style="color:#fca5a5;font-size:1.3em;font-weight:700;margin-top:20px">Danger: {danger_text}</div>
+                        <div style="color:#ef4444;font-size:1.5em;font-weight:900;margin-top:15px">DO NOT BUY — CHECK MANUALLY</div>
                     </div>
                     
-                    <div style="color:#4ade80;font-size:1em;margin-top:15px">{lock_info} @ {settlement_time}</div>
-                    <div style="color:#86efac;font-size:0.9em">Winning bracket: {bracket_name} @ {ask}¢</div>
+                    <div style="color:#9ca3af;font-size:1em;margin-top:20px">{lock_info} @ {settlement_time} local</div>
+                    <div style="color:#6b7280;font-size:0.9em;margin-top:5px">Winning bracket: {bracket_name} @ {ask}¢</div>
                     
-                    <div style="margin-top:20px;padding:15px;background:#30363d;border-radius:10px;cursor:not-allowed;opacity:0.6">
-                        <span style="color:#9ca3af;font-weight:800;font-size:1.2em">🚫 DO NOT TRADE - ANOMALY ACTIVE</span>
+                    <div style="margin-top:25px;padding:18px;background:#30363d;border-radius:10px;cursor:not-allowed;opacity:0.7">
+                        <span style="color:#9ca3af;font-weight:800;font-size:1.3em">⚠️ VERIFY BEFORE BUYING</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -704,6 +696,7 @@ if is_owner and st.session_state.view_mode == "today":
                 results.append({"city": city_name, "status": "✅", "obs_low": obs_low, "settlement_low": settlement_low, "settlement_time": settlement_time, "bracket": winning["name"], "bid": bid, "ask": ask, "edge": edge, "rating": rating, "url": winning["url"], "locked": is_locked})
             else:
                 results.append({"city": city_name, "status": "⚠️ NO BRACKET", "obs_low": obs_low, "settlement_low": settlement_low, "settlement_time": settlement_time, "bracket": None, "bid": 0, "ask": 100, "edge": 0, "url": None, "locked": is_locked})
+    
     results_with_edge = sorted([r for r in results if r.get("edge") and r["edge"] >= 10], key=lambda x: x["edge"], reverse=True)
     st.markdown("### 🔥 OPPORTUNITIES (6hr Settlement)")
     if results_with_edge:
@@ -735,6 +728,7 @@ if is_owner and st.session_state.view_mode == "today":
             """, unsafe_allow_html=True)
     else:
         st.info("No opportunities with 10¢+ edge found.")
+    
     st.markdown("### 📊 ALL CITIES")
     for r in results:
         if r["status"] == "⏸️ YESTERDAY":
@@ -757,9 +751,11 @@ if is_owner and st.session_state.view_mode == "today":
             ask_color = "#22c55e" if r["ask"] < 85 else "#3b82f6" if r["ask"] < 90 else "#f59e0b" if r["ask"] < 95 else "#9ca3af"
             settle_text = f"6hr↓{r['settlement_low']}°" if r.get('settlement_low') else "—"
             st.markdown(f"<div style='background:{row_bg};border:2px solid {row_border};border-radius:8px;padding:12px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'><div><span style='color:#fff;font-weight:600'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span></div><div><span style='color:#22c55e;font-weight:700'>{settle_text}</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#fbbf24'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:#9ca3af'>Ask:</span><span style='color:{ask_color};margin:0 3px'>{r['ask']:.0f}¢</span><span style='color:#6b7280;margin:0 5px'>|</span>{edge_display}</div></div>", unsafe_allow_html=True)
+    
     st.markdown("---")
     st.markdown(f"<div style='text-align:center;color:#6b7280;font-size:0.8em'>Last scan: {now.strftime('%I:%M %p ET')} | 🟢 = 6hr LOCKED | 🟡 = Waiting for 6hr</div>", unsafe_allow_html=True)
     st.markdown("---")
+    
     tomorrow_date = (datetime.now(eastern) + timedelta(days=1)).strftime('%A, %b %d')
     st.subheader(f"🔮 TOMORROW'S LOW ({tomorrow_date})")
     tomorrow_results = []
@@ -778,6 +774,7 @@ if is_owner and st.session_state.view_mode == "today":
                 tomorrow_results.append({"city": city_name, "status": "✅", "forecast_low": forecast_low, "bracket": winning["name"], "bid": winning["bid"], "ask": winning["ask"], "url": winning["url"]})
             else:
                 tomorrow_results.append({"city": city_name, "status": "⚠️", "forecast_low": forecast_low, "bracket": None, "ask": None, "url": None})
+    
     cheap_opps = [r for r in tomorrow_results if r.get("ask") and r["ask"] < 40]
     cheap_opps.sort(key=lambda x: x["ask"])
     if cheap_opps:
@@ -796,6 +793,7 @@ if is_owner and st.session_state.view_mode == "today":
             """, unsafe_allow_html=True)
     else:
         st.info("No cheap entries (all > 40¢)")
+    
     st.markdown("### 📋 ALL CITIES - TOMORROW")
     for r in tomorrow_results:
         if r["status"] == "❌":
@@ -923,6 +921,7 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
                     tickets.append(data)
             else:
                 all_cities.append({"city": city_name, "pattern": pattern_icon, "status": "NO BRACKET", "forecast": forecast_low, "anomaly": anomaly_active})
+    
     if tickets:
         st.markdown("### 🎰 CHEAP ENTRIES (≤10¢)")
         for t in sorted(tickets, key=lambda x: x["ask"]):
@@ -947,6 +946,7 @@ elif is_owner and st.session_state.view_mode == "tomorrow":
             """, unsafe_allow_html=True)
     else:
         st.info("No cheap entries ≤10¢ found. Check back later or use Tomorrow Scanner CLI.")
+    
     st.markdown("### 📋 ALL CITIES - TOMORROW")
     for c in all_cities:
         check_time = CHECK_TIMES_ET.get(c['city'], "7-10 AM ET")
@@ -973,11 +973,14 @@ elif is_owner and st.session_state.view_mode == "city":
     if st.button("⭐ Set as Default City", use_container_width=False):
         st.query_params["city"] = city
         st.success(f"✓ Bookmark to save {city} as default!")
+    
     render_hero_box(city, cfg)
+    
     current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
     extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
     settlement_low, settlement_time = get_settlement_from_6hr(extremes_6hr, "low")
     is_locked, lock_time = check_low_locked_6hr(extremes_6hr, cfg.get("tz", "US/Eastern"))
+    
     if current_temp:
         st.markdown(f"""
         <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
@@ -1014,6 +1017,7 @@ elif is_owner and st.session_state.view_mode == "city":
                     st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:50px'>{r['time']}</span><span style='flex:1;text-align:center;font-size:0.85em'>{six_hr_display}</span><span style='{temp_style}'>{r['temp']}°F{label}</span></div>", unsafe_allow_html=True)
     else:
         st.warning("⚠️ Could not fetch NWS observations")
+    
     st.markdown("---")
     anomaly_active, anomaly_words, wind_speed, forecast_temp = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
     if anomaly_active:
@@ -1023,6 +1027,7 @@ elif is_owner and st.session_state.view_mode == "city":
         st.markdown(f'<div style="background:#2d0a0a;border:2px solid #ef4444;border-radius:8px;padding:12px;margin:10px 0;text-align:center"><span style="color:#ef4444;font-weight:700">{warning_text}</span></div>', unsafe_allow_html=True)
     else:
         st.markdown(f'<div style="background:#0a2d1a;border:1px solid #22c55e;border-radius:8px;padding:8px;margin:10px 0;text-align:center"><span style="color:#22c55e;font-weight:600">✅ No weather anomalies detected</span></div>', unsafe_allow_html=True)
+    
     st.subheader("📡 NWS Forecast")
     forecast = fetch_nws_forecast(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
     if forecast:
@@ -1049,6 +1054,7 @@ else:
     if st.button("⭐ Set as Default City", use_container_width=False):
         st.query_params["city"] = city
         st.success(f"✓ Bookmark to save {city} as default!")
+    
     current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
     if obs_low and current_temp:
         st.markdown(f"""
@@ -1078,6 +1084,7 @@ else:
                     st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:50px'>{r['time']}</span><span style='{temp_style}'>{r['temp']}°F</span></div>", unsafe_allow_html=True)
     else:
         st.warning("⚠️ Could not fetch NWS observations")
+    
     st.markdown("---")
     anomaly_active, anomaly_words, wind_speed, forecast_temp = check_forecast_anomalies(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
     if anomaly_active:
@@ -1087,6 +1094,7 @@ else:
         st.markdown(f'<div style="background:#2d0a0a;border:2px solid #ef4444;border-radius:8px;padding:12px;margin:10px 0;text-align:center"><span style="color:#ef4444;font-weight:700">{warning_text}</span></div>', unsafe_allow_html=True)
     else:
         st.markdown(f'<div style="background:#0a2d1a;border:1px solid #22c55e;border-radius:8px;padding:8px;margin:10px 0;text-align:center"><span style="color:#22c55e;font-weight:600">✅ No weather anomalies detected</span></div>', unsafe_allow_html=True)
+    
     st.subheader("📡 NWS Forecast")
     forecast = fetch_nws_forecast(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
     if forecast:
