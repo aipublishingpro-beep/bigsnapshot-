@@ -37,7 +37,6 @@ if "default_city" not in st.session_state:
 def fetch_nws_forecast(lat, lon):
     """Fetch tomorrow's forecast LOW from NWS"""
     try:
-        # Get grid point
         points_url = f"https://api.weather.gov/points/{lat},{lon}"
         resp = requests.get(points_url, headers={"User-Agent": "Temp/1.0"}, timeout=10)
         if resp.status_code != 200:
@@ -48,14 +47,12 @@ def fetch_nws_forecast(lat, lon):
         if not forecast_url:
             return None
         
-        # Get forecast
         forecast_resp = requests.get(forecast_url, headers={"User-Agent": "Temp/1.0"}, timeout=10)
         if forecast_resp.status_code != 200:
             return None
         
         periods = forecast_resp.json().get("properties", {}).get("periods", [])
         
-        # Find tomorrow night (that's when LOW occurs)
         for period in periods:
             name = period.get("name", "")
             if "Tomorrow Night" in name or "Tonight" in name:
@@ -134,7 +131,7 @@ def fetch_full_nws_recording(station, city_tz_str):
                         "air": cells[6].text.strip(),
                         "dwpt": cells[7].text.strip(),
                         "max_6hr": cells[8].text.strip(),
-                        "min_6hr": cells[9].text.strip()  # CRITICAL: 6hr MIN for LOW
+                        "min_6hr": cells[9].text.strip()
                     })
             except:
                 continue
@@ -202,51 +199,12 @@ with col2:
 
 st.divider()
 
-# TOMORROW FORECAST SECTION
-st.subheader("📅 Tomorrow's Forecast")
-
-lat = cfg.get("lat")
-lon = cfg.get("lon")
-
-if lat and lon:
-    forecast_low = fetch_nws_forecast(lat, lon)
-    
-    if forecast_low:
-    forecast_settlement = round(forecast_low)
-    
-    # Fetch tomorrow's Kalshi brackets (API returns future dates)
-    kalshi_series = cfg.get("kalshi_low", "")
-    if kalshi_series:
-        all_brackets = fetch_kalshi_brackets(kalshi_series)
-        
-        # Find bracket for forecast settlement
-        forecast_bracket = None
-        for b in all_brackets:
-            if b['low'] <= forecast_settlement < b['high']:
-                forecast_bracket = b['range']
-                break
-        
-        if forecast_bracket:
-            st.success(f"🎯 NWS Forecast LOW: **{forecast_low}°F** → Rounds to **{forecast_settlement}°F** → **TARGET: {forecast_bracket}**")
-            
-            # Log entry for tracking
-            eastern = pytz.timezone("US/Eastern")
-            log_time = datetime.now(eastern).strftime("%Y-%m-%d %H:%M:%S")
-            st.code(f"LOG|{log_time}|{city_selection}|FORECAST:{forecast_low}|SETTLEMENT:{forecast_settlement}|BRACKET:{forecast_bracket}")
-        else:
-            st.warning(f"🎯 NWS Forecast LOW: **{forecast_low}°F** → Rounds to **{forecast_settlement}°F** → ⚠️ No bracket match")
-else:
-    st.info("⏳ Tomorrow's forecast not yet available from NWS")
-
-st.divider()
-
 cfg = CITIES[city_selection]
 st.header(f"📍 {city_selection}")
 
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg["nws"], cfg["tz"])
 full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
 
-# FALLBACK: If JSON API fails, use HTML
 if not readings and full_readings:
     st.warning("⚠️ JSON API unavailable - using HTML fallback")
     readings = []
@@ -268,7 +226,6 @@ if not readings and full_readings:
 if current_temp:
     settlement_info = ""
     if full_readings:
-        # Calculate 6hr MIN (LOWEST value in cells[9])
         raw_6hr_min = None
         for r in full_readings:
             if r['min_6hr']:
@@ -394,6 +351,42 @@ elif readings:
         st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:60px;font-weight:600'>{time_key}</span><span style='{temp_style}'>{temp}°F{label}</span></div>", unsafe_allow_html=True)
 else:
     st.warning("⚠️ No data available")
+
+st.divider()
+
+st.subheader("📅 Tomorrow's Forecast")
+
+lat = cfg.get("lat")
+lon = cfg.get("lon")
+
+if lat and lon:
+    forecast_low = fetch_nws_forecast(lat, lon)
+    
+    if forecast_low:
+        forecast_settlement = round(forecast_low)
+        
+        kalshi_series = cfg.get("kalshi_low", "")
+        if kalshi_series:
+            all_brackets = fetch_kalshi_brackets(kalshi_series)
+            
+            forecast_bracket = None
+            for b in all_brackets:
+                if b['low'] <= forecast_settlement < b['high']:
+                    forecast_bracket = b['range']
+                    break
+            
+            if forecast_bracket:
+                st.success(f"🎯 NWS Forecast LOW: **{forecast_low}°F** → Rounds to **{forecast_settlement}°F** → **TARGET: {forecast_bracket}**")
+                
+                eastern = pytz.timezone("US/Eastern")
+                log_time = datetime.now(eastern).strftime("%Y-%m-%d %H:%M:%S")
+                st.code(f"LOG|{log_time}|{city_selection}|FORECAST:{forecast_low}|SETTLEMENT:{forecast_settlement}|BRACKET:{forecast_bracket}")
+            else:
+                st.warning(f"🎯 NWS Forecast LOW: **{forecast_low}°F** → Rounds to **{forecast_settlement}°F** → ⚠️ No bracket match")
+    else:
+        st.info("⏳ Tomorrow's forecast not yet available from NWS")
+else:
+    st.error("⚠️ Missing lat/lon coordinates for this city")
 
 st.divider()
 
