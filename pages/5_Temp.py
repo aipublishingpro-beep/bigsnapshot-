@@ -456,7 +456,6 @@ if mode == "🦈 SHARK Mode":
                 markets = fetch_kalshi_markets(city_selection, settlement_type, st.session_state.cache_buster)
                 today_high_forecast, tonight_low_forecast, warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"], cfg["tz"], st.session_state.cache_buster)
             
-            if not markets:        
             if not markets:
                 st.error("❌ No Kalshi markets found")
                 st.caption(f"Searched for series: {cfg.get('kalshi_low' if settlement_type == 'LOW' else 'kalshi_high')}")
