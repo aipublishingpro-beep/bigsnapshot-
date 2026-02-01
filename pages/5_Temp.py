@@ -1,135 +1,343 @@
 """
-🌡️ TEMP.PY - City View with NWS Observations + SHARK Mode
-Shows hourly readings + 6hr extremes for selected city + automated trading signals
+🦈 SHARK AUTO-BUY v7.5 - FIXED SETTLEMENT LOCK + 5 GUARDS
+- ✅ GUARD 1: Weather (blocks storms/fronts/freezes)
+- ✅ GUARD 2: Price (blocks ≤20¢, warns ≤40¢)
+- ✅ GUARD 3: Trend (blocks if current temp contradicts settlement)
+- ✅ GUARD 4: Forecast (blocks if NWS disagrees by 3°+)
+- ✅ GUARD 5: Settlement Lock (blocks if 6hr ≠ hourly ±0.5°F) ← FIXES $7K BUG
+- 📊 AUTO-LOGS all scans to shark_log.csv
+- Uses 6hr aggregate from obhistory + hourly API for verification
+- LOW = LOWEST 6hr Min (verified against hourly low)
+- HIGH = HIGHEST 6hr Max after NOON (verified against hourly high)
 """
-import streamlit as st
 import requests
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 import pytz
-from bs4 import BeautifulSoup
+import winsound
 import base64
 import re
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
-from cryptography.hazmat.backends import default_backend
+import csv
+import os
+from bs4 import BeautifulSoup
 
-st.set_page_config(page_title="🌡️ Temp Trading", page_icon="🌡️", layout="wide")
+# ============================================================
+# 🔑 KALSHI API KEYS - PASTE YOUR CREDENTIALS HERE FIRST!
+# ============================================================
+# Get these from: https://kalshi.com → Settings → API
+# API_KEY = The API Key ID (looks like: 3abd1b21-023d-4088-abae-35c36e9ba806)
+# PRIVATE_KEY = The full private key (multi-line, starts with -----BEGIN PRIVATE KEY-----)
 
-try:
-    OWNER_MODE = "owner" in st.query_params and st.query_params["owner"] == "true"
-except:
-    OWNER_MODE = False
+API_KEY = "paste-your-api-key-id-here"
 
-CITIES = {
-    "Austin": {"nws": "KAUS", "tz": "US/Central", "lat": 30.19, "lon": -97.67, "kalshi_low": "KXLOWTAUS", "kalshi_high": "KXHIGHAUS"},
-    "Chicago": {"nws": "KMDW", "tz": "US/Central", "lat": 41.79, "lon": -87.75, "kalshi_low": "KXLOWTCHI", "kalshi_high": "KXHIGHCHI"},
-    "Denver": {"nws": "KDEN", "tz": "US/Mountain", "lat": 39.86, "lon": -104.67, "kalshi_low": "KXLOWTDEN", "kalshi_high": "KXHIGHDEN"},
-    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "lat": 33.94, "lon": -118.41, "kalshi_low": "KXLOWTLAX", "kalshi_high": "KXHIGHLAX"},
-    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "lat": 25.80, "lon": -80.29, "kalshi_low": "KXLOWTMIA", "kalshi_high": "KXHIGHMIA"},
-    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "lat": 40.78, "lon": -73.97, "kalshi_low": "KXLOWTNYC", "kalshi_high": "KXHIGHNY"},
-    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "lat": 39.87, "lon": -75.23, "kalshi_low": "KXLOWTPHIL", "kalshi_high": "KXHIGHPHIL"},
+PRIVATE_KEY = """-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASC...
+paste-all-lines-of-your-private-key-here
+keep-the-BEGIN-and-END-lines
+-----END PRIVATE KEY-----"""
+
+# ============================================================
+# ⚙️ SETTINGS
+# ============================================================
+CONTRACTS_PER_TRADE = 20
+MAX_DAILY_SPEND = 100
+AUTO_BUY_ENABLED = False  # 🧪 TEST MODE - Alerts only, no buying
+MAX_ASK_PRICE = 89
+CHECK_INTERVAL = 60
+LOG_FILE = "shark_log.csv"
+LOG_INTERVAL = 1800  # Log summary every 30 min
+
+# ============================================================
+# 🛡️ GUARD SETTINGS
+# ============================================================
+GUARD_ENABLED = True
+PRICE_FLOOR = 20         # Ask ≤ this = BLOCK
+PRICE_WARN = 40          # Ask ≤ this = WARN + BLOCK
+FORECAST_GAP_THRESHOLD = 3  # NWS forecast disagrees by this many degrees = BLOCK
+SETTLEMENT_TOLERANCE = 0.5  # 6hr must match hourly within this tolerance
+
+WEATHER_DANGER_WORDS = [
+    "cold front", "warm front", "frontal passage", "front passage",
+    "freeze", "hard freeze", "flash freeze",
+    "frost", "killing frost",
+    "winter storm", "ice storm", "blizzard",
+    "arctic", "polar vortex", "polar outbreak",
+    "heat wave", "excessive heat", "heat advisory", "extreme heat",
+    "severe thunderstorm", "tornado", "tropical storm", "hurricane",
+    "record high", "record low", "near record",
+    "wind chill warning", "wind chill advisory",
+    "freeze warning", "frost advisory",
+    "rapidly falling", "rapidly rising",
+    "sharply colder", "sharply warmer",
+    "much colder", "much warmer",
+    "plunging", "plummeting", "soaring",
+    "temperature crash", "temperature plunge",
+]
+
+# ============================================================
+# 🎯 CITY TOGGLES
+# ============================================================
+TRADE_LOW = {
+    "New York City": True,
+    "Philadelphia": False,
+    "Miami": True,
+    "Los Angeles": False,
+    "Austin": False,
 }
 
-if "default_city" not in st.session_state:
-    st.session_state.default_city = "New York City"
+TRADE_HIGH = {
+    "New York City": True,
+    "Philadelphia": True,
+    "Miami": True,
+    "Los Angeles": True,
+    "Austin": True,
+    "Houston": True,
+    "Las Vegas": True,
+    "Seattle": True,
+    "San Francisco": True,
+    "Washington DC": True,
+    "New Orleans": True,
+}
 
-if "cache_buster" not in st.session_state:
-    st.session_state.cache_buster = 0
+# ============================================================
+# CITIES CONFIG
+# ============================================================
+CITIES = {
+    "New York City": {
+        "nws": "KNYC", "kalshi_low": "KXLOWTNYC", "kalshi_high": "KXHIGHNY",
+        "tz": "US/Eastern", "lat": 40.78, "lon": -73.97,
+    },
+    "Philadelphia": {
+        "nws": "KPHL", "kalshi_low": "KXLOWTPHL", "kalshi_high": "KXHIGHPHIL",
+        "tz": "US/Eastern", "lat": 39.87, "lon": -75.23,
+    },
+    "Miami": {
+        "nws": "KMIA", "kalshi_low": "KXLOWTMIA", "kalshi_high": "KXHIGHMIA",
+        "tz": "US/Eastern", "lat": 25.80, "lon": -80.29,
+    },
+    "Los Angeles": {
+        "nws": "KLAX", "kalshi_low": "KXLOWTLAX", "kalshi_high": "KXHIGHLAX",
+        "tz": "US/Pacific", "lat": 33.94, "lon": -118.41,
+    },
+    "Austin": {
+        "nws": "KAUS", "kalshi_low": "KXLOWTAUS", "kalshi_high": "KXHIGHAUS",
+        "tz": "US/Central", "lat": 30.19, "lon": -97.67,
+    },
+    "Houston": {
+        "nws": "KIAH", "kalshi_low": None, "kalshi_high": "KXHIGHHOU",
+        "tz": "US/Central", "lat": 29.98, "lon": -95.37,
+    },
+    "Las Vegas": {
+        "nws": "KLAS", "kalshi_low": None, "kalshi_high": "KXHIGHTLV",
+        "tz": "US/Pacific", "lat": 36.08, "lon": -115.15,
+    },
+    "Seattle": {
+        "nws": "KSEA", "kalshi_low": None, "kalshi_high": "KXHIGHSEA",
+        "tz": "US/Pacific", "lat": 47.45, "lon": -122.31,
+    },
+    "San Francisco": {
+        "nws": "KSFO", "kalshi_low": None, "kalshi_high": "KXHIGHSFO",
+        "tz": "US/Pacific", "lat": 37.62, "lon": -122.38,
+    },
+    "Washington DC": {
+        "nws": "KDCA", "kalshi_low": None, "kalshi_high": "KXHIGHDC",
+        "tz": "US/Eastern", "lat": 38.85, "lon": -77.04,
+    },
+    "New Orleans": {
+        "nws": "KMSY", "kalshi_low": None, "kalshi_high": "KXHIGHNOLA",
+        "tz": "US/Central", "lat": 29.99, "lon": -90.25,
+    },
+}
 
-def create_kalshi_signature(timestamp, method, path, body=""):
-    """Generate Kalshi API signature with PSS padding"""
+daily_spent = 0
+_forecast_cache = {}
+FORECAST_CACHE_TTL = 900
+_last_log_time = 0
+
+# ============================================================
+# 🔑 KALSHI API KEYS - PASTE YOUR CREDENTIALS HERE
+# ============================================================
+# Get these from: https://kalshi.com → Settings → API
+# API_KEY = The API Key ID (looks like: 3abd1b21-023d-4088-abae-35c36e9ba806)
+# PRIVATE_KEY = The full private key (multi-line, starts with -----BEGIN PRIVATE KEY-----)
+
+API_KEY = "paste-your-api-key-id-here"
+
+PRIVATE_KEY = """-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASC...
+paste-all-lines-of-your-private-key-here
+keep-the-BEGIN-and-END-lines
+-----END PRIVATE KEY-----"""
+
+# ============================================================
+# 📊 CSV LOGGING
+# ============================================================
+def init_csv_log():
+    """Create CSV file with headers if it doesn't exist"""
+    if not os.path.exists(LOG_FILE):
+        with open(LOG_FILE, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                'Timestamp', 'Date', 'Time', 'Hour',
+                'City', 'Type', 
+                'Settlement_Temp', 'Settlement_Time', 'Is_Locked',
+                'Hourly_Extreme', 'Settlement_Match',
+                'Bracket', 'Ask', 'Ticker',
+                'Guards_Passed', 'Guard_Warnings',
+                'Action', 'Edge', 'Contracts', 'Cost', 'Potential_Profit'
+            ])
+
+def log_to_csv(scan_time, city, market_type, settlement_temp, settlement_time, is_locked, hourly_extreme=None, settlement_match=None, bracket=None, guards_passed=None, guard_warnings=None, order_placed=False):
+    """Log scan result to CSV"""
+    with open(LOG_FILE, 'a', newline='') as f:
+        writer = csv.writer(f)
+        
+        date_str = scan_time.strftime('%Y-%m-%d')
+        time_str = scan_time.strftime('%H:%M:%S')
+        hour = scan_time.hour
+        
+        if bracket:
+            cost = (bracket['ask'] / 100) * CONTRACTS_PER_TRADE
+            profit = ((100 - bracket['ask']) / 100) * CONTRACTS_PER_TRADE
+            edge = 100 - bracket['ask']
+            
+            writer.writerow([
+                scan_time.isoformat(),
+                date_str,
+                time_str,
+                hour,
+                city,
+                market_type,
+                settlement_temp or '',
+                settlement_time or '',
+                'YES' if is_locked else 'NO',
+                hourly_extreme or '',
+                'YES' if settlement_match else 'NO',
+                bracket['name'],
+                bracket['ask'],
+                bracket['ticker'],
+                'YES' if guards_passed else 'NO',
+                '|'.join(guard_warnings) if guard_warnings else '',
+                'BOUGHT' if order_placed else ('ALERT' if guards_passed else 'BLOCKED'),
+                edge,
+                CONTRACTS_PER_TRADE if (guards_passed and order_placed) else 0,
+                f"${cost:.2f}" if guards_passed else '',
+                f"${profit:.2f}" if guards_passed else ''
+            ])
+        else:
+            action = 'LOCKED_NO_MATCH' if is_locked else 'WAITING_FOR_LOCK'
+            writer.writerow([
+                scan_time.isoformat(),
+                date_str,
+                time_str,
+                hour,
+                city,
+                market_type,
+                settlement_temp or '',
+                settlement_time or '',
+                'YES' if is_locked else 'NO',
+                hourly_extreme or '',
+                'YES' if settlement_match else 'NO',
+                'NO_MATCH' if is_locked else 'WAITING',
+                '',
+                '',
+                '',
+                '',
+                action,
+                '',
+                0,
+                '',
+                ''
+            ])
+
+# ============================================================
+# 🔑 KALSHI API AUTHENTICATION (PASTE YOUR KEYS HERE)
+# ============================================================
+API_KEY = "your-api-key-id-here"
+
+PRIVATE_KEY = """-----BEGIN PRIVATE KEY-----
+paste-your-full-private-key-here
+multiple-lines-from-kalshi
+-----END PRIVATE KEY-----"""
+
+def create_kalshi_signature(timestamp, method, path):
     try:
-        api_key = st.secrets.get("KALSHI_API_KEY", "")
-        private_key_str = st.secrets.get("KALSHI_PRIVATE_KEY", "")
-        
-        if not api_key or not private_key_str:
-            return None, None
-        
-        msg_string = f"{timestamp}{method}{path}{body}"
-        
+        from cryptography.hazmat.primitives import serialization, hashes
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from cryptography.hazmat.backends import default_backend
         private_key = serialization.load_pem_private_key(
-            private_key_str.encode(),
-            password=None,
-            backend=default_backend()
+            PRIVATE_KEY.encode() if isinstance(PRIVATE_KEY, str) else PRIVATE_KEY,
+            password=None, backend=default_backend()
         )
-        
+        message = f"{timestamp}{method}{path}".encode('utf-8')
         signature = private_key.sign(
-            msg_string.encode('utf-8'),
-            asym_padding.PSS(
-                mgf=asym_padding.MGF1(hashes.SHA256()),
-                salt_length=asym_padding.PSS.MAX_LENGTH
-            ),
+            message,
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
             hashes.SHA256()
         )
-        
-        return api_key, base64.b64encode(signature).decode('utf-8')
-    except:
-        return None, None
+        return base64.b64encode(signature).decode()
+    except Exception as e:
+        print(f"  ❌ Signature error: {e}")
+        return None
 
-@st.cache_data(ttl=300)
-def fetch_full_nws_recording(station, city_tz_str, cache_buster=0):
-    """Fetch complete NWS observation table with 6hr extremes"""
-    url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
+def place_kalshi_order(ticker, price_cents, contracts):
+    global daily_spent
+    cost = (price_cents / 100) * contracts
+    if daily_spent + cost > MAX_DAILY_SPEND:
+        print(f"  ⚠️ Daily limit reached (${daily_spent:.2f}/${MAX_DAILY_SPEND})")
+        return False, "Daily limit reached"
     try:
-        city_tz = pytz.timezone(city_tz_str)
-        today = datetime.now(city_tz).day
-        
-        resp = requests.get(url, headers={"User-Agent": "Temp/1.0"}, timeout=15)
-        if resp.status_code != 200:
-            return []
-        
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        table = soup.find('table')
-        if not table:
-            return []
-        
-        rows = table.find_all('tr')
-        readings = []
-        
-        for row in rows[3:]:
-            cells = row.find_all('td')
-            if len(cells) < 10:
-                continue
-            
-            try:
-                date_val = cells[0].text.strip()
-                if date_val and int(date_val) == today:
-                    readings.append({
-                        "date": date_val,
-                        "time": cells[1].text.strip(),
-                        "wind": cells[2].text.strip(),
-                        "vis": cells[3].text.strip(),
-                        "weather": cells[4].text.strip(),
-                        "sky": cells[5].text.strip(),
-                        "air": cells[6].text.strip(),
-                        "dwpt": cells[7].text.strip(),
-                        "max_6hr": cells[8].text.strip(),
-                        "min_6hr": cells[9].text.strip()
-                    })
-            except:
-                continue
-        
-        return readings
-    except:
-        return []
+        path = '/trade-api/v2/portfolio/orders'
+        timestamp = str(int(datetime.now().timestamp() * 1000))
+        signature = create_kalshi_signature(timestamp, "POST", path)
+        if not signature:
+            return False, "Failed to create signature"
+        headers = {
+            'KALSHI-ACCESS-KEY': API_KEY,
+            'KALSHI-ACCESS-SIGNATURE': signature,
+            'KALSHI-ACCESS-TIMESTAMP': timestamp,
+            'Content-Type': 'application/json'
+        }
+        import uuid
+        order_data = {
+            "ticker": ticker, "action": "buy", "side": "yes",
+            "count": contracts, "type": "limit", "yes_price": price_cents,
+            "client_order_id": str(uuid.uuid4())
+        }
+        response = requests.post(
+            f"https://api.elections.kalshi.com{path}",
+            headers=headers, json=order_data, timeout=10
+        )
+        if response.status_code == 201:
+            daily_spent += cost
+            return True, f"✅ ORDER PLACED {contracts}x @ {price_cents}¢ (${cost:.2f})"
+        else:
+            error = response.json().get('error', {}).get('message', response.text)
+            return False, f"❌ Order failed: {error}"
+    except Exception as e:
+        return False, f"❌ Error: {e}"
 
-@st.cache_data(ttl=300)
-def fetch_nws_observations(station, city_tz_str, cache_buster=0):
-    """Fetch hourly observations from NWS API"""
+# ============================================================
+# 📡 HOURLY OBSERVATIONS FETCH (for verification)
+# ============================================================
+def fetch_hourly_observations(station, city_tz_str):
+    """Fetch today's hourly temps from NWS API for verification"""
     url = f"https://api.weather.gov/stations/{station}/observations?limit=500"
     try:
         city_tz = pytz.timezone(city_tz_str)
-        resp = requests.get(url, headers={"User-Agent": "Temp/1.0"}, timeout=15)
+        resp = requests.get(url, headers={"User-Agent": "SHARK/7.5"}, timeout=15)
         if resp.status_code != 200:
-            return None, None, None, []
+            return None, None
         
         observations = resp.json().get("features", [])
         if not observations:
-            return None, None, None, []
+            return None, None
         
         now_local = datetime.now(city_tz)
         today_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        readings = []
+        today_noon = now_local.replace(hour=12, minute=0, second=0, microsecond=0)
+        temps = []
+        temps_after_noon = []
         
         for obs in observations:
             props = obs.get("properties", {})
@@ -143,553 +351,521 @@ def fetch_nws_observations(station, city_tz_str, cache_buster=0):
                 ts_local = ts.astimezone(city_tz)
                 if ts_local >= today_midnight and ts_local <= now_local:
                     temp_f = round(temp_c * 9/5 + 32, 1)
-                    readings.append({"time": ts_local.strftime("%H:%M"), "temp": temp_f})
+                    temps.append(temp_f)
+                    if ts_local >= today_noon:
+                        temps_after_noon.append(temp_f)
             except:
                 continue
         
-        if not readings:
-            return None, None, None, []
-        
-        temps = [r["temp"] for r in readings]
-        current = temps[0]
-        low = min(temps)
-        high = max(temps)
-        
-        readings.reverse()
-        
-        return current, low, high, readings
-    except:
-        return None, None, None, []
-
-def check_settlement_lock(full_readings, city_tz_str):
-    """Check if LOW or HIGH settlement is locked based on 6hr data appearance"""
-    try:
-        city_tz = pytz.timezone(city_tz_str)
-        now = datetime.now(city_tz)
-        
-        low_settlement = None
-        high_settlement = None
-        
-        # Find the LOWEST 6hr min value (that's the settlement)
-        for r in full_readings:
-            if r.get('min_6hr'):
-                try:
-                    val = float(r['min_6hr'])
-                    if low_settlement is None or val < low_settlement:
-                        low_settlement = val
-                except:
-                    pass
-        
-        # Find the HIGHEST 6hr max value (that's the settlement)
-        for r in full_readings:
-            if r.get('max_6hr'):
-                try:
-                    val = float(r['max_6hr'])
-                    if high_settlement is None or val > high_settlement:
-                        high_settlement = val
-                except:
-                    pass
-        
-        low_locked = low_settlement is not None
-        high_locked = high_settlement is not None
-        
-        return low_locked, high_locked, low_settlement, high_settlement
-    except:
-        return False, False, None, None
-
-@st.cache_data(ttl=300)
-def fetch_kalshi_markets(city_name, market_type, cache_buster=0):
-    """Fetch today's temperature markets for a city"""
-    try:
-        timestamp = str(int(datetime.now().timestamp() * 1000))
-        path = "/trade-api/v2/markets"
-        method = "GET"
-        
-        api_key, signature = create_kalshi_signature(timestamp, method, path)
-        if not api_key or not signature:
-            return []
-        
-        headers = {
-            "KALSHI-ACCESS-KEY": api_key,
-            "KALSHI-ACCESS-SIGNATURE": signature,
-            "KALSHI-ACCESS-TIMESTAMP": timestamp,
-            "Content-Type": "application/json"
-        }
-        
-        city_cfg = CITIES.get(city_name, {})
-        if market_type == "LOW":
-            series_ticker = city_cfg.get("kalshi_low")
-        else:
-            series_ticker = city_cfg.get("kalshi_high")
-        
-        if not series_ticker:
-            return []
-        
-        params = {
-            "series_ticker": series_ticker,
-            "limit": 200,
-            "status": "open"
-        }
-        
-        resp = requests.get(
-            "https://api.elections.kalshi.com/trade-api/v2/markets",
-            headers=headers,
-            params=params,
-            timeout=15
-        )
-        
-        if resp.status_code != 200:
-            return []
-        
-        markets = resp.json().get("markets", [])
-        
-        eastern = pytz.timezone("US/Eastern")
-        today_str = datetime.now(eastern).strftime('%y%b%d').upper()
-        today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
-        
-        return today_markets
-    except:
-        return []
-
-def parse_bracket(ticker):
-    """Extract temperature range from ticker"""
-    try:
-        parts = ticker.split("-T")
-        if len(parts) != 2:
+        if not temps:
             return None, None
-        temp_str = parts[1]
-        temp = float(temp_str)
-        return temp, temp + 1
+        
+        hourly_low = min(temps)
+        hourly_high = max(temps_after_noon) if temps_after_noon else None
+        
+        return hourly_low, hourly_high
     except:
         return None, None
 
-def find_winning_bracket(markets, settlement_temp):
-    """Find the cheapest bracket that contains settlement temp using title parsing"""
-    winning_brackets = []
-    
-    for m in markets:
-        title = m.get("title", "")
-        ticker = m.get("ticker", "")
-        yes_ask = m.get("yes_ask")
-        
-        if yes_ask is None:
-            continue
-        
-        # Parse from title like "Will the minimum temperature be >50° on Jan 31, 2026?"
-        match = None
-        low, high = None, None
-        
-        # Check for >X format (e.g., ">50°")
-        match = re.search(r'>(\d+)°', title)
-        if match:
-            threshold = int(match.group(1))
-            if settlement_temp > threshold:
-                winning_brackets.append({
-                    "ticker": ticker,
-                    "ask": yes_ask / 100,
-                    "low": threshold + 1,
-                    "high": 999,
-                    "title": title
-                })
-        
-        # Check for <X format (e.g., "<40°")
-        if not match:
-            match = re.search(r'<(\d+)°', title)
-            if match:
-                threshold = int(match.group(1))
-                if settlement_temp < threshold:
-                    winning_brackets.append({
-                        "ticker": ticker,
-                        "ask": yes_ask / 100,
-                        "low": -999,
-                        "high": threshold - 1,
-                        "title": title
-                    })
-    
-    if not winning_brackets:
+# ============================================================
+# 🛡️ WEATHER GUARD SYSTEM
+# ============================================================
+def fetch_forecast_cached(city_name, lat, lon):
+    now = time.time()
+    if city_name in _forecast_cache:
+        cached_time, cached_data = _forecast_cache[city_name]
+        if now - cached_time < FORECAST_CACHE_TTL:
+            return cached_data
+    try:
+        points_url = f"https://api.weather.gov/points/{lat},{lon}"
+        resp = requests.get(points_url, headers={"User-Agent": "SHARK/7.5"}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        forecast_url = resp.json().get("properties", {}).get("forecast")
+        if not forecast_url:
+            return None
+        resp2 = requests.get(forecast_url, headers={"User-Agent": "SHARK/7.5"}, timeout=10)
+        if resp2.status_code != 200:
+            return None
+        periods = resp2.json().get("properties", {}).get("periods", [])
+        _forecast_cache[city_name] = (now, periods)
+        return periods
+    except:
         return None
-    
-    return min(winning_brackets, key=lambda x: x["ask"])
 
-@st.cache_data(ttl=600)
-def fetch_nws_forecast(lat, lon, city_tz_str, cache_buster=0):
-    """Fetch NWS forecast - use Tonight's low for anomaly detection"""
+def fetch_current_temp(station):
+    try:
+        url = f"https://api.weather.gov/stations/{station}/observations/latest"
+        resp = requests.get(url, headers={"User-Agent": "SHARK/7.5"}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        temp_c = resp.json().get("properties", {}).get("temperature", {}).get("value")
+        if temp_c is not None:
+            return round(temp_c * 9/5 + 32, 1)
+        return None
+    except:
+        return None
+
+def run_all_guards(city_name, cfg, settlement_value, market_type, ask_price, hourly_extreme):
+    """Run all 5 guards - returns (safe, warnings)"""
+    if not GUARD_ENABLED:
+        return True, []
+    
+    warnings = []
+    blocked = False
+    lat = cfg.get("lat")
+    lon = cfg.get("lon")
+    station = cfg["nws"]
+
+    # ===== GUARD 1: WEATHER - danger words in forecast =====
+    if lat and lon:
+        periods = fetch_forecast_cached(city_name, lat, lon)
+        if periods:
+            matched_words = set()
+            for p in periods[:4]:
+                detailed = (p.get("detailedForecast", "") or "").lower()
+                short_fc = (p.get("shortForecast", "") or "").lower()
+                period_name = p.get("name", "")
+                combined = detailed + " " + short_fc
+                for danger_word in WEATHER_DANGER_WORDS:
+                    if danger_word in combined and danger_word not in matched_words:
+                        matched_words.add(danger_word)
+                        warnings.append(f"   ⛈️ WEATHER: '{danger_word}' in {period_name} forecast")
+                        blocked = True
+        else:
+            warnings.append("   ⚠️ WEATHER: Could not fetch NWS forecast — proceed with caution")
+
+    # ===== GUARD 2: PRICE - suspiciously cheap =====
+    if ask_price <= PRICE_FLOOR:
+        warnings.append(f"   💰 PRICE BLOCK: Ask is only {ask_price}¢ — market knows something you don't!")
+        blocked = True
+    elif ask_price <= PRICE_WARN:
+        warnings.append(f"   💰 PRICE WARN: Ask is {ask_price}¢ — unusually cheap for a locked bracket")
+        blocked = True
+
+    # ===== GUARD 3: TREND - current temp vs settlement =====
+    current_temp = fetch_current_temp(station)
+    if current_temp is not None:
+        if market_type == "LOW" and current_temp < settlement_value:
+            diff = settlement_value - current_temp
+            warnings.append(f"   📉 TREND: Current {current_temp}°F is BELOW settlement {settlement_value}°F — low may drop {diff:.0f}° more!")
+            blocked = True
+        elif market_type == "HIGH" and current_temp > settlement_value:
+            diff = current_temp - settlement_value
+            warnings.append(f"   📈 TREND: Current {current_temp}°F is ABOVE settlement {settlement_value}°F — high may rise {diff:.0f}° more!")
+            blocked = True
+        if current_temp is not None and not blocked:
+            warnings.append(f"   ✅ TREND: Current {current_temp}°F — no conflict with settlement {settlement_value}°F")
+    else:
+        warnings.append(f"   ⚠️ TREND: Could not fetch current temp — proceed with caution")
+
+    # ===== GUARD 4: FORECAST - NWS forecast temp vs settlement =====
+    if lat and lon:
+        periods = fetch_forecast_cached(city_name, lat, lon)
+        if periods:
+            for p in periods[:4]:
+                is_daytime = p.get("isDaytime", True)
+                forecast_temp = p.get("temperature")
+                period_name = p.get("name", "")
+                if forecast_temp is None:
+                    continue
+                if market_type == "LOW" and not is_daytime:
+                    gap = abs(settlement_value - forecast_temp)
+                    if gap > FORECAST_GAP_THRESHOLD:
+                        warnings.append(f"   🌡️ FORECAST: NWS {period_name} low = {forecast_temp}°F vs settlement {settlement_value}°F — {gap:.0f}° gap!")
+                        blocked = True
+                    else:
+                        warnings.append(f"   ✅ FORECAST: NWS {period_name} low = {forecast_temp}°F — within {FORECAST_GAP_THRESHOLD}° of settlement")
+                    break
+                if market_type == "HIGH" and is_daytime:
+                    gap = abs(forecast_temp - settlement_value)
+                    if gap > FORECAST_GAP_THRESHOLD:
+                        warnings.append(f"   🌡️ FORECAST: NWS {period_name} high = {forecast_temp}°F vs settlement {settlement_value}°F — {gap:.0f}° gap!")
+                        blocked = True
+                    else:
+                        warnings.append(f"   ✅ FORECAST: NWS {period_name} high = {forecast_temp}°F — within {FORECAST_GAP_THRESHOLD}° of settlement")
+                    break
+
+    # ===== GUARD 5: SETTLEMENT LOCK VERIFICATION (THE $7K FIX) =====
+    if hourly_extreme is not None:
+        gap = abs(settlement_value - hourly_extreme)
+        if gap > SETTLEMENT_TOLERANCE:
+            warnings.append(f"   🚨 SETTLEMENT MISMATCH: 6hr={settlement_value}°F vs Hourly={hourly_extreme}°F ({gap:.1f}° gap) — DATA CONFLICT!")
+            blocked = True
+        else:
+            warnings.append(f"   ✅ SETTLEMENT VERIFIED: 6hr={settlement_value}°F matches Hourly={hourly_extreme}°F (±{SETTLEMENT_TOLERANCE}°)")
+    else:
+        warnings.append(f"   ⚠️ SETTLEMENT: Could not verify hourly data — proceed with caution")
+        blocked = True
+
+    return not blocked, warnings
+
+# ============================================================
+# 6HR SETTLEMENT FETCH
+# ============================================================
+def fetch_6hr_settlement(station, city_tz_str):
+    """Fetch 6hr settlement from obhistory table"""
+    url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
         city_tz = pytz.timezone(city_tz_str)
-        point_url = f"https://api.weather.gov/points/{lat},{lon}"
-        resp = requests.get(point_url, headers={"User-Agent": "Temp/1.0"}, timeout=10)
+        today = datetime.now(city_tz).day
+        resp = requests.get(url, headers={"User-Agent": "SHARK/7.5"}, timeout=15)
         if resp.status_code != 200:
-            return None, None, []
+            return None, None, None, None, False, False
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        table = soup.find('table')
+        if not table:
+            return None, None, None, None, False, False
+        rows = table.find_all('tr')
+        all_6hr_mins = []
+        all_6hr_maxs = []
+        for row in rows[3:]:
+            cells = row.find_all('td')
+            if len(cells) < 10:
+                continue
+            try:
+                date_val = cells[0].text.strip()
+                time_val = cells[1].text.strip()
+                if date_val:
+                    try:
+                        if int(date_val) != today:
+                            continue
+                    except:
+                        continue
+                max_6hr_text = cells[8].text.strip() if len(cells) > 8 else ""
+                min_6hr_text = cells[9].text.strip() if len(cells) > 9 else ""
+                if max_6hr_text:
+                    try:
+                        max_val = int(float(max_6hr_text))
+                        hour = int(time_val.replace(":", "")[:2])
+                        if hour >= 12:
+                            all_6hr_maxs.append((time_val, max_val))
+                    except:
+                        pass
+                if min_6hr_text:
+                    try:
+                        min_val = int(float(min_6hr_text))
+                        all_6hr_mins.append((time_val, min_val))
+                    except:
+                        pass
+            except:
+                continue
         
-        forecast_url = resp.json()["properties"]["forecast"]
-        resp2 = requests.get(forecast_url, headers={"User-Agent": "Temp/1.0"}, timeout=10)
-        if resp2.status_code != 200:
-            return None, None, []
+        settlement_low, low_time = None, None
+        if all_6hr_mins:
+            all_6hr_mins.sort(key=lambda x: x[1])
+            low_time, settlement_low = all_6hr_mins[0]
         
-        periods = resp2.json()["properties"]["periods"]
+        settlement_high, high_time = None, None
+        if all_6hr_maxs:
+            all_6hr_maxs.sort(key=lambda x: x[1], reverse=True)
+            high_time, settlement_high = all_6hr_maxs[0]
         
-        # For LOW: Get Tonight's forecast (shows if cold front coming)
-        # For HIGH: Get Today's forecast
-        today_high = None
-        tonight_low = None
-        warnings = []
+        # Lock detection: Does 6hr data exist?
+        is_low_locked = len(all_6hr_mins) > 0 and settlement_low is not None
+        is_high_locked = len(all_6hr_maxs) > 0 and settlement_high is not None
         
-        for p in periods[:3]:
-            name = p.get("name", "").lower()
-            temp = p.get("temperature")
-            forecast = p.get("detailedForecast", "").lower()
-            
-            # Today's high
-            if ("today" in name or "this afternoon" in name) and not today_high:
-                today_high = temp
-            
-            # Tonight's low (for anomaly detection)
-            if "tonight" in name and not tonight_low:
-                tonight_low = temp
-            
-            # Check for weather warnings - MORE KEYWORDS
-            warning_keywords = [
-                "cold front", "warm front", "front", "frontal",
-                "storm", "severe", "warning", "advisory",
-                "freeze", "freezing", "frost",
-                "wind", "gust", "windy"
-            ]
-            for keyword in warning_keywords:
-                if keyword in forecast:
-                    warnings.append(keyword)
-                    break  # Only add once per period
+        return settlement_low, settlement_high, low_time, high_time, is_low_locked, is_high_locked
+    except Exception as e:
+        print(f"    6hr fetch error: {e}")
+        return None, None, None, None, False, False
+
+# ============================================================
+# KALSHI BRACKET FETCH
+# ============================================================
+def fetch_kalshi_brackets(series_ticker, city_tz_str):
+    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code != 200:
+            return []
+        markets = resp.json().get("markets", [])
+        if not markets:
+            return []
+        city_tz = pytz.timezone(city_tz_str)
+        today_str = datetime.now(city_tz).strftime('%y%b%d').upper()
+        today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
+        if not today_markets:
+            first_event = markets[0].get("event_ticker", "")
+            today_markets = [m for m in markets if m.get("event_ticker") == first_event]
+        brackets = []
+        for m in today_markets:
+            title = m.get("title", "")
+            ticker = m.get("ticker", "")
+            yes_ask = m.get("yes_ask", 0) or 0
+            low_bound, high_bound, bracket_name = None, None, ""
+            gt_match = re.search(r'>\s*(-?\d+)', title)
+            if gt_match:
+                threshold = int(gt_match.group(1))
+                low_bound = threshold + 1
+                high_bound = 999
+                bracket_name = f">{threshold} ({low_bound}+)"
+            if low_bound is None:
+                lt_match = re.search(r'<\s*(-?\d+)', title)
+                if lt_match:
+                    threshold = int(lt_match.group(1))
+                    high_bound = threshold - 1
+                    low_bound = -999
+                    bracket_name = f"<{threshold} (<={high_bound})"
+            if low_bound is None:
+                range_match = re.search(r'(-?\d+)\s*to\s*(-?\d+)', title, re.IGNORECASE)
+                if range_match:
+                    low_bound = int(range_match.group(1))
+                    high_bound = int(range_match.group(2))
+                    bracket_name = f"{low_bound} to {high_bound}"
+                else:
+                    dash_match = re.search(r'be\s+(-?\d+)-(-?\d+)', title)
+                    if dash_match:
+                        low_bound = int(dash_match.group(1))
+                        high_bound = int(dash_match.group(2))
+                        bracket_name = f"{low_bound} to {high_bound}"
+            if low_bound is None:
+                above_match = re.search(r'(-?\d+)\s*(or above|or more|at least|\+)', title, re.IGNORECASE)
+                if above_match:
+                    low_bound = int(above_match.group(1))
+                    high_bound = 999
+                    bracket_name = f"{low_bound}+"
+            if low_bound is None:
+                below_match = re.search(r'(-?\d+)\s*(or below|or less|or under)', title, re.IGNORECASE)
+                if below_match:
+                    high_bound = int(below_match.group(1))
+                    low_bound = -999
+                    bracket_name = f"<={high_bound}"
+            if low_bound is not None and high_bound is not None:
+                brackets.append({
+                    "name": bracket_name, "low": low_bound, "high": high_bound,
+                    "ask": yes_ask, "ticker": ticker, "title": title
+                })
+        brackets.sort(key=lambda x: x['low'])
+        return brackets
+    except Exception as e:
+        print(f"  Bracket fetch error: {e}")
+        return []
+
+def find_winning_bracket(temp, brackets):
+    if temp is None or not brackets:
+        return None
+    for b in brackets:
+        if b["high"] == 999 and temp >= b["low"]:
+            return b
+        if b["low"] == -999 and temp <= b["high"]:
+            return b
+        if b["low"] <= temp <= b["high"]:
+            return b
+    return None
+
+# ============================================================
+# ALERT & BUY
+# ============================================================
+def send_alert_and_buy(city, cfg, bracket, temp_value, market_type, settlement_time, hourly_extreme, settlement_match):
+    global daily_spent
+    ask = bracket["ask"]
+    ticker = bracket["ticker"]
+    potential_cost = (ask / 100) * CONTRACTS_PER_TRADE
+    potential_profit = ((100 - ask) / 100) * CONTRACTS_PER_TRADE
+
+    eastern = pytz.timezone("US/Eastern")
+    now = datetime.now(eastern)
+
+    print(f"\n{'='*60}")
+    print(f"🦈🚨 SHARK ALERT: {city} ({market_type})")
+    print(f"   6HR SETTLEMENT: {temp_value}°F @ {settlement_time}")
+    print(f"   HOURLY EXTREME: {hourly_extreme}°F (Match: {'YES' if settlement_match else 'NO'})")
+    print(f"   BRACKET: {bracket['name']} (ticker: {ticker})")
+    print(f"   Ask: {ask}¢ | Potential profit: {100-ask}¢")
+    print(f"")
+    print(f"   💰 WOULD BUY: {CONTRACTS_PER_TRADE} contracts @ {ask}¢")
+    print(f"   💵 Cost: ${potential_cost:.2f} | Profit if wins: ${potential_profit:.2f}")
+
+    # ===== RUN ALL 5 GUARDS =====
+    print(f"\n   🛡️ RUNNING 5 SAFETY GUARDS...")
+    safe, guard_warnings = run_all_guards(city, cfg, temp_value, market_type, ask, hourly_extreme)
+
+    for w in guard_warnings:
+        print(w)
+
+    if not safe:
+        print(f"\n   ⛔⛔⛔ GUARDS BLOCKED — DO NOT BUY ⛔⛔⛔")
+        print(f"   🔍 CHECK MANUALLY before overriding!")
         
-        return today_high, tonight_low, warnings
-    except:
-        return None, None, []
-
-def run_shark_guards(settlement_temp, bracket, forecast_temp, warnings):
-    """Run 2 guardrails: price floor + anomaly detection"""
-    guards = {
-        "price_floor": {"pass": True, "reason": ""},
-        "anomaly_check": {"pass": True, "reason": "", "warning_level": "normal"}
-    }
-    
-    if bracket["ask"] <= 0.15:
-        guards["price_floor"]["pass"] = False
-        guards["price_floor"]["reason"] = f"Ask {bracket['ask']:.0%} ≤15¢ - market knows something you don't!"
-    
-    if warnings:
-        guards["anomaly_check"]["pass"] = True
-        guards["anomaly_check"]["warning_level"] = "anomaly"
-        guards["anomaly_check"]["reason"] = f"⚠️ ANOMALY DETECTED: {', '.join(set(warnings))}"
-        if forecast_temp:
-            gap = abs(forecast_temp - settlement_temp)
-            guards["anomaly_check"]["reason"] += f" | Forecast: {forecast_temp}°F vs Settlement: {settlement_temp}°F ({gap:.0f}° gap)"
-    elif forecast_temp and abs(forecast_temp - settlement_temp) >= 3:
-        guards["anomaly_check"]["pass"] = True
-        guards["anomaly_check"]["warning_level"] = "caution"
-        gap = abs(forecast_temp - settlement_temp)
-        guards["anomaly_check"]["reason"] = f"⚠️ Large forecast gap: {forecast_temp}°F vs {settlement_temp}°F ({gap:.0f}°)"
-    else:
-        guards["anomaly_check"]["reason"] = "✅ No anomalies - 6hr settlement reliable"
-    
-    all_pass = guards["price_floor"]["pass"]
-    return all_pass, guards
-
-st.title("🌡️ Temperature Trading Dashboard")
-st.caption("⚠️ EXPERIMENTAL - EDUCATIONAL PURPOSES ONLY")
-
-mode = st.radio("Mode", ["📊 City View", "🦈 SHARK Mode"], horizontal=True)
-
-col1, col2 = st.columns([3, 1])
-with col1:
-    city_selection = st.selectbox("📍 Select City", list(CITIES.keys()), index=list(CITIES.keys()).index(st.session_state.default_city))
-with col2:
-    if st.button("⭐ Set as Default", use_container_width=True):
-        st.session_state.default_city = city_selection
-        st.success(f"✅ {city_selection} saved!")
-
-if st.button("🔄 Refresh Data"):
-    st.session_state.cache_buster += 1
-    st.rerun()
-
-st.divider()
-
-cfg = CITIES[city_selection]
-
-current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg["nws"], cfg["tz"], st.session_state.cache_buster)
-full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"], st.session_state.cache_buster)
-
-if mode == "🦈 SHARK Mode":
-    st.header("🦈 SHARK Mode - Automated Trading Signals")
-    
-    if not full_readings:
-        st.error("⚠️ No NWS data available for SHARK analysis")
-    else:
-        low_locked, high_locked, low_settlement, high_settlement = check_settlement_lock(full_readings, cfg["tz"])
+        log_to_csv(now, city, market_type, temp_value, settlement_time, True, hourly_extreme, settlement_match, bracket, False, guard_warnings, False)
         
-        if not low_locked and not high_locked:
-            st.info("⏳ Waiting for settlement lock... (LOW at 06:53+, HIGH at 18:53+)")
+        for _ in range(5):
+            winsound.Beep(400, 300)
+            time.sleep(0.15)
+        print(f"{'='*60}\n")
+        return
+
+    # All guards passed
+    print(f"\n   ✅ ALL 5 GUARDS PASSED")
+    for _ in range(3):
+        winsound.Beep(1000, 200)
+        time.sleep(0.1)
+        winsound.Beep(1200, 200)
+        time.sleep(0.1)
+
+    if AUTO_BUY_ENABLED and API_KEY and len(API_KEY) > 10:
+        print(f"\n   🛒 PLACING ORDER...")
+        success, msg = place_kalshi_order(ticker, ask, CONTRACTS_PER_TRADE)
+        print(f"   {msg}")
+        if success:
+            winsound.Beep(800, 500)
+            print(f"   📊 Daily spent: ${daily_spent:.2f} / ${MAX_DAILY_SPEND}")
+            log_to_csv(now, city, market_type, temp_value, settlement_time, True, hourly_extreme, settlement_match, bracket, True, guard_warnings, True)
         else:
-            st.subheader("🔍 Detection Status")
-            col1, col2 = st.columns(2)
-            with col1:
-                if low_locked:
-                    st.success(f"✅ LOW locked: {low_settlement}°F" if low_settlement else "❌ LOW locked but no temp")
-                else:
-                    st.info("⏳ LOW not locked yet (need 06:53+)")
-            with col2:
-                if high_locked:
-                    st.success(f"✅ HIGH locked: {high_settlement}°F" if high_settlement else "❌ HIGH locked but no temp")
-                else:
-                    st.info("⏳ HIGH not locked yet (need 18:53+)")
-            
-            if low_locked and low_settlement:
-                settlement_type = "LOW"
-                settlement_temp = low_settlement
-            elif high_locked and high_settlement:
-                settlement_type = "HIGH"
-                settlement_temp = high_settlement
-            else:
-                st.warning("⚠️ Lock detected but no valid temperature value parsed")
-                st.stop()
-            
-            st.success(f"🔒 {settlement_type} Settlement Locked: {settlement_temp}°F")
-            
-            with st.spinner("Fetching data..."):
-                markets = fetch_kalshi_markets(city_selection, settlement_type, st.session_state.cache_buster)
-                today_high_forecast, tonight_low_forecast, warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"], cfg["tz"], st.session_state.cache_buster)
-            
-            if not markets:
-                st.error("❌ No Kalshi markets found")
-                st.caption(f"Searched for series: {cfg.get('kalshi_low' if settlement_type == 'LOW' else 'kalshi_high')}")
-            else:
-                winning = find_winning_bracket(markets, settlement_temp)
-                
-                if not winning:
-                    st.error("❌ No winning bracket found")
-                else:
-                    forecast_temp = today_high_forecast if settlement_type == "HIGH" else tonight_low_forecast
-                    
-                    all_pass, guards = run_shark_guards(settlement_temp, winning, forecast_temp, warnings, obs_low, current_temp)
-                    
-                    if all_pass:
-                        if guards["anomaly_check"]["warning_level"] == "anomaly":
-                            st.markdown(f"""
-                            <div style="background:#854d0e;border:2px solid #fbbf24;border-radius:8px;padding:20px;margin:20px 0">
-                                <div style="color:#fbbf24;font-size:2em;font-weight:700;text-align:center">⚠️ ANOMALY DETECTED</div>
-                                <div style="color:#fef3c7;font-size:1.2em;text-align:center;margin-top:10px">Check adjusted forecast before buying!</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"""
-                            <div style="background:#064e3b;border:2px solid #10b981;border-radius:8px;padding:20px;margin:20px 0">
-                                <div style="color:#10b981;font-size:2em;font-weight:700;text-align:center">✅ CLEAR TO BUY</div>
-                                <div style="color:#d1fae5;font-size:1.2em;text-align:center;margin-top:10px">No anomalies - 6hr settlement reliable</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"""
-                        <div style="background:#7f1d1d;border:2px solid #ef4444;border-radius:8px;padding:20px;margin:20px 0">
-                            <div style="color:#ef4444;font-size:2em;font-weight:700;text-align:center">🚫 BLOCKED</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    st.subheader("📊 Trade Details")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Settlement Temp", f"{settlement_temp}°F")
-                    with col2:
-                        st.metric("Winning Bracket", f"{winning['low']}-{winning['high']}°F")
-                    with col3:
-                        edge = (1 - winning['ask']) * 100
-                        st.metric("Edge", f"{edge:.0f}%", f"Ask: {winning['ask']:.0%}")
-                    
-                    st.caption(f"Ticker: {winning['ticker']}")
-                    
-                    st.subheader("🛡️ Analysis")
-                    
-                    if guards["price_floor"]["pass"]:
-                        st.success(f"✅ Price Floor: Ask {winning['ask']:.0%} is above 15¢ minimum")
-                    else:
-                        st.error(f"🚫 {guards['price_floor']['reason']}")
-                    
-                    if guards["anomaly_check"]["warning_level"] == "anomaly":
-                        st.warning(f"⚠️ {guards['anomaly_check']['reason']}")
-                        st.info("💡 **Anomaly detected** - Consider using adjusted forecast instead of 6hr settlement")
-                    elif guards["anomaly_check"]["warning_level"] == "caution":
-                        st.warning(f"⚠️ {guards['anomaly_check']['reason']}")
-                    else:
-                        st.success(f"{guards['anomaly_check']['reason']}")
-
-else:
-    st.header(f"📍 {city_selection}")
-    
-    if current_temp:
-        st.markdown(f"""
-        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
-            <div style="display:flex;justify-content:space-around;text-align:center">
-                <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
-                <div><div style="color:#6b7280;font-size:0.8em">LOW</div><div style="color:#3b82f6;font-size:1.8em;font-weight:700">{obs_low}°F</div></div>
-                <div><div style="color:#6b7280;font-size:0.8em">HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # 6HR LOCK STATUS HERO BOX
-    if full_readings and obs_low:
-        low_locked, high_locked, low_settlement, high_settlement = check_settlement_lock(full_readings, cfg["tz"])
-        
-        # Check if any 6hr min data exists
-        has_6hr_low = any(r.get('min_6hr') for r in full_readings)
-        
-        if has_6hr_low and low_settlement:
-            if abs(low_settlement - obs_low) <= 0.5:
-                st.markdown(f"""
-                <div style="background:#064e3b;border:3px solid #10b981;border-radius:12px;padding:25px;margin:20px 0">
-                    <div style="color:#10b981;font-size:2.5em;font-weight:700;text-align:center">🔒 LOW LOCKED</div>
-                    <div style="color:#d1fae5;font-size:1.5em;text-align:center;margin-top:10px">6hr Aggregate ({low_settlement}°F) = All-Day Low ({obs_low}°F)</div>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div style="background:#7f1d1d;border:3px solid #ef4444;border-radius:12px;padding:25px;margin:20px 0">
-                    <div style="color:#ef4444;font-size:2.5em;font-weight:700;text-align:center">⚠️ LOW MISMATCH</div>
-                    <div style="color:#fecaca;font-size:1.5em;text-align:center;margin-top:10px">6hr ({low_settlement}°F) ≠ All-Day Low ({obs_low}°F)</div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        # Check if any 6hr max data exists
-        has_6hr_high = any(r.get('max_6hr') for r in full_readings)
-        
-        if has_6hr_high and high_settlement and obs_high:
-            if abs(high_settlement - obs_high) <= 0.5:
-                st.markdown(f"""
-                <div style="background:#064e3b;border:3px solid #10b981;border-radius:12px;padding:25px;margin:20px 0">
-                    <div style="color:#10b981;font-size:2.5em;font-weight:700;text-align:center">🔒 HIGH LOCKED</div>
-                    <div style="color:#d1fae5;font-size:1.5em;text-align:center;margin-top:10px">6hr Aggregate ({high_settlement}°F) = All-Day High ({obs_high}°F)</div>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div style="background:#7f1d1d;border:3px solid #ef4444;border-radius:12px;padding:25px;margin:20px 0">
-                    <div style="color:#ef4444;font-size:2.5em;font-weight:700;text-align:center">⚠️ HIGH MISMATCH</div>
-                    <div style="color:#fecaca;font-size:1.5em;text-align:center;margin-top:10px">6hr ({high_settlement}°F) ≠ All-Day High ({obs_high}°F)</div>
-                </div>
-                """, unsafe_allow_html=True)
-    
-    st.subheader("📊 NWS Observations + 6hr Extremes")
-    if city_selection == "New York City":
-        st.caption(f"Station: {cfg['nws']} | Today's hourly readings from midnight to now")
+            log_to_csv(now, city, market_type, temp_value, settlement_time, True, hourly_extreme, settlement_match, bracket, True, guard_warnings, False)
     else:
-        st.caption(f"Station: {cfg['nws']} | Today's readings (5-min intervals) from midnight to now")
+        print(f"\n   🧪 TEST MODE - Not buying. Verify this is correct!")
+        log_to_csv(now, city, market_type, temp_value, settlement_time, True, hourly_extreme, settlement_match, bracket, True, guard_warnings, False)
+
+    print(f"{'='*60}\n")
+
+# ============================================================
+# MAIN LOOP
+# ============================================================
+def check_all_cities():
+    global daily_spent, _last_log_time
+    eastern = pytz.timezone("US/Eastern")
+    now = datetime.now(eastern)
+    et_date = now.date()
     
-    if readings and full_readings:
-        six_hr_map = {}
-        for r in full_readings:
-            time_key = r['time']
-            six_hr_map[time_key] = {
-                'max_6hr': r['max_6hr'],
-                'min_6hr': r['min_6hr']
-            }
-        
-        low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
-        
-        st.info(f"📊 Showing {len(readings)} readings")
-        
-        # REVERSE for newest first
-        for i, r in enumerate(reversed(readings)):
-            time_key = r['time']
-            temp = r['temp']
-            
-            six_hr_data = six_hr_map.get(time_key, {})
-            six_hr_max = six_hr_data.get('max_6hr', '')
-            six_hr_min = six_hr_data.get('min_6hr', '')
-            
-            six_hr_display = ""
-            if six_hr_max:
-                six_hr_display += f"<span style='color:#ef4444;font-weight:700'>6hr↑{six_hr_max}</span> "
-            if six_hr_min:
-                six_hr_display += f"<span style='color:#22c55e;font-weight:700'>6hr↓{six_hr_min}</span>"
-            
-            if i == low_idx:
-                row_style = "display:flex;justify-content:space-between;padding:8px;border-radius:4px;background:#2d1f0a;border:2px solid #f59e0b;margin:2px 0"
-                temp_style = "color:#fbbf24;font-weight:700;font-size:1.1em"
-                label = " ⬅️ HOURLY LOW"
-            else:
-                row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #30363d"
-                temp_style = "color:#fff;font-weight:600"
-                label = ""
-            
-            st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:60px;font-weight:600'>{time_key}</span><span style='flex:1;text-align:center;font-size:0.9em'>{six_hr_display}</span><span style='{temp_style}'>{temp}°F{label}</span></div>", unsafe_allow_html=True)
+    init_csv_log()
+    
+    current_time = time.time()
+    should_log_summary = (current_time - _last_log_time) >= LOG_INTERVAL
+
+    print(f"\n[{now.strftime('%I:%M:%S %p')}] Scanning cities...")
+    print("=" * 70)
+
+    for city, cfg in CITIES.items():
+        try:
+            city_tz = pytz.timezone(cfg["tz"])
+            city_date = datetime.now(city_tz).date()
+            if city_date < et_date:
+                city_date_str = datetime.now(city_tz).strftime("%b %d")
+                print(f"  ⏸️ {city} — Still on {city_date_str}, skipping")
+                continue
+
+            settlement_low, settlement_high, low_time, high_time, is_low_locked, is_high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
+            hourly_low, hourly_high = fetch_hourly_observations(cfg["nws"], cfg["tz"])
+
+            # ===== CHECK LOW =====
+            if cfg["kalshi_low"] and TRADE_LOW.get(city, False):
+                if settlement_low is not None:
+                    settlement_match = (hourly_low is not None and abs(settlement_low - hourly_low) <= SETTLEMENT_TOLERANCE)
+                    brackets_low = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"])
+                    winning_low = find_winning_bracket(settlement_low, brackets_low)
+                    if winning_low:
+                        ask_low = winning_low["ask"]
+                        bracket_name_low = winning_low["name"]
+                    else:
+                        ask_low = 100
+                        bracket_name_low = "NO MATCH"
+                    lock_icon = "🔒" if is_low_locked else "⏳"
+                    match_icon = "✅" if settlement_match else "⚠️"
+                    print(f"  {lock_icon}{match_icon} {city} LOW: 6hr↓{settlement_low} @ {low_time} (hourly:{hourly_low}) -> {bracket_name_low} @ {ask_low}¢")
+                    
+                    if is_low_locked and settlement_match and ask_low <= MAX_ASK_PRICE and winning_low:
+                        send_alert_and_buy(city, cfg, winning_low, settlement_low, "LOW", low_time, hourly_low, settlement_match)
+                    elif should_log_summary:
+                        log_to_csv(now, city, "LOW", settlement_low, low_time, is_low_locked, hourly_low, settlement_match, winning_low if winning_low and ask_low <= MAX_ASK_PRICE else None, None, None, False)
+                elif should_log_summary:
+                    log_to_csv(now, city, "LOW", None, None, False, hourly_low, None, None, None, None, False)
+
+            # ===== CHECK HIGH =====
+            if TRADE_HIGH.get(city, False):
+                if settlement_high is not None:
+                    settlement_match = (hourly_high is not None and abs(settlement_high - hourly_high) <= SETTLEMENT_TOLERANCE)
+                    brackets_high = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"])
+                    winning_high = find_winning_bracket(settlement_high, brackets_high)
+                    if winning_high:
+                        ask_high = winning_high["ask"]
+                        bracket_name_high = winning_high["name"]
+                    else:
+                        ask_high = 100
+                        bracket_name_high = "NO MATCH"
+                    lock_icon = "🔒" if is_high_locked else "⏳"
+                    match_icon = "✅" if settlement_match else "⚠️"
+                    print(f"  {lock_icon}{match_icon} {city} HIGH: 6hr↑{settlement_high} @ {high_time} (hourly:{hourly_high}) -> {bracket_name_high} @ {ask_high}¢")
+                    
+                    if is_high_locked and settlement_match and ask_high <= MAX_ASK_PRICE and winning_high:
+                        send_alert_and_buy(city, cfg, winning_high, settlement_high, "HIGH", high_time, hourly_high, settlement_match)
+                    elif should_log_summary:
+                        log_to_csv(now, city, "HIGH", settlement_high, high_time, is_high_locked, hourly_high, settlement_match, winning_high if winning_high and ask_high <= MAX_ASK_PRICE else None, None, None, False)
+                elif should_log_summary:
+                    log_to_csv(now, city, "HIGH", None, None, False, hourly_high, None, None, None, None, False)
+
+        except Exception as e:
+            print(f"  ❌ {city}: Error - {e}")
+    
+    if should_log_summary:
+        _last_log_time = current_time
+
+    print("=" * 70)
+
+def main():
+    global daily_spent
+    low_enabled = [c for c, v in TRADE_LOW.items() if v]
+    high_enabled = [c for c, v in TRADE_HIGH.items() if v]
+
+    print("=" * 70)
+    print("🦈 SHARK AUTO-BUY v7.5 - FIXED SETTLEMENT LOCK + 5 GUARDS")
+    print("=" * 70)
+    print("")
+    if AUTO_BUY_ENABLED:
+        print("🔴 LIVE MODE - REAL BUYING ENABLED")
     else:
-        st.warning("⚠️ No data available")
-    
-    st.divider()
-    
-    with st.expander("📋 Full NWS Table", expanded=False):
-        if full_readings:
-            table_html = """
-            <style>
-            .nws-full { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
-            .nws-full th { background: #b8cce4; color: #000; padding: 6px 4px; text-align: center; border: 1px solid #7f7f7f; font-weight: 600; font-size: 11px; }
-            .nws-full td { padding: 5px 3px; text-align: center; border: 1px solid #d0d0d0; background: #fff; color: #000; font-size: 11px; }
-            .nws-full tr:nth-child(even) td { background: #f0f0f0; }
-            .temp-header { background: #dae8f5 !important; }
-            </style>
-            <div style="overflow-x: auto;">
-            <table class='nws-full'>
-            <thead>
-            <tr>
-            <th rowspan="3">Date</th>
-            <th rowspan="3">Time<br/>(local)</th>
-            <th rowspan="3">Wind<br/>(mph)</th>
-            <th rowspan="3">Vis.<br/>(mi.)</th>
-            <th rowspan="3">Weather</th>
-            <th rowspan="3">Sky<br/>Cond.</th>
-            <th colspan="4" class="temp-header">Temperature (°F)</th>
-            <th rowspan="3">Relative<br/>Humidity</th>
-            <th rowspan="3">Wind<br/>Chill<br/>(°F)</th>
-            <th rowspan="3">Heat<br/>Index<br/>(°F)</th>
-            <th colspan="3" class="temp-header">Pressure</th>
-            <th colspan="3" class="temp-header">Precipitation<br/>(in)</th>
-            </tr>
-            <tr>
-            <th rowspan="2">Air</th>
-            <th rowspan="2">Dwpt</th>
-            <th colspan="2">6 hour</th>
-            <th rowspan="2">altimeter<br/>(in)</th>
-            <th rowspan="2">sea<br/>level<br/>(mb)</th>
-            <th rowspan="2">1 hr</th>
-            <th rowspan="2">3 hr</th>
-            <th rowspan="2">6 hr</th>
-            </tr>
-            <tr>
-            <th>Max</th>
-            <th>Min</th>
-            </tr>
-            </thead>
-            <tbody>
-            """
-            
-            for r in full_readings:
-                table_html += f"""<tr>
-                <td>{r['date']}</td>
-                <td>{r['time']}</td>
-                <td>{r['wind']}</td>
-                <td>{r['vis']}</td>
-                <td>{r['weather']}</td>
-                <td>{r['sky']}</td>
-                <td><b>{r['air']}</b></td>
-                <td>{r['dwpt']}</td>
-                <td><b style="color:#d00">{r['max_6hr']}</b></td>
-                <td><b style="color:#00d">{r['min_6hr']}</b></td>
-                <td colspan="7"></td>
-                </tr>"""
-            
-            table_html += "</tbody></table></div>"
-            st.markdown(table_html, unsafe_allow_html=True)
-            st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
+        print("🧪 TEST MODE - ALERTS ONLY, NO BUYING")
+    print("")
+    print(f"🛡️ 5 GUARDS: {'ON' if GUARD_ENABLED else 'OFF'}")
+    if GUARD_ENABLED:
+        print(f"   1️⃣ Weather Guard     — blocks on storms/fronts/freezes/heat")
+        print(f"   2️⃣ Price Guard       — blocks ≤{PRICE_FLOOR}¢, warns ≤{PRICE_WARN}¢")
+        print(f"   3️⃣ Trend Guard       — blocks if current temp contradicts settlement")
+        print(f"   4️⃣ Forecast Guard    — blocks if NWS forecast disagrees by {FORECAST_GAP_THRESHOLD}°+")
+        print(f"   5️⃣ Settlement Guard  — blocks if 6hr ≠ hourly ±{SETTLEMENT_TOLERANCE}° (FIXES $7K BUG)")
+    print("")
+    print(f"📊 AUTO-LOGGING: All scans → {LOG_FILE}")
+    print(f"   ⚡ ALWAYS logs: Alerts, Blocks, Buys")
+    print(f"   📋 Summary logs: Every 30 min (lock status, prices)")
+    print("")
+    print(f"📍 ENABLED: {len(low_enabled)} LOWs, {len(high_enabled)} HIGHs")
+    print(f"   LOWs:  {', '.join(low_enabled) if low_enabled else 'NONE'}")
+    print(f"   HIGHs: {', '.join(high_enabled) if high_enabled else 'NONE'}")
+    print("")
+    print("✅ Uses 6hr aggregate from obhistory + hourly API for verification")
+    print("✅ LOW = LOWEST 6hr Min (verified against hourly low)")
+    print("✅ HIGH = HIGHEST 6hr Max after NOON (verified against hourly high)")
+    print("=" * 70)
+    print("")
+    print("📋 Settings:")
+    print(f"   Contracts per trade: {CONTRACTS_PER_TRADE}")
+    print(f"   Max ask price: {MAX_ASK_PRICE}¢")
+    print(f"   Max daily spend: ${MAX_DAILY_SPEND}")
+    print(f"   Check interval: {CHECK_INTERVAL}s")
+    print("=" * 70)
+    print("\nPress Ctrl+C to stop.\n")
 
-st.divider()
-st.caption("⚠️ **DISCLAIMER:** This application is for EDUCATIONAL and EXPERIMENTAL purposes ONLY. This is NOT financial advice. This is NOT betting advice.")
+    winsound.Beep(600, 200)
+    winsound.Beep(800, 300)
 
-st.divider()
-eastern = pytz.timezone("US/Eastern")
-st.caption(f"Last updated: {datetime.now(eastern).strftime('%I:%M:%S %p ET')}")
+    while True:
+        try:
+            check_all_cities()
+            eastern = pytz.timezone("US/Eastern")
+            if datetime.now(eastern).hour == 0 and datetime.now(eastern).minute < 2:
+                daily_spent = 0
+                _forecast_cache.clear()
+                global _last_log_time
+                _last_log_time = 0
+                print("\n[MIDNIGHT] Daily spend + cache + log timer reset")
+            time.sleep(CHECK_INTERVAL)
+        except KeyboardInterrupt:
+            print(f"\n\n[STOPPED] Daily spent: ${daily_spent:.2f}")
+            break
+        except Exception as e:
+            print(f"\n[WARNING] Error: {e}")
+            time.sleep(60)
+
+if __name__ == "__main__":
+    main()
