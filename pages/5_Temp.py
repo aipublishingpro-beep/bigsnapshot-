@@ -21,17 +21,51 @@ if not OWNER_MODE:
     st.stop()
 
 CITIES = {
-    "Austin": {"nws": "KAUS", "tz": "US/Central", "kalshi_low": "KXLOWTAUS"},
-    "Chicago": {"nws": "KMDW", "tz": "US/Central", "kalshi_low": "KXLOWTCHI"},
-    "Denver": {"nws": "KDEN", "tz": "US/Mountain", "kalshi_low": "KXLOWTDEN"},
-    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "kalshi_low": "KXLOWTLAX"},
-    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "kalshi_low": "KXLOWTMIA"},
-    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "kalshi_low": "KXLOWTNYC"},
-    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "kalshi_low": "KXLOWTPHL"},
+    "Austin": {"nws": "KAUS", "tz": "US/Central", "kalshi_low": "KXLOWTAUS", "lat": 30.19, "lon": -97.67},
+    "Chicago": {"nws": "KMDW", "tz": "US/Central", "kalshi_low": "KXLOWTCHI", "lat": 41.79, "lon": -87.75},
+    "Denver": {"nws": "KDEN", "tz": "US/Mountain", "kalshi_low": "KXLOWTDEN", "lat": 39.86, "lon": -104.67},
+    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "kalshi_low": "KXLOWTLAX", "lat": 33.94, "lon": -118.41},
+    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "kalshi_low": "KXLOWTMIA", "lat": 25.80, "lon": -80.29},
+    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "kalshi_low": "KXLOWTNYC", "lat": 40.78, "lon": -73.97},
+    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "kalshi_low": "KXLOWTPHL", "lat": 39.87, "lon": -75.23},
 }
 
 if "default_city" not in st.session_state:
     st.session_state.default_city = "New York City"
+
+@st.cache_data(ttl=300)
+def fetch_nws_forecast(lat, lon):
+    """Fetch tomorrow's forecast LOW from NWS"""
+    try:
+        # Get grid point
+        points_url = f"https://api.weather.gov/points/{lat},{lon}"
+        resp = requests.get(points_url, headers={"User-Agent": "Temp/1.0"}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        
+        data = resp.json()
+        forecast_url = data.get("properties", {}).get("forecast", "")
+        if not forecast_url:
+            return None
+        
+        # Get forecast
+        forecast_resp = requests.get(forecast_url, headers={"User-Agent": "Temp/1.0"}, timeout=10)
+        if forecast_resp.status_code != 200:
+            return None
+        
+        periods = forecast_resp.json().get("properties", {}).get("periods", [])
+        
+        # Find tomorrow night (that's when LOW occurs)
+        for period in periods:
+            name = period.get("name", "")
+            if "Tomorrow Night" in name or "Tonight" in name:
+                temp = period.get("temperature")
+                if temp:
+                    return temp
+        
+        return None
+    except:
+        return None
 
 @st.cache_data(ttl=300)
 def fetch_kalshi_brackets(series_ticker):
@@ -165,6 +199,39 @@ with col2:
     if st.button("⭐ Set as Default", use_container_width=True):
         st.session_state.default_city = city_selection
         st.success(f"✅ {city_selection} saved!")
+
+st.divider()
+
+# TOMORROW FORECAST SECTION
+st.subheader("📅 Tomorrow's Forecast")
+forecast_low = fetch_nws_forecast(cfg.get("lat", 0), cfg.get("lon", 0))
+
+if forecast_low:
+    forecast_settlement = round(forecast_low)
+    
+    # Fetch tomorrow's Kalshi brackets (API returns future dates)
+    kalshi_series = cfg.get("kalshi_low", "")
+    if kalshi_series:
+        all_brackets = fetch_kalshi_brackets(kalshi_series)
+        
+        # Find bracket for forecast settlement
+        forecast_bracket = None
+        for b in all_brackets:
+            if b['low'] <= forecast_settlement < b['high']:
+                forecast_bracket = b['range']
+                break
+        
+        if forecast_bracket:
+            st.success(f"🎯 NWS Forecast LOW: **{forecast_low}°F** → Rounds to **{forecast_settlement}°F** → **TARGET: {forecast_bracket}**")
+            
+            # Log entry for tracking
+            eastern = pytz.timezone("US/Eastern")
+            log_time = datetime.now(eastern).strftime("%Y-%m-%d %H:%M:%S")
+            st.code(f"LOG|{log_time}|{city_selection}|FORECAST:{forecast_low}|SETTLEMENT:{forecast_settlement}|BRACKET:{forecast_bracket}")
+        else:
+            st.warning(f"🎯 NWS Forecast LOW: **{forecast_low}°F** → Rounds to **{forecast_settlement}°F** → ⚠️ No bracket match")
+else:
+    st.info("⏳ Tomorrow's forecast not yet available from NWS")
 
 st.divider()
 
