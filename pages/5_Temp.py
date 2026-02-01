@@ -167,28 +167,31 @@ def check_settlement_lock(full_readings, city_tz_str):
         city_tz = pytz.timezone(city_tz_str)
         now = datetime.now(city_tz)
         
-        low_locked = False
-        high_locked = False
         low_settlement = None
         high_settlement = None
         
+        # Find the LOWEST 6hr min value (that's the settlement)
         for r in full_readings:
-            time_str = r['time']
-            hour, minute = map(int, time_str.split(':'))
-            
-            if hour == 6 and minute >= 53 and r['min_6hr']:
-                low_locked = True
+            if r.get('min_6hr'):
                 try:
-                    low_settlement = float(r['min_6hr'])
+                    val = float(r['min_6hr'])
+                    if low_settlement is None or val < low_settlement:
+                        low_settlement = val
                 except:
                     pass
-            
-            if hour == 18 and minute >= 53 and r['max_6hr']:
-                high_locked = True
+        
+        # Find the HIGHEST 6hr max value (that's the settlement)
+        for r in full_readings:
+            if r.get('max_6hr'):
                 try:
-                    high_settlement = float(r['max_6hr'])
+                    val = float(r['max_6hr'])
+                    if high_settlement is None or val > high_settlement:
+                        high_settlement = val
                 except:
                     pass
+        
+        low_locked = low_settlement is not None
+        high_locked = high_settlement is not None
         
         return low_locked, high_locked, low_settlement, high_settlement
     except:
