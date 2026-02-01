@@ -271,29 +271,7 @@ if current_temp:
         
         if raw_6hr_min:
             settlement_temp = round(raw_6hr_min)
-            kalshi_series = cfg.get("kalshi_low", "")
-            if kalshi_series:
-                brackets = fetch_kalshi_brackets(kalshi_series)
-                winning_bracket = None
-                for b in brackets:
-                    # ✅ FIXED: Proper bracket matching for "or above" type
-                    if b['high'] == 999:  # "X or above" bracket
-                        if settlement_temp >= b['low']:
-                            winning_bracket = b['range']
-                            break
-                    elif b['low'] == 0:  # "X or below" bracket
-                        if settlement_temp <= b['high']:
-                            winning_bracket = b['range']
-                            break
-                    else:  # "X to Y" bracket
-                        if b['low'] <= settlement_temp <= b['high']:
-                            winning_bracket = b['range']
-                            break
-                
-                if winning_bracket:
-                    settlement_info = f"<div style='color:#22c55e;font-size:1.2em;margin-top:8px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → BUY: {winning_bracket}</div>"
-                else:
-                    settlement_info = f"<div style='color:#22c55e;font-size:1.2em;margin-top:8px;font-weight:700'>6hr MIN: {raw_6hr_min}°F (Settlement: {settlement_temp}°F)</div>"
+            settlement_info = f"<div style='color:#22c55e;font-size:1.2em;margin-top:8px;font-weight:700'>6hr MIN: {raw_6hr_min}°F (Settlement: {settlement_temp}°F)</div>"
     
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
@@ -333,28 +311,7 @@ if readings and full_readings:
         low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
     
     if settlement_low:
-        kalshi_series = cfg.get("kalshi_low", "")
-        brackets = fetch_kalshi_brackets(kalshi_series) if kalshi_series else []
-        winning_bracket = None
-        for b in brackets:
-            # ✅ FIXED: Proper bracket matching
-            if b['high'] == 999:
-                if settlement_low >= b['low']:
-                    winning_bracket = b['range']
-                    break
-            elif b['low'] == 0:
-                if settlement_low <= b['high']:
-                    winning_bracket = b['range']
-                    break
-            else:
-                if b['low'] <= settlement_low <= b['high']:
-                    winning_bracket = b['range']
-                    break
-        
-        if winning_bracket:
-            st.info(f"📊 {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → **BUY: {winning_bracket}**")
-        else:
-            st.info(f"📊 {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → Settlement: **{settlement_low}°F**")
+        st.info(f"📊 {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → Settlement: **{settlement_low}°F**")
     else:
         st.info(f"📊 {len(readings)} readings")
     
@@ -417,35 +374,11 @@ if lat and lon:
     
     if forecast_low:
         forecast_settlement = round(forecast_low)
+        st.success(f"🎯 NWS Forecast LOW: **{forecast_low}°F** → Settlement: **{forecast_settlement}°F**")
         
-        kalshi_series = cfg.get("kalshi_low", "")
-        if kalshi_series:
-            all_brackets = fetch_kalshi_brackets(kalshi_series)
-            
-            forecast_bracket = None
-            for b in all_brackets:
-                # ✅ FIXED: Proper bracket matching
-                if b['high'] == 999:
-                    if forecast_settlement >= b['low']:
-                        forecast_bracket = b['range']
-                        break
-                elif b['low'] == 0:
-                    if forecast_settlement <= b['high']:
-                        forecast_bracket = b['range']
-                        break
-                else:
-                    if b['low'] <= forecast_settlement <= b['high']:
-                        forecast_bracket = b['range']
-                        break
-            
-            if forecast_bracket:
-                st.success(f"🎯 NWS Forecast LOW: **{forecast_low}°F** → Rounds to **{forecast_settlement}°F** → **TARGET: {forecast_bracket}**")
-                
-                eastern = pytz.timezone("US/Eastern")
-                log_time = datetime.now(eastern).strftime("%Y-%m-%d %H:%M:%S")
-                st.code(f"LOG|{log_time}|{city_selection}|FORECAST:{forecast_low}|SETTLEMENT:{forecast_settlement}|BRACKET:{forecast_bracket}")
-            else:
-                st.warning(f"🎯 NWS Forecast LOW: **{forecast_low}°F** → Rounds to **{forecast_settlement}°F** → ⚠️ No bracket match")
+        eastern = pytz.timezone("US/Eastern")
+        log_time = datetime.now(eastern).strftime("%Y-%m-%d %H:%M:%S")
+        st.code(f"LOG|{log_time}|{city_selection}|FORECAST:{forecast_low}|SETTLEMENT:{forecast_settlement}")
     else:
         st.info("⏳ Tomorrow's forecast not yet available from NWS")
 else:
