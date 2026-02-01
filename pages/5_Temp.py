@@ -2,6 +2,9 @@
 🌡️ TEMP.PY - Temperature Trading Dashboard (VIEW ONLY)
 Combines SHARK (today's 6hr settlement) + TOM (tomorrow's forecast)
 No trading - monitoring and analysis only
+
+OWNER MODE: Add ?owner=true to URL to see lock status
+Example: https://bigsnapshot.streamlit.app/Temp?owner=true
 """
 import streamlit as st
 import requests
@@ -12,6 +15,10 @@ import re
 from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="🌡️ Temp Trading", page_icon="🌡️", layout="wide")
+
+# Check if owner mode
+query_params = st.query_params
+OWNER_MODE = query_params.get("owner") == "true"
 
 # ============================================================
 # CITIES CONFIG
@@ -224,7 +231,10 @@ def check_weather_guards(lat, lon):
 # ============================================================
 
 st.title("🌡️ Temperature Trading Dashboard")
-st.caption("Real-time monitoring for SHARK (today) + TOM (tomorrow) strategies")
+if OWNER_MODE:
+    st.caption("🔑 OWNER MODE - Real-time monitoring for SHARK (today) + TOM (tomorrow) strategies")
+else:
+    st.caption("Real-time monitoring for SHARK (today) + TOM (tomorrow) strategies")
 
 # Sidebar
 with st.sidebar:
@@ -272,30 +282,46 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
             brackets_low = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"])
             match_low = find_winning_bracket(low_6hr, brackets_low)
             
-            shark_data.append({
+            row = {
                 "City": city,
                 "Type": "LOW",
                 "Settlement": f"{low_6hr}°F @ {low_time}" if low_6hr else "—",
                 "Current": f"{current}°F" if current else "—",
+            }
+            
+            if OWNER_MODE:
+                row["Locked"] = "🔒" if low_locked else "⏳"
+            
+            row.update({
                 "Bracket": match_low["name"] if match_low else "NO MATCH",
                 "Ask": f"{match_low['ask']}¢" if match_low else "—",
                 "Edge": f"{100 - match_low['ask']}¢" if match_low else "—"
             })
+            
+            shark_data.append(row)
         
         # Check HIGH
         if high_6hr:
             brackets_high = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"])
             match_high = find_winning_bracket(high_6hr, brackets_high)
             
-            shark_data.append({
+            row = {
                 "City": city,
                 "Type": "HIGH",
                 "Settlement": f"{high_6hr}°F @ {high_time}" if high_6hr else "—",
                 "Current": f"{current}°F" if current else "—",
+            }
+            
+            if OWNER_MODE:
+                row["Locked"] = "🔒" if high_locked else "⏳"
+            
+            row.update({
                 "Bracket": match_high["name"] if match_high else "NO MATCH",
                 "Ask": f"{match_high['ask']}¢" if match_high else "—",
                 "Edge": f"{100 - match_high['ask']}¢" if match_high else "—"
             })
+            
+            shark_data.append(row)
     
     if shark_data:
         df_shark = pd.DataFrame(shark_data)
