@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="🌡️ Temp Trading", page_icon="🌡️", layout="wide")
 
-OWNER_MODE = st.query_params.get("owner") == "true"
+OWNER_MODE = st.query_params.get("owner", "") == "true"
 
 CITIES = {
     "New York City": {"nws": "KNYC", "kalshi_low": "KXLOWTNYC", "kalshi_high": "KXHIGHNY", "tz": "US/Eastern", "lat": 40.78, "lon": -73.97},
