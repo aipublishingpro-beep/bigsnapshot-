@@ -374,6 +374,25 @@ if mode == "🦈 SHARK Mode":
             st.info("⏳ Waiting for settlement lock... (LOW at 06:53+, HIGH at 18:53+)")
         else:
             # Determine which settlement is locked
+            # Show what we detected
+            st.subheader("🔍 Detection Status")
+            col1, col2 = st.columns(2)
+            with col1:
+                if low_locked:
+                    st.success(f"✅ LOW locked: {low_settlement}°F" if low_settlement else "❌ LOW locked but no temp")
+                else:
+                    st.info("⏳ LOW not locked yet (need 06:53+)")
+            with col2:
+                if high_locked:
+                    st.success(f"✅ HIGH locked: {high_settlement}°F" if high_settlement else "❌ HIGH locked but no temp")
+                else:
+                    st.info("⏳ HIGH not locked yet (need 18:53+)")
+            
+            # Debug: Show last few readings with 6hr data
+            with st.expander("🔧 Debug: Last 10 readings with 6hr data", expanded=True):
+                for r in full_readings[-10:]:
+                    st.text(f"{r['time']} | Air: {r['air']}°F | 6hr↑: {r['max_6hr']} | 6hr↓: {r['min_6hr']}")
+            
             if low_locked and low_settlement:
                 settlement_type = "LOW"
                 settlement_temp = low_settlement
@@ -383,7 +402,7 @@ if mode == "🦈 SHARK Mode":
                 settlement_temp = high_settlement
                 market_search = f"HIGHTEMP-{city_selection.upper().replace(' ', '')}"
             else:
-                st.warning("Settlement detected but no valid temperature")
+                st.warning("⚠️ Lock detected but no valid temperature value parsed")
                 st.stop()
             
             st.success(f"🔒 {settlement_type} Settlement Locked: {settlement_temp}°F")
