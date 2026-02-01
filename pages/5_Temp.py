@@ -399,17 +399,16 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                     </style>
                     """, unsafe_allow_html=True)
                     
-                    table_html = "<table class='nws-table'><thead><tr><th>Date</th><th>Time (est)</th><th>Air Temp (°F)</th><th>6hr Max</th><th>6hr Min</th></tr></thead><tbody>"
-                    
                     city_tz = pytz.timezone(cfg["tz"])
                     today = datetime.now(city_tz).day
                     
+                    table_html = "<table class='nws-table'><thead><tr><th>Date</th><th>Time (est)</th><th>Air Temp (°F)</th><th>6hr Max</th><th>6hr Min</th></tr></thead><tbody>"
                     for r in full_readings:
                         max_display = f"<span class='max-6hr'>{r['max_6hr']}</span>" if r['max_6hr'] else ""
                         min_display = f"<span class='min-6hr'>{r['min_6hr']}</span>" if r['min_6hr'] else ""
                         table_html += f"<tr><td class='time-col'>{today}</td><td class='time-col'>{r['time']}</td><td class='temp-col'>{r['temp']}</td><td>{max_display}</td><td>{min_display}</td></tr>"
-                    
                     table_html += "</tbody></table>"
+                    
                     st.markdown(table_html, unsafe_allow_html=True)
                     st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
         
