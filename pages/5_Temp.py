@@ -66,7 +66,7 @@ def create_kalshi_signature(timestamp, method, path, body=""):
         return None, None
 
 @st.cache_data(ttl=300)
-def fetch_full_nws_recording(station, city_tz_str):
+def fetch_full_nws_recording(station, city_tz_str, cache_buster=0):
     """Fetch complete NWS observation table with 6hr extremes"""
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
@@ -113,7 +113,7 @@ def fetch_full_nws_recording(station, city_tz_str):
         return []
 
 @st.cache_data(ttl=300)
-def fetch_nws_observations(station, city_tz_str):
+def fetch_nws_observations(station, city_tz_str, cache_buster=0):
     """Fetch hourly observations from NWS API"""
     url = f"https://api.weather.gov/stations/{station}/observations?limit=500"
     try:
@@ -197,9 +197,9 @@ def check_settlement_lock(full_readings, city_tz_str):
     except:
         return False, False, None, None
 
-@st.cache_data(ttl=300, show_spinner=False)
-def fetch_kalshi_markets(city_name, market_type):
-    """Fetch today's temperature markets for a city and market type (LOW or HIGH)"""
+@st.cache_data(ttl=300)
+def fetch_kalshi_markets(city_name, market_type, cache_buster=0):
+    """Fetch today's temperature markets for a city"""
     try:
         timestamp = str(int(datetime.now().timestamp() * 1000))
         path = "/trade-api/v2/markets"
@@ -250,7 +250,7 @@ def fetch_kalshi_markets(city_name, market_type):
         today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
         
         return today_markets
-    except Exception as e:
+    except:
         return []
 
 def parse_bracket(ticker):
@@ -291,7 +291,7 @@ def find_winning_bracket(markets, settlement_temp):
     return min(winning_brackets, key=lambda x: x["ask"])
 
 @st.cache_data(ttl=600)
-def fetch_nws_forecast(lat, lon, city_tz_str):
+def fetch_nws_forecast(lat, lon, city_tz_str, cache_buster=0):
     """Fetch NWS forecast made EARLIER TODAY for today's temps"""
     try:
         city_tz = pytz.timezone(city_tz_str)
@@ -373,6 +373,9 @@ st.caption("⚠️ EXPERIMENTAL - EDUCATIONAL PURPOSES ONLY")
 # Mode selector
 mode = st.radio("Mode", ["📊 City View", "🦈 SHARK Mode"], horizontal=True)
 
+if "cache_buster" not in st.session_state:
+    st.session_state.cache_buster = 0
+
 col1, col2 = st.columns([3, 1])
 with col1:
     city_selection = st.selectbox("📍 Select City", list(CITIES.keys()), index=list(CITIES.keys()).index(st.session_state.default_city))
@@ -381,12 +384,8 @@ with col2:
         st.session_state.default_city = city_selection
         st.success(f"✅ {city_selection} saved!")
 
-if st.button("🔄 Refresh Data", use_container_width=False):
-    st.cache_data.clear()
-    st.rerun()
-
-if st.button("🔄 Clear Cache & Refresh"):
-    st.cache_data.clear()
+if st.button("🔄 Refresh Data"):
+    st.session_state.cache_buster += 1
     st.rerun()
 
 st.divider()
@@ -394,8 +393,8 @@ st.divider()
 cfg = CITIES[city_selection]
 
 # Fetch data
-current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg["nws"], cfg["tz"])
-full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
+current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg["nws"], cfg["tz"], st.session_state.cache_buster)
+full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"], st.session_state.cache_buster)
 
 if mode == "🦈 SHARK Mode":
     st.header("🦈 SHARK Mode - Automated Trading Signals")
