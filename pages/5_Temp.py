@@ -278,9 +278,10 @@ def find_winning_bracket(markets, settlement_temp):
     return min(winning_brackets, key=lambda x: x["ask"])
 
 @st.cache_data(ttl=600)
-def fetch_nws_forecast(lat, lon):
-    """Fetch NWS forecast for today's high/low"""
+def fetch_nws_forecast(lat, lon, city_tz_str):
+    """Fetch NWS forecast made EARLIER TODAY for today's temps"""
     try:
+        city_tz = pytz.timezone(city_tz_str)
         point_url = f"https://api.weather.gov/points/{lat},{lon}"
         resp = requests.get(point_url, headers={"User-Agent": "Temp/1.0"}, timeout=10)
         if resp.status_code != 200:
@@ -292,18 +293,23 @@ def fetch_nws_forecast(lat, lon):
             return None, None, []
         
         periods = resp2.json()["properties"]["periods"]
+        
+        # Get TODAY's forecasted high and low (from forecast made earlier)
         today_high = None
         today_low = None
         warnings = []
         
         for p in periods[:3]:
-            name = p.get("name", "")
+            name = p.get("name", "").lower()
             temp = p.get("temperature")
             forecast = p.get("detailedForecast", "").lower()
             
-            if "today" in name.lower() or "this afternoon" in name.lower():
+            # Today's high
+            if ("today" in name or "this afternoon" in name) and not today_high:
                 today_high = temp
-            if "tonight" in name.lower():
+            
+            # Today's low (might be from "This Morning" or overnight period)
+            if ("tonight" in name or "this morning" in name) and not today_low:
                 today_low = temp
             
             # Check for weather warnings
@@ -317,29 +323,35 @@ def fetch_nws_forecast(lat, lon):
         return None, None, []
 
 def run_shark_guards(settlement_temp, bracket, forecast_temp, warnings):
-    """Run 3 guardrails: weather warnings, price floor, forecast gap"""
+    """Run 2 guardrails: price floor + anomaly detection"""
     guards = {
-        "weather_warnings": {"pass": True, "reason": ""},
         "price_floor": {"pass": True, "reason": ""},
-        "forecast_gap": {"pass": True, "reason": ""}
+        "anomaly_check": {"pass": True, "reason": "", "warning_level": "normal"}
     }
     
-    # Guard 1: Weather warnings
-    if warnings:
-        guards["weather_warnings"]["pass"] = False
-        guards["weather_warnings"]["reason"] = f"Active warnings: {', '.join(set(warnings))}"
-    
-    # Guard 2: Price floor (≤20¢ = market knows something)
-    if bracket["ask"] <= 0.20:
+    # Guard 1: Price floor (≤15¢ = market knows something)
+    if bracket["ask"] <= 0.15:
         guards["price_floor"]["pass"] = False
-        guards["price_floor"]["reason"] = f"Ask price {bracket['ask']:.0%} ≤ 20¢ - market may know something"
+        guards["price_floor"]["reason"] = f"Ask {bracket['ask']:.0%} ≤15¢ - market knows something you don't!"
     
-    # Guard 3: Forecast gap (≥3° difference)
-    if forecast_temp and abs(forecast_temp - settlement_temp) >= 3:
-        guards["forecast_gap"]["pass"] = False
-        guards["forecast_gap"]["reason"] = f"Forecast {forecast_temp}°F differs by {abs(forecast_temp - settlement_temp)}° from settlement"
+    # Guard 2: Anomaly Detection (this is INFO, not necessarily a block)
+    if warnings:
+        guards["anomaly_check"]["pass"] = True  # Not blocking, just alerting
+        guards["anomaly_check"]["warning_level"] = "anomaly"
+        guards["anomaly_check"]["reason"] = f"⚠️ ANOMALY DETECTED: {', '.join(set(warnings))}"
+        if forecast_temp:
+            gap = abs(forecast_temp - settlement_temp)
+            guards["anomaly_check"]["reason"] += f" | Forecast: {forecast_temp}°F vs Settlement: {settlement_temp}°F ({gap:.0f}° gap)"
+    elif forecast_temp and abs(forecast_temp - settlement_temp) >= 3:
+        guards["anomaly_check"]["pass"] = True
+        guards["anomaly_check"]["warning_level"] = "caution"
+        gap = abs(forecast_temp - settlement_temp)
+        guards["anomaly_check"]["reason"] = f"⚠️ Large forecast gap: {forecast_temp}°F vs {settlement_temp}°F ({gap:.0f}°)"
+    else:
+        guards["anomaly_check"]["reason"] = "✅ No anomalies - 6hr settlement reliable"
     
-    all_pass = all(g["pass"] for g in guards.values())
+    # Only block on price floor, not anomalies
+    all_pass = guards["price_floor"]["pass"]
     return all_pass, guards
 
 st.title("🌡️ Temperature Trading Dashboard")
@@ -390,11 +402,6 @@ if mode == "🦈 SHARK Mode":
                 else:
                     st.info("⏳ HIGH not locked yet (need 18:53+)")
             
-            # Debug: Show last few readings with 6hr data
-            with st.expander("🔧 Debug: Last 10 readings with 6hr data", expanded=True):
-                for r in full_readings[-10:]:
-                    st.text(f"{r['time']} | Air: {r['air']}°F | 6hr↑: {r['max_6hr']} | 6hr↓: {r['min_6hr']}")
-            
             if low_locked and low_settlement:
                 settlement_type = "LOW"
                 settlement_temp = low_settlement
@@ -423,18 +430,27 @@ if mode == "🦈 SHARK Mode":
                     st.error("❌ No winning bracket found")
                 else:
                     # Fetch forecast and check guards
-                    forecast_high, forecast_low, warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
-                    forecast_temp = forecast_high if settlement_type == "HIGH" else forecast_low
+                    today_high_forecast, today_low_forecast, warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"], cfg["tz"])
+                    forecast_temp = today_high_forecast if settlement_type == "HIGH" else today_low_forecast
                     
                     all_pass, guards = run_shark_guards(settlement_temp, winning, forecast_temp, warnings)
                     
                     # Display decision
                     if all_pass:
-                        st.markdown(f"""
-                        <div style="background:#064e3b;border:2px solid #10b981;border-radius:8px;padding:20px;margin:20px 0">
-                            <div style="color:#10b981;font-size:2em;font-weight:700;text-align:center">✅ BUY SIGNAL</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        if guards["anomaly_check"]["warning_level"] == "anomaly":
+                            st.markdown(f"""
+                            <div style="background:#854d0e;border:2px solid #fbbf24;border-radius:8px;padding:20px;margin:20px 0">
+                                <div style="color:#fbbf24;font-size:2em;font-weight:700;text-align:center">⚠️ ANOMALY DETECTED</div>
+                                <div style="color:#fef3c7;font-size:1.2em;text-align:center;margin-top:10px">Check adjusted forecast before buying!</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""
+                            <div style="background:#064e3b;border:2px solid #10b981;border-radius:8px;padding:20px;margin:20px 0">
+                                <div style="color:#10b981;font-size:2em;font-weight:700;text-align:center">✅ CLEAR TO BUY</div>
+                                <div style="color:#d1fae5;font-size:1.2em;text-align:center;margin-top:10px">No anomalies - 6hr settlement reliable</div>
+                            </div>
+                            """, unsafe_allow_html=True)
                     else:
                         st.markdown(f"""
                         <div style="background:#7f1d1d;border:2px solid #ef4444;border-radius:8px;padding:20px;margin:20px 0">
@@ -456,12 +472,22 @@ if mode == "🦈 SHARK Mode":
                     st.caption(f"Ticker: {winning['ticker']}")
                     
                     # Guards status
-                    st.subheader("🛡️ Guardrails")
-                    for guard_name, guard_data in guards.items():
-                        if guard_data["pass"]:
-                            st.success(f"✅ {guard_name.replace('_', ' ').title()}")
-                        else:
-                            st.error(f"🚫 {guard_name.replace('_', ' ').title()}: {guard_data['reason']}")
+                    st.subheader("🛡️ Analysis")
+                    
+                    # Price floor guard
+                    if guards["price_floor"]["pass"]:
+                        st.success(f"✅ Price Floor: Ask {winning['ask']:.0%} is above 15¢ minimum")
+                    else:
+                        st.error(f"🚫 {guards['price_floor']['reason']}")
+                    
+                    # Anomaly check
+                    if guards["anomaly_check"]["warning_level"] == "anomaly":
+                        st.warning(f"⚠️ {guards['anomaly_check']['reason']}")
+                        st.info("💡 **Anomaly detected** - Consider using adjusted forecast instead of 6hr settlement")
+                    elif guards["anomaly_check"]["warning_level"] == "caution":
+                        st.warning(f"⚠️ {guards['anomaly_check']['reason']}")
+                    else:
+                        st.success(f"{guards['anomaly_check']['reason']}")
 
 else:  # City View mode
     st.header(f"📍 {city_selection}")
