@@ -226,9 +226,9 @@ if current_temp:
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
         <div style="display:flex;justify-content:space-around;text-align:center">
-            <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
-            <div><div style="color:#6b7280;font-size:0.8em">LOW SETTLEMENT</div>{settlement_info}</div>
-            <div><div style="color:#6b7280;font-size:0.8em">HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
+            <div><div style="color:#ef4444;font-size:0.9em;font-weight:700;margin-bottom:8px">CURRENT</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
+            <div><div style="color:#f59e0b;font-size:0.9em;font-weight:700;margin-bottom:8px">LOW SETTLEMENT</div>{settlement_info}</div>
+            <div><div style="color:#ef4444;font-size:0.9em;font-weight:700;margin-bottom:8px">HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
