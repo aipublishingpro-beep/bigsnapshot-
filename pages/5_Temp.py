@@ -456,19 +456,7 @@ if mode == "🦈 SHARK Mode":
                 markets = fetch_kalshi_markets(city_selection, settlement_type, st.session_state.cache_buster)
                 today_high_forecast, tonight_low_forecast, warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"], cfg["tz"], st.session_state.cache_buster)
             
-            # DEBUG INFO
-            with st.expander("🔧 DEBUG INFO", expanded=True):
-                st.write(f"Markets returned: {len(markets) if markets else 0}")
-                st.write(f"Settlement temp: {settlement_temp}°F")
-                st.write(f"Tonight forecast: {tonight_low_forecast}°F")
-                st.write(f"Warnings detected: {warnings}")
-                st.write(f"Series ticker: {cfg.get('kalshi_low' if settlement_type == 'LOW' else 'kalshi_high')}")
-                
-                if markets:
-                    st.write("**ALL MARKETS:**")
-                    for i, m in enumerate(markets[:10]):
-                        st.write(f"{i+1}. {m.get('title')} | Ask: {m.get('yes_ask')}¢ | Ticker: {m.get('ticker')}")
-            
+            if not markets:        
             if not markets:
                 st.error("❌ No Kalshi markets found")
                 st.caption(f"Searched for series: {cfg.get('kalshi_low' if settlement_type == 'LOW' else 'kalshi_high')}")
@@ -548,14 +536,6 @@ else:
     # 6HR LOCK STATUS HERO BOX
     if full_readings and obs_low:
         low_locked, high_locked, low_settlement, high_settlement = check_settlement_lock(full_readings, cfg["tz"])
-        
-        # DEBUG
-        st.write(f"DEBUG: low_locked={low_locked}, low_settlement={low_settlement}, obs_low={obs_low}")
-        st.write(f"DEBUG: high_locked={high_locked}, high_settlement={high_settlement}, obs_high={obs_high}")
-        st.write(f"DEBUG: full_readings count={len(full_readings)}")
-        if full_readings:
-            six_hr_mins = [r.get('min_6hr') for r in full_readings if r.get('min_6hr')]
-            st.write(f"DEBUG: 6hr min values found: {six_hr_mins}")
         
         # Check if any 6hr min data exists
         has_6hr_low = any(r.get('min_6hr') for r in full_readings)
