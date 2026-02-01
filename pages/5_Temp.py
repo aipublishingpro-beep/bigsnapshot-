@@ -49,8 +49,12 @@ def fetch_kalshi_brackets(series_ticker):
     year = today.strftime("%y")
     date_suffix = f"{day}{month}{year}"  # e.g., "01FEB26"
     
-    # Try both with and without date filter
-    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
+    # Add event ticker filter for today's date
+    # Kalshi event format: KXLOWTCHI-01FEB26
+    event_ticker_filter = f"{series_ticker}-{date_suffix}"
+    
+    # API call with event ticker filter
+    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?event_ticker={event_ticker_filter}&status=open"
     
     try:
         resp = requests.get(url, timeout=10)
@@ -105,6 +109,11 @@ def fetch_kalshi_brackets(series_ticker):
                 st.write(f"✅ Found bracket: {low}-{high}°F")
         
         st.write(f"🔍 DEBUG: Parsed {len(brackets)} brackets for today")
+        
+        # If no brackets found, it means today's markets are closed
+        if len(brackets) == 0 and len(markets) > 0:
+            st.warning(f"⏰ Today's markets ({date_suffix}) are closed. Showing tomorrow's markets in API.")
+        
         return brackets
     except Exception as e:
         st.error(f"Kalshi API error: {e}")
@@ -288,9 +297,9 @@ if current_temp:
                         break
                 
                 if winning_bracket:
-                    settlement_info = f"<div style='color:#22c55e;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → BUY: {winning_bracket}</div>"
+                    settlement_info = f"<div style='color:#22c55e;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → SETTLED: {winning_bracket}</div>"
                 else:
-                    settlement_info = f"<div style='color:#f59e0b;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → NO BRACKET (Rounded: {settlement_temp}°F)</div>"
+                    settlement_info = f"<div style='color:#6b7280;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → MARKETS CLOSED (Settlement: {settlement_temp}°F)</div>"
     
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
@@ -348,9 +357,9 @@ if readings and full_readings:
                 break
         
         if winning_bracket:
-            st.info(f"📊 Showing {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → **BUY: {winning_bracket}**")
+            st.info(f"📊 Showing {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → **SETTLED: {winning_bracket}**")
         else:
-            st.info(f"📊 Showing {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → ⚠️ NO BRACKET (Rounded: {settlement_low}°F)")
+            st.info(f"📊 Showing {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → 🔒 **MARKETS CLOSED** (Settlement: {settlement_low}°F)")
     else:
         st.info(f"📊 Showing {len(readings)} readings")
     
