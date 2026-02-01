@@ -65,7 +65,7 @@ def fetch_nws_forecast(lat, lon):
     except:
         return None
 
-@st.cache_data(ttl=60)  # ✅ FIXED: 60s instead of 300s
+# ✅ CACHE DISABLED - Fetch fresh brackets every time
 def fetch_kalshi_brackets(series_ticker):
     """Fetch Kalshi brackets for LOW market"""
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open&limit=100"
