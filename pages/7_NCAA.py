@@ -27,14 +27,14 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "11.9"
+VERSION = "12.0"
 LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
 if 'positions' not in st.session_state:
     st.session_state.positions = []
 
-TEAM_COLORS = {"DUKE": "#003087", "UNC": "#7BAFD4", "KANSAS": "#0051BA", "KENTUCKY": "#0033A0", "UCLA": "#2D68C4", "GONZ": "#002967", "ARIZ": "#CC0033", "PURDUE": "#CEB888", "PUR": "#CEB888", "TENN": "#FF8200", "CONN": "#000E2F", "HOUSTON": "#C8102E", "TEXAS": "#BF5700", "BAYLOR": "#154734", "AUBURN": "#0C2340", "MICH": "#00274C", "MSU": "#18453B", "NOVA": "#00205B", "CREIGH": "#005CA9", "MARQ": "#003366", "SDSU": "#A6192E", "FAU": "#003366", "MIAMI": "#F47321", "IND": "#990000", "IU": "#990000", "IOWA": "#FFCD00", "ILLINOIS": "#13294B", "OHIOST": "#BB0000", "WISC": "#C5050C", "ORE": "#154733", "ALA": "#9E1B32", "ARK": "#9D2235", "LSU": "#461D7C", "MISS": "#14213D", "OKLA": "#841617", "TEXTECH": "#CC0000", "TCU": "#4D1979", "OKST": "#FF7300"}
+TEAM_COLORS = {"DUKE": "#003087", "UNC": "#7BAFD4", "KANSAS": "#0051BA", "KENTUCKY": "#0033A0", "UCLA": "#2D68C4", "GONZ": "#002967", "ARIZ": "#CC0033", "PURDUE": "#CEB888", "PUR": "#CEB888", "TENN": "#FF8200", "CONN": "#000E2F", "HOUSTON": "#C8102E", "TEXAS": "#BF5700", "BAYLOR": "#154734", "AUBURN": "#0C2340", "MICH": "#00274C", "MSU": "#18453B", "NOVA": "#00205B", "CREIGH": "#005CA9", "MARQ": "#003366", "SDSU": "#A6192E", "FAU": "#003366", "MIAMI": "#F47321", "IND": "#990000", "IU": "#990000", "IOWA": "#FFCD00", "ILLINOIS": "#13294B", "OHIOST": "#BB0000", "WISC": "#C5050C", "ORE": "#154733", "ALA": "#9E1B32", "ARK": "#9D2235", "LSU": "#461D7C", "MISS": "#14213D", "OKLA": "#841617", "TEXTECH": "#CC0000", "TCU": "#4D1979", "OKST": "#FF7300", "MD": "#E03A3E", "MARY": "#E03A3E"}
 
 POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC", "Big East"}
 HIGH_MAJOR = {"American Athletic", "Mountain West", "Atlantic 10", "West Coast", "Missouri Valley"}
@@ -120,12 +120,15 @@ def fetch_yesterday_teams():
     except: return set()
 
 @st.cache_data(ttl=25)
-def fetch_plays(game_id, known_away="", known_home=""):
-    if not game_id: return [], "", {}
+def fetch_plays_and_linescores(game_id, known_away="", known_home=""):
+    """Fetch plays AND period-by-period scoring"""
+    if not game_id: return [], "", {}, []
     try:
         url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event={game_id}"
         resp = requests.get(url, timeout=10)
         data = resp.json()
+        
+        # Get plays
         all_plays = data.get("plays", [])
         plays = []
         for p in all_plays[-15:]:
@@ -134,11 +137,15 @@ def fetch_plays(game_id, known_away="", known_home=""):
             if isinstance(team_data, dict):
                 team_abbrev = team_data.get("abbreviation", "") or team_data.get("displayName", "")
             plays.append({"text": p.get("text", ""), "period": p.get("period", {}).get("number", 0), "clock": p.get("clock", {}).get("displayValue", ""), "score_value": p.get("scoreValue", 0), "play_type": p.get("type", {}).get("text", ""), "team": team_abbrev.upper() if team_abbrev else ""})
+        
+        # Get possession
         poss_team = ""
         situation = data.get("situation", {})
         if situation:
             poss_text = situation.get("possessionText", "") or ""
             poss_team = poss_text.split()[0] if poss_text else ""
+        
+        # Get records
         half_scores = {"away_record": "", "home_record": ""}
         header = data.get("header", {})
         competitions = header.get("competitions", [{}])
@@ -150,26 +157,99 @@ def fetch_plays(game_id, known_away="", known_home=""):
                     half_scores["home_record"] = record_str
                 else:
                     half_scores["away_record"] = record_str
-        return plays[-10:], poss_team, half_scores
-    except: return [], "", {}
+        
+        # **NEW: Get period-by-period scores (linescores)**
+        linescores = []
+        box_score = data.get("boxscore", {})
+        teams = box_score.get("teams", [])
+        
+        # Find away and home team linescores
+        away_line = []
+        home_line = []
+        
+        for team in teams:
+            team_abbrev = team.get("team", {}).get("abbreviation", "").upper()
+            team_linescores = team.get("statistics", [])
+            
+            # Look for the linescores in statistics
+            for stat_group in team_linescores:
+                if stat_group.get("name") == "linescores":
+                    line = []
+                    for period_stat in stat_group.get("stats", []):
+                        period_value = period_stat.get("value", 0)
+                        try:
+                            line.append(int(float(period_value)))
+                        except:
+                            line.append(0)
+                    
+                    # Determine if this is home or away
+                    if team.get("homeAway") == "home":
+                        home_line = line
+                    else:
+                        away_line = line
+                    break
+        
+        # Build linescores array: [{"period": "H1", "away": 40, "home": 35}, ...]
+        max_periods = max(len(away_line), len(home_line))
+        for i in range(max_periods):
+            period_name = f"H{i+1}" if i < 2 else f"OT{i-1}"
+            away_pts = away_line[i] if i < len(away_line) else 0
+            home_pts = home_line[i] if i < len(home_line) else 0
+            linescores.append({"period": period_name, "away": away_pts, "home": home_pts})
+        
+        return plays[-10:], poss_team, half_scores, linescores
+        
+    except Exception as e:
+        # print(f"Error fetching plays/linescores: {e}")
+        return [], "", {}, []
 
-def render_scoreboard_ncaa(away_abbrev, home_abbrev, away_score, home_score, period, clock, half_scores):
+def render_scoreboard_ncaa(away_abbrev, home_abbrev, away_score, home_score, period, clock, half_scores, linescores):
+    """Render scoreboard with half-by-half breakdown"""
     away_color = TEAM_COLORS.get(away_abbrev, "#666")
     home_color = TEAM_COLORS.get(home_abbrev, "#666")
     away_record = half_scores.get("away_record", "")
     home_record = half_scores.get("home_record", "")
     period_text = f"H{period}" if period <= 2 else f"OT{period-2}"
+    
+    # Build period headers and scores
+    period_headers = ""
+    away_period_scores = ""
+    home_period_scores = ""
+    
+    if linescores:
+        for ls in linescores:
+            period_headers += f'<th style="padding:8px;text-align:center;color:#888;font-size:14px">{ls["period"]}</th>'
+            away_period_scores += f'<td style="padding:8px;text-align:center;color:#fff;font-size:18px;font-weight:bold">{ls["away"]}</td>'
+            home_period_scores += f'<td style="padding:8px;text-align:center;color:#fff;font-size:18px;font-weight:bold">{ls["home"]}</td>'
+    
     return f'''<div style="background:#0f172a;border-radius:12px;padding:20px;margin-bottom:8px">
     <div style="text-align:center;color:#ffd700;font-weight:bold;font-size:22px;margin-bottom:16px">{period_text} - {clock}</div>
     <table style="width:100%;border-collapse:collapse;color:#fff">
+    <thead>
+        <tr style="border-bottom:1px solid #333">
+            <th style="padding:8px;text-align:left;width:40%;color:#888;font-size:14px">TEAM</th>
+            {period_headers}
+            <th style="padding:8px;text-align:center;color:#ffd700;font-size:14px">TOTAL</th>
+        </tr>
+    </thead>
+    <tbody>
     <tr style="border-bottom:2px solid #333">
-        <td style="padding:16px;text-align:left;width:70%"><span style="color:{away_color};font-weight:bold;font-size:28px">{away_abbrev}</span><span style="color:#666;font-size:14px;margin-left:12px">{away_record}</span></td>
-        <td style="padding:16px;text-align:right;font-weight:bold;font-size:52px;color:#fff">{away_score}</td>
+        <td style="padding:16px;text-align:left">
+            <span style="color:{away_color};font-weight:bold;font-size:24px">{away_abbrev}</span>
+            <span style="color:#666;font-size:12px;margin-left:8px">{away_record}</span>
+        </td>
+        {away_period_scores}
+        <td style="padding:16px;text-align:center;font-weight:bold;font-size:42px;color:#fff">{away_score}</td>
     </tr>
     <tr>
-        <td style="padding:16px;text-align:left;width:70%"><span style="color:{home_color};font-weight:bold;font-size:28px">{home_abbrev}</span><span style="color:#666;font-size:14px;margin-left:12px">{home_record}</span></td>
-        <td style="padding:16px;text-align:right;font-weight:bold;font-size:52px;color:#fff">{home_score}</td>
+        <td style="padding:16px;text-align:left">
+            <span style="color:{home_color};font-weight:bold;font-size:24px">{home_abbrev}</span>
+            <span style="color:#666;font-size:12px;margin-left:8px">{home_record}</span>
+        </td>
+        {home_period_scores}
+        <td style="padding:16px;text-align:center;font-weight:bold;font-size:42px;color:#fff">{home_score}</td>
     </tr>
+    </tbody>
     </table></div>'''
 
 def get_play_badge(last_play):
@@ -376,9 +456,15 @@ if live_games:
     for g in live_games:
         away_abbrev, home_abbrev = g['away_abbrev'], g['home_abbrev']
         total, mins, game_id = g['total_score'], g['minutes_played'], g['game_id']
-        plays, espn_poss, half_scores = fetch_plays(game_id, away_abbrev, home_abbrev)
+        
+        # **UPDATED: Get linescores too**
+        plays, espn_poss, half_scores, linescores = fetch_plays_and_linescores(game_id, away_abbrev, home_abbrev)
+        
         st.markdown(f"### {g['away']} @ {g['home']}")
-        st.markdown(render_scoreboard_ncaa(away_abbrev, home_abbrev, g['away_score'], g['home_score'], g['period'], g['clock'], half_scores), unsafe_allow_html=True)
+        
+        # **UPDATED: Pass linescores to scoreboard**
+        st.markdown(render_scoreboard_ncaa(away_abbrev, home_abbrev, g['away_score'], g['home_score'], g['period'], g['clock'], half_scores, linescores), unsafe_allow_html=True)
+        
         col1, col2 = st.columns([1, 1])
         with col1:
             last_play = plays[-1] if plays else None
