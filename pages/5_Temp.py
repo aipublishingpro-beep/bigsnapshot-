@@ -231,7 +231,10 @@ if readings and full_readings:
             except:
                 pass
     
-    low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
+    # Find LOW index only for NYC (hourly readings are reliable)
+    low_idx = None
+    if city_selection == "New York City":
+        low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
     
     st.info(f"📊 Showing {len(readings)} readings | 6hr Settlement LOW: **{settlement_low}°F** (rounded)" if settlement_low else f"📊 Showing {len(readings)} readings")
     
@@ -249,7 +252,8 @@ if readings and full_readings:
         if six_hr_min:
             six_hr_display += f"<span style='color:#22c55e;font-weight:700'>6hr↓{six_hr_min}</span>"
         
-        if i == low_idx:
+        if i == low_idx and city_selection == "New York City":
+            # Only highlight HOURLY LOW for NYC (hourly readings are reliable)
             row_style = "display:flex;justify-content:space-between;padding:8px;border-radius:4px;background:#2d1f0a;border:2px solid #f59e0b;margin:2px 0"
             temp_style = "color:#fbbf24;font-weight:700;font-size:1.1em"
             label = " ⬅️ HOURLY LOW"
@@ -261,12 +265,17 @@ if readings and full_readings:
         st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:60px;font-weight:600'>{time_key}</span><span style='flex:1;text-align:center;font-size:0.9em'>{six_hr_display}</span><span style='{temp_style}'>{temp}°F{label}</span></div>", unsafe_allow_html=True)
 elif readings:
     st.info(f"📊 Showing {len(readings)} readings (6hr data unavailable)")
-    low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
+    
+    # Only highlight LOW for NYC
+    low_idx = None
+    if city_selection == "New York City":
+        low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
+    
     for i, r in enumerate(readings):
         time_key = r['time']
         temp = r['temp']
         
-        if i == low_idx:
+        if i == low_idx and city_selection == "New York City":
             row_style = "display:flex;justify-content:space-between;padding:8px;border-radius:4px;background:#2d1f0a;border:2px solid #f59e0b;margin:2px 0"
             temp_style = "color:#fbbf24;font-weight:700;font-size:1.1em"
             label = " ⬅️ HOURLY LOW"
