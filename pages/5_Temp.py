@@ -11,8 +11,6 @@ import pandas as pd
 from datetime import datetime, timedelta
 import pytz
 import re
-import json
-import os
 from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="🌡️ Temp Trading", page_icon="🌡️", layout="wide")
@@ -32,26 +30,8 @@ CITIES = {
     "Denver": {"nws": "KDEN", "kalshi_low": "KXLOWTDEN", "kalshi_high": "KXHIGHDEN", "tz": "US/Mountain", "lat": 39.86, "lon": -104.67},
 }
 
-PREFS_FILE = "temp_prefs.json"
-
-def load_prefs():
-    try:
-        if os.path.exists(PREFS_FILE):
-            with open(PREFS_FILE, 'r') as f:
-                return json.load(f)
-    except:
-        pass
-    return {"default_city": "New York City"}
-
-def save_prefs(prefs):
-    try:
-        with open(PREFS_FILE, 'w') as f:
-            json.dump(prefs, f)
-    except:
-        pass
-
-if "prefs" not in st.session_state:
-    st.session_state.prefs = load_prefs()
+if "default_city" not in st.session_state:
+    st.session_state.default_city = "New York City"
 
 WEATHER_DANGER = ["cold front", "warm front", "frontal passage", "freeze", "hard freeze", "frost", "winter storm", "ice storm", "blizzard", "arctic", "polar vortex", "heat wave", "excessive heat", "heat advisory", "severe thunderstorm", "tornado", "hurricane", "record high", "record low", "rapidly falling", "rapidly rising", "sharply colder", "sharply warmer", "plunging", "soaring"]
 
@@ -327,12 +307,10 @@ else:
 with st.sidebar:
     st.header("⚙️ Settings")
     
-    default_city = st.session_state.prefs.get("default_city", "New York City")
-    city_selection = st.selectbox("Select City", list(CITIES.keys()), index=list(CITIES.keys()).index(default_city))
+    city_selection = st.selectbox("Select City", list(CITIES.keys()), index=list(CITIES.keys()).index(st.session_state.default_city))
     
     if st.button("Set as Default City"):
-        st.session_state.prefs["default_city"] = city_selection
-        save_prefs(st.session_state.prefs)
+        st.session_state.default_city = city_selection
         st.success(f"✅ {city_selection} set as default!")
     
     st.divider()
@@ -536,6 +514,10 @@ if mode in ["🦅 TOM (Tomorrow)", "📊 Both"]:
                         st.success("✅ SAFE")
                     for g in guards:
                         st.write(g)
+
+st.divider()
+
+st.caption("⚠️ **DISCLAIMER:** This application is for EDUCATIONAL and EXPERIMENTAL purposes ONLY. This is NOT financial advice. This is NOT betting advice. Always verify data independently before making any decisions. Past performance does not guarantee future results. Weather is inherently unpredictable. Use at your own risk.")
 
 st.divider()
 
