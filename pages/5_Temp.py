@@ -311,52 +311,7 @@ st.caption("⚠️ EXPERIMENTAL - EDUCATIONAL PURPOSES ONLY - NOT FINANCIAL OR B
 if OWNER_MODE:
     st.caption("🔑 OWNER MODE")
 else:
-    st.caption("Public View")d locked settlement temperatures and matching Kalshi brackets
-    
-    **How it works:**
-    1. App pulls 6-hour aggregate data from NWS obhistory
-    2. LOW locks after 06:53 local time (overnight minimum captured)
-    3. HIGH locks after 18:53 local time (afternoon maximum captured)
-    4. App finds the cheapest winning bracket based on locked settlement
-    5. Guards check for weather warnings, suspicious pricing, and forecast alignment
-    
-    **What the metrics mean:**
-    - **Settlement**: The locked 6hr Min/Max temperature from NWS
-    - **Bracket**: The Kalshi market range that contains the settlement temp
-    - **Ask**: Current price to buy YES contract (pays $1 if correct)
-    - **Edge**: Profit potential (100¢ - Ask price)
-    - **Profit (20x)**: Estimated profit on 20 contracts
-    
-    ### 🦅 TOM Mode (Tomorrow)
-    **Purpose:** Find tomorrow's NWS forecast and match to cheap brackets
-    
-    **How it works:**
-    1. Fetches tomorrow's forecast from NWS
-    2. Finds brackets ≤20¢ that match the forecast
-    3. Runs guards for weather warnings and pricing
-    
-    ### 🛡️ Guards System
-    **BLOCKED** means do NOT trade - something is wrong:
-    - **Weather warnings**: Fronts, storms, extreme events make temps unpredictable
-    - **Price too cheap** (≤20¢): Market knows something you don't
-    - **Forecast gap** (≥3°): NWS forecast disagrees with settlement
-    
-    **PASSED** means guards found no red flags (but still do your own research)
-    
-    ### 📊 Full NWS Recording (Owner Mode)
-    Shows complete observation history since midnight with:
-    - **Time**: Local observation time
-    - **Temp**: Hourly temperature reading
-    - **6hr Max/Min**: Aggregate extremes (what Kalshi settles on)
-    
-    ### ⚠️ Important Notes
-    - This app is for **educational and experimental purposes only**
-    - NOT financial advice, NOT betting advice
-    - Always verify data independently before making decisions
-    - Past performance does not guarantee future results
-    - Weather is inherently unpredictable
-    """)
-
+    st.caption("Public View")
 
 with st.sidebar:
     st.header("⚙️ Settings")
@@ -381,12 +336,14 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
         current = fetch_current_temp(cfg["nws"])
         nws_forecast, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
         
-        # Display full NWS recording table
         if OWNER_MODE:
             full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
             if full_readings:
                 with st.expander(f"📊 {city} - Full NWS Recording (Since Midnight)", expanded=True):
-                    st.markdown("""
+                    city_tz = pytz.timezone(cfg["tz"])
+                    today = datetime.now(city_tz).day
+                    
+                    table_html = """
                     <style>
                     .nws-table { width: 100%; border-collapse: collapse; font-family: 'Courier New', monospace; font-size: 12px; }
                     .nws-table th { background: #2d3748; color: #fff; padding: 10px 8px; text-align: center; border: 1px solid #4a5568; font-weight: 600; }
@@ -397,18 +354,15 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                     .max-6hr { color: #fc8181; font-weight: 700; }
                     .min-6hr { color: #63b3ed; font-weight: 700; }
                     </style>
-                    """, unsafe_allow_html=True)
+                    <table class='nws-table'><thead><tr><th>Date</th><th>Time (est)</th><th>Air Temp (°F)</th><th>6hr Max</th><th>6hr Min</th></tr></thead><tbody>
+                    """
                     
-                    city_tz = pytz.timezone(cfg["tz"])
-                    today = datetime.now(city_tz).day
-                    
-                    table_html = "<table class='nws-table'><thead><tr><th>Date</th><th>Time (est)</th><th>Air Temp (°F)</th><th>6hr Max</th><th>6hr Min</th></tr></thead><tbody>"
                     for r in full_readings:
                         max_display = f"<span class='max-6hr'>{r['max_6hr']}</span>" if r['max_6hr'] else ""
                         min_display = f"<span class='min-6hr'>{r['min_6hr']}</span>" if r['min_6hr'] else ""
                         table_html += f"<tr><td class='time-col'>{today}</td><td class='time-col'>{r['time']}</td><td class='temp-col'>{r['temp']}</td><td>{max_display}</td><td>{min_display}</td></tr>"
-                    table_html += "</tbody></table>"
                     
+                    table_html += "</tbody></table>"
                     st.markdown(table_html, unsafe_allow_html=True)
                     st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
         
@@ -567,9 +521,11 @@ with st.expander("📖 How to Use This App", expanded=False):
     
     ### 📊 Full NWS Recording (Owner Mode)
     Shows complete observation history since midnight with:
-    - **Time**: Local observation time
-    - **Temp**: Hourly temperature reading
-    - **6hr Max/Min**: Aggregate extremes (what Kalshi settles on)
+    - **Date**: Day of month
+    - **Time (est)**: Local observation time
+    - **Air Temp (°F)**: Hourly temperature reading
+    - **6hr Max**: Maximum temp in last 6 hours (red, what Kalshi uses for HIGH)
+    - **6hr Min**: Minimum temp in last 6 hours (blue, what Kalshi uses for LOW)
     
     ### ⚠️ Important Notes
     - This app is for **educational and experimental purposes only**
