@@ -1,82 +1,4 @@
-table_html = """
-            <style>
-            .nws-full { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
-            .nws-full th { background: #b8cce4; color: #000; padding: 6px 4px; text-align: center; border: 1px solid #7f7f7f; font-weight: 600; font-size: 11px; }
-            .nws-full td { padding: 5px 3px; text-align: center; border: 1px solid #d0d0d0; background: #fff; color: #000; font-size: 11px; }
-            .nws-full tr:nth-child(even) td { background: #f0f0f0; }
-            .temp-header { background: #dae8f5 !important; }
-            </style>
-            <div style="overflow-x: auto;">
-            <table class='nws-full'>
-            <thead>
-            <tr>
-            <th rowspan="3">Date</th>
-            <th rowspan="3">Time<br/>(est)</th>
-            <th rowspan="3">Wind<br/>(mph)</th>
-            <th rowspan="3">Vis.<br/>(mi.)</th>
-            <th rowspan="3">Weather</th>
-            <th rowspan="3">Sky<br/>Cond.</th>
-            <th colspan="4" class="temp-header">Temperature (°F)</th>
-            <th rowspan="3">Relative<br/>Humidity</th>
-            <th rowspan="3">Wind<br/>Chill<br/>(°F)</th>
-            <th rowspan="3">Heat<br/>Index<br/>(°F)</th>
-            <th colspan="3" class="temp-header">Pressure</th>
-            <th colspan="3" class="temp-header">Precipitation<br/>(in)</th>
-            </tr>
-            <tr>
-            <th rowspan="2">Air</th>
-            <th rowspan="2">Dwpt</th>
-            <th colspan="2">6 hour</th>
-            <th rowspan="2">altimeter<br/>(in)</th>
-            <th rowspan="2">sea<br/>level<br/>(mb)</th>
-            <th rowspan="2">1 hr</th>
-            <th rowspan="2">3 hr</th>
-            <th rowspan="2">6 hr</th>
-            </tr>
-            <tr>
-            <th>Max</th>
-            <th>Min</th>
-            </tr>
-            </thead>
-            <tbody>
-            """
-            
-            for r in full_readings:
-                time_key = r['time']
-                six_hr_max = r['max_6hr']
-                six_hr_min = r['min_6hr']
-                
-                # Highlight the settlement low reading
-                if settlement_low is not None and six_hr_min and int(float(six_hr_min)) == settlement_low:
-                    row_bg = "#1a2e1a"
-                    border = "2px solid #22c55e"
-                else:
-                    row_bg = "#0d1117"
-                    border = "1px solid #30363d"
-                
-                table_html += f"""<tr>
-                <td>{r['date']}</td>
-                <td>{r['time']}</td>
-                <td>{r['wind']}</td>
-                <td>{r['vis']}</td>
-                <td>{r['weather']}</td>
-                <td>{r['sky']}</td>
-                <td><b>{r['air']}</b></td>
-                <td>{r['dwpt']}</td>
-                <td><b style="color:#d00">{r['max_6hr']}</b></td>
-                <td><b style="color:#00d">{r['min_6hr']}</b></td>
-                <td colspan="7"></td>
-                </tr>"""
-            
-            table_html += "</tbody></table></div>"
-            st.markdown(table_html, unsafe_allow_html=True)
-            st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")    if OWNER_MODE:
-        st.subheader(f"📊 Recent NWS Observations + 6hr Extremes - {city_selection}")
-        
-        cfg = CITIES[city_selection]
-        current_temp, obs_low, obs_high, readings, _, oldest_time, newest_time, _ = fetch_nws_observations(cfg["nws"], cfg["tz"])
-        full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
-        settlement_low, settlement_high, low"""
+"""
 🌡️ TEMP.PY - Temperature Trading Dashboard
 SHARK: Find LOCKED settlements → Show CHEAPEST winning bracket → Run GUARDS → BUY or BLOCK
 TOM: Tomorrow's NWS forecast → Match brackets → Guards → Opportunities
@@ -142,8 +64,6 @@ def fetch_full_nws_recording(station, city_tz_str):
             
             try:
                 date_val = cells[0].text.strip()
-                
-                # ONLY include today's date
                 if date_val and int(date_val) == today:
                     readings.append({
                         "date": date_val,
@@ -163,6 +83,47 @@ def fetch_full_nws_recording(station, city_tz_str):
         return readings
     except:
         return []
+
+@st.cache_data(ttl=300)
+def fetch_nws_observations(station, city_tz_str):
+    url = f"https://api.weather.gov/stations/{station}/observations?limit=500"
+    try:
+        city_tz = pytz.timezone(city_tz_str)
+        resp = requests.get(url, headers={"User-Agent": "Temp/1.0", "Cache-Control": "no-cache"}, timeout=15)
+        if resp.status_code != 200:
+            return None, None, None, [], None, None, None
+        observations = resp.json().get("features", [])
+        if not observations:
+            return None, None, None, [], None, None, None
+        now_local = datetime.now(city_tz)
+        today_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        readings = []
+        for obs in observations:
+            props = obs.get("properties", {})
+            timestamp_str = props.get("timestamp", "")
+            temp_c = props.get("temperature", {}).get("value")
+            if not timestamp_str or temp_c is None:
+                continue
+            try:
+                ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                ts_local = ts.astimezone(city_tz)
+                if ts_local >= today_midnight and ts_local <= now_local:
+                    temp_f = round(temp_c * 9/5 + 32, 1)
+                    readings.append({"time": ts_local, "temp": temp_f})
+            except:
+                continue
+        if not readings:
+            return None, None, None, [], None, None, None
+        readings.sort(key=lambda x: x["time"], reverse=True)
+        current = readings[0]["temp"]
+        low = min(r["temp"] for r in readings)
+        high = max(r["temp"] for r in readings)
+        oldest_time = sorted(readings, key=lambda x: x["time"])[0]["time"] if readings else None
+        newest_time = sorted(readings, key=lambda x: x["time"])[-1]["time"] if readings else None
+        display_readings = [{"time": r["time"].strftime("%H:%M"), "temp": r["temp"]} for r in readings]
+        return current, low, high, display_readings, oldest_time, newest_time, len(readings)
+    except:
+        return None, None, None, [], None, None, None
 
 @st.cache_data(ttl=300)
 def fetch_6hr_settlement(station, city_tz_str):
@@ -284,58 +245,6 @@ def find_winning_bracket(temp, brackets):
             return b
     return None
 
-@st.cache_data(ttl=300)
-def fetch_nws_observations(station, city_tz_str):
-    url = f"https://api.weather.gov/stations/{station}/observations?limit=500"
-    try:
-        city_tz = pytz.timezone(city_tz_str)
-        resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0", "Cache-Control": "no-cache"}, timeout=15)
-        if resp.status_code != 200:
-            return None, None, None, [], None, None, None, None
-        observations = resp.json().get("features", [])
-        if not observations:
-            return None, None, None, [], None, None, None, None
-        now_local = datetime.now(city_tz)
-        today_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        readings = []
-        for obs in observations:
-            props = obs.get("properties", {})
-            timestamp_str = props.get("timestamp", "")
-            temp_c = props.get("temperature", {}).get("value")
-            if not timestamp_str or temp_c is None:
-                continue
-            try:
-                ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                ts_local = ts.astimezone(city_tz)
-                if ts_local >= today_midnight and ts_local <= now_local:
-                    temp_f = round(temp_c * 9/5 + 32, 1)
-                    readings.append({"time": ts_local, "temp": temp_f})
-            except:
-                continue
-        if not readings:
-            return None, None, None, [], None, None, None, None
-        readings.sort(key=lambda x: x["time"], reverse=True)
-        current = readings[0]["temp"]
-        low = min(r["temp"] for r in readings)
-        high = max(r["temp"] for r in readings)
-        readings_chrono = sorted(readings, key=lambda x: x["time"])
-        confirm_time = None
-        mins_since_confirm = None
-        low_found = False
-        for r in readings_chrono:
-            if r["temp"] == low:
-                low_found = True
-            elif low_found and r["temp"] > low:
-                confirm_time = r["time"]
-                mins_since_confirm = int((datetime.now(city_tz) - confirm_time).total_seconds() / 60)
-                break
-        oldest_time = readings_chrono[0]["time"] if readings_chrono else None
-        newest_time = readings_chrono[-1]["time"] if readings_chrono else None
-        display_readings = [{"time": r["time"].strftime("%H:%M"), "temp": r["temp"]} for r in readings]
-        return current, low, high, display_readings, confirm_time, oldest_time, newest_time, mins_since_confirm
-    except:
-        return None, None, None, [], None, None, None, None
-
 @st.cache_data(ttl=900)
 def fetch_nws_forecast(lat, lon):
     try:
@@ -456,12 +365,12 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
         st.subheader(f"📊 Recent NWS Observations + 6hr Extremes - {city_selection}")
         
         cfg = CITIES[city_selection]
-        current_temp, obs_low, obs_high, readings, _, oldest_time, newest_time, _ = fetch_nws_observations(cfg["nws"], cfg["tz"])
+        current_temp, obs_low, obs_high, readings, oldest_time, newest_time, reading_count = fetch_nws_observations(cfg["nws"], cfg["tz"])
         full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
         settlement_low, settlement_high, low_time, high_time, is_low_locked, is_high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
         
         if oldest_time and newest_time:
-            st.caption(f"📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local | {len(readings)} readings")
+            st.caption(f"📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local | {reading_count} readings")
         
         if settlement_low is not None:
             lock_status = "🔒 LOCKED" if is_low_locked else "⏳ WAITING"
@@ -478,7 +387,6 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
             """, unsafe_allow_html=True)
         
         if readings and full_readings:
-            # Create a map of time -> 6hr data
             six_hr_map = {}
             for r in full_readings:
                 time_key = r['time']
@@ -487,26 +395,22 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                     'min_6hr': r['min_6hr']
                 }
             
-            # Find the hourly low
             low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
             
             for i, r in enumerate(readings):
                 time_key = r['time']
                 temp = r['temp']
                 
-                # Get 6hr data if available
                 six_hr_data = six_hr_map.get(time_key, {})
                 six_hr_max = six_hr_data.get('max_6hr', '')
                 six_hr_min = six_hr_data.get('min_6hr', '')
                 
-                # Build 6hr display
                 six_hr_display = ""
                 if six_hr_max:
                     six_hr_display += f"<span style='color:#ef4444;font-weight:700'>6hr↑{six_hr_max}</span> "
                 if six_hr_min:
                     six_hr_display += f"<span style='color:#22c55e;font-weight:700'>6hr↓{six_hr_min}</span>"
                 
-                # Highlight the hourly LOW with AMBER
                 if i == low_idx:
                     row_style = "display:flex;justify-content:space-between;padding:8px;border-radius:4px;background:#2d1f0a;border:2px solid #f59e0b;margin:2px 0"
                     temp_style = "color:#fbbf24;font-weight:700;font-size:1.1em"
@@ -518,7 +422,9 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                 
                 st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:60px;font-weight:600'>{time_key}</span><span style='flex:1;text-align:center;font-size:0.9em'>{six_hr_display}</span><span style='{temp_style}'>{temp}°F{label}</span></div>", unsafe_allow_html=True)
         
-        st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
+        st.divider()
+        st.subheader("📋 Full NWS Table")
+        if full_readings:
             table_html = """
             <style>
             .nws-full { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
@@ -563,24 +469,6 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
             """
             
             for r in full_readings:
-                time_key = r['time']
-                six_hr_max = r['max_6hr']
-                six_hr_min = r['min_6hr']
-                
-                six_hr_display = ""
-                if six_hr_max:
-                    six_hr_display += f"<span style='color:#d00;font-weight:700'>6hr↑{six_hr_max}</span> "
-                if six_hr_min:
-                    six_hr_display += f"<span style='color:#00d;font-weight:700'>6hr↓{six_hr_min}</span>"
-                
-                # Highlight the settlement low reading
-                if settlement_low is not None and six_hr_min and int(float(six_hr_min)) == settlement_low:
-                    row_bg = "#1a2e1a"
-                    border = "2px solid #22c55e"
-                else:
-                    row_bg = "#0d1117"
-                    border = "1px solid #30363d"
-                
                 table_html += f"""<tr>
                 <td>{r['date']}</td>
                 <td>{r['time']}</td>
@@ -604,7 +492,7 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
     for city in selected_cities:
         cfg = CITIES[city]
         low_6hr, high_6hr, low_time, high_time, low_locked, high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
-        current = fetch_current_temp(cfg["nws"])
+        current_temp, obs_low, obs_high, _, _, _, _ = fetch_nws_observations(cfg["nws"], cfg["tz"])
         nws_forecast, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
         
         if cfg["kalshi_low"] and low_6hr and low_locked:
@@ -618,7 +506,7 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         st.metric("Settlement", f"{low_6hr}°F @ {low_time}")
-                        st.metric("Current", f"{current}°F" if current else "—")
+                        st.metric("Current", f"{current_temp}°F" if current_temp else "—")
                     with col2:
                         st.metric("Bracket", winner["name"])
                         st.metric("Ask", f"{winner['ask']}¢")
@@ -648,7 +536,7 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         st.metric("Settlement", f"{high_6hr}°F @ {high_time}")
-                        st.metric("Current", f"{current}°F" if current else "—")
+                        st.metric("Current", f"{current_temp}°F" if current_temp else "—")
                     with col2:
                         st.metric("Bracket", winner["name"])
                         st.metric("Ask", f"{winner['ask']}¢")
