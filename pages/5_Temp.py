@@ -179,7 +179,8 @@ def check_settlement_lock(full_readings, city_tz_str):
             if hour == 6 and minute >= 53 and r['min_6hr']:
                 low_locked = True
                 try:
-                    low_settlement = int(r['min_6hr'])
+                    # Keep as float - let bracket matching handle it
+                    low_settlement = float(r['min_6hr'])
                 except:
                     pass
             
@@ -187,7 +188,8 @@ def check_settlement_lock(full_readings, city_tz_str):
             if hour == 18 and minute >= 53 and r['max_6hr']:
                 high_locked = True
                 try:
-                    high_settlement = int(r['max_6hr'])
+                    # Keep as float - let bracket matching handle it
+                    high_settlement = float(r['max_6hr'])
                 except:
                     pass
         
