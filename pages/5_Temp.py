@@ -74,9 +74,13 @@ def fetch_kalshi_brackets(series_ticker):
                 continue
             
             # Check both 'subtitle' and 'sub_title' (API uses different fields)
-            subtitle = m.get("subtitle", "") or m.get("sub_title", "")
+            subtitle = m.get("subtitle", "") or m.get("sub_title", "") or m.get("yes_sub_title", "")
             
-            st.write(f"🔍 DEBUG: Processing market - ticker: {ticker}, subtitle: '{subtitle}'")
+            st.write(f"🔍 DEBUG: Today's market - ticker: {ticker}")
+            st.write(f"   subtitle field: '{m.get('subtitle', 'MISSING')}'")
+            st.write(f"   sub_title field: '{m.get('sub_title', 'MISSING')}'")
+            st.write(f"   yes_sub_title field: '{m.get('yes_sub_title', 'MISSING')}'")
+            st.write(f"   Combined subtitle: '{subtitle}'")
             
             # Parse "9° to 10°" or "11° to 12°"
             match = re.search(r'(\d+)°?\s*to\s*(\d+)°?', subtitle)
