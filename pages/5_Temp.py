@@ -7,8 +7,6 @@ import requests
 from datetime import datetime
 import pytz
 from bs4 import BeautifulSoup
-import json
-import hashlib
 import base64
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
@@ -34,7 +32,9 @@ CITIES = {
 if "default_city" not in st.session_state:
     st.session_state.default_city = "New York City"
 
-# Kalshi authentication
+if "cache_buster" not in st.session_state:
+    st.session_state.cache_buster = 0
+
 def create_kalshi_signature(timestamp, method, path, body=""):
     """Generate Kalshi API signature with PSS padding"""
     try:
@@ -175,20 +175,16 @@ def check_settlement_lock(full_readings, city_tz_str):
             time_str = r['time']
             hour, minute = map(int, time_str.split(':'))
             
-            # LOW locks at 06:53+ when 6hr min appears
             if hour == 6 and minute >= 53 and r['min_6hr']:
                 low_locked = True
                 try:
-                    # Keep as float - let bracket matching handle it
                     low_settlement = float(r['min_6hr'])
                 except:
                     pass
             
-            # HIGH locks at 18:53+ when 6hr max appears
             if hour == 18 and minute >= 53 and r['max_6hr']:
                 high_locked = True
                 try:
-                    # Keep as float - let bracket matching handle it
                     high_settlement = float(r['max_6hr'])
                 except:
                     pass
@@ -216,7 +212,6 @@ def fetch_kalshi_markets(city_name, market_type, cache_buster=0):
             "Content-Type": "application/json"
         }
         
-        # Use series ticker from CITIES config
         city_cfg = CITIES.get(city_name, {})
         if market_type == "LOW":
             series_ticker = city_cfg.get("kalshi_low")
@@ -244,7 +239,6 @@ def fetch_kalshi_markets(city_name, market_type, cache_buster=0):
         
         markets = resp.json().get("markets", [])
         
-        # Filter for today's markets
         eastern = pytz.timezone("US/Eastern")
         today_str = datetime.now(eastern).strftime('%y%b%d').upper()
         today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
@@ -254,7 +248,7 @@ def fetch_kalshi_markets(city_name, market_type, cache_buster=0):
         return []
 
 def parse_bracket(ticker):
-    """Extract temperature range from ticker like HIGHTEMP-NYC-24-01-31-T60.5"""
+    """Extract temperature range from ticker"""
     try:
         parts = ticker.split("-T")
         if len(parts) != 2:
@@ -307,7 +301,6 @@ def fetch_nws_forecast(lat, lon, city_tz_str, cache_buster=0):
         
         periods = resp2.json()["properties"]["periods"]
         
-        # Get TODAY's forecasted high and low (from forecast made earlier)
         today_high = None
         today_low = None
         warnings = []
@@ -317,15 +310,12 @@ def fetch_nws_forecast(lat, lon, city_tz_str, cache_buster=0):
             temp = p.get("temperature")
             forecast = p.get("detailedForecast", "").lower()
             
-            # Today's high
             if ("today" in name or "this afternoon" in name) and not today_high:
                 today_high = temp
             
-            # Today's low (might be from "This Morning" or overnight period)
             if ("tonight" in name or "this morning" in name) and not today_low:
                 today_low = temp
             
-            # Check for weather warnings
             warning_keywords = ["cold front", "warm front", "storm", "severe", "warning", "advisory"]
             for keyword in warning_keywords:
                 if keyword in forecast:
@@ -342,14 +332,12 @@ def run_shark_guards(settlement_temp, bracket, forecast_temp, warnings):
         "anomaly_check": {"pass": True, "reason": "", "warning_level": "normal"}
     }
     
-    # Guard 1: Price floor (≤15¢ = market knows something)
     if bracket["ask"] <= 0.15:
         guards["price_floor"]["pass"] = False
         guards["price_floor"]["reason"] = f"Ask {bracket['ask']:.0%} ≤15¢ - market knows something you don't!"
     
-    # Guard 2: Anomaly Detection (this is INFO, not necessarily a block)
     if warnings:
-        guards["anomaly_check"]["pass"] = True  # Not blocking, just alerting
+        guards["anomaly_check"]["pass"] = True
         guards["anomaly_check"]["warning_level"] = "anomaly"
         guards["anomaly_check"]["reason"] = f"⚠️ ANOMALY DETECTED: {', '.join(set(warnings))}"
         if forecast_temp:
@@ -363,18 +351,13 @@ def run_shark_guards(settlement_temp, bracket, forecast_temp, warnings):
     else:
         guards["anomaly_check"]["reason"] = "✅ No anomalies - 6hr settlement reliable"
     
-    # Only block on price floor, not anomalies
     all_pass = guards["price_floor"]["pass"]
     return all_pass, guards
 
 st.title("🌡️ Temperature Trading Dashboard")
 st.caption("⚠️ EXPERIMENTAL - EDUCATIONAL PURPOSES ONLY")
 
-# Mode selector
 mode = st.radio("Mode", ["📊 City View", "🦈 SHARK Mode"], horizontal=True)
-
-if "cache_buster" not in st.session_state:
-    st.session_state.cache_buster = 0
 
 col1, col2 = st.columns([3, 1])
 with col1:
@@ -392,7 +375,6 @@ st.divider()
 
 cfg = CITIES[city_selection]
 
-# Fetch data
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg["nws"], cfg["tz"], st.session_state.cache_buster)
 full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"], st.session_state.cache_buster)
 
@@ -407,8 +389,6 @@ if mode == "🦈 SHARK Mode":
         if not low_locked and not high_locked:
             st.info("⏳ Waiting for settlement lock... (LOW at 06:53+, HIGH at 18:53+)")
         else:
-            # Determine which settlement is locked
-            # Show what we detected
             st.subheader("🔍 Detection Status")
             col1, col2 = st.columns(2)
             with col1:
@@ -425,37 +405,32 @@ if mode == "🦈 SHARK Mode":
             if low_locked and low_settlement:
                 settlement_type = "LOW"
                 settlement_temp = low_settlement
-                market_search = f"LOWTEMP-{city_selection.upper().replace(' ', '')}"
             elif high_locked and high_settlement:
                 settlement_type = "HIGH"
                 settlement_temp = high_settlement
-                market_search = f"HIGHTEMP-{city_selection.upper().replace(' ', '')}"
             else:
                 st.warning("⚠️ Lock detected but no valid temperature value parsed")
                 st.stop()
             
             st.success(f"🔒 {settlement_type} Settlement Locked: {settlement_temp}°F")
             
-            # Fetch Kalshi markets
-            with st.spinner("Fetching Kalshi markets..."):
-                markets = fetch_kalshi_markets(city_selection)
+            with st.spinner("Fetching data..."):
+                markets = fetch_kalshi_markets(city_selection, settlement_type, st.session_state.cache_buster)
+                today_high_forecast, today_low_forecast, warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"], cfg["tz"], st.session_state.cache_buster)
             
             if not markets:
                 st.error("❌ No Kalshi markets found")
+                st.caption(f"Searched for series: {cfg.get('kalshi_low' if settlement_type == 'LOW' else 'kalshi_high')}")
             else:
-                # Find winning bracket
                 winning = find_winning_bracket(markets, settlement_temp)
                 
                 if not winning:
                     st.error("❌ No winning bracket found")
                 else:
-                    # Fetch forecast and check guards
-                    today_high_forecast, today_low_forecast, warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"], cfg["tz"])
                     forecast_temp = today_high_forecast if settlement_type == "HIGH" else today_low_forecast
                     
                     all_pass, guards = run_shark_guards(settlement_temp, winning, forecast_temp, warnings)
                     
-                    # Display decision
                     if all_pass:
                         if guards["anomaly_check"]["warning_level"] == "anomaly":
                             st.markdown(f"""
@@ -478,7 +453,6 @@ if mode == "🦈 SHARK Mode":
                         </div>
                         """, unsafe_allow_html=True)
                     
-                    # Trade details
                     st.subheader("📊 Trade Details")
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -491,16 +465,13 @@ if mode == "🦈 SHARK Mode":
                     
                     st.caption(f"Ticker: {winning['ticker']}")
                     
-                    # Guards status
                     st.subheader("🛡️ Analysis")
                     
-                    # Price floor guard
                     if guards["price_floor"]["pass"]:
                         st.success(f"✅ Price Floor: Ask {winning['ask']:.0%} is above 15¢ minimum")
                     else:
                         st.error(f"🚫 {guards['price_floor']['reason']}")
                     
-                    # Anomaly check
                     if guards["anomaly_check"]["warning_level"] == "anomaly":
                         st.warning(f"⚠️ {guards['anomaly_check']['reason']}")
                         st.info("💡 **Anomaly detected** - Consider using adjusted forecast instead of 6hr settlement")
@@ -509,7 +480,7 @@ if mode == "🦈 SHARK Mode":
                     else:
                         st.success(f"{guards['anomaly_check']['reason']}")
 
-else:  # City View mode
+else:
     st.header(f"📍 {city_selection}")
     
     if current_temp:
