@@ -542,6 +542,42 @@ else:
         </div>
         """, unsafe_allow_html=True)
     
+    # 6HR LOCK STATUS HERO BOX
+    if full_readings:
+        low_locked, high_locked, low_settlement, high_settlement = check_settlement_lock(full_readings, cfg["tz"])
+        
+        if low_locked and low_settlement and obs_low:
+            if abs(low_settlement - obs_low) <= 0.5:
+                st.markdown(f"""
+                <div style="background:#064e3b;border:3px solid #10b981;border-radius:12px;padding:25px;margin:20px 0">
+                    <div style="color:#10b981;font-size:2.5em;font-weight:700;text-align:center">🔒 LOW LOCKED</div>
+                    <div style="color:#d1fae5;font-size:1.5em;text-align:center;margin-top:10px">6hr Aggregate ({low_settlement}°F) = All-Day Low ({obs_low}°F)</div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style="background:#7f1d1d;border:3px solid #ef4444;border-radius:12px;padding:25px;margin:20px 0">
+                    <div style="color:#ef4444;font-size:2.5em;font-weight:700;text-align:center">⚠️ LOW MISMATCH</div>
+                    <div style="color:#fecaca;font-size:1.5em;text-align:center;margin-top:10px">6hr ({low_settlement}°F) ≠ All-Day Low ({obs_low}°F)</div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        if high_locked and high_settlement and obs_high:
+            if abs(high_settlement - obs_high) <= 0.5:
+                st.markdown(f"""
+                <div style="background:#064e3b;border:3px solid #10b981;border-radius:12px;padding:25px;margin:20px 0">
+                    <div style="color:#10b981;font-size:2.5em;font-weight:700;text-align:center">🔒 HIGH LOCKED</div>
+                    <div style="color:#d1fae5;font-size:1.5em;text-align:center;margin-top:10px">6hr Aggregate ({high_settlement}°F) = All-Day High ({obs_high}°F)</div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style="background:#7f1d1d;border:3px solid #ef4444;border-radius:12px;padding:25px;margin:20px 0">
+                    <div style="color:#ef4444;font-size:2.5em;font-weight:700;text-align:center">⚠️ HIGH MISMATCH</div>
+                    <div style="color:#fecaca;font-size:1.5em;text-align:center;margin-top:10px">6hr ({high_settlement}°F) ≠ All-Day High ({obs_high}°F)</div>
+                </div>
+                """, unsafe_allow_html=True)
+    
     st.subheader("📊 NWS Observations + 6hr Extremes")
     if city_selection == "New York City":
         st.caption(f"Station: {cfg['nws']} | Today's hourly readings from midnight to now")
@@ -561,7 +597,8 @@ else:
         
         st.info(f"📊 Showing {len(readings)} readings")
         
-        for i, r in enumerate(readings):
+        # REVERSE for newest first
+        for i, r in enumerate(reversed(readings)):
             time_key = r['time']
             temp = r['temp']
             
