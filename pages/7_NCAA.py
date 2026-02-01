@@ -211,16 +211,30 @@ def render_scoreboard_ncaa(away_abbrev, home_abbrev, away_score, home_score, per
     home_record = half_scores.get("home_record", "")
     period_text = f"H{period}" if period <= 2 else f"OT{period-2}"
     
+    # **FIXED: Simple fallback when no linescores available**
+    if not linescores or len(linescores) == 0:
+        return f'''<div style="background:#0f172a;border-radius:12px;padding:20px;margin-bottom:8px">
+        <div style="text-align:center;color:#ffd700;font-weight:bold;font-size:22px;margin-bottom:16px">{period_text} - {clock}</div>
+        <table style="width:100%;border-collapse:collapse;color:#fff">
+        <tr style="border-bottom:2px solid #333">
+            <td style="padding:16px;text-align:left;width:70%"><span style="color:{away_color};font-weight:bold;font-size:28px">{away_abbrev}</span><span style="color:#666;font-size:14px;margin-left:12px">{away_record}</span></td>
+            <td style="padding:16px;text-align:right;font-weight:bold;font-size:52px;color:#fff">{away_score}</td>
+        </tr>
+        <tr>
+            <td style="padding:16px;text-align:left;width:70%"><span style="color:{home_color};font-weight:bold;font-size:28px">{home_abbrev}</span><span style="color:#666;font-size:14px;margin-left:12px">{home_record}</span></td>
+            <td style="padding:16px;text-align:right;font-weight:bold;font-size:52px;color:#fff">{home_score}</td>
+        </tr>
+        </table></div>'''
+    
     # Build period headers and scores
     period_headers = ""
     away_period_scores = ""
     home_period_scores = ""
     
-    if linescores:
-        for ls in linescores:
-            period_headers += f'<th style="padding:8px;text-align:center;color:#888;font-size:14px">{ls["period"]}</th>'
-            away_period_scores += f'<td style="padding:8px;text-align:center;color:#fff;font-size:18px;font-weight:bold">{ls["away"]}</td>'
-            home_period_scores += f'<td style="padding:8px;text-align:center;color:#fff;font-size:18px;font-weight:bold">{ls["home"]}</td>'
+    for ls in linescores:
+        period_headers += f'<th style="padding:8px;text-align:center;color:#888;font-size:14px">{ls["period"]}</th>'
+        away_period_scores += f'<td style="padding:8px;text-align:center;color:#fff;font-size:18px;font-weight:bold">{ls["away"]}</td>'
+        home_period_scores += f'<td style="padding:8px;text-align:center;color:#fff;font-size:18px;font-weight:bold">{ls["home"]}</td>'
     
     return f'''<div style="background:#0f172a;border-radius:12px;padding:20px;margin-bottom:8px">
     <div style="text-align:center;color:#ffd700;font-weight:bold;font-size:22px;margin-bottom:16px">{period_text} - {clock}</div>
