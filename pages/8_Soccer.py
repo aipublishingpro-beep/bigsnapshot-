@@ -36,10 +36,15 @@ import json
 import os
 
 # ============================================================
+# AUTO-REFRESH
+# ============================================================
+st.markdown('<meta http-equiv="refresh" content="24">', unsafe_allow_html=True)
+
+# ============================================================
 # STYLES
 # ============================================================
 def apply_styles():
-    st.markdown('<style>@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"); html, body, [class*="css"] { font-family: "Inter", sans-serif; } .stApp { background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0d0d1a 100%); } .top-pick-card { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); border: 2px solid #4a9eff; border-radius: 16px; padding: 24px; margin: 16px 0; box-shadow: 0 8px 32px rgba(74, 158, 255, 0.3); } .pick-card { background: linear-gradient(135deg, #1a1a2e 0%, #252545 100%); border: 1px solid #3a3a5a; border-radius: 12px; padding: 16px; margin: 8px 0; transition: all 0.3s ease; } .pick-card:hover { border-color: #4a9eff; box-shadow: 0 4px 20px rgba(74, 158, 255, 0.2); } .live-badge { background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; animation: pulse 2s infinite; } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } } .signal-strong { color: #00ff88; font-weight: 700; } .signal-moderate { color: #ffcc00; font-weight: 600; } .signal-weak { color: #ff9500; font-weight: 500; } .signal-hold { color: #ff6b6b; font-weight: 500; } .league-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; margin-right: 8px; } .league-epl { background: #3d195b; color: white; } .league-laliga { background: #ee8707; color: white; } .league-bundesliga { background: #d20515; color: white; } .league-seriea { background: #024494; color: white; } .league-ligue1 { background: #091c3e; color: white; } .league-mls { background: #000000; color: white; } .league-ucl { background: #0a1128; color: #ffd700; } .legend-box { background: rgba(26, 26, 46, 0.8); border: 1px solid #3a3a5a; border-radius: 10px; padding: 16px; margin: 16px 0; } .news-ticker { background: linear-gradient(90deg, #1a1a2e 0%, #2d2d4a 50%, #1a1a2e 100%); border-radius: 8px; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #4a9eff; } a { color: #4a9eff !important; text-decoration: none !important; } a:hover { color: #6bb3ff !important; } .stButton > button { background: linear-gradient(135deg, #4a9eff 0%, #2d7dd2 100%); color: white; border: none; border-radius: 8px; padding: 8px 24px; font-weight: 600; transition: all 0.3s ease; } .stButton > button:hover { background: linear-gradient(135deg, #6bb3ff 0%, #4a9eff 100%); box-shadow: 0 4px 15px rgba(74, 158, 255, 0.4); }</style>', unsafe_allow_html=True)
+    st.markdown('<style>@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"); html, body, [class*="css"] { font-family: "Inter", sans-serif; } .stApp { background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0d0d1a 100%); } .top-pick-card { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); border: 2px solid #4a9eff; border-radius: 16px; padding: 24px; margin: 16px 0; box-shadow: 0 8px 32px rgba(74, 158, 255, 0.3); } .pick-card { background: linear-gradient(135deg, #1a1a2e 0%, #252545 100%); border: 1px solid #3a3a5a; border-radius: 12px; padding: 16px; margin: 8px 0; transition: all 0.3s ease; } .pick-card:hover { border-color: #4a9eff; box-shadow: 0 4px 20px rgba(74, 158, 255, 0.2); } .live-badge { background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; animation: pulse 2s infinite; } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } } .signal-strong { color: #00ff88; font-weight: 700; } .signal-moderate { color: #ffcc00; font-weight: 600; } .signal-weak { color: #ff9500; font-weight: 500; } .signal-hold { color: #ff6b6b; font-weight: 500; } .league-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; margin-right: 8px; } .league-epl { background: #3d195b; color: white; } .league-laliga { background: #ee8707; color: white; } .league-bundesliga { background: #d20515; color: white; } .league-seriea { background: #024494; color: white; } .league-ligue1 { background: #091c3e; color: white; } .league-mls { background: #000000; color: white; } .league-ucl { background: #0a1128; color: #ffd700; } .legend-box { background: rgba(26, 26, 46, 0.8); border: 1px solid #3a3a5a; border-radius: 10px; padding: 16px; margin: 16px 0; } .news-ticker { background: linear-gradient(90deg, #1a1a2e 0%, #2d2d4a 50%, #1a1a2e 100%); border-radius: 8px; padding: 12px 16px; margin: 12px 0; border-left: 4px solid #4a9eff; } a { color: #4a9eff !important; text-decoration: none !important; } a:hover { color: #6bb3ff !important; } .stButton > button { background: linear-gradient(135deg, #4a9eff 0%, #2d7dd2 100%); color: white; border: none; border-radius: 8px; padding: 8px 24px; font-weight: 600; transition: all 0.3s ease; } .stButton > button:hover { background: linear-gradient(135deg, #6bb3ff 0%, #4a9eff 100%); box-shadow: 0 4px 15px rgba(74, 158, 255, 0.4); } .play-item { background: #1a1a2e; padding: 8px 12px; margin: 4px 0; border-radius: 6px; border-left: 3px solid #4a9eff; font-size: 0.9em; }</style>', unsafe_allow_html=True)
 
 apply_styles()
 
@@ -306,12 +311,100 @@ def get_signal_tier(score):
         return "⏸️ HOLD", "signal-hold", False
 
 # ============================================================
+# SOCCER FIELD VISUALIZATION
+# ============================================================
+def render_soccer_field(away_team, home_team, away_score, home_score, possession, clock, period):
+    """
+    Renders a full soccer pitch with possession indicator and attack direction.
+    
+    Layout:
+    - Left side: Away team (attacks RIGHT →)
+    - Right side: Home team (attacks LEFT ←)
+    """
+    away_abbrev = get_team_abbrev(away_team)
+    home_abbrev = get_team_abbrev(home_team)
+    
+    # Determine ball position based on possession
+    if possession == away_team:
+        ball_x = 200  # Left side (away team possession)
+        arrow = '<polygon points="450,210 480,210 465,195 465,203 350,203 350,217 465,217 465,225" fill="#ffd700"/>'
+        poss_text = f"{away_abbrev.upper()} ►"
+    elif possession == home_team:
+        ball_x = 600  # Right side (home team possession)
+        arrow = '<polygon points="350,210 320,210 335,195 335,203 450,203 450,217 335,217 335,225" fill="#ffd700"/>'
+        poss_text = f"◄ {home_abbrev.upper()}"
+    else:
+        ball_x = 400  # Center (no clear possession)
+        arrow = ''
+        poss_text = "—"
+    
+    period_text = f"{period}'" if period else "0'"
+    
+    return f'''
+    <div style="background:#1a1a2e;border-radius:12px;padding:16px;margin:20px 0;">
+        <div style="text-align:center;margin-bottom:12px;">
+            <span style="color:#fff;font-size:1.3rem;font-weight:bold;">{escape_html(away_team)} {away_score} - {home_score} {escape_html(home_team)}</span><br>
+            <span style="color:#888;font-size:0.9rem;">{period_text} | {escape_html(clock)}</span>
+        </div>
+        <svg viewBox="0 0 800 420" style="width:100%;max-width:800px;display:block;margin:0 auto;">
+            <!-- Pitch background -->
+            <rect x="50" y="50" width="700" height="320" fill="#2d5a22" stroke="#fff" stroke-width="3" rx="8"/>
+            
+            <!-- Center line -->
+            <line x1="400" y1="50" x2="400" y2="370" stroke="#fff" stroke-width="2"/>
+            
+            <!-- Center circle -->
+            <circle cx="400" cy="210" r="50" fill="none" stroke="#fff" stroke-width="2"/>
+            <circle cx="400" cy="210" r="3" fill="#fff"/>
+            
+            <!-- Left penalty area (Away team defends) -->
+            <rect x="50" y="130" width="80" height="160" fill="none" stroke="#fff" stroke-width="2"/>
+            <rect x="50" y="170" width="30" height="80" fill="none" stroke="#fff" stroke-width="2"/>
+            <circle cx="130" cy="210" r="50" fill="none" stroke="#fff" stroke-width="2" clip-path="inset(0 50% 0 0)"/>
+            
+            <!-- Right penalty area (Home team defends) -->
+            <rect x="670" y="130" width="80" height="160" fill="none" stroke="#fff" stroke-width="2"/>
+            <rect x="720" y="170" width="30" height="80" fill="none" stroke="#fff" stroke-width="2"/>
+            <circle cx="670" cy="210" r="50" fill="none" stroke="#fff" stroke-width="2" clip-path="inset(0 0 0 50%)"/>
+            
+            <!-- Team names in each half -->
+            <text x="220" y="35" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{escape_html(away_abbrev.upper())}</text>
+            <text x="580" y="35" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{escape_html(home_abbrev.upper())}</text>
+            
+            <!-- Ball position (glowing) -->
+            <circle cx="{ball_x}" cy="210" r="8" fill="#ffd700" opacity="0.9">
+                <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite"/>
+            </circle>
+            <text x="{ball_x}" y="240" fill="#ffd700" font-size="12" font-weight="bold" text-anchor="middle">⚽</text>
+            
+            <!-- Attack direction arrow -->
+            {arrow}
+            
+            <!-- Possession indicator -->
+            <text x="400" y="400" fill="#ffd700" font-size="16" font-weight="bold" text-anchor="middle">{poss_text}</text>
+        </svg>
+    </div>
+    '''
+
+# ============================================================
 # API FUNCTIONS
 # ============================================================
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=30)
 def fetch_soccer_games(league_code):
     try:
         url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except:
+        return None
+
+@st.cache_data(ttl=30)
+def fetch_game_summary(game_id):
+    """Fetch detailed play-by-play data for a specific game"""
+    try:
+        url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event={game_id}"
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             return response.json()
@@ -358,6 +451,18 @@ def parse_games(data, league_key):
             state = status_type.get('state', 'pre')
             status_detail = status_type.get('detail', '')
             clock = status.get('displayClock', '')
+            period = status.get('period', 0)
+            
+            # Get possession info if available
+            situation = competition.get('situation', {})
+            poss_team_id = situation.get('possession')
+            possession = None
+            if poss_team_id:
+                if home.get('team', {}).get('id') == poss_team_id:
+                    possession = home_team
+                elif away.get('team', {}).get('id') == poss_team_id:
+                    possession = away_team
+            
             game_date_str = event.get('date', '')
             try:
                 game_time = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
@@ -381,14 +486,34 @@ def parse_games(data, league_key):
             games.append({
                 'id': event.get('id'), 'game_key': game_key, 'home_team': home_team, 'away_team': away_team,
                 'home_score': home_score, 'away_score': away_score, 'state': state, 'status_detail': status_detail,
-                'clock': clock, 'game_time': game_time_et, 'league': league_key, 'pick': pick, 'edge_score': edge_score,
-                'home_edge': home_edge, 'away_edge': away_edge, 'signal': signal, 'signal_class': signal_class,
-                'is_strong': is_strong, 'kalshi_url': kalshi_url, 'fallback_url': fallback_url,
+                'clock': clock, 'period': period, 'possession': possession, 'game_time': game_time_et, 'league': league_key, 
+                'pick': pick, 'edge_score': edge_score, 'home_edge': home_edge, 'away_edge': away_edge, 
+                'signal': signal, 'signal_class': signal_class, 'is_strong': is_strong, 
+                'kalshi_url': kalshi_url, 'fallback_url': fallback_url,
                 'strong_eligible': strong_eligible, 'block_reasons': block_reasons,
             })
         except:
             continue
     return games
+
+def parse_plays(summary_data):
+    """Extract play-by-play from game summary"""
+    plays = []
+    if not summary_data:
+        return plays
+    
+    try:
+        # ESPN returns plays in commentary or plays array
+        commentary = summary_data.get('commentary', [])
+        for item in commentary[:5]:  # Last 5 plays
+            time = item.get('time', {}).get('displayValue', '')
+            text = item.get('text', '')
+            if text:
+                plays.append({'time': time, 'text': text})
+    except:
+        pass
+    
+    return plays
 
 # ============================================================
 # SIDEBAR
@@ -412,13 +537,13 @@ with st.sidebar:
     for key, league in LEAGUES.items():
         st.markdown(f"• {league['name']}")
     st.markdown("---")
-    st.caption("v18.2")
+    st.caption("v19.0 | Auto-refresh: 24s")
 
 # ============================================================
 # MAIN CONTENT
 # ============================================================
 st.markdown("# ⚽ Soccer Edge Finder")
-st.markdown("*Multi-league analysis for Kalshi soccer markets | v18.2*")
+st.markdown("*Multi-league analysis for Kalshi soccer markets | v19.0*")
 st.markdown(f"**Last Updated:** {now.strftime('%B %d, %Y at %I:%M %p ET')}")
 st.markdown("---")
 
@@ -505,20 +630,49 @@ if today_strong:
             st.markdown(f'<div style="background:#0f172a;padding:14px 18px;border-radius:8px;border-left:4px solid #444;margin-bottom:10px"><div style="display:flex;align-items:center;gap:12px"><span style="color:#00ff00;font-weight:bold">ML-{ml_num:03d}</span><b style="color:#fff">{escape_html(pick)}</b><span style="color:#666">(game not in current feed)</span></div></div>', unsafe_allow_html=True)
     st.markdown("---")
 
-# Live Games
+# ============================================================
+# LIVE GAMES WITH FIELD VISUALIZATION
+# ============================================================
 if live_games:
-    st.markdown("### 🔴 Live Matches")
+    st.markdown("### 🔴 Live Match Tracker")
     st.caption("⚠️ Live games have higher variance - signals less reliable once in-play")
+    
     for game in live_games:
+        # Render soccer field
+        field_html = render_soccer_field(
+            game['away_team'], 
+            game['home_team'],
+            game['away_score'],
+            game['home_score'],
+            game.get('possession'),
+            game['clock'],
+            game.get('period', 0)
+        )
+        st.markdown(field_html, unsafe_allow_html=True)
+        
+        # Fetch and display play-by-play
+        summary = fetch_game_summary(game['id'])
+        plays = parse_plays(summary)
+        
+        if plays:
+            st.markdown("**📋 Recent Plays:**")
+            for play in plays:
+                time_str = play.get('time', '')
+                text = play.get('text', '')
+                st.markdown(f'<div class="play-item"><strong>{time_str}</strong> • {escape_html(text)}</div>', unsafe_allow_html=True)
+        
+        # Game info and actions
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
-            st.markdown(f'<div class="pick-card"><span class="live-badge">LIVE</span> <span class="league-badge league-{game["league"].lower()}">{LEAGUES[game["league"]]["name"]}</span><br><br><strong>{escape_html(game["home_team"])}</strong> {game["home_score"]} - {game["away_score"]} <strong>{escape_html(game["away_team"])}</strong><br><small>⏱️ {escape_html(game["clock"])} | {escape_html(game["status_detail"])}</small></div>', unsafe_allow_html=True)
+            st.markdown(f'<span class="league-badge league-{game["league"].lower()}">{LEAGUES[game["league"]]["name"]}</span>', unsafe_allow_html=True)
+            st.markdown(f"**Pick:** {escape_html(game['pick'])} | **Edge:** {game['edge_score']}")
         with col2:
-            st.markdown(f"**Pick:** {escape_html(game['pick'])}")
-            st.markdown(f"**Edge:** {game['edge_score']}")
+            st.markdown(f"<span class='{game['signal_class']}'>{game['signal']}</span>", unsafe_allow_html=True)
         with col3:
-            st.link_button("📈 Trade on Kalshi", game['fallback_url'])
-            st.caption(f"[Try direct link]({game['kalshi_url']})")
+            st.link_button("📈 Trade", game['fallback_url'])
+            st.caption(f"[Direct]({game['kalshi_url']})")
+        
+        st.markdown("---")
 
 # Top Pick
 if all_games:
@@ -559,7 +713,7 @@ if all_games:
             st.metric("Edge", game['edge_score'])
         with col4:
             st.link_button("Trade", game['fallback_url'], use_container_width=True)
-            st.caption(f"[Direct link]({game['kalshi_url']})")
+            st.caption(f"[Direct]({game['kalshi_url']})")
         if game['is_strong'] and game['strong_eligible'] and not existing_tag and game['state'] != 'post':
             if st.button(f"➕ Add Strong Pick", key=f"strong_{game['game_key']}", use_container_width=True):
                 ml_num = add_strong_pick(game['game_key'], game['pick'], "Soccer")
@@ -618,6 +772,14 @@ A pick must pass ALL 3 gates to qualify for tagging:
 
 When all gates pass, the ➕ button appears.
 
+### Live Match Visualization
+
+The soccer field shows:
+- **Ball position**: Left (away) or right (home) based on possession
+- **Attack arrow**: Shows which goal team is attacking
+- **Recent plays**: Last 5 actions (goals, cards, subs)
+- **Auto-refresh**: Updates every 24 seconds
+
 ### Trading Tips
 
 - **If Trade button 404s**: Use "Browse League" link as fallback
@@ -633,4 +795,4 @@ Structure beats precision. Process over picks.
 
 # Footer
 st.markdown("---")
-st.caption("⚠️ Educational only. Not financial advice. v18.2")
+st.caption("⚠️ Educational only. Not financial advice. v19.0 | Auto-refresh: 24s")
