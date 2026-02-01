@@ -21,13 +21,13 @@ if not OWNER_MODE:
     st.stop()
 
 CITIES = {
-    "Austin": {"nws": "KAUS", "tz": "US/Central", "kalshi_low": "KXLOWTAUS", "lat": 30.19, "lon": -97.67},
-    "Chicago": {"nws": "KMDW", "tz": "US/Central", "kalshi_low": "KXLOWTCHI", "lat": 41.79, "lon": -87.75},
-    "Denver": {"nws": "KDEN", "tz": "US/Mountain", "kalshi_low": "KXLOWTDEN", "lat": 39.86, "lon": -104.67},
-    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "kalshi_low": "KXLOWTLAX", "lat": 33.94, "lon": -118.41},
-    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "kalshi_low": "KXLOWTMIA", "lat": 25.80, "lon": -80.29},
-    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "kalshi_low": "KXLOWTNYC", "lat": 40.78, "lon": -73.97},
-    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "kalshi_low": "KXLOWTPHL", "lat": 39.87, "lon": -75.23},
+    "Austin": {"nws": "KAUS", "tz": "US/Central", "kalshi_low": "KXLOWTAUS", "lat": 30.1944, "lon": -97.6700},
+    "Chicago": {"nws": "KMDW", "tz": "US/Central", "kalshi_low": "KXLOWTCHI", "lat": 41.7868, "lon": -87.7522},
+    "Denver": {"nws": "KDEN", "tz": "US/Mountain", "kalshi_low": "KXLOWTDEN", "lat": 39.8561, "lon": -104.6737},
+    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "kalshi_low": "KXLOWTLAX", "lat": 33.9425, "lon": -118.4081},
+    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "kalshi_low": "KXLOWTMIA", "lat": 25.7959, "lon": -80.2870},
+    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "kalshi_low": "KXLOWTNYC", "lat": 40.7789, "lon": -73.9692},
+    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "kalshi_low": "KXLOWTPHL", "lat": 39.8721, "lon": -75.2408},
 }
 
 if "default_city" not in st.session_state:
@@ -204,9 +204,14 @@ st.divider()
 
 # TOMORROW FORECAST SECTION
 st.subheader("📅 Tomorrow's Forecast")
-forecast_low = fetch_nws_forecast(cfg.get("lat", 0), cfg.get("lon", 0))
 
-if forecast_low:
+lat = cfg.get("lat")
+lon = cfg.get("lon")
+
+if lat and lon:
+    forecast_low = fetch_nws_forecast(lat, lon)
+    
+    if forecast_low:
     forecast_settlement = round(forecast_low)
     
     # Fetch tomorrow's Kalshi brackets (API returns future dates)
