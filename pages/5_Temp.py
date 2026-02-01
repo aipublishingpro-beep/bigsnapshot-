@@ -11,6 +11,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import pytz
 import re
+import json
+import os
 from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="🌡️ Temp Trading", page_icon="🌡️", layout="wide")
@@ -29,6 +31,27 @@ CITIES = {
     "Chicago": {"nws": "KMDW", "kalshi_low": "KXLOWTCHI", "kalshi_high": "KXHIGHCHI", "tz": "US/Central", "lat": 41.79, "lon": -87.75},
     "Denver": {"nws": "KDEN", "kalshi_low": "KXLOWTDEN", "kalshi_high": "KXHIGHDEN", "tz": "US/Mountain", "lat": 39.86, "lon": -104.67},
 }
+
+PREFS_FILE = "temp_prefs.json"
+
+def load_prefs():
+    try:
+        if os.path.exists(PREFS_FILE):
+            with open(PREFS_FILE, 'r') as f:
+                return json.load(f)
+    except:
+        pass
+    return {"default_city": "New York City"}
+
+def save_prefs(prefs):
+    try:
+        with open(PREFS_FILE, 'w') as f:
+            json.dump(prefs, f)
+    except:
+        pass
+
+if "prefs" not in st.session_state:
+    st.session_state.prefs = load_prefs()
 
 WEATHER_DANGER = ["cold front", "warm front", "frontal passage", "freeze", "hard freeze", "frost", "winter storm", "ice storm", "blizzard", "arctic", "polar vortex", "heat wave", "excessive heat", "heat advisory", "severe thunderstorm", "tornado", "hurricane", "record high", "record low", "rapidly falling", "rapidly rising", "sharply colder", "sharply warmer", "plunging", "soaring"]
 
@@ -303,89 +326,110 @@ else:
 
 with st.sidebar:
     st.header("⚙️ Settings")
-    mode = st.radio("Mode", ["🦈 SHARK (Today)", "🦅 TOM (Tomorrow)", "📊 Both"])
+    
+    default_city = st.session_state.prefs.get("default_city", "New York City")
+    city_selection = st.selectbox("Select City", list(CITIES.keys()), index=list(CITIES.keys()).index(default_city))
+    
+    if st.button("Set as Default City"):
+        st.session_state.prefs["default_city"] = city_selection
+        save_prefs(st.session_state.prefs)
+        st.success(f"✅ {city_selection} set as default!")
+    
     st.divider()
-    selected_cities = st.multiselect("Cities", list(CITIES.keys()), default=["New York City", "Miami", "Los Angeles", "Austin", "Chicago", "Philadelphia", "Denver"])
+    mode = st.radio("Mode", ["🦈 SHARK (Today)", "🦅 TOM (Tomorrow)", "📊 Both"])
     st.divider()
     if st.button("🔄 Refresh"):
         st.cache_data.clear()
         st.rerun()
 
-if not selected_cities:
-    st.warning("Select cities")
-    st.stop()
+selected_city = city_selection
 
 if mode in ["🦈 SHARK (Today)", "📊 Both"]:
     st.header("🦈 SHARK - Locked Settlement Scanner")
     
     if OWNER_MODE:
-        st.subheader("📊 Full NWS Recording")
-        city_choice = st.selectbox("Select City", selected_cities)
+        st.subheader(f"📊 Full NWS Recording - {selected_city}")
         
-        if city_choice:
-            cfg = CITIES[city_choice]
-            full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
-            if full_readings:
-                table_html = """
-                <style>
-                .nws-full { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11px; }
-                .nws-full th { background: #e8e8e8; color: #000; padding: 8px 4px; text-align: center; border: 1px solid #ccc; font-weight: 600; }
-                .nws-full td { padding: 6px 4px; text-align: center; border: 1px solid #ccc; background: #fff; color: #000; }
-                .nws-full tr:nth-child(even) td { background: #f5f5f5; }
-                .max-6 { color: #d00; font-weight: 700; }
-                .min-6 { color: #00d; font-weight: 700; }
-                </style>
-                <table class='nws-full'>
-                <thead><tr>
-                <th rowspan="2">Date</th>
-                <th rowspan="2">Time<br/>(est)</th>
-                <th rowspan="2">Wind<br/>(mph)</th>
-                <th rowspan="2">Vis.<br/>(mi.)</th>
-                <th rowspan="2">Weather</th>
-                <th rowspan="2">Sky<br/>Cond.</th>
-                <th colspan="4">Temperature (°F)</th>
-                </tr><tr>
-                <th>Air</th><th>Dwpt</th><th>6 hour<br/>Max.</th><th>6 hour<br/>Min.</th>
-                </tr></thead><tbody>
-                """
-                
-                for r in full_readings:
-                    max_val = f"<span class='max-6'>{r['max_6hr']}</span>" if r['max_6hr'] else ""
-                    min_val = f"<span class='min-6'>{r['min_6hr']}</span>" if r['min_6hr'] else ""
-                    
-                    table_html += f"""<tr>
-                    <td>{r['date']}</td>
-                    <td>{r['time']}</td>
-                    <td>{r['wind']}</td>
-                    <td>{r['vis']}</td>
-                    <td>{r['weather']}</td>
-                    <td>{r['sky']}</td>
-                    <td>{r['air']}</td>
-                    <td>{r['dwpt']}</td>
-                    <td>{max_val}</td>
-                    <td>{min_val}</td>
-                    </tr>"""
-                
-                table_html += "</tbody></table>"
-                st.markdown(table_html, unsafe_allow_html=True)
-                st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
-        
-        st.divider()
+        cfg = CITIES[selected_city]
+        full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
+        if full_readings:
+            table_html = """
+            <style>
+            .nws-full { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
+            .nws-full th { background: #b8cce4; color: #000; padding: 6px 4px; text-align: center; border: 1px solid #7f7f7f; font-weight: 600; font-size: 11px; }
+            .nws-full td { padding: 5px 3px; text-align: center; border: 1px solid #d0d0d0; background: #fff; color: #000; font-size: 11px; }
+            .nws-full tr:nth-child(even) td { background: #f0f0f0; }
+            .temp-header { background: #dae8f5 !important; }
+            </style>
+            <div style="overflow-x: auto;">
+            <table class='nws-full'>
+            <thead>
+            <tr>
+            <th rowspan="3">Date</th>
+            <th rowspan="3">Time<br/>(est)</th>
+            <th rowspan="3">Wind<br/>(mph)</th>
+            <th rowspan="3">Vis.<br/>(mi.)</th>
+            <th rowspan="3">Weather</th>
+            <th rowspan="3">Sky<br/>Cond.</th>
+            <th colspan="4" class="temp-header">Temperature (°F)</th>
+            <th rowspan="3">Relative<br/>Humidity</th>
+            <th rowspan="3">Wind<br/>Chill<br/>(°F)</th>
+            <th rowspan="3">Heat<br/>Index<br/>(°F)</th>
+            <th colspan="3" class="temp-header">Pressure</th>
+            <th colspan="3" class="temp-header">Precipitation<br/>(in)</th>
+            </tr>
+            <tr>
+            <th rowspan="2">Air</th>
+            <th rowspan="2">Dwpt</th>
+            <th colspan="2">6 hour</th>
+            <th rowspan="2">altimeter<br/>(in)</th>
+            <th rowspan="2">sea<br/>level<br/>(mb)</th>
+            <th rowspan="2">1 hr</th>
+            <th rowspan="2">3 hr</th>
+            <th rowspan="2">6 hr</th>
+            </tr>
+            <tr>
+            <th>Max</th>
+            <th>Min</th>
+            </tr>
+            </thead>
+            <tbody>
+            """
+            
+            for r in full_readings:
+                table_html += f"""<tr>
+                <td>{r['date']}</td>
+                <td>{r['time']}</td>
+                <td>{r['wind']}</td>
+                <td>{r['vis']}</td>
+                <td>{r['weather']}</td>
+                <td>{r['sky']}</td>
+                <td><b>{r['air']}</b></td>
+                <td>{r['dwpt']}</td>
+                <td><b style="color:#d00">{r['max_6hr']}</b></td>
+                <td><b style="color:#00d">{r['min_6hr']}</b></td>
+                <td colspan="7"></td>
+                </tr>"""
+            
+            table_html += "</tbody></table></div>"
+            st.markdown(table_html, unsafe_allow_html=True)
+            st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
     
-    for city in selected_cities:
-        cfg = CITIES[city]
-        low_6hr, high_6hr, low_time, high_time, low_locked, high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
-        current = fetch_current_temp(cfg["nws"])
-        nws_forecast, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
-        
-        if cfg["kalshi_low"] and low_6hr and low_locked:
+    st.divider()
+    
+    cfg = CITIES[selected_city]
+    low_6hr, high_6hr, low_time, high_time, low_locked, high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
+    current = fetch_current_temp(cfg["nws"])
+    nws_forecast, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
+    
+    if cfg["kalshi_low"] and low_6hr and low_locked:
             brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"])
             winner = find_winning_bracket(low_6hr, brackets)
             
             if winner:
                 guards, blocked = run_guards(low_6hr, "LOW", winner["ask"], nws_forecast, weather_warnings)
                 
-                with st.expander(f"🔒 {city} LOW: {low_6hr}°F @ {low_time} → {winner['name']} @ {winner['ask']}¢", expanded=not blocked):
+                with st.expander(f"🔒 {selected_city} LOW: {low_6hr}°F @ {low_time} → {winner['name']} @ {winner['ask']}¢", expanded=not blocked):
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         st.metric("Settlement", f"{low_6hr}°F @ {low_time}")
@@ -415,7 +459,7 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
             if winner:
                 guards, blocked = run_guards(high_6hr, "HIGH", winner["ask"], None, weather_warnings)
                 
-                with st.expander(f"🔒 {city} HIGH: {high_6hr}°F @ {high_time} → {winner['name']} @ {winner['ask']}¢", expanded=not blocked):
+                with st.expander(f"🔒 {selected_city} HIGH: {high_6hr}°F @ {high_time} → {winner['name']} @ {winner['ask']}¢", expanded=not blocked):
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         st.metric("Settlement", f"{high_6hr}°F @ {high_time}")
@@ -441,19 +485,18 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
 if mode in ["🦅 TOM (Tomorrow)", "📊 Both"]:
     st.header("🦅 TOM - Tomorrow Scanner")
     
-    for city in selected_cities:
-        cfg = CITIES[city]
-        forecast_low, forecast_high = fetch_tomorrow_forecast(cfg["lat"], cfg["lon"])
-        _, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
+    cfg = CITIES[selected_city]
+    forecast_low, forecast_high = fetch_tomorrow_forecast(cfg["lat"], cfg["lon"])
+    _, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
+    
+    if cfg["kalshi_low"] and forecast_low:
+        brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"], is_tomorrow=True)
+        match = find_winning_bracket(forecast_low, brackets)
         
-        if cfg["kalshi_low"] and forecast_low:
-            brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"], is_tomorrow=True)
-            match = find_winning_bracket(forecast_low, brackets)
+        if match and match["ask"] <= 20:
+            guards, blocked = run_guards(None, "LOW", match["ask"], None, weather_warnings)
             
-            if match and match["ask"] <= 20:
-                guards, blocked = run_guards(None, "LOW", match["ask"], None, weather_warnings)
-                
-                with st.expander(f"🦅 {city} LOW: Forecast {forecast_low}°F → {match['name']} @ {match['ask']}¢", expanded=not blocked):
+            with st.expander(f"🦅 {selected_city} LOW: Forecast {forecast_low}°F → {match['name']} @ {match['ask']}¢", expanded=not blocked):
                     col1, col2 = st.columns(2)
                     with col1:
                         st.metric("NWS Forecast", f"{forecast_low}°F")
@@ -470,14 +513,14 @@ if mode in ["🦅 TOM (Tomorrow)", "📊 Both"]:
                     for g in guards:
                         st.write(g)
         
-        if forecast_high:
-            brackets = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"], is_tomorrow=True)
-            match = find_winning_bracket(forecast_high, brackets)
+    if forecast_high:
+        brackets = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"], is_tomorrow=True)
+        match = find_winning_bracket(forecast_high, brackets)
+        
+        if match and match["ask"] <= 20:
+            guards, blocked = run_guards(None, "HIGH", match["ask"], None, weather_warnings)
             
-            if match and match["ask"] <= 20:
-                guards, blocked = run_guards(None, "HIGH", match["ask"], None, weather_warnings)
-                
-                with st.expander(f"🦅 {city} HIGH: Forecast {forecast_high}°F → {match['name']} @ {match['ask']}¢", expanded=not blocked):
+            with st.expander(f"🦅 {selected_city} HIGH: Forecast {forecast_high}°F → {match['name']} @ {match['ask']}¢", expanded=not blocked):
                     col1, col2 = st.columns(2)
                     with col1:
                         st.metric("NWS Forecast", f"{forecast_high}°F")
