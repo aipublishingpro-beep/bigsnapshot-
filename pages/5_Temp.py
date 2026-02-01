@@ -22,13 +22,13 @@ except:
     OWNER_MODE = False
 
 CITIES = {
-    "Austin": {"nws": "KAUS", "tz": "US/Central", "lat": 30.19, "lon": -97.67},
-    "Chicago": {"nws": "KMDW", "tz": "US/Central", "lat": 41.79, "lon": -87.75},
-    "Denver": {"nws": "KDEN", "tz": "US/Mountain", "lat": 39.86, "lon": -104.67},
-    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "lat": 33.94, "lon": -118.41},
-    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "lat": 25.80, "lon": -80.29},
-    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "lat": 40.78, "lon": -73.97},
-    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "lat": 39.87, "lon": -75.23},
+    "Austin": {"nws": "KAUS", "tz": "US/Central", "lat": 30.19, "lon": -97.67, "kalshi_low": "KXLOWTAUS", "kalshi_high": "KXHIGHAUS"},
+    "Chicago": {"nws": "KMDW", "tz": "US/Central", "lat": 41.79, "lon": -87.75, "kalshi_low": "KXLOWTCHI", "kalshi_high": "KXHIGHCHI"},
+    "Denver": {"nws": "KDEN", "tz": "US/Mountain", "lat": 39.86, "lon": -104.67, "kalshi_low": "KXLOWTDEN", "kalshi_high": "KXHIGHDEN"},
+    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "lat": 33.94, "lon": -118.41, "kalshi_low": "KXLOWTLAX", "kalshi_high": "KXHIGHLAX"},
+    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "lat": 25.80, "lon": -80.29, "kalshi_low": "KXLOWTMIA", "kalshi_high": "KXHIGHMIA"},
+    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "lat": 40.78, "lon": -73.97, "kalshi_low": "KXLOWTNYC", "kalshi_high": "KXHIGHNY"},
+    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "lat": 39.87, "lon": -75.23, "kalshi_low": "KXLOWTPHIL", "kalshi_high": "KXHIGHPHIL"},
 }
 
 if "default_city" not in st.session_state:
@@ -198,7 +198,7 @@ def check_settlement_lock(full_readings, city_tz_str):
         return False, False, None, None
 
 @st.cache_data(ttl=300)
-def fetch_kalshi_markets(city_name):
+def fetch_kalshi_markets(city_name, market_type):
     """Fetch today's temperature markets for a city"""
     try:
         timestamp = str(int(datetime.now().timestamp() * 1000))
@@ -216,11 +216,18 @@ def fetch_kalshi_markets(city_name):
             "Content-Type": "application/json"
         }
         
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        city_search = city_name.upper().replace(" ", "")
+        # Use series ticker from CITIES config
+        city_cfg = CITIES.get(city_name, {})
+        if market_type == "LOW":
+            series_ticker = city_cfg.get("kalshi_low")
+        else:
+            series_ticker = city_cfg.get("kalshi_high")
+        
+        if not series_ticker:
+            return []
         
         params = {
-            "event_ticker": f"HIGHTEMP-{city_search}-{today_str}",
+            "series_ticker": series_ticker,
             "limit": 200,
             "status": "open"
         }
@@ -236,7 +243,13 @@ def fetch_kalshi_markets(city_name):
             return []
         
         markets = resp.json().get("markets", [])
-        return markets
+        
+        # Filter for today's markets
+        eastern = pytz.timezone("US/Eastern")
+        today_str = datetime.now(eastern).strftime('%y%b%d').upper()
+        today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
+        
+        return today_markets
     except:
         return []
 
