@@ -374,8 +374,7 @@ def render_scoreboard_ncaa(away_abbrev, home_abbrev, away_score, home_score, per
     </tr>
     </tbody>
     </table></div>'''
-
-def render_ncaa_court(away_abbrev, home_abbrev, away_score, home_score, possession, period, clock):
+    def render_ncaa_court(away_abbrev, home_abbrev, away_score, home_score, possession, period, clock):
     away_color = TEAM_COLORS.get(away_abbrev, "#666666")
     home_color = TEAM_COLORS.get(home_abbrev, "#666666")
     poss_away = "visible" if possession == away_abbrev else "hidden"
@@ -761,7 +760,7 @@ else:
 st.divider()
 
 # ============================================================
-# PRE-GAME ALIGNMENT (FIXED)
+# PRE-GAME ALIGNMENT
 # ============================================================
 with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
     st.caption("Model prediction for scheduled games • Click ➕ to add to tracker")
@@ -957,144 +956,6 @@ for g in games[:30]:
     else:
         game_datetime = g.get('game_datetime', 'TBD')
         spread = g.get('vegas_odds',{}).get('spread','N/A')
-        status, color = f"{game_datetime} | Spread: {spread}", "#888"
-    st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid {color}'><b style='color:#fff'>{g['away_abbrev']} @ {g['home_abbrev']}</b><br><span style='color:{color}'>{status}</span></div>", unsafe_allow_html=True)
-
-st.divider()
-
-# ============================================================
-# HOW TO USE THIS APP
-# ============================================================
-with st.expander("📖 HOW TO USE THIS APP", expanded=False):
-    st.markdown("""
-## 🎯 QUICK START GUIDE
-
-### What This App Does
-This app finds **edges** in NCAA basketball prediction markets. It compares Vegas odds with model projections to find mispricings on Kalshi.
-
----
-
-### 📍 SECTION GUIDE
-
-| Section | What It Does | When To Use |
-|---------|--------------|-------------|
-| 💰 **Mispricing Alert** | Shows Vegas vs Model gaps ≥5% | Check before games start |
-| 🎮 **Live Edge Monitor** | Court, scores, play-by-play, totals projections | During live games |
-| 🎯 **Cushion Scanner** | Finds safe totals bets with buffer from projection | Mid-game (H2) |
-| 📈 **Pace Scanner** | Shows scoring pace (SLOW/FAST) for all live games | Mid-game totals |
-| 🎯 **Pre-Game Alignment** | Model picks for scheduled games | Before tipoff |
-| 📊 **Position Tracker** | Track your bets, see live status | All day |
-
----
-
-### 📊 PACE LABELS (Totals) - NCAA
-
-| Label | Pace | Totals Strategy |
-|-------|------|-----------------|
-| 🐢 **SLOW** | <3.2 pts/min | Lean UNDER / BUY NO |
-| ⚖️ **AVG** | 3.2-3.5 pts/min | Wait for clarity |
-| 🔥 **FAST** | 3.5-3.8 pts/min | Lean OVER / BUY YES |
-| 💥 **SHOOTOUT** | >3.8 pts/min | Strong OVER / BUY YES |
-
----
-
-### 💰 HOW TO BET ON KALSHI
-
-1. **YES** = You think the event WILL happen (team wins, total goes OVER)
-2. **NO** = You think the event WON'T happen (team loses, total stays UNDER)
-3. **Price** = Cost in cents (50¢ = 50% implied probability)
-4. **Profit** = 100¢ - Price (buy at 40¢, win 60¢ profit)
-
----
-
-### 🏀 NCAA vs NBA DIFFERENCES
-
-- **Game Length**: 40 minutes (2 halves) vs NBA's 48 minutes (4 quarters)
-- **Average Total**: ~145 points vs NBA's ~225 points
-- **Pace**: 3.2-3.8 pts/min vs NBA's 4.2-5.0 pts/min
-- **Thresholds**: 120.5-170.5 vs NBA's 210.5-245.5
-
----
-
-### ⚠️ DISCLAIMER
-
-This app is for **educational purposes only**. Not financial advice. Past performance doesn't guarantee future results. Only bet what you can afford to lose.
-
-**Stay small. Stay quiet. Win.**
-""")
-
-st.caption(f"v{VERSION} • Educational only • Not financial advice")
-st.caption("Stay small. Stay quiet. Win.")get('game_datetime', 'TBD')
-        spread = g.get('vegas_odds',{}).get('spread','N/A')
-        status, color = f"{game_datetime} | Spread: {spread}", "#888"
-    st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid {color}'><b style='color:#fff'>{g['away_abbrev']} @ {g['home_abbrev']}</b><br><span style='color:{color}'>{status}</span></div>", unsafe_allow_html=True)
-
-st.divider()
-
-# ============================================================
-# HOW TO USE THIS APP
-# ============================================================
-with st.expander("📖 HOW TO USE THIS APP", expanded=False):
-    st.markdown("""
-## 🎯 QUICK START GUIDE
-
-### What This App Does
-This app finds **edges** in NCAA basketball prediction markets. It compares Vegas odds with model projections to find mispricings on Kalshi.
-
----
-
-### 📍 SECTION GUIDE
-
-| Section | What It Does | When To Use |
-|---------|--------------|-------------|
-| 💰 **Mispricing Alert** | Shows Vegas vs Model gaps ≥5% | Check before games start |
-| 🎮 **Live Edge Monitor** | Court, scores, play-by-play, totals projections | During live games |
-| 🎯 **Cushion Scanner** | Finds safe totals bets with buffer from projection | Mid-game (H2) |
-| 📈 **Pace Scanner** | Shows scoring pace (SLOW/FAST) for all live games | Mid-game totals |
-| 🎯 **Pre-Game Alignment** | Model picks for scheduled games | Before tipoff |
-| 📊 **Position Tracker** | Track your bets, see live status | All day |
-
----
-
-### 📊 PACE LABELS (Totals) - NCAA
-
-| Label | Pace | Totals Strategy |
-|-------|------|-----------------|
-| 🐢 **SLOW** | <3.2 pts/min | Lean UNDER / BUY NO |
-| ⚖️ **AVG** | 3.2-3.5 pts/min | Wait for clarity |
-| 🔥 **FAST** | 3.5-3.8 pts/min | Lean OVER / BUY YES |
-| 💥 **SHOOTOUT** | >3.8 pts/min | Strong OVER / BUY YES |
-
----
-
-### 💰 HOW TO BET ON KALSHI
-
-1. **YES** = You think the event WILL happen (team wins, total goes OVER)
-2. **NO** = You think the event WON'T happen (team loses, total stays UNDER)
-3. **Price** = Cost in cents (50¢ = 50% implied probability)
-4. **Profit** = 100¢ - Price (buy at 40¢, win 60¢ profit)
-
----
-
-### 🏀 NCAA vs NBA DIFFERENCES
-
-- **Game Length**: 40 minutes (2 halves) vs NBA's 48 minutes (4 quarters)
-- **Average Total**: ~145 points vs NBA's ~225 points
-- **Pace**: 3.2-3.8 pts/min vs NBA's 4.2-5.0 pts/min
-- **Thresholds**: 120.5-170.5 vs NBA's 210.5-245.5
-
----
-
-### ⚠️ DISCLAIMER
-
-This app is for **educational purposes only**. Not financial advice. Past performance doesn't guarantee future results. Only bet what you can afford to lose.
-
-**Stay small. Stay quiet. Win.**
-""")
-
-st.caption(f"v{VERSION} • Educational only • Not financial advice")
-st.caption("Stay small. Stay quiet. Win.")get('game_datetime', 'TBD')
-       get('vegas_odds',{}).get('spread','N/A')
         status, color = f"{game_datetime} | Spread: {spread}", "#888"
     st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid {color}'><b style='color:#fff'>{g['away_abbrev']} @ {g['home_abbrev']}</b><br><span style='color:{color}'>{status}</span></div>", unsafe_allow_html=True)
 
