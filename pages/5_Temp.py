@@ -197,9 +197,9 @@ def check_settlement_lock(full_readings, city_tz_str):
     except:
         return False, False, None, None
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_kalshi_markets(city_name, market_type):
-    """Fetch today's temperature markets for a city"""
+    """Fetch today's temperature markets for a city and market type (LOW or HIGH)"""
     try:
         timestamp = str(int(datetime.now().timestamp() * 1000))
         path = "/trade-api/v2/markets"
@@ -250,7 +250,7 @@ def fetch_kalshi_markets(city_name, market_type):
         today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
         
         return today_markets
-    except:
+    except Exception as e:
         return []
 
 def parse_bracket(ticker):
@@ -380,6 +380,14 @@ with col2:
     if st.button("⭐ Set as Default", use_container_width=True):
         st.session_state.default_city = city_selection
         st.success(f"✅ {city_selection} saved!")
+
+if st.button("🔄 Refresh Data", use_container_width=False):
+    st.cache_data.clear()
+    st.rerun()
+
+if st.button("🔄 Clear Cache & Refresh"):
+    st.cache_data.clear()
+    st.rerun()
 
 st.divider()
 
