@@ -15,6 +15,11 @@ try:
 except:
     OWNER_MODE = False
 
+# BLOCK PUBLIC ACCESS - OWNER ONLY
+if not OWNER_MODE:
+    st.error("🔒 This page is private.")
+    st.stop()
+
 CITIES = {
     "Austin": {"nws": "KAUS", "tz": "US/Central", "lat": 30.19, "lon": -97.67},
     "Chicago": {"nws": "KMDW", "tz": "US/Central", "lat": 41.79, "lon": -87.75},
