@@ -16,13 +16,13 @@ except:
     OWNER_MODE = False
 
 CITIES = {
-    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "lat": 40.78, "lon": -73.97},
-    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "lat": 39.87, "lon": -75.23},
-    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "lat": 25.80, "lon": -80.29},
-    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "lat": 33.94, "lon": -118.41},
     "Austin": {"nws": "KAUS", "tz": "US/Central", "lat": 30.19, "lon": -97.67},
     "Chicago": {"nws": "KMDW", "tz": "US/Central", "lat": 41.79, "lon": -87.75},
     "Denver": {"nws": "KDEN", "tz": "US/Mountain", "lat": 39.86, "lon": -104.67},
+    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "lat": 33.94, "lon": -118.41},
+    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "lat": 25.80, "lon": -80.29},
+    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "lat": 40.78, "lon": -73.97},
+    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "lat": 39.87, "lon": -75.23},
 }
 
 if "default_city" not in st.session_state:
@@ -159,7 +159,10 @@ if current_temp:
     """, unsafe_allow_html=True)
 
 st.subheader("📊 NWS Observations + 6hr Extremes")
-st.caption(f"Station: {cfg['nws']} | Today's readings from midnight to now")
+if city_selection == "New York City":
+    st.caption(f"Station: {cfg['nws']} | Today's hourly readings from midnight to now")
+else:
+    st.caption(f"Station: {cfg['nws']} | Today's readings (5-min intervals) from midnight to now")
 
 if readings and full_readings:
     six_hr_map = {}
@@ -171,6 +174,8 @@ if readings and full_readings:
         }
     
     low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
+    
+    st.info(f"📊 Showing {len(readings)} readings")
     
     for i, r in enumerate(readings):
         time_key = r['time']
