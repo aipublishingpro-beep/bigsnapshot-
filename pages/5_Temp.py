@@ -396,9 +396,11 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                         'min_6hr': r['min_6hr']
                     }
                 
-                low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
+                # REVERSE readings to show oldest first (midnight -> now)
+                readings_chronological = list(reversed(readings))
+                low_idx = next((i for i, r in enumerate(readings_chronological) if r['temp'] == obs_low), None)
                 
-                for i, r in enumerate(readings):
+                for i, r in enumerate(readings_chronological):
                     time_key = r['time']
                     temp = r['temp']
                     
