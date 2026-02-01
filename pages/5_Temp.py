@@ -8,6 +8,7 @@ from datetime import datetime
 import pytz
 from bs4 import BeautifulSoup
 import base64
+import re
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 from cryptography.hazmat.backends import default_backend
@@ -260,24 +261,47 @@ def parse_bracket(ticker):
         return None, None
 
 def find_winning_bracket(markets, settlement_temp):
-    """Find the cheapest bracket that contains settlement temp"""
+    """Find the cheapest bracket that contains settlement temp using title parsing"""
     winning_brackets = []
     
     for m in markets:
+        title = m.get("title", "")
         ticker = m.get("ticker", "")
         yes_ask = m.get("yes_ask")
         
         if yes_ask is None:
             continue
         
-        low, high = parse_bracket(ticker)
-        if low is not None and low <= settlement_temp < high:
-            winning_brackets.append({
-                "ticker": ticker,
-                "ask": yes_ask / 100,
-                "low": low,
-                "high": high
-            })
+        # Parse from title like "Will the minimum temperature be >50° on Jan 31, 2026?"
+        match = None
+        low, high = None, None
+        
+        # Check for >X format (e.g., ">50°")
+        match = re.search(r'>(\d+)°', title)
+        if match:
+            threshold = int(match.group(1))
+            if settlement_temp > threshold:
+                winning_brackets.append({
+                    "ticker": ticker,
+                    "ask": yes_ask / 100,
+                    "low": threshold + 1,
+                    "high": 999,
+                    "title": title
+                })
+        
+        # Check for <X format (e.g., "<40°")
+        if not match:
+            match = re.search(r'<(\d+)°', title)
+            if match:
+                threshold = int(match.group(1))
+                if settlement_temp < threshold:
+                    winning_brackets.append({
+                        "ticker": ticker,
+                        "ask": yes_ask / 100,
+                        "low": -999,
+                        "high": threshold - 1,
+                        "title": title
+                    })
     
     if not winning_brackets:
         return None
