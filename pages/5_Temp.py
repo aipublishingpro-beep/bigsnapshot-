@@ -89,7 +89,7 @@ def fetch_6hr_settlement(station, city_tz_str):
     except:
         return None, None, None, None, False, False
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)  # Reduced cache to 60 seconds
 def fetch_kalshi_brackets(series_ticker, city_tz_str, is_tomorrow=False):
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
     try:
@@ -117,18 +117,30 @@ def fetch_kalshi_brackets(series_ticker, city_tz_str, is_tomorrow=False):
             
             low, high, name = None, None, ""
             
-            if match := re.search(r'>\s*(-?\d+)', title):
-                low, high, name = int(match.group(1)) + 1, 999, f">{match.group(1)}"
-            elif match := re.search(r'<\s*(-?\d+)', title):
-                low, high, name = -999, int(match.group(1)) - 1, f"<{match.group(1)}"
-            elif match := re.search(r'(-?\d+)\s*to\s*(-?\d+)', title, re.I):
-                low, high, name = int(match.group(1)), int(match.group(2)), f"{match.group(1)}-{match.group(2)}"
+            # Parse >X brackets
+            if ">°" in title or "> " in title:
+                match = re.search(r'>\s*(-?\d+)', title)
+                if match:
+                    threshold = int(match.group(1))
+                    low, high, name = threshold + 1, 999, f">{threshold} ({threshold+1}+)"
+            # Parse <X brackets
+            elif "<°" in title or "< " in title:
+                match = re.search(r'<\s*(-?\d+)', title)
+                if match:
+                    threshold = int(match.group(1))
+                    low, high, name = -999, threshold - 1, f"<{threshold} (≤{threshold-1})"
+            # Parse range brackets
+            elif "to" in title.lower():
+                match = re.search(r'(-?\d+)\s*to\s*(-?\d+)', title, re.I)
+                if match:
+                    low, high, name = int(match.group(1)), int(match.group(2)), f"{match.group(1)} to {match.group(2)}"
             
             if low is not None:
-                brackets.append({"name": name, "low": low, "high": high, "ask": yes_ask, "ticker": ticker})
+                brackets.append({"name": name, "low": low, "high": high, "ask": yes_ask, "ticker": ticker, "title": title})
         
         return sorted(brackets, key=lambda x: x['ask'])  # Sort by CHEAPEST
-    except:
+    except Exception as e:
+        st.error(f"Error fetching brackets: {e}")
         return []
 
 def find_winning_bracket(temp, brackets):
@@ -288,7 +300,7 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                         st.metric("Settlement", f"{low_6hr}°F @ {low_time}")
                         st.metric("Current", f"{current}°F" if current else "—")
                     with col2:
-                        st.metric("Bracket", winner["name"])
+                        st.metric("Bracket", f"{winner['name']}")
                         st.metric("Ask", f"{winner['ask']}¢")
                     with col3:
                         edge = 100 - winner["ask"]
