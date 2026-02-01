@@ -39,9 +39,12 @@ if "default_city" not in st.session_state:
     st.session_state.default_city = "New York City"
 
 @st.cache_data(ttl=300)
-def fetch_full_nws_recording(station):
+def fetch_full_nws_recording(station, city_tz_str):
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
+        city_tz = pytz.timezone(city_tz_str)
+        today = datetime.now(city_tz).day
+        
         resp = requests.get(url, headers={"User-Agent": "Temp/1.0"}, timeout=15)
         if resp.status_code != 200:
             return []
@@ -60,18 +63,22 @@ def fetch_full_nws_recording(station):
                 continue
             
             try:
-                readings.append({
-                    "date": cells[0].text.strip(),
-                    "time": cells[1].text.strip(),
-                    "wind": cells[2].text.strip(),
-                    "vis": cells[3].text.strip(),
-                    "weather": cells[4].text.strip(),
-                    "sky": cells[5].text.strip(),
-                    "air": cells[6].text.strip(),
-                    "dwpt": cells[7].text.strip(),
-                    "max_6hr": cells[8].text.strip(),
-                    "min_6hr": cells[9].text.strip()
-                })
+                date_val = cells[0].text.strip()
+                
+                # ONLY include today's date
+                if date_val and int(date_val) == today:
+                    readings.append({
+                        "date": date_val,
+                        "time": cells[1].text.strip(),
+                        "wind": cells[2].text.strip(),
+                        "vis": cells[3].text.strip(),
+                        "weather": cells[4].text.strip(),
+                        "sky": cells[5].text.strip(),
+                        "air": cells[6].text.strip(),
+                        "dwpt": cells[7].text.strip(),
+                        "max_6hr": cells[8].text.strip(),
+                        "min_6hr": cells[9].text.strip()
+                    })
             except:
                 continue
         
@@ -328,10 +335,21 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
     st.header("🦈 SHARK - Locked Settlement Scanner")
     
     if OWNER_MODE:
-        st.subheader(f"📊 Full NWS Recording - {city_selection}")
+        st.subheader(f"📊 Recent NWS Observations + 6hr Extremes - {city_selection}")
         
         cfg = CITIES[city_selection]
-        full_readings = fetch_full_nws_recording(cfg["nws"])
+        current_temp, obs_low, obs_high, _, _, oldest_time, newest_time, _ = fetch_nws_observations(cfg["nws"], cfg["tz"])
+        extremes_6hr = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
+        settlement_low, settlement_high, low_time, high_time, is_low_locked, is_high_locked = extremes_6hr
+        
+        if oldest_time and newest_time:
+            st.caption(f"📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local")
+        
+        if settlement_low is not None:
+            lock_status = "🔒 LOCKED" if is_low_locked else "⏳ WAITING"
+            st.markdown(f"<div style='background:#1a2e1a;border:2px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px;text-align:center'><span style='color:#22c55e;font-weight:700;font-size:1.1em'>📍 SETTLEMENT LOW: {settlement_low}°F @ {low_time} {lock_status}</span></div>", unsafe_allow_html=True)
+        
+        full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
         if full_readings:
             table_html = """
             <style>
@@ -377,6 +395,24 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
             """
             
             for r in full_readings:
+                time_key = r['time']
+                six_hr_max = r['max_6hr']
+                six_hr_min = r['min_6hr']
+                
+                six_hr_display = ""
+                if six_hr_max:
+                    six_hr_display += f"<span style='color:#d00;font-weight:700'>6hr↑{six_hr_max}</span> "
+                if six_hr_min:
+                    six_hr_display += f"<span style='color:#00d;font-weight:700'>6hr↓{six_hr_min}</span>"
+                
+                # Highlight the settlement low reading
+                if settlement_low is not None and six_hr_min and int(float(six_hr_min)) == settlement_low:
+                    row_bg = "#1a2e1a"
+                    border = "2px solid #22c55e"
+                else:
+                    row_bg = "#0d1117"
+                    border = "1px solid #30363d"
+                
                 table_html += f"""<tr>
                 <td>{r['date']}</td>
                 <td>{r['time']}</td>
