@@ -285,16 +285,56 @@ def find_winning_bracket(temp, brackets):
     return None
 
 @st.cache_data(ttl=300)
-def fetch_current_temp(station):
+def fetch_nws_observations(station, city_tz_str):
+    url = f"https://api.weather.gov/stations/{station}/observations?limit=500"
     try:
-        url = f"https://api.weather.gov/stations/{station}/observations/latest"
-        resp = requests.get(url, headers={"User-Agent": "Temp/1.0"}, timeout=10)
+        city_tz = pytz.timezone(city_tz_str)
+        resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0", "Cache-Control": "no-cache"}, timeout=15)
         if resp.status_code != 200:
-            return None
-        temp_c = resp.json().get("properties", {}).get("temperature", {}).get("value")
-        return round(temp_c * 9/5 + 32, 1) if temp_c else None
+            return None, None, None, [], None, None, None, None
+        observations = resp.json().get("features", [])
+        if not observations:
+            return None, None, None, [], None, None, None, None
+        now_local = datetime.now(city_tz)
+        today_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        readings = []
+        for obs in observations:
+            props = obs.get("properties", {})
+            timestamp_str = props.get("timestamp", "")
+            temp_c = props.get("temperature", {}).get("value")
+            if not timestamp_str or temp_c is None:
+                continue
+            try:
+                ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                ts_local = ts.astimezone(city_tz)
+                if ts_local >= today_midnight and ts_local <= now_local:
+                    temp_f = round(temp_c * 9/5 + 32, 1)
+                    readings.append({"time": ts_local, "temp": temp_f})
+            except:
+                continue
+        if not readings:
+            return None, None, None, [], None, None, None, None
+        readings.sort(key=lambda x: x["time"], reverse=True)
+        current = readings[0]["temp"]
+        low = min(r["temp"] for r in readings)
+        high = max(r["temp"] for r in readings)
+        readings_chrono = sorted(readings, key=lambda x: x["time"])
+        confirm_time = None
+        mins_since_confirm = None
+        low_found = False
+        for r in readings_chrono:
+            if r["temp"] == low:
+                low_found = True
+            elif low_found and r["temp"] > low:
+                confirm_time = r["time"]
+                mins_since_confirm = int((datetime.now(city_tz) - confirm_time).total_seconds() / 60)
+                break
+        oldest_time = readings_chrono[0]["time"] if readings_chrono else None
+        newest_time = readings_chrono[-1]["time"] if readings_chrono else None
+        display_readings = [{"time": r["time"].strftime("%H:%M"), "temp": r["temp"]} for r in readings]
+        return current, low, high, display_readings, confirm_time, oldest_time, newest_time, mins_since_confirm
     except:
-        return None
+        return None, None, None, [], None, None, None, None
 
 @st.cache_data(ttl=900)
 def fetch_nws_forecast(lat, lon):
