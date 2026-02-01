@@ -1,7 +1,6 @@
 """
 🌡️ TEMP.PY - City View with NWS Observations
-Shows hourly readings + 6hr extremes for selected city
-OWNER ONLY - Uses 6hr aggregate for settlement prediction
+OWNER ONLY - Uses 6hr aggregate MIN for settlement (cells[9])
 """
 import streamlit as st
 import requests
@@ -17,19 +16,18 @@ try:
 except:
     OWNER_MODE = False
 
-# BLOCK PUBLIC ACCESS - OWNER ONLY
 if not OWNER_MODE:
     st.error("🔒 This page is private.")
     st.stop()
 
 CITIES = {
-    "Austin": {"nws": "KAUS", "tz": "US/Central", "lat": 30.19, "lon": -97.67, "kalshi_low": "KXLOWTAUS"},
-    "Chicago": {"nws": "KMDW", "tz": "US/Central", "lat": 41.79, "lon": -87.75, "kalshi_low": "KXLOWTCHI"},
-    "Denver": {"nws": "KDEN", "tz": "US/Mountain", "lat": 39.86, "lon": -104.67, "kalshi_low": "KXLOWTDEN"},
-    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "lat": 33.94, "lon": -118.41, "kalshi_low": "KXLOWTLAX"},
-    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "lat": 25.80, "lon": -80.29, "kalshi_low": "KXLOWTMIA"},
-    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "lat": 40.78, "lon": -73.97, "kalshi_low": "KXLOWTNYC"},
-    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "lat": 39.87, "lon": -75.23, "kalshi_low": "KXLOWTPHL"},
+    "Austin": {"nws": "KAUS", "tz": "US/Central", "kalshi_low": "KXLOWTAUS"},
+    "Chicago": {"nws": "KMDW", "tz": "US/Central", "kalshi_low": "KXLOWTCHI"},
+    "Denver": {"nws": "KDEN", "tz": "US/Mountain", "kalshi_low": "KXLOWTDEN"},
+    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "kalshi_low": "KXLOWTLAX"},
+    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "kalshi_low": "KXLOWTMIA"},
+    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "kalshi_low": "KXLOWTNYC"},
+    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "kalshi_low": "KXLOWTPHL"},
 }
 
 if "default_city" not in st.session_state:
@@ -38,56 +36,17 @@ if "default_city" not in st.session_state:
 @st.cache_data(ttl=300)
 def fetch_kalshi_brackets(series_ticker):
     """Fetch Kalshi brackets for LOW market"""
-    # Get today's date in the format Kalshi uses (e.g., 01FEB26 for Feb 1, 2026)
-    from datetime import datetime
-    eastern = pytz.timezone("US/Eastern")
-    today = datetime.now(eastern)
-    
-    # Kalshi format: DDMMMYY (e.g., 01FEB26 for Feb 1, 2026)
-    day = today.strftime("%d")
-    month = today.strftime("%b").upper()
-    year = today.strftime("%y")
-    date_suffix = f"{day}{month}{year}"  # e.g., "01FEB26"
-    
-    # Kalshi event ticker format is unclear - try without date filter
-    # Just use series_ticker and filter by subtitle matching
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open&limit=100"
-    
     try:
         resp = requests.get(url, timeout=10)
-        
-        # DEBUG: Show raw API response
-        st.write(f"🔍 DEBUG: API URL: {url}")
-        st.write(f"🔍 DEBUG: API Status: {resp.status_code}")
-        st.write(f"🔍 DEBUG: Looking for date suffix: {date_suffix}")
-        
         if resp.status_code != 200:
-            st.error(f"Kalshi API returned status {resp.status_code}")
             return []
         
-        data = resp.json()
-        markets = data.get("markets", [])
-        st.write(f"🔍 DEBUG: Total markets returned: {len(markets)}")
-        
-        # Show ALL tickers to see the date format
-        all_tickers = [m.get("ticker", "???") for m in markets]
-        st.write(f"🔍 DEBUG: All tickers: {all_tickers[:5]}")  # Show first 5
-        
+        markets = resp.json().get("markets", [])
         brackets = []
         
         for m in markets:
-            ticker = m.get("ticker", "")
-            event_ticker = m.get("event_ticker", "")
-            
-            # DON'T filter by date - just check if subtitle matches a bracket pattern
-            # We'll get all open markets and parse them
-            
-            # Check both 'subtitle' and 'sub_title' (API uses different fields)
             subtitle = m.get("subtitle", "") or m.get("sub_title", "") or m.get("yes_sub_title", "")
-            
-            st.write(f"🔍 ticker: {ticker}, subtitle: '{subtitle}'")
-            
-            # Parse "9° to 10°" or "11° to 12°"
             match = re.search(r'(\d+)°?\s*to\s*(\d+)°?', subtitle)
             if match:
                 low = int(match.group(1))
@@ -96,26 +55,16 @@ def fetch_kalshi_brackets(series_ticker):
                     "low": low,
                     "high": high,
                     "range": f"{low}-{high}°F",
-                    "ticker": ticker
+                    "ticker": m.get("ticker", "")
                 })
-                st.write(f"✅ Found bracket: {low}-{high}°F")
-        
-        st.write(f"🔍 DEBUG: Parsed {len(brackets)} brackets for today")
-        
-        # If no brackets found, it means today's markets are closed
-        if len(brackets) == 0 and len(markets) > 0:
-            st.warning(f"⏰ Today's markets ({date_suffix}) are closed. Showing tomorrow's markets in API.")
         
         return brackets
-    except Exception as e:
-        st.error(f"Kalshi API error: {e}")
-        import traceback
-        st.code(traceback.format_exc())
+    except:
         return []
 
 @st.cache_data(ttl=300)
 def fetch_full_nws_recording(station, city_tz_str):
-    """Fetch complete NWS observation table with 6hr extremes - CRITICAL: Use correct columns!"""
+    """Fetch NWS obhistory - CRITICAL: cells[9] = 6hr MIN for LOW settlement"""
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
         city_tz = pytz.timezone(city_tz_str)
@@ -141,9 +90,6 @@ def fetch_full_nws_recording(station, city_tz_str):
             try:
                 date_val = cells[0].text.strip()
                 if date_val and int(date_val) == today:
-                    # CRITICAL: cells[8] = 6hr MAX, cells[9] = 6hr MIN
-                    # For LOW settlement: ONLY use cells[9]
-                    # For HIGH settlement: ONLY use cells[8]
                     readings.append({
                         "date": date_val,
                         "time": cells[1].text.strip(),
@@ -153,8 +99,8 @@ def fetch_full_nws_recording(station, city_tz_str):
                         "sky": cells[5].text.strip(),
                         "air": cells[6].text.strip(),
                         "dwpt": cells[7].text.strip(),
-                        "max_6hr": cells[8].text.strip(),  # 6hr MAX (for HIGH only)
-                        "min_6hr": cells[9].text.strip()   # 6hr MIN (for LOW only)
+                        "max_6hr": cells[8].text.strip(),
+                        "min_6hr": cells[9].text.strip()  # CRITICAL: 6hr MIN for LOW
                     })
             except:
                 continue
@@ -165,7 +111,7 @@ def fetch_full_nws_recording(station, city_tz_str):
 
 @st.cache_data(ttl=300)
 def fetch_nws_observations(station, city_tz_str):
-    """Fetch hourly observations from NWS API"""
+    """Fetch observations from JSON API"""
     url = f"https://api.weather.gov/stations/{station}/observations?limit=500"
     try:
         city_tz = pytz.timezone(city_tz_str)
@@ -205,14 +151,12 @@ def fetch_nws_observations(station, city_tz_str):
         low = min(temps)
         high = max(temps)
         
-        # DON'T reverse - keep newest first (most recent at top)
-        
         return current, low, high, readings
     except:
         return None, None, None, []
 
 st.title("🌡️ Temperature Trading Dashboard")
-st.caption("⚠️ EXPERIMENTAL - EDUCATIONAL PURPOSES ONLY")
+st.caption("⚠️ OWNER ONLY - EDUCATIONAL PURPOSES")
 
 col1, col2 = st.columns([3, 1])
 with col1:
@@ -225,13 +169,12 @@ with col2:
 st.divider()
 
 cfg = CITIES[city_selection]
-
 st.header(f"📍 {city_selection}")
 
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg["nws"], cfg["tz"])
 full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
 
-# FALLBACK: If JSON API fails but HTML works, use HTML temps
+# FALLBACK: If JSON API fails, use HTML
 if not readings and full_readings:
     st.warning("⚠️ JSON API unavailable - using HTML fallback")
     readings = []
@@ -244,7 +187,6 @@ if not readings and full_readings:
             continue
     
     if readings:
-        # Reverse to get newest first
         readings.reverse()
         temps = [r['temp'] for r in readings]
         current_temp = temps[0]
@@ -253,8 +195,8 @@ if not readings and full_readings:
 
 if current_temp:
     settlement_info = ""
-    if full_readings and OWNER_MODE:
-        # Calculate 6hr settlement LOW (LOWEST 6hr MIN, rounded)
+    if full_readings:
+        # Calculate 6hr MIN (LOWEST value in cells[9])
         raw_6hr_min = None
         for r in full_readings:
             if r['min_6hr']:
@@ -267,31 +209,19 @@ if current_temp:
         
         if raw_6hr_min:
             settlement_temp = round(raw_6hr_min)
-            
-            # Fetch Kalshi brackets and find winning bracket
             kalshi_series = cfg.get("kalshi_low", "")
             if kalshi_series:
                 brackets = fetch_kalshi_brackets(kalshi_series)
-                
-                # DEBUG
-                st.write(f"🔍 DEBUG: Kalshi series: {kalshi_series}")
-                st.write(f"🔍 DEBUG: Found {len(brackets)} brackets")
-                if brackets:
-                    st.write(f"🔍 DEBUG: Brackets: {[f'{b['low']}-{b['high']}' for b in brackets]}")
-                st.write(f"🔍 DEBUG: Settlement temp: {settlement_temp}°F")
-                
                 winning_bracket = None
                 for b in brackets:
-                    matches = b['low'] <= settlement_temp < b['high']
-                    st.write(f"🔍 DEBUG: Checking {settlement_temp} vs {b['low']}-{b['high']}: {b['low']} <= {settlement_temp} < {b['high']} = {matches}")
-                    if matches:
+                    if b['low'] <= settlement_temp < b['high']:
                         winning_bracket = b['range']
                         break
                 
                 if winning_bracket:
-                    settlement_info = f"<div style='color:#22c55e;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → SETTLED: {winning_bracket}</div>"
+                    settlement_info = f"<div style='color:#22c55e;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → BUY: {winning_bracket}</div>"
                 else:
-                    settlement_info = f"<div style='color:#6b7280;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → MARKETS CLOSED (Settlement: {settlement_temp}°F)</div>"
+                    settlement_info = f"<div style='color:#6b7280;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → Settlement: {settlement_temp}°F</div>"
     
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
@@ -305,21 +235,15 @@ if current_temp:
 
 st.subheader("📊 NWS Observations + 6hr Extremes")
 if city_selection == "New York City":
-    st.caption(f"Station: {cfg['nws']} | Hourly readings from midnight to now")
+    st.caption(f"Station: {cfg['nws']} | Hourly readings")
 else:
-    st.caption(f"Station: {cfg['nws']} | 5-minute interval readings - ONLY 6hr data used for Kalshi settlement")
+    st.caption(f"Station: {cfg['nws']} | 5-minute intervals - ONLY 6hr MIN used for settlement")
 
 if readings and full_readings:
-    # Build 6hr data map
     six_hr_map = {}
     for r in full_readings:
-        time_key = r['time']
-        six_hr_map[time_key] = {
-            'max_6hr': r['max_6hr'],  # For HIGH settlement only
-            'min_6hr': r['min_6hr']   # For LOW settlement only
-        }
+        six_hr_map[r['time']] = {'max_6hr': r['max_6hr'], 'min_6hr': r['min_6hr']}
     
-    # Find the LOWEST 6hr MIN for settlement (rounds to nearest integer)
     raw_6hr_min = None
     settlement_low = None
     for r in full_readings:
@@ -328,32 +252,29 @@ if readings and full_readings:
                 min_val = float(r['min_6hr'])
                 if raw_6hr_min is None or min_val < raw_6hr_min:
                     raw_6hr_min = min_val
-                    settlement_low = round(min_val)  # Kalshi rounds to nearest whole number
+                    settlement_low = round(min_val)
             except:
                 pass
     
-    # Find LOW index only for NYC (hourly readings are reliable)
     low_idx = None
     if city_selection == "New York City":
         low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
     
-    if settlement_low and OWNER_MODE:
-        # Fetch Kalshi brackets and find winning bracket
+    if settlement_low:
         kalshi_series = cfg.get("kalshi_low", "")
         brackets = fetch_kalshi_brackets(kalshi_series) if kalshi_series else []
         winning_bracket = None
         for b in brackets:
-            # Bracket "11-12°F" means temp >= 11 and temp < 12
             if b['low'] <= settlement_low < b['high']:
                 winning_bracket = b['range']
                 break
         
         if winning_bracket:
-            st.info(f"📊 Showing {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → **SETTLED: {winning_bracket}**")
+            st.info(f"📊 {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → **BUY: {winning_bracket}**")
         else:
-            st.info(f"📊 Showing {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → 🔒 **MARKETS CLOSED** (Settlement: {settlement_low}°F)")
+            st.info(f"📊 {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → Settlement: **{settlement_low}°F**")
     else:
-        st.info(f"📊 Showing {len(readings)} readings")
+        st.info(f"📊 {len(readings)} readings")
     
     for i, r in enumerate(readings):
         time_key = r['time']
@@ -370,7 +291,6 @@ if readings and full_readings:
             six_hr_display += f"<span style='color:#22c55e;font-weight:700'>6hr↓{six_hr_min}</span>"
         
         if i == low_idx and city_selection == "New York City":
-            # Only highlight HOURLY LOW for NYC (hourly readings are reliable)
             row_style = "display:flex;justify-content:space-between;padding:8px;border-radius:4px;background:#2d1f0a;border:2px solid #f59e0b;margin:2px 0"
             temp_style = "color:#fbbf24;font-weight:700;font-size:1.1em"
             label = " ⬅️ HOURLY LOW"
@@ -381,9 +301,7 @@ if readings and full_readings:
         
         st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:60px;font-weight:600'>{time_key}</span><span style='flex:1;text-align:center;font-size:0.9em'>{six_hr_display}</span><span style='{temp_style}'>{temp}°F{label}</span></div>", unsafe_allow_html=True)
 elif readings:
-    st.info(f"📊 Showing {len(readings)} readings (6hr data unavailable)")
-    
-    # Only highlight LOW for NYC
+    st.info(f"📊 {len(readings)} readings (6hr data unavailable)")
     low_idx = None
     if city_selection == "New York City":
         low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
@@ -472,7 +390,7 @@ with st.expander("📋 Full NWS Table", expanded=True):
         st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
 
 st.divider()
-st.caption("⚠️ **DISCLAIMER:** This application is for EDUCATIONAL and EXPERIMENTAL purposes ONLY. This is NOT financial advice. This is NOT betting advice.")
+st.caption("⚠️ **DISCLAIMER:** EDUCATIONAL and EXPERIMENTAL purposes ONLY. NOT financial advice. NOT betting advice.")
 
 st.divider()
 eastern = pytz.timezone("US/Eastern")
