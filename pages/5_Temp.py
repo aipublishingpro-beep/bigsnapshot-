@@ -434,24 +434,6 @@ def render_hero_box(city_name, cfg):
     extremes = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
     settlement_low, settlement_time = get_settlement_from_6hr(extremes, "low")
     is_locked, lock_time = check_low_locked_6hr(extremes, cfg.get("tz", "US/Eastern"))
-    brackets = fetch_kalshi_brackets(cfg.get("low", ""), cfg.get("tz", "US/Eastern"))
-    winning = find_winning_bracket(settlement_low, brackets) if settlement_low else None
-    ask = winning.get("ask", 0) if winning else 0
-    profit = 100 - ask
-    bracket_name = winning.get("name", "?") if winning else "?"
-    bracket_url = winning.get("url", "#") if winning else "#"
-    if ask < 85:
-        rating = "🔥 GREAT"
-        profit_color = "#22c55e"
-    elif ask < 90:
-        rating = "✅ GOOD"
-        profit_color = "#22c55e"
-    elif ask < 95:
-        rating = "⚠️ SMALL"
-        profit_color = "#fbbf24"
-    else:
-        rating = "😐 MEH"
-        profit_color = "#9ca3af"
     mins_since_lock = None
     if settlement_time and is_locked:
         try:
@@ -476,30 +458,20 @@ def render_hero_box(city_name, cfg):
         time_ago_str = None
     if settlement_low is not None and is_locked:
         lock_info = f"🔒 Locked {time_ago_str}" if time_ago_str else "🔒 Locked"
-        if winning:
-            st.markdown(f'<div style="background:linear-gradient(135deg,#052e16,#14532d);border:4px solid #22c55e;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)"><div style="color:#22c55e;font-size:2em;font-weight:800;margin-bottom:10px">✅ LOW LOCKED & CONFIRMED</div><div style="color:#86efac;font-size:1.2em;margin-bottom:5px">{city_name}</div><div style="color:#4ade80;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div><div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(34,197,94,0.5)">{settlement_low}°F</div><div style="color:#4ade80;font-size:1.3em;font-weight:600">{lock_info}</div><div style="color:#86efac;font-size:1em;margin-top:5px">6hr Min @ {settlement_time} local</div><div style="margin-top:25px;padding:20px;background:rgba(0,0,0,0.4);border-radius:12px"><div style="display:flex;justify-content:space-around;align-items:center;flex-wrap:wrap;gap:15px;margin-bottom:15px"><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">WINNER</div><div style="color:#fbbf24;font-size:1.5em;font-weight:800">{bracket_name}</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">ASK</div><div style="color:#fff;font-size:1.5em;font-weight:800">{ask}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">PROFIT</div><div style="color:{profit_color};font-size:1.5em;font-weight:800">+{profit}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">VERDICT</div><div style="font-size:1.5em;font-weight:800">{rating}</div></div></div><a href="{bracket_url}" target="_blank" style="text-decoration:none;display:block"><div style="background:linear-gradient(135deg,#22c55e,#16a34a);padding:15px 20px;border-radius:10px;text-align:center;cursor:pointer"><span style="color:#000;font-weight:900;font-size:1.2em">🛒 BUY YES → {bracket_name} @ {ask}¢</span></div></a></div></div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div style="background:linear-gradient(135deg,#052e16,#14532d);border:4px solid #22c55e;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)"><div style="color:#22c55e;font-size:2em;font-weight:800;margin-bottom:10px">✅ LOW LOCKED & CONFIRMED</div><div style="color:#86efac;font-size:1.2em;margin-bottom:5px">{city_name}</div><div style="color:#4ade80;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div><div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(34,197,94,0.5)">{settlement_low}°F</div><div style="color:#4ade80;font-size:1.3em;font-weight:600">{lock_info}</div><div style="color:#86efac;font-size:1em;margin-top:5px">6hr Min @ {settlement_time} local</div><div style="margin-top:20px;padding:15px;background:rgba(0,0,0,0.3);border-radius:10px"><span style="color:#f59e0b;font-size:1.1em">⚠️ No matching bracket found on Kalshi</span></div></div>', unsafe_allow_html=True)
-    elif settlement_low is not None:
-        if winning:
-            ask = winning.get("ask", 0)
-            profit = 100 - ask
-            bracket_name = winning.get("name", "?")
-            bracket_url = winning.get("url", "")
-            trade_section = f"""
-            <div style="margin-top:25px;padding:20px;background:rgba(0,0,0,0.4);border-radius:12px">
-                <div style="display:flex;justify-content:space-around;align-items:center;flex-wrap:wrap;gap:15px;margin-bottom:15px">
-                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">CURRENT WINNER</div><div style="color:#fbbf24;font-size:1.5em;font-weight:800">{bracket_name}</div></div>
-                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">ASK</div><div style="color:#fff;font-size:1.5em;font-weight:800">{ask}¢</div></div>
-                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">PROFIT IF HOLDS</div><div style="color:#60a5fa;font-size:1.5em;font-weight:800">+{profit}¢</div></div>
-                </div>
-                <div style="color:#fbbf24;font-size:0.9em;text-align:center;margin-bottom:10px">⏳ Wait for 06:53 lock before buying</div>
-            </div>"""
-        else:
-            trade_section = """
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#052e16,#14532d);border:4px solid #22c55e;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)">
+            <div style="color:#22c55e;font-size:2em;font-weight:800;margin-bottom:10px">✅ LOW LOCKED & CONFIRMED</div>
+            <div style="color:#86efac;font-size:1.2em;margin-bottom:5px">{city_name}</div>
+            <div style="color:#4ade80;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div>
+            <div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(34,197,94,0.5)">{settlement_low}°F</div>
+            <div style="color:#4ade80;font-size:1.3em;font-weight:600">{lock_info}</div>
+            <div style="color:#86efac;font-size:1em;margin-top:5px">6hr Min @ {settlement_time} local</div>
             <div style="margin-top:20px;padding:15px;background:rgba(0,0,0,0.3);border-radius:10px">
-                <span style="color:#fbbf24;font-size:1.1em">⏳ Early 6hr data - may update at next reading</span>
-            </div>"""
+                <span style="color:#22c55e;font-size:1.1em">🎯 Settlement = {settlement_low}°F → Buy the bracket containing this value</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif settlement_low is not None:
         st.markdown(f"""
         <div style="background:linear-gradient(135deg,#0c1929,#1e3a5f);border:4px solid #3b82f6;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(59,130,246,0.3)">
             <div style="color:#3b82f6;font-size:2em;font-weight:800;margin-bottom:10px">📊 6hr DATA AVAILABLE</div>
@@ -507,7 +479,9 @@ def render_hero_box(city_name, cfg):
             <div style="color:#60a5fa;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div>
             <div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(59,130,246,0.5)">{settlement_low}°F</div>
             <div style="color:#60a5fa;font-size:1.3em;font-weight:600">6hr Min @ {settlement_time} local</div>
-            {trade_section}
+            <div style="margin-top:20px;padding:15px;background:rgba(0,0,0,0.3);border-radius:10px">
+                <span style="color:#fbbf24;font-size:1.1em">⏳ Early 6hr data - may update at next reading</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -970,5 +944,5 @@ else:
                 st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v9.1 (5 Cities)</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v9.0 (5 Cities)</span></div>', unsafe_allow_html=True)
 st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment only. Not financial advice. Now using 6hr settlement data.</div>', unsafe_allow_html=True)
