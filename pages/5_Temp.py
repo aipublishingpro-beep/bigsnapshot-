@@ -38,11 +38,9 @@ FORECAST_GAP = 3
 
 @st.cache_data(ttl=300)
 def fetch_full_nws_recording(station, city_tz_str):
-    """Fetch complete NWS observation history with ALL columns"""
+    """Fetch complete NWS observation history with ALL columns exactly as shown"""
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
-        city_tz = pytz.timezone(city_tz_str)
-        today = datetime.now(city_tz).day
         resp = requests.get(url, headers={"User-Agent": "Temp/1.0"}, timeout=15)
         if resp.status_code != 200:
             return []
@@ -59,33 +57,19 @@ def fetch_full_nws_recording(station, city_tz_str):
             cells = row.find_all('td')
             if len(cells) < 10:
                 continue
+            
             try:
-                date_val = cells[0].text.strip()
-                time_val = cells[1].text.strip()
-                
-                if date_val and int(date_val) != today:
-                    continue
-                
-                wind = cells[2].text.strip()
-                vis = cells[3].text.strip()
-                weather = cells[4].text.strip()
-                sky = cells[5].text.strip() if len(cells) > 5 else ""
-                air_temp = cells[6].text.strip() if len(cells) > 6 else ""
-                dwpt = cells[7].text.strip() if len(cells) > 7 else ""
-                max_6hr = cells[8].text.strip() if len(cells) > 8 else ""
-                min_6hr = cells[9].text.strip() if len(cells) > 9 else ""
-                
                 readings.append({
-                    "date": date_val if date_val else today,
-                    "time": time_val,
-                    "wind": wind,
-                    "vis": vis,
-                    "weather": weather,
-                    "sky": sky,
-                    "air_temp": air_temp,
-                    "dwpt": dwpt,
-                    "max_6hr": max_6hr,
-                    "min_6hr": min_6hr
+                    "date": cells[0].text.strip(),
+                    "time": cells[1].text.strip(),
+                    "wind": cells[2].text.strip(),
+                    "vis": cells[3].text.strip(),
+                    "weather": cells[4].text.strip(),
+                    "sky": cells[5].text.strip(),
+                    "air": cells[6].text.strip(),
+                    "dwpt": cells[7].text.strip(),
+                    "max_6hr": cells[8].text.strip(),
+                    "min_6hr": cells[9].text.strip()
                 })
             except:
                 continue
@@ -335,8 +319,8 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
     st.header("🦈 SHARK - Locked Settlement Scanner")
     
     if OWNER_MODE:
-        st.subheader("📊 Full NWS Recording (All Cities)")
-        city_choice = st.selectbox("Select City for Full Recording", selected_cities)
+        st.subheader("📊 Full NWS Recording")
+        city_choice = st.selectbox("Select City", selected_cities)
         
         if city_choice:
             cfg = CITIES[city_choice]
@@ -344,30 +328,42 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
             if full_readings:
                 table_html = """
                 <style>
-                .nws-full-table { width: 100%; border-collapse: collapse; font-family: 'Courier New', monospace; font-size: 11px; }
-                .nws-full-table th { background: #2d3748; color: #fff; padding: 8px 6px; text-align: center; border: 1px solid #4a5568; font-weight: 600; font-size: 10px; }
-                .nws-full-table td { padding: 6px 4px; text-align: center; border: 1px solid #4a5568; background: #1a202c; }
-                .nws-full-table tr:hover td { background: #2d3748; }
-                .max-6hr-cell { color: #fc8181; font-weight: 700; }
-                .min-6hr-cell { color: #63b3ed; font-weight: 700; }
-                .temp-cell { color: #fff; font-weight: 600; }
+                .nws-full { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11px; }
+                .nws-full th { background: #e8e8e8; color: #000; padding: 8px 4px; text-align: center; border: 1px solid #ccc; font-weight: 600; }
+                .nws-full td { padding: 6px 4px; text-align: center; border: 1px solid #ccc; background: #fff; color: #000; }
+                .nws-full tr:nth-child(even) td { background: #f5f5f5; }
+                .max-6 { color: #d00; font-weight: 700; }
+                .min-6 { color: #00d; font-weight: 700; }
                 </style>
-                <table class='nws-full-table'>
+                <table class='nws-full'>
                 <thead><tr>
-                <th>Date</th><th>Time<br/>(est)</th><th>Wind<br/>(mph)</th><th>Vis.<br/>(mi.)</th><th>Weather</th><th>Sky<br/>Cond.</th>
-                <th>Air<br/>Temp</th><th>Dwpt</th><th>6 hour<br/>Max.</th><th>6 hour<br/>Min.</th>
+                <th rowspan="2">Date</th>
+                <th rowspan="2">Time<br/>(est)</th>
+                <th rowspan="2">Wind<br/>(mph)</th>
+                <th rowspan="2">Vis.<br/>(mi.)</th>
+                <th rowspan="2">Weather</th>
+                <th rowspan="2">Sky<br/>Cond.</th>
+                <th colspan="4">Temperature (°F)</th>
+                </tr><tr>
+                <th>Air</th><th>Dwpt</th><th>6 hour<br/>Max.</th><th>6 hour<br/>Min.</th>
                 </tr></thead><tbody>
                 """
                 
-                for r in readings:
-                    max_display = f"<span class='max-6hr-cell'>{r['max_6hr']}</span>" if r['max_6hr'] else ""
-                    min_display = f"<span class='min-6hr-cell'>{r['min_6hr']}</span>" if r['min_6hr'] else ""
-                    air_display = f"<span class='temp-cell'>{r['air_temp']}</span>" if r['air_temp'] else ""
+                for r in full_readings:
+                    max_val = f"<span class='max-6'>{r['max_6hr']}</span>" if r['max_6hr'] else ""
+                    min_val = f"<span class='min-6'>{r['min_6hr']}</span>" if r['min_6hr'] else ""
                     
                     table_html += f"""<tr>
-                    <td>{r['date']}</td><td>{r['time']}</td><td>{r['wind']}</td><td>{r['vis']}</td>
-                    <td>{r['weather']}</td><td>{r['sky']}</td><td>{air_display}</td><td>{r['dwpt']}</td>
-                    <td>{max_display}</td><td>{min_display}</td>
+                    <td>{r['date']}</td>
+                    <td>{r['time']}</td>
+                    <td>{r['wind']}</td>
+                    <td>{r['vis']}</td>
+                    <td>{r['weather']}</td>
+                    <td>{r['sky']}</td>
+                    <td>{r['air']}</td>
+                    <td>{r['dwpt']}</td>
+                    <td>{max_val}</td>
+                    <td>{min_val}</td>
                     </tr>"""
                 
                 table_html += "</tbody></table>"
@@ -381,36 +377,6 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
         low_6hr, high_6hr, low_time, high_time, low_locked, high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
         current = fetch_current_temp(cfg["nws"])
         nws_forecast, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
-        
-        if OWNER_MODE:
-            full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
-            if full_readings:
-                with st.expander(f"📊 {city} - Full NWS Recording (Since Midnight)", expanded=True):
-                    city_tz = pytz.timezone(cfg["tz"])
-                    today = datetime.now(city_tz).day
-                    
-                    table_html = """
-                    <style>
-                    .nws-table { width: 100%; border-collapse: collapse; font-family: 'Courier New', monospace; font-size: 12px; }
-                    .nws-table th { background: #2d3748; color: #fff; padding: 10px 8px; text-align: center; border: 1px solid #4a5568; font-weight: 600; }
-                    .nws-table td { padding: 8px; text-align: center; border: 1px solid #4a5568; background: #1a202c; }
-                    .nws-table tr:hover td { background: #2d3748; }
-                    .time-col { color: #a0aec0; font-weight: 600; }
-                    .temp-col { color: #fff; font-weight: 700; font-size: 14px; }
-                    .max-6hr { color: #fc8181; font-weight: 700; }
-                    .min-6hr { color: #63b3ed; font-weight: 700; }
-                    </style>
-                    <table class='nws-table'><thead><tr><th>Date</th><th>Time (est)</th><th>Air Temp (°F)</th><th>6hr Max</th><th>6hr Min</th></tr></thead><tbody>
-                    """
-                    
-                    for r in full_readings:
-                        max_display = f"<span class='max-6hr'>{r['max_6hr']}</span>" if r['max_6hr'] else ""
-                        min_display = f"<span class='min-6hr'>{r['min_6hr']}</span>" if r['min_6hr'] else ""
-                        table_html += f"<tr><td class='time-col'>{today}</td><td class='time-col'>{r['time']}</td><td class='temp-col'>{r['temp']}</td><td>{max_display}</td><td>{min_display}</td></tr>"
-                    
-                    table_html += "</tbody></table>"
-                    st.markdown(table_html, unsafe_allow_html=True)
-                    st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
         
         if cfg["kalshi_low"] and low_6hr and low_locked:
             brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"])
