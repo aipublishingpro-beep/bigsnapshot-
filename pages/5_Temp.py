@@ -426,67 +426,67 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
         st.divider()
         with st.expander("📋 Full NWS Table", expanded=False):
             if full_readings:
-            table_html = """
-            <style>
-            .nws-full { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
-            .nws-full th { background: #b8cce4; color: #000; padding: 6px 4px; text-align: center; border: 1px solid #7f7f7f; font-weight: 600; font-size: 11px; }
-            .nws-full td { padding: 5px 3px; text-align: center; border: 1px solid #d0d0d0; background: #fff; color: #000; font-size: 11px; }
-            .nws-full tr:nth-child(even) td { background: #f0f0f0; }
-            .temp-header { background: #dae8f5 !important; }
-            </style>
-            <div style="overflow-x: auto;">
-            <table class='nws-full'>
-            <thead>
-            <tr>
-            <th rowspan="3">Date</th>
-            <th rowspan="3">Time<br/>(est)</th>
-            <th rowspan="3">Wind<br/>(mph)</th>
-            <th rowspan="3">Vis.<br/>(mi.)</th>
-            <th rowspan="3">Weather</th>
-            <th rowspan="3">Sky<br/>Cond.</th>
-            <th colspan="4" class="temp-header">Temperature (°F)</th>
-            <th rowspan="3">Relative<br/>Humidity</th>
-            <th rowspan="3">Wind<br/>Chill<br/>(°F)</th>
-            <th rowspan="3">Heat<br/>Index<br/>(°F)</th>
-            <th colspan="3" class="temp-header">Pressure</th>
-            <th colspan="3" class="temp-header">Precipitation<br/>(in)</th>
-            </tr>
-            <tr>
-            <th rowspan="2">Air</th>
-            <th rowspan="2">Dwpt</th>
-            <th colspan="2">6 hour</th>
-            <th rowspan="2">altimeter<br/>(in)</th>
-            <th rowspan="2">sea<br/>level<br/>(mb)</th>
-            <th rowspan="2">1 hr</th>
-            <th rowspan="2">3 hr</th>
-            <th rowspan="2">6 hr</th>
-            </tr>
-            <tr>
-            <th>Max</th>
-            <th>Min</th>
-            </tr>
-            </thead>
-            <tbody>
-            """
-            
-            for r in full_readings:
-                table_html += f"""<tr>
-                <td>{r['date']}</td>
-                <td>{r['time']}</td>
-                <td>{r['wind']}</td>
-                <td>{r['vis']}</td>
-                <td>{r['weather']}</td>
-                <td>{r['sky']}</td>
-                <td><b>{r['air']}</b></td>
-                <td>{r['dwpt']}</td>
-                <td><b style="color:#d00">{r['max_6hr']}</b></td>
-                <td><b style="color:#00d">{r['min_6hr']}</b></td>
-                <td colspan="7"></td>
-                </tr>"""
-            
-            table_html += "</tbody></table></div>"
-            st.markdown(table_html, unsafe_allow_html=True)
-            st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
+                table_html = """
+                <style>
+                .nws-full { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
+                .nws-full th { background: #b8cce4; color: #000; padding: 6px 4px; text-align: center; border: 1px solid #7f7f7f; font-weight: 600; font-size: 11px; }
+                .nws-full td { padding: 5px 3px; text-align: center; border: 1px solid #d0d0d0; background: #fff; color: #000; font-size: 11px; }
+                .nws-full tr:nth-child(even) td { background: #f0f0f0; }
+                .temp-header { background: #dae8f5 !important; }
+                </style>
+                <div style="overflow-x: auto;">
+                <table class='nws-full'>
+                <thead>
+                <tr>
+                <th rowspan="3">Date</th>
+                <th rowspan="3">Time<br/>(est)</th>
+                <th rowspan="3">Wind<br/>(mph)</th>
+                <th rowspan="3">Vis.<br/>(mi.)</th>
+                <th rowspan="3">Weather</th>
+                <th rowspan="3">Sky<br/>Cond.</th>
+                <th colspan="4" class="temp-header">Temperature (°F)</th>
+                <th rowspan="3">Relative<br/>Humidity</th>
+                <th rowspan="3">Wind<br/>Chill<br/>(°F)</th>
+                <th rowspan="3">Heat<br/>Index<br/>(°F)</th>
+                <th colspan="3" class="temp-header">Pressure</th>
+                <th colspan="3" class="temp-header">Precipitation<br/>(in)</th>
+                </tr>
+                <tr>
+                <th rowspan="2">Air</th>
+                <th rowspan="2">Dwpt</th>
+                <th colspan="2">6 hour</th>
+                <th rowspan="2">altimeter<br/>(in)</th>
+                <th rowspan="2">sea<br/>level<br/>(mb)</th>
+                <th rowspan="2">1 hr</th>
+                <th rowspan="2">3 hr</th>
+                <th rowspan="2">6 hr</th>
+                </tr>
+                <tr>
+                <th>Max</th>
+                <th>Min</th>
+                </tr>
+                </thead>
+                <tbody>
+                """
+                
+                for r in full_readings:
+                    table_html += f"""<tr>
+                    <td>{r['date']}</td>
+                    <td>{r['time']}</td>
+                    <td>{r['wind']}</td>
+                    <td>{r['vis']}</td>
+                    <td>{r['weather']}</td>
+                    <td>{r['sky']}</td>
+                    <td><b>{r['air']}</b></td>
+                    <td>{r['dwpt']}</td>
+                    <td><b style="color:#d00">{r['max_6hr']}</b></td>
+                    <td><b style="color:#00d">{r['min_6hr']}</b></td>
+                    <td colspan="7"></td>
+                    </tr>"""
+                
+                table_html += "</tbody></table></div>"
+                st.markdown(table_html, unsafe_allow_html=True)
+                st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
     
     st.divider()
     
