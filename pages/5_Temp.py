@@ -14,7 +14,10 @@ from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="🌡️ Temp Trading", page_icon="🌡️", layout="wide")
 
-OWNER_MODE = st.query_params.get("owner", "") == "true"
+try:
+    OWNER_MODE = "owner" in st.query_params and st.query_params["owner"] == "true"
+except:
+    OWNER_MODE = False
 
 CITIES = {
     "New York City": {"nws": "KNYC", "kalshi_low": "KXLOWTNYC", "kalshi_high": "KXHIGHNY", "tz": "US/Eastern", "lat": 40.78, "lon": -73.97},
@@ -408,112 +411,113 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                 guards, blocked = run_guards(low_6hr, "LOW", winner["ask"], nws_forecast, weather_warnings)
                 
                 with st.expander(f"🔒 {city} LOW: {low_6hr}°F @ {low_time} → {winner['name']} @ {winner['ask']}¢", expanded=not blocked):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Settlement", f"{low_6hr}°F @ {low_time}")
-                    st.metric("Current", f"{current}°F" if current else "—")
-                with col2:
-                    st.metric("Bracket", winner["name"])
-                    st.metric("Ask", f"{winner['ask']}¢")
-                with col3:
-                    edge = 100 - winner["ask"]
-                    st.metric("Edge", f"{edge}¢")
-                    profit = (edge / 100) * 20
-                    st.metric("Profit (20x)", f"${profit:.2f}")
-                
-                st.divider()
-                if blocked:
-                    st.error("🛡️ GUARDS BLOCKED - DO NOT BUY")
-                else:
-                    st.success("✅ GUARDS PASSED - SAFE TO BUY")
-                
-                for g in guards:
-                    st.write(g)
-    
-    if high_6hr and high_locked:
-        brackets = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"])
-        winner = find_winning_bracket(high_6hr, brackets)
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Settlement", f"{low_6hr}°F @ {low_time}")
+                        st.metric("Current", f"{current}°F" if current else "—")
+                    with col2:
+                        st.metric("Bracket", winner["name"])
+                        st.metric("Ask", f"{winner['ask']}¢")
+                    with col3:
+                        edge = 100 - winner["ask"]
+                        st.metric("Edge", f"{edge}¢")
+                        profit = (edge / 100) * 20
+                        st.metric("Profit (20x)", f"${profit:.2f}")
+                    
+                    st.divider()
+                    if blocked:
+                        st.error("🛡️ GUARDS BLOCKED - DO NOT BUY")
+                    else:
+                        st.success("✅ GUARDS PASSED - SAFE TO BUY")
+                    
+                    for g in guards:
+                        st.write(g)
         
-        if winner:
-            guards, blocked = run_guards(high_6hr, "HIGH", winner["ask"], None, weather_warnings)
+        if cfg["kalshi_high"] and high_6hr and high_locked:
+            brackets = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"])
+            winner = find_winning_bracket(high_6hr, brackets)
             
-            with st.expander(f"🔒 {selected_city} HIGH: {high_6hr}°F @ {high_time} → {winner['name']} @ {winner['ask']}¢", expanded=not blocked):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Settlement", f"{high_6hr}°F @ {high_time}")
-                    st.metric("Current", f"{current}°F" if current else "—")
-                with col2:
-                    st.metric("Bracket", winner["name"])
-                    st.metric("Ask", f"{winner['ask']}¢")
-                with col3:
-                    edge = 100 - winner["ask"]
-                    st.metric("Edge", f"{edge}¢")
-                    profit = (edge / 100) * 20
-                    st.metric("Profit (20x)", f"${profit:.2f}")
+            if winner:
+                guards, blocked = run_guards(high_6hr, "HIGH", winner["ask"], None, weather_warnings)
                 
-                st.divider()
-                if blocked:
-                    st.error("🛡️ GUARDS BLOCKED - DO NOT BUY")
-                else:
-                    st.success("✅ GUARDS PASSED - SAFE TO BUY")
-                
-                for g in guards:
-                    st.write(g)
+                with st.expander(f"🔒 {city} HIGH: {high_6hr}°F @ {high_time} → {winner['name']} @ {winner['ask']}¢", expanded=not blocked):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Settlement", f"{high_6hr}°F @ {high_time}")
+                        st.metric("Current", f"{current}°F" if current else "—")
+                    with col2:
+                        st.metric("Bracket", winner["name"])
+                        st.metric("Ask", f"{winner['ask']}¢")
+                    with col3:
+                        edge = 100 - winner["ask"]
+                        st.metric("Edge", f"{edge}¢")
+                        profit = (edge / 100) * 20
+                        st.metric("Profit (20x)", f"${profit:.2f}")
+                    
+                    st.divider()
+                    if blocked:
+                        st.error("🛡️ GUARDS BLOCKED - DO NOT BUY")
+                    else:
+                        st.success("✅ GUARDS PASSED - SAFE TO BUY")
+                    
+                    for g in guards:
+                        st.write(g)
 
 if mode in ["🦅 TOM (Tomorrow)", "📊 Both"]:
     st.header("🦅 TOM - Tomorrow Scanner")
     
-    cfg = CITIES[selected_city]
-    forecast_low, forecast_high = fetch_tomorrow_forecast(cfg["lat"], cfg["lon"])
-    _, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
-    
-    if cfg["kalshi_low"] and forecast_low:
-        brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"], is_tomorrow=True)
-        match = find_winning_bracket(forecast_low, brackets)
+    for city in selected_cities:
+        cfg = CITIES[city]
+        forecast_low, forecast_high = fetch_tomorrow_forecast(cfg["lat"], cfg["lon"])
+        _, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
         
-        if match and match["ask"] <= 20:
-            guards, blocked = run_guards(None, "LOW", match["ask"], None, weather_warnings)
+        if cfg["kalshi_low"] and forecast_low:
+            brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"], is_tomorrow=True)
+            match = find_winning_bracket(forecast_low, brackets)
             
-            with st.expander(f"🦅 {selected_city} LOW: Forecast {forecast_low}°F → {match['name']} @ {match['ask']}¢", expanded=not blocked):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("NWS Forecast", f"{forecast_low}°F")
-                    st.metric("Bracket", match["name"])
-                with col2:
-                    st.metric("Ask", f"{match['ask']}¢")
-                    edge = 100 - match["ask"]
-                    st.metric("Edge", f"{edge}¢")
+            if match and match["ask"] <= 20:
+                guards, blocked = run_guards(None, "LOW", match["ask"], None, weather_warnings)
                 
-                if blocked:
-                    st.error("⚠️ BLOCKED")
-                else:
-                    st.success("✅ SAFE")
-                for g in guards:
-                    st.write(g)
-    
-    if forecast_high:
-        brackets = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"], is_tomorrow=True)
-        match = find_winning_bracket(forecast_high, brackets)
+                with st.expander(f"🦅 {city} LOW: Forecast {forecast_low}°F → {match['name']} @ {match['ask']}¢", expanded=not blocked):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("NWS Forecast", f"{forecast_low}°F")
+                        st.metric("Bracket", match["name"])
+                    with col2:
+                        st.metric("Ask", f"{match['ask']}¢")
+                        edge = 100 - match["ask"]
+                        st.metric("Edge", f"{edge}¢")
+                    
+                    if blocked:
+                        st.error("⚠️ BLOCKED")
+                    else:
+                        st.success("✅ SAFE")
+                    for g in guards:
+                        st.write(g)
         
-        if match and match["ask"] <= 20:
-            guards, blocked = run_guards(None, "HIGH", match["ask"], None, weather_warnings)
+        if cfg["kalshi_high"] and forecast_high:
+            brackets = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"], is_tomorrow=True)
+            match = find_winning_bracket(forecast_high, brackets)
             
-            with st.expander(f"🦅 {selected_city} HIGH: Forecast {forecast_high}°F → {match['name']} @ {match['ask']}¢", expanded=not blocked):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("NWS Forecast", f"{forecast_high}°F")
-                    st.metric("Bracket", match["name"])
-                with col2:
-                    st.metric("Ask", f"{match['ask']}¢")
-                    edge = 100 - match["ask"]
-                    st.metric("Edge", f"{edge}¢")
+            if match and match["ask"] <= 20:
+                guards, blocked = run_guards(None, "HIGH", match["ask"], None, weather_warnings)
                 
-                if blocked:
-                    st.error("⚠️ BLOCKED")
-                else:
-                    st.success("✅ SAFE")
-                for g in guards:
-                    st.write(g)
+                with st.expander(f"🦅 {city} HIGH: Forecast {forecast_high}°F → {match['name']} @ {match['ask']}¢", expanded=not blocked):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("NWS Forecast", f"{forecast_high}°F")
+                        st.metric("Bracket", match["name"])
+                    with col2:
+                        st.metric("Ask", f"{match['ask']}¢")
+                        edge = 100 - match["ask"]
+                        st.metric("Edge", f"{edge}¢")
+                    
+                    if blocked:
+                        st.error("⚠️ BLOCKED")
+                    else:
+                        st.success("✅ SAFE")
+                    for g in guards:
+                        st.write(g)
 
 st.divider()
 
