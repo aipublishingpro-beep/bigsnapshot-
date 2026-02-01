@@ -385,11 +385,8 @@ st.subheader("📅 Tomorrow's Forecast")
 lat = cfg.get("lat")
 lon = cfg.get("lon")
 
-st.write(f"DEBUG: lat={lat}, lon={lon}")  # DEBUG
-
 if lat and lon:
     forecast_low = fetch_nws_forecast(lat, lon)
-    st.write(f"DEBUG: forecast_low={forecast_low}")  # DEBUG
     
     if forecast_low:
         forecast_settlement = round(forecast_low)
@@ -398,14 +395,9 @@ if lat and lon:
         if kalshi_series:
             all_brackets = fetch_kalshi_brackets(kalshi_series)
             
-            st.write(f"DEBUG: forecast_settlement={forecast_settlement}, brackets={[f'{b['low']}-{b['high']}' for b in all_brackets[:5]]}")
-            
             forecast_bracket = None
             for b in all_brackets:
-                # Try inclusive on upper bound
-                matches = b['low'] <= forecast_settlement <= b['high']
-                st.write(f"DEBUG: {forecast_settlement} vs {b['low']}-{b['high']}: {b['low']} <= {forecast_settlement} <= {b['high']} = {matches}")
-                if matches:
+                if b['low'] <= forecast_settlement <= b['high']:
                     forecast_bracket = b['range']
                     break
             
