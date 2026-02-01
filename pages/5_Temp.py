@@ -477,7 +477,7 @@ if mode == "🦈 SHARK Mode":
                 else:
                     forecast_temp = today_high_forecast if settlement_type == "HIGH" else tonight_low_forecast
                     
-                    all_pass, guards = run_shark_guards(settlement_temp, winning, forecast_temp, warnings)
+                    all_pass, guards = run_shark_guards(settlement_temp, winning, forecast_temp, warnings, obs_low, current_temp)
                     
                     if all_pass:
                         if guards["anomaly_check"]["warning_level"] == "anomaly":
