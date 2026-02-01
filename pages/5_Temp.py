@@ -277,7 +277,6 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                 "Type": "LOW",
                 "Settlement": f"{low_6hr}°F @ {low_time}" if low_6hr else "—",
                 "Current": f"{current}°F" if current else "—",
-                "Locked": "🔒" if low_locked else "⏳",
                 "Bracket": match_low["name"] if match_low else "NO MATCH",
                 "Ask": f"{match_low['ask']}¢" if match_low else "—",
                 "Edge": f"{100 - match_low['ask']}¢" if match_low else "—"
@@ -293,7 +292,6 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                 "Type": "HIGH",
                 "Settlement": f"{high_6hr}°F @ {high_time}" if high_6hr else "—",
                 "Current": f"{current}°F" if current else "—",
-                "Locked": "🔒" if high_locked else "⏳",
                 "Bracket": match_high["name"] if match_high else "NO MATCH",
                 "Ask": f"{match_high['ask']}¢" if match_high else "—",
                 "Edge": f"{100 - match_high['ask']}¢" if match_high else "—"
