@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 st.set_page_config(page_title="🌡️ Temp Trading", page_icon="🌡️", layout="wide")
 
 try:
-    OWNER_MODE = st.experimental_get_query_params().get("owner", [""])[0] == "true"
+    OWNER_MODE = st.query_params.get("owner") == "true"
 except:
     OWNER_MODE = False
 
