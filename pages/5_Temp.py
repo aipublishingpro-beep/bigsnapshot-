@@ -21,17 +21,48 @@ if not OWNER_MODE:
     st.stop()
 
 CITIES = {
-    "Austin": {"nws": "KAUS", "tz": "US/Central", "lat": 30.19, "lon": -97.67},
-    "Chicago": {"nws": "KMDW", "tz": "US/Central", "lat": 41.79, "lon": -87.75},
-    "Denver": {"nws": "KDEN", "tz": "US/Mountain", "lat": 39.86, "lon": -104.67},
-    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "lat": 33.94, "lon": -118.41},
-    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "lat": 25.80, "lon": -80.29},
-    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "lat": 40.78, "lon": -73.97},
-    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "lat": 39.87, "lon": -75.23},
+    "Austin": {"nws": "KAUS", "tz": "US/Central", "lat": 30.19, "lon": -97.67, "kalshi_low": "KXLOWTAUS"},
+    "Chicago": {"nws": "KMDW", "tz": "US/Central", "lat": 41.79, "lon": -87.75, "kalshi_low": "KXLOWTCHI"},
+    "Denver": {"nws": "KDEN", "tz": "US/Mountain", "lat": 39.86, "lon": -104.67, "kalshi_low": "KXLOWTDEN"},
+    "Los Angeles": {"nws": "KLAX", "tz": "US/Pacific", "lat": 33.94, "lon": -118.41, "kalshi_low": "KXLOWTLAX"},
+    "Miami": {"nws": "KMIA", "tz": "US/Eastern", "lat": 25.80, "lon": -80.29, "kalshi_low": "KXLOWTMIA"},
+    "New York City": {"nws": "KNYC", "tz": "US/Eastern", "lat": 40.78, "lon": -73.97, "kalshi_low": "KXLOWTNYC"},
+    "Philadelphia": {"nws": "KPHL", "tz": "US/Eastern", "lat": 39.87, "lon": -75.23, "kalshi_low": "KXLOWTPHL"},
 }
 
 if "default_city" not in st.session_state:
     st.session_state.default_city = "New York City"
+
+@st.cache_data(ttl=300)
+def fetch_kalshi_brackets(series_ticker):
+    """Fetch Kalshi brackets for LOW market"""
+    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code != 200:
+            return []
+        
+        markets = resp.json().get("markets", [])
+        brackets = []
+        
+        for m in markets:
+            subtitle = m.get("subtitle", "")
+            # Parse "9° to 10°" or "11° to 12°"
+            import re
+            match = re.search(r'(\d+)°?\s*to\s*(\d+)°?', subtitle)
+            if match:
+                low = int(match.group(1))
+                high = int(match.group(2))
+                brackets.append({
+                    "low": low,
+                    "high": high,
+                    "range": f"{low}-{high}°F",
+                    "ticker": m.get("ticker", "")
+                })
+        
+        return brackets
+    except:
+        return []
 
 @st.cache_data(ttl=300)
 def fetch_full_nws_recording(station, city_tz_str):
@@ -179,20 +210,35 @@ if not readings and full_readings:
 
 if current_temp:
     settlement_info = ""
-    if full_readings:
+    if full_readings and OWNER_MODE:
         # Calculate 6hr settlement LOW (LOWEST 6hr MIN, rounded)
-        settlement_low = None
+        raw_6hr_min = None
         for r in full_readings:
             if r['min_6hr']:
                 try:
                     min_val = float(r['min_6hr'])
-                    if settlement_low is None or min_val < settlement_low:
-                        settlement_low = round(min_val)
+                    if raw_6hr_min is None or min_val < raw_6hr_min:
+                        raw_6hr_min = min_val
                 except:
                     pass
         
-        if settlement_low:
-            settlement_info = f"<div style='color:#22c55e;font-size:0.7em;margin-top:5px'>6hr Settlement: {settlement_low}°F</div>"
+        if raw_6hr_min:
+            settlement_temp = round(raw_6hr_min)
+            
+            # Fetch Kalshi brackets and find winning bracket
+            kalshi_series = cfg.get("kalshi_low", "")
+            if kalshi_series:
+                brackets = fetch_kalshi_brackets(kalshi_series)
+                winning_bracket = None
+                for b in brackets:
+                    if b['low'] < settlement_temp <= b['high']:
+                        winning_bracket = b['range']
+                        break
+                
+                if winning_bracket:
+                    settlement_info = f"<div style='color:#22c55e;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → BUY: {winning_bracket}</div>"
+                else:
+                    settlement_info = f"<div style='color:#f59e0b;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → NO BRACKET MATCH</div>"
     
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
