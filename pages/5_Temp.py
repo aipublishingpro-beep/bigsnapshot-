@@ -38,30 +38,45 @@ if "default_city" not in st.session_state:
 @st.cache_data(ttl=300)
 def fetch_kalshi_brackets(series_ticker):
     """Fetch Kalshi brackets for LOW market"""
+    # Get today's date in the format Kalshi uses (e.g., 26FEB01 for Feb 1, 2026)
+    from datetime import datetime
+    eastern = pytz.timezone("US/Eastern")
+    today = datetime.now(eastern)
+    date_suffix = today.strftime("%d%b%y").upper()  # e.g., "01FEB26"
+    
+    # Try both with and without date filter
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
+    
     try:
         resp = requests.get(url, timeout=10)
         
         # DEBUG: Show raw API response
         st.write(f"🔍 DEBUG: API URL: {url}")
         st.write(f"🔍 DEBUG: API Status: {resp.status_code}")
+        st.write(f"🔍 DEBUG: Looking for date suffix: {date_suffix}")
         
         if resp.status_code != 200:
             st.error(f"Kalshi API returned status {resp.status_code}")
             return []
         
         data = resp.json()
-        st.write(f"🔍 DEBUG: API Response: {data}")
-        
         markets = data.get("markets", [])
-        st.write(f"🔍 DEBUG: Markets count: {len(markets)}")
+        st.write(f"🔍 DEBUG: Total markets returned: {len(markets)}")
         
         brackets = []
         
         for m in markets:
-            subtitle = m.get("subtitle", "")
             ticker = m.get("ticker", "")
-            st.write(f"🔍 DEBUG: Processing market - ticker: {ticker}, subtitle: {subtitle}")
+            event_ticker = m.get("event_ticker", "")
+            
+            # Filter for today's markets only
+            if date_suffix not in ticker and date_suffix not in event_ticker:
+                continue
+            
+            # Check both 'subtitle' and 'sub_title' (API uses different fields)
+            subtitle = m.get("subtitle", "") or m.get("sub_title", "")
+            
+            st.write(f"🔍 DEBUG: Processing market - ticker: {ticker}, subtitle: '{subtitle}'")
             
             # Parse "9° to 10°" or "11° to 12°"
             match = re.search(r'(\d+)°?\s*to\s*(\d+)°?', subtitle)
@@ -74,8 +89,9 @@ def fetch_kalshi_brackets(series_ticker):
                     "range": f"{low}-{high}°F",
                     "ticker": ticker
                 })
+                st.write(f"✅ Found bracket: {low}-{high}°F")
         
-        st.write(f"🔍 DEBUG: Parsed {len(brackets)} brackets")
+        st.write(f"🔍 DEBUG: Parsed {len(brackets)} brackets for today")
         return brackets
     except Exception as e:
         st.error(f"Kalshi API error: {e}")
