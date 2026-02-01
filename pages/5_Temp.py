@@ -78,6 +78,8 @@ def fetch_kalshi_brackets(series_ticker):
         
         for m in markets:
             subtitle = m.get("subtitle", "") or m.get("sub_title", "") or m.get("yes_sub_title", "")
+            
+            # Parse "X° to Y°" format
             match = re.search(r'(\d+)°?\s*to\s*(\d+)°?', subtitle)
             if match:
                 low = int(match.group(1))
@@ -86,6 +88,30 @@ def fetch_kalshi_brackets(series_ticker):
                     "low": low,
                     "high": high,
                     "range": f"{low}-{high}°F",
+                    "ticker": m.get("ticker", "")
+                })
+                continue
+            
+            # Parse "X° or below" format (e.g., "13° or below")
+            match = re.search(r'(\d+)°?\s*or\s*below', subtitle)
+            if match:
+                high = int(match.group(1))
+                brackets.append({
+                    "low": 0,  # Effectively -infinity
+                    "high": high,
+                    "range": f"≤{high}°F",
+                    "ticker": m.get("ticker", "")
+                })
+                continue
+            
+            # Parse "X° or above" format (e.g., "22° or above")
+            match = re.search(r'(\d+)°?\s*or\s*above', subtitle)
+            if match:
+                low = int(match.group(1))
+                brackets.append({
+                    "low": low,
+                    "high": 999,  # Effectively infinity
+                    "range": f"≥{low}°F",
                     "ticker": m.get("ticker", "")
                 })
         
@@ -359,8 +385,11 @@ st.subheader("📅 Tomorrow's Forecast")
 lat = cfg.get("lat")
 lon = cfg.get("lon")
 
+st.write(f"DEBUG: lat={lat}, lon={lon}")  # DEBUG
+
 if lat and lon:
     forecast_low = fetch_nws_forecast(lat, lon)
+    st.write(f"DEBUG: forecast_low={forecast_low}")  # DEBUG
     
     if forecast_low:
         forecast_settlement = round(forecast_low)
@@ -369,9 +398,14 @@ if lat and lon:
         if kalshi_series:
             all_brackets = fetch_kalshi_brackets(kalshi_series)
             
+            st.write(f"DEBUG: forecast_settlement={forecast_settlement}, brackets={[f'{b['low']}-{b['high']}' for b in all_brackets[:5]]}")
+            
             forecast_bracket = None
             for b in all_brackets:
-                if b['low'] <= forecast_settlement < b['high']:
+                # Try inclusive on upper bound
+                matches = b['low'] <= forecast_settlement <= b['high']
+                st.write(f"DEBUG: {forecast_settlement} vs {b['low']}-{b['high']}: {b['low']} <= {forecast_settlement} <= {b['high']} = {matches}")
+                if matches:
                     forecast_bracket = b['range']
                     break
             
