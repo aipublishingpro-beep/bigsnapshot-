@@ -41,14 +41,28 @@ def fetch_kalshi_brackets(series_ticker):
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
     try:
         resp = requests.get(url, timeout=10)
+        
+        # DEBUG: Show raw API response
+        st.write(f"🔍 DEBUG: API URL: {url}")
+        st.write(f"🔍 DEBUG: API Status: {resp.status_code}")
+        
         if resp.status_code != 200:
+            st.error(f"Kalshi API returned status {resp.status_code}")
             return []
         
-        markets = resp.json().get("markets", [])
+        data = resp.json()
+        st.write(f"🔍 DEBUG: API Response: {data}")
+        
+        markets = data.get("markets", [])
+        st.write(f"🔍 DEBUG: Markets count: {len(markets)}")
+        
         brackets = []
         
         for m in markets:
             subtitle = m.get("subtitle", "")
+            ticker = m.get("ticker", "")
+            st.write(f"🔍 DEBUG: Processing market - ticker: {ticker}, subtitle: {subtitle}")
+            
             # Parse "9° to 10°" or "11° to 12°"
             match = re.search(r'(\d+)°?\s*to\s*(\d+)°?', subtitle)
             if match:
@@ -58,12 +72,15 @@ def fetch_kalshi_brackets(series_ticker):
                     "low": low,
                     "high": high,
                     "range": f"{low}-{high}°F",
-                    "ticker": m.get("ticker", "")
+                    "ticker": ticker
                 })
         
+        st.write(f"🔍 DEBUG: Parsed {len(brackets)} brackets")
         return brackets
     except Exception as e:
         st.error(f"Kalshi API error: {e}")
+        import traceback
+        st.code(traceback.format_exc())
         return []
 
 @st.cache_data(ttl=300)
