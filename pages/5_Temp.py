@@ -332,7 +332,7 @@ def fetch_tomorrow_forecast(lat, lon):
 st.title("🌡️ Temperature Trading Dashboard")
 st.caption("⚠️ EXPERIMENTAL - EDUCATIONAL PURPOSES ONLY - NOT FINANCIAL OR BETTING ADVICE")
 if OWNER_MODE:
-    st.caption("🔑 OWNER MODE")
+    st.caption("🔑 OWNER MODE ACTIVE")
 else:
     st.caption("Public View")
 
@@ -362,12 +362,31 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
     st.header("🦈 SHARK - Locked Settlement Scanner")
     
     if OWNER_MODE:
+        st.success("✅ OWNER MODE DETECTED - LOADING NWS TABLE")
         st.subheader(f"📊 Recent NWS Observations + 6hr Extremes - {city_selection}")
         
         cfg = CITIES[city_selection]
-        current_temp, obs_low, obs_high, readings, oldest_time, newest_time, reading_count = fetch_nws_observations(cfg["nws"], cfg["tz"])
-        full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
-        settlement_low, settlement_high, low_time, high_time, is_low_locked, is_high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
+        
+        try:
+            current_temp, obs_low, obs_high, readings, oldest_time, newest_time, reading_count = fetch_nws_observations(cfg["nws"], cfg["tz"])
+            st.info(f"Fetched {reading_count} readings from NWS API")
+        except Exception as e:
+            st.error(f"Error fetching observations: {e}")
+            current_temp, obs_low, obs_high, readings, oldest_time, newest_time, reading_count = None, None, None, [], None, None, 0
+        
+        try:
+            full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
+            st.info(f"Fetched {len(full_readings)} full recordings from NWS HTML")
+        except Exception as e:
+            st.error(f"Error fetching full recordings: {e}")
+            full_readings = []
+        
+        try:
+            settlement_low, settlement_high, low_time, high_time, is_low_locked, is_high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
+            st.info(f"Settlement: {settlement_low}°F @ {low_time}")
+        except Exception as e:
+            st.error(f"Error fetching settlement: {e}")
+            settlement_low, settlement_high, low_time, high_time, is_low_locked, is_high_locked = None, None, None, None, False, False
         
         if oldest_time and newest_time:
             st.caption(f"📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local | {reading_count} readings")
