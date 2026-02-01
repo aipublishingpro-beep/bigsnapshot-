@@ -1,12 +1,14 @@
 """
 🌡️ TEMP.PY - City View with NWS Observations
 Shows hourly readings + 6hr extremes for selected city
+OWNER ONLY - Uses 6hr aggregate for settlement prediction
 """
 import streamlit as st
 import requests
 from datetime import datetime
 import pytz
 from bs4 import BeautifulSoup
+import re
 
 st.set_page_config(page_title="🌡️ Temp Trading", page_icon="🌡️", layout="wide")
 
@@ -48,7 +50,6 @@ def fetch_kalshi_brackets(series_ticker):
         for m in markets:
             subtitle = m.get("subtitle", "")
             # Parse "9° to 10°" or "11° to 12°"
-            import re
             match = re.search(r'(\d+)°?\s*to\s*(\d+)°?', subtitle)
             if match:
                 low = int(match.group(1))
@@ -61,7 +62,8 @@ def fetch_kalshi_brackets(series_ticker):
                 })
         
         return brackets
-    except:
+    except Exception as e:
+        st.error(f"Kalshi API error: {e}")
         return []
 
 @st.cache_data(ttl=300)
@@ -223,10 +225,19 @@ if current_temp:
             kalshi_series = cfg.get("kalshi_low", "")
             if kalshi_series:
                 brackets = fetch_kalshi_brackets(kalshi_series)
+                
+                # DEBUG
+                st.write(f"🔍 DEBUG: Kalshi series: {kalshi_series}")
+                st.write(f"🔍 DEBUG: Found {len(brackets)} brackets")
+                if brackets:
+                    st.write(f"🔍 DEBUG: Brackets: {[f'{b['low']}-{b['high']}' for b in brackets]}")
+                st.write(f"🔍 DEBUG: Settlement temp: {settlement_temp}°F")
+                
                 winning_bracket = None
                 for b in brackets:
-                    # Bracket "11-12°F" means temp >= 11 and temp < 12
-                    if b['low'] <= settlement_temp < b['high']:
+                    matches = b['low'] <= settlement_temp < b['high']
+                    st.write(f"🔍 DEBUG: Checking {settlement_temp} vs {b['low']}-{b['high']}: {b['low']} <= {settlement_temp} < {b['high']} = {matches}")
+                    if matches:
                         winning_bracket = b['range']
                         break
                 
@@ -261,13 +272,15 @@ if readings and full_readings:
             'min_6hr': r['min_6hr']   # For LOW settlement only
         }
     
-    # Find the LOWEST 6hr MIN for LOW settlement (rounds to nearest integer)
+    # Find the LOWEST 6hr MIN for settlement (rounds to nearest integer)
+    raw_6hr_min = None
     settlement_low = None
     for r in full_readings:
         if r['min_6hr']:
             try:
                 min_val = float(r['min_6hr'])
-                if settlement_low is None or min_val < settlement_low:
+                if raw_6hr_min is None or min_val < raw_6hr_min:
+                    raw_6hr_min = min_val
                     settlement_low = round(min_val)  # Kalshi rounds to nearest whole number
             except:
                 pass
@@ -277,7 +290,23 @@ if readings and full_readings:
     if city_selection == "New York City":
         low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
     
-    st.info(f"📊 Showing {len(readings)} readings | 6hr Settlement LOW: **{settlement_low}°F** (rounded)" if settlement_low else f"📊 Showing {len(readings)} readings")
+    if settlement_low and OWNER_MODE:
+        # Fetch Kalshi brackets and find winning bracket
+        kalshi_series = cfg.get("kalshi_low", "")
+        brackets = fetch_kalshi_brackets(kalshi_series) if kalshi_series else []
+        winning_bracket = None
+        for b in brackets:
+            # Bracket "11-12°F" means temp >= 11 and temp < 12
+            if b['low'] <= settlement_low < b['high']:
+                winning_bracket = b['range']
+                break
+        
+        if winning_bracket:
+            st.info(f"📊 Showing {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → **BUY: {winning_bracket}**")
+        else:
+            st.info(f"📊 Showing {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → ⚠️ NO BRACKET (Rounded: {settlement_low}°F)")
+    else:
+        st.info(f"📊 Showing {len(readings)} readings")
     
     for i, r in enumerate(readings):
         time_key = r['time']
