@@ -125,7 +125,7 @@ def fetch_nws_observations(station, city_tz_str):
         low = min(temps)
         high = max(temps)
         
-        readings.reverse()
+        # DON'T reverse - keep newest first (most recent at top)
         
         return current, low, high, readings
     except:
@@ -170,8 +170,10 @@ if not readings and full_readings:
             continue
     
     if readings:
+        # Reverse to get newest first
+        readings.reverse()
         temps = [r['temp'] for r in readings]
-        current_temp = temps[-1]
+        current_temp = temps[0]
         obs_low = min(temps)
         obs_high = max(temps)
 
@@ -204,9 +206,9 @@ if current_temp:
 
 st.subheader("📊 NWS Observations + 6hr Extremes")
 if city_selection == "New York City":
-    st.caption(f"Station: {cfg['nws']} | Today's hourly readings from midnight to now")
+    st.caption(f"Station: {cfg['nws']} | Hourly readings from midnight to now")
 else:
-    st.caption(f"Station: {cfg['nws']} | Today's readings (5-min intervals) from midnight to now")
+    st.caption(f"Station: {cfg['nws']} | 5-minute interval readings - ONLY 6hr data used for Kalshi settlement")
 
 if readings and full_readings:
     # Build 6hr data map
