@@ -182,12 +182,6 @@ st.header(f"📍 {city_selection}")
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg["nws"], cfg["tz"])
 full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
 
-# DEBUG
-st.write(f"DEBUG: readings from JSON API = {len(readings) if readings else 0}")
-st.write(f"DEBUG: full_readings from HTML = {len(full_readings)}")
-if full_readings:
-    st.write(f"DEBUG: First HTML reading = {full_readings[0]}")
-
 # FALLBACK: If JSON API fails but HTML works, use HTML temps
 if not readings and full_readings:
     st.warning("⚠️ JSON API unavailable - using HTML fallback")
@@ -231,14 +225,15 @@ if current_temp:
                 brackets = fetch_kalshi_brackets(kalshi_series)
                 winning_bracket = None
                 for b in brackets:
-                    if b['low'] < settlement_temp <= b['high']:
+                    # Bracket "11-12°F" means temp >= 11 and temp < 12
+                    if b['low'] <= settlement_temp < b['high']:
                         winning_bracket = b['range']
                         break
                 
                 if winning_bracket:
                     settlement_info = f"<div style='color:#22c55e;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → BUY: {winning_bracket}</div>"
                 else:
-                    settlement_info = f"<div style='color:#f59e0b;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → NO BRACKET MATCH</div>"
+                    settlement_info = f"<div style='color:#f59e0b;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → NO BRACKET (Rounded: {settlement_temp}°F)</div>"
     
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
