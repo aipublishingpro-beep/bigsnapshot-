@@ -1,5 +1,5 @@
 """
-🦈 SHARK AUTO-BUY v7.5 - FIXED SETTLEMENT LOCK + 5 GUARDS
+🦈 SHARK AUTO-BUY v7.5 - FIXED SETTLEMENT LOCK + 5 GUARDS + LINUX COMPATIBLE
 - ✅ GUARD 1: Weather (blocks storms/fronts/freezes)
 - ✅ GUARD 2: Price (blocks ≤20¢, warns ≤40¢)
 - ✅ GUARD 3: Trend (blocks if current temp contradicts settlement)
@@ -9,17 +9,32 @@
 - Uses 6hr aggregate from obhistory + hourly API for verification
 - LOW = LOWEST 6hr Min (verified against hourly low)
 - HIGH = HIGHEST 6hr Max after NOON (verified against hourly high)
+- 🐧 LINUX/CLOUD COMPATIBLE (sound alerts optional)
 """
 import requests
 import time
 from datetime import datetime, timedelta
 import pytz
-import winsound
 import base64
 import re
 import csv
 import os
 from bs4 import BeautifulSoup
+
+# ============================================================
+# 🔊 CROSS-PLATFORM SOUND SUPPORT
+# ============================================================
+try:
+    import winsound
+    SOUND_AVAILABLE = True
+except ImportError:
+    SOUND_AVAILABLE = False
+    print("⚠️ Sound alerts disabled (winsound not available on this platform)")
+
+def play_beep(frequency, duration):
+    """Play beep sound if available, otherwise skip silently"""
+    if SOUND_AVAILABLE:
+        winsound.Beep(frequency, duration)
 
 # ============================================================
 # 🔑 KALSHI API KEYS - PASTE YOUR CREDENTIALS HERE FIRST!
@@ -155,21 +170,6 @@ FORECAST_CACHE_TTL = 900
 _last_log_time = 0
 
 # ============================================================
-# 🔑 KALSHI API KEYS - PASTE YOUR CREDENTIALS HERE
-# ============================================================
-# Get these from: https://kalshi.com → Settings → API
-# API_KEY = The API Key ID (looks like: 3abd1b21-023d-4088-abae-35c36e9ba806)
-# PRIVATE_KEY = The full private key (multi-line, starts with -----BEGIN PRIVATE KEY-----)
-
-API_KEY = "paste-your-api-key-id-here"
-
-PRIVATE_KEY = """-----BEGIN PRIVATE KEY-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASC...
-paste-all-lines-of-your-private-key-here
-keep-the-BEGIN-and-END-lines
------END PRIVATE KEY-----"""
-
-# ============================================================
 # 📊 CSV LOGGING
 # ============================================================
 def init_csv_log():
@@ -251,15 +251,8 @@ def log_to_csv(scan_time, city, market_type, settlement_temp, settlement_time, i
             ])
 
 # ============================================================
-# 🔑 KALSHI API AUTHENTICATION (PASTE YOUR KEYS HERE)
+# 🔑 KALSHI API AUTHENTICATION
 # ============================================================
-API_KEY = "your-api-key-id-here"
-
-PRIVATE_KEY = """-----BEGIN PRIVATE KEY-----
-paste-your-full-private-key-here
-multiple-lines-from-kalshi
------END PRIVATE KEY-----"""
-
 def create_kalshi_signature(timestamp, method, path):
     try:
         from cryptography.hazmat.primitives import serialization, hashes
@@ -691,7 +684,7 @@ def send_alert_and_buy(city, cfg, bracket, temp_value, market_type, settlement_t
         log_to_csv(now, city, market_type, temp_value, settlement_time, True, hourly_extreme, settlement_match, bracket, False, guard_warnings, False)
         
         for _ in range(5):
-            winsound.Beep(400, 300)
+            play_beep(400, 300)
             time.sleep(0.15)
         print(f"{'='*60}\n")
         return
@@ -699,9 +692,9 @@ def send_alert_and_buy(city, cfg, bracket, temp_value, market_type, settlement_t
     # All guards passed
     print(f"\n   ✅ ALL 5 GUARDS PASSED")
     for _ in range(3):
-        winsound.Beep(1000, 200)
+        play_beep(1000, 200)
         time.sleep(0.1)
-        winsound.Beep(1200, 200)
+        play_beep(1200, 200)
         time.sleep(0.1)
 
     if AUTO_BUY_ENABLED and API_KEY and len(API_KEY) > 10:
@@ -709,7 +702,7 @@ def send_alert_and_buy(city, cfg, bracket, temp_value, market_type, settlement_t
         success, msg = place_kalshi_order(ticker, ask, CONTRACTS_PER_TRADE)
         print(f"   {msg}")
         if success:
-            winsound.Beep(800, 500)
+            play_beep(800, 500)
             print(f"   📊 Daily spent: ${daily_spent:.2f} / ${MAX_DAILY_SPEND}")
             log_to_csv(now, city, market_type, temp_value, settlement_time, True, hourly_extreme, settlement_match, bracket, True, guard_warnings, True)
         else:
@@ -846,8 +839,8 @@ def main():
     print("=" * 70)
     print("\nPress Ctrl+C to stop.\n")
 
-    winsound.Beep(600, 200)
-    winsound.Beep(800, 300)
+    play_beep(600, 200)
+    play_beep(800, 300)
 
     while True:
         try:
