@@ -546,6 +546,14 @@ else:
     if full_readings and obs_low:
         low_locked, high_locked, low_settlement, high_settlement = check_settlement_lock(full_readings, cfg["tz"])
         
+        # DEBUG
+        st.write(f"DEBUG: low_locked={low_locked}, low_settlement={low_settlement}, obs_low={obs_low}")
+        st.write(f"DEBUG: high_locked={high_locked}, high_settlement={high_settlement}, obs_high={obs_high}")
+        st.write(f"DEBUG: full_readings count={len(full_readings)}")
+        if full_readings:
+            six_hr_mins = [r.get('min_6hr') for r in full_readings if r.get('min_6hr')]
+            st.write(f"DEBUG: 6hr min values found: {six_hr_mins}")
+        
         # Check if any 6hr min data exists
         has_6hr_low = any(r.get('min_6hr') for r in full_readings)
         
