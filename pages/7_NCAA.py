@@ -3,6 +3,22 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="BigSnapshot NCAA Edge Finder", page_icon="🎓", layout="wide")
 
+# ============================================================
+# CACHE BUSTING - Prevent navigation issues
+# ============================================================
+st.markdown('''
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+''', unsafe_allow_html=True)
+
+# Force page identity in session state
+if "current_page" not in st.session_state:
+    st.session_state.current_page = None
+if st.session_state.current_page != "NCAA":
+    st.session_state.current_page = "NCAA"
+    st.rerun()
+
 from auth import require_auth
 require_auth()
 
