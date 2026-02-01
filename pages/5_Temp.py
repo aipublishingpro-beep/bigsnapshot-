@@ -26,6 +26,8 @@ CITIES = {
     "Miami": {"nws": "KMIA", "kalshi_low": "KXLOWTMIA", "kalshi_high": "KXHIGHMIA", "tz": "US/Eastern", "lat": 25.80, "lon": -80.29},
     "Los Angeles": {"nws": "KLAX", "kalshi_low": "KXLOWTLAX", "kalshi_high": "KXHIGHLAX", "tz": "US/Pacific", "lat": 33.94, "lon": -118.41},
     "Austin": {"nws": "KAUS", "kalshi_low": "KXLOWTAUS", "kalshi_high": "KXHIGHAUS", "tz": "US/Central", "lat": 30.19, "lon": -97.67},
+    "Chicago": {"nws": "KMDW", "kalshi_low": "KXLOWTCHI", "kalshi_high": "KXHIGHCHI", "tz": "US/Central", "lat": 41.79, "lon": -87.75},
+    "Denver": {"nws": "KDEN", "kalshi_low": "KXLOWTDEN", "kalshi_high": "KXHIGHDEN", "tz": "US/Mountain", "lat": 39.86, "lon": -104.67},
 }
 
 WEATHER_DANGER = ["cold front", "warm front", "frontal passage", "freeze", "hard freeze", "frost", "winter storm", "ice storm", "blizzard", "arctic", "polar vortex", "heat wave", "excessive heat", "heat advisory", "severe thunderstorm", "tornado", "hurricane", "record high", "record low", "rapidly falling", "rapidly rising", "sharply colder", "sharply warmer", "plunging", "soaring"]
@@ -33,6 +35,60 @@ WEATHER_DANGER = ["cold front", "warm front", "frontal passage", "freeze", "hard
 PRICE_FLOOR = 20
 PRICE_WARN = 40
 FORECAST_GAP = 3
+
+@st.cache_data(ttl=300)
+def fetch_full_nws_recording(station, city_tz_str):
+    """Fetch complete NWS observation history with 6hr aggregates"""
+    url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
+    try:
+        city_tz = pytz.timezone(city_tz_str)
+        today = datetime.now(city_tz).day
+        resp = requests.get(url, headers={"User-Agent": "Temp/1.0"}, timeout=15)
+        if resp.status_code != 200:
+            return []
+        
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        table = soup.find('table')
+        if not table:
+            return []
+        
+        rows = table.find_all('tr')
+        readings = []
+        
+        for row in rows[3:]:
+            cells = row.find_all('td')
+            if len(cells) < 10:
+                continue
+            try:
+                date_val = cells[0].text.strip()
+                time_val = cells[1].text.strip()
+                
+                if date_val and int(date_val) != today:
+                    continue
+                
+                temp_text = cells[5].text.strip()
+                max_6hr_text = cells[8].text.strip()
+                min_6hr_text = cells[9].text.strip()
+                
+                if not temp_text:
+                    continue
+                
+                temp_f = int(float(temp_text))
+                max_6hr = int(float(max_6hr_text)) if max_6hr_text else None
+                min_6hr = int(float(min_6hr_text)) if min_6hr_text else None
+                
+                readings.append({
+                    "time": time_val,
+                    "temp": temp_f,
+                    "max_6hr": max_6hr,
+                    "min_6hr": min_6hr
+                })
+            except:
+                continue
+        
+        return readings
+    except:
+        return []
 
 @st.cache_data(ttl=300)
 def fetch_6hr_settlement(station, city_tz_str):
@@ -117,7 +173,6 @@ def fetch_kalshi_brackets(series_ticker, city_tz_str, is_tomorrow=False):
             
             low, high, name = None, None, ""
             
-            # Parse >X format
             gt_match = re.search(r'>\s*(-?\d+)', title)
             if gt_match:
                 threshold = int(gt_match.group(1))
@@ -125,7 +180,6 @@ def fetch_kalshi_brackets(series_ticker, city_tz_str, is_tomorrow=False):
                 high = 999
                 name = f">{threshold} ({low}+)"
             
-            # Parse <X format
             if low is None:
                 lt_match = re.search(r'<\s*(-?\d+)', title)
                 if lt_match:
@@ -134,7 +188,6 @@ def fetch_kalshi_brackets(series_ticker, city_tz_str, is_tomorrow=False):
                     low = -999
                     name = f"<{threshold} (≤{high})"
             
-            # Parse X to Y format
             if low is None:
                 range_match = re.search(r'(-?\d+)\s*to\s*(-?\d+)', title, re.I)
                 if range_match:
@@ -254,16 +307,62 @@ def fetch_tomorrow_forecast(lat, lon):
         return None, None
 
 st.title("🌡️ Temperature Trading Dashboard")
+st.caption("⚠️ EXPERIMENTAL - EDUCATIONAL PURPOSES ONLY - NOT FINANCIAL OR BETTING ADVICE")
 if OWNER_MODE:
     st.caption("🔑 OWNER MODE")
 else:
-    st.caption("Public View")
+    st.caption("Public View")d locked settlement temperatures and matching Kalshi brackets
+    
+    **How it works:**
+    1. App pulls 6-hour aggregate data from NWS obhistory
+    2. LOW locks after 06:53 local time (overnight minimum captured)
+    3. HIGH locks after 18:53 local time (afternoon maximum captured)
+    4. App finds the cheapest winning bracket based on locked settlement
+    5. Guards check for weather warnings, suspicious pricing, and forecast alignment
+    
+    **What the metrics mean:**
+    - **Settlement**: The locked 6hr Min/Max temperature from NWS
+    - **Bracket**: The Kalshi market range that contains the settlement temp
+    - **Ask**: Current price to buy YES contract (pays $1 if correct)
+    - **Edge**: Profit potential (100¢ - Ask price)
+    - **Profit (20x)**: Estimated profit on 20 contracts
+    
+    ### 🦅 TOM Mode (Tomorrow)
+    **Purpose:** Find tomorrow's NWS forecast and match to cheap brackets
+    
+    **How it works:**
+    1. Fetches tomorrow's forecast from NWS
+    2. Finds brackets ≤20¢ that match the forecast
+    3. Runs guards for weather warnings and pricing
+    
+    ### 🛡️ Guards System
+    **BLOCKED** means do NOT trade - something is wrong:
+    - **Weather warnings**: Fronts, storms, extreme events make temps unpredictable
+    - **Price too cheap** (≤20¢): Market knows something you don't
+    - **Forecast gap** (≥3°): NWS forecast disagrees with settlement
+    
+    **PASSED** means guards found no red flags (but still do your own research)
+    
+    ### 📊 Full NWS Recording (Owner Mode)
+    Shows complete observation history since midnight with:
+    - **Time**: Local observation time
+    - **Temp**: Hourly temperature reading
+    - **6hr Max/Min**: Aggregate extremes (what Kalshi settles on)
+    
+    ### ⚠️ Important Notes
+    - This app is for **educational and experimental purposes only**
+    - NOT financial advice, NOT betting advice
+    - Always verify data independently before making decisions
+    - Past performance does not guarantee future results
+    - Weather is inherently unpredictable
+    """)
+
 
 with st.sidebar:
     st.header("⚙️ Settings")
     mode = st.radio("Mode", ["🦈 SHARK (Today)", "🦅 TOM (Tomorrow)", "📊 Both"])
     st.divider()
-    selected_cities = st.multiselect("Cities", list(CITIES.keys()), default=["Miami", "New York City"])
+    selected_cities = st.multiselect("Cities", list(CITIES.keys()), default=["New York City", "Miami", "Los Angeles", "Austin", "Chicago", "Philadelphia", "Denver"])
     st.divider()
     if st.button("🔄 Refresh"):
         st.cache_data.clear()
@@ -281,6 +380,38 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
         low_6hr, high_6hr, low_time, high_time, low_locked, high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
         current = fetch_current_temp(cfg["nws"])
         nws_forecast, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
+        
+        # Display full NWS recording table
+        if OWNER_MODE:
+            full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
+            if full_readings:
+                with st.expander(f"📊 {city} - Full NWS Recording (Since Midnight)", expanded=True):
+                    st.markdown("""
+                    <style>
+                    .nws-table { width: 100%; border-collapse: collapse; font-family: 'Courier New', monospace; font-size: 12px; }
+                    .nws-table th { background: #2d3748; color: #fff; padding: 10px 8px; text-align: center; border: 1px solid #4a5568; font-weight: 600; }
+                    .nws-table td { padding: 8px; text-align: center; border: 1px solid #4a5568; background: #1a202c; }
+                    .nws-table tr:hover td { background: #2d3748; }
+                    .time-col { color: #a0aec0; font-weight: 600; }
+                    .temp-col { color: #fff; font-weight: 700; font-size: 14px; }
+                    .max-6hr { color: #fc8181; font-weight: 700; }
+                    .min-6hr { color: #63b3ed; font-weight: 700; }
+                    </style>
+                    """, unsafe_allow_html=True)
+                    
+                    table_html = "<table class='nws-table'><thead><tr><th>Date</th><th>Time (est)</th><th>Air Temp (°F)</th><th>6hr Max</th><th>6hr Min</th></tr></thead><tbody>"
+                    
+                    city_tz = pytz.timezone(cfg["tz"])
+                    today = datetime.now(city_tz).day
+                    
+                    for r in full_readings:
+                        max_display = f"<span class='max-6hr'>{r['max_6hr']}</span>" if r['max_6hr'] else ""
+                        min_display = f"<span class='min-6hr'>{r['min_6hr']}</span>" if r['min_6hr'] else ""
+                        table_html += f"<tr><td class='time-col'>{today}</td><td class='time-col'>{r['time']}</td><td class='temp-col'>{r['temp']}</td><td>{max_display}</td><td>{min_display}</td></tr>"
+                    
+                    table_html += "</tbody></table>"
+                    st.markdown(table_html, unsafe_allow_html=True)
+                    st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
         
         if cfg["kalshi_low"] and low_6hr and low_locked:
             brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"])
@@ -397,6 +528,57 @@ if mode in ["🦅 TOM (Tomorrow)", "📊 Both"]:
                         st.success("✅ SAFE")
                     for g in guards:
                         st.write(g)
+
+st.divider()
+
+with st.expander("📖 How to Use This App", expanded=False):
+    st.markdown("""
+    ### 🦈 SHARK Mode (Today)
+    **Purpose:** Find locked settlement temperatures and matching Kalshi brackets
+    
+    **How it works:**
+    1. App pulls 6-hour aggregate data from NWS obhistory
+    2. LOW locks after 06:53 local time (overnight minimum captured)
+    3. HIGH locks after 18:53 local time (afternoon maximum captured)
+    4. App finds the cheapest winning bracket based on locked settlement
+    5. Guards check for weather warnings, suspicious pricing, and forecast alignment
+    
+    **What the metrics mean:**
+    - **Settlement**: The locked 6hr Min/Max temperature from NWS
+    - **Bracket**: The Kalshi market range that contains the settlement temp
+    - **Ask**: Current price to buy YES contract (pays $1 if correct)
+    - **Edge**: Profit potential (100¢ - Ask price)
+    - **Profit (20x)**: Estimated profit on 20 contracts
+    
+    ### 🦅 TOM Mode (Tomorrow)
+    **Purpose:** Find tomorrow's NWS forecast and match to cheap brackets
+    
+    **How it works:**
+    1. Fetches tomorrow's forecast from NWS
+    2. Finds brackets ≤20¢ that match the forecast
+    3. Runs guards for weather warnings and pricing
+    
+    ### 🛡️ Guards System
+    **BLOCKED** means do NOT trade - something is wrong:
+    - **Weather warnings**: Fronts, storms, extreme events make temps unpredictable
+    - **Price too cheap** (≤20¢): Market knows something you don't
+    - **Forecast gap** (≥3°): NWS forecast disagrees with settlement
+    
+    **PASSED** means guards found no red flags (but still do your own research)
+    
+    ### 📊 Full NWS Recording (Owner Mode)
+    Shows complete observation history since midnight with:
+    - **Time**: Local observation time
+    - **Temp**: Hourly temperature reading
+    - **6hr Max/Min**: Aggregate extremes (what Kalshi settles on)
+    
+    ### ⚠️ Important Notes
+    - This app is for **educational and experimental purposes only**
+    - NOT financial advice, NOT betting advice
+    - Always verify data independently before making decisions
+    - Past performance does not guarantee future results
+    - Weather is inherently unpredictable
+    """)
 
 st.divider()
 eastern = pytz.timezone("US/Eastern")
