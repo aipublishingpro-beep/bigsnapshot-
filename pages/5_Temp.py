@@ -456,14 +456,15 @@ if mode == "🦈 SHARK Mode":
             # DEBUG INFO
             with st.expander("🔧 DEBUG INFO", expanded=True):
                 st.write(f"Markets returned: {len(markets) if markets else 0}")
-                if markets:
-                    st.write(f"First market ticker: {markets[0].get('ticker')}")
-                    st.write(f"First market title: {markets[0].get('title')}")
-                    st.write(f"First market yes_ask: {markets[0].get('yes_ask')}")
-                st.write(f"Warnings detected: {warnings}")
-                st.write(f"Tonight forecast: {tonight_low_forecast}°F")
                 st.write(f"Settlement temp: {settlement_temp}°F")
+                st.write(f"Tonight forecast: {tonight_low_forecast}°F")
+                st.write(f"Warnings detected: {warnings}")
                 st.write(f"Series ticker: {cfg.get('kalshi_low' if settlement_type == 'LOW' else 'kalshi_high')}")
+                
+                if markets:
+                    st.write("**ALL MARKETS:**")
+                    for i, m in enumerate(markets[:10]):
+                        st.write(f"{i+1}. {m.get('title')} | Ask: {m.get('yes_ask')}¢ | Ticker: {m.get('ticker')}")
             
             if not markets:
                 st.error("❌ No Kalshi markets found")
