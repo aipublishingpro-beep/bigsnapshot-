@@ -35,7 +35,7 @@ if "default_city" not in st.session_state:
 
 @st.cache_data(ttl=300)
 def fetch_full_nws_recording(station, city_tz_str):
-    """Fetch complete NWS observation table with 6hr extremes"""
+    """Fetch complete NWS observation table with 6hr extremes - CRITICAL: Use correct columns!"""
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
         city_tz = pytz.timezone(city_tz_str)
@@ -61,6 +61,9 @@ def fetch_full_nws_recording(station, city_tz_str):
             try:
                 date_val = cells[0].text.strip()
                 if date_val and int(date_val) == today:
+                    # CRITICAL: cells[8] = 6hr MAX, cells[9] = 6hr MIN
+                    # For LOW settlement: ONLY use cells[9]
+                    # For HIGH settlement: ONLY use cells[8]
                     readings.append({
                         "date": date_val,
                         "time": cells[1].text.strip(),
@@ -70,8 +73,8 @@ def fetch_full_nws_recording(station, city_tz_str):
                         "sky": cells[5].text.strip(),
                         "air": cells[6].text.strip(),
                         "dwpt": cells[7].text.strip(),
-                        "max_6hr": cells[8].text.strip(),
-                        "min_6hr": cells[9].text.strip()
+                        "max_6hr": cells[8].text.strip(),  # 6hr MAX (for HIGH only)
+                        "min_6hr": cells[9].text.strip()   # 6hr MIN (for LOW only)
                     })
             except:
                 continue
@@ -173,11 +176,27 @@ if not readings and full_readings:
         obs_high = max(temps)
 
 if current_temp:
+    settlement_info = ""
+    if full_readings:
+        # Calculate 6hr settlement LOW (LOWEST 6hr MIN, rounded)
+        settlement_low = None
+        for r in full_readings:
+            if r['min_6hr']:
+                try:
+                    min_val = float(r['min_6hr'])
+                    if settlement_low is None or min_val < settlement_low:
+                        settlement_low = round(min_val)
+                except:
+                    pass
+        
+        if settlement_low:
+            settlement_info = f"<div style='color:#22c55e;font-size:0.7em;margin-top:5px'>6hr Settlement: {settlement_low}°F</div>"
+    
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
         <div style="display:flex;justify-content:space-around;text-align:center">
             <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
-            <div><div style="color:#6b7280;font-size:0.8em">LOW</div><div style="color:#3b82f6;font-size:1.8em;font-weight:700">{obs_low}°F</div></div>
+            <div><div style="color:#6b7280;font-size:0.8em">LOW</div><div style="color:#3b82f6;font-size:1.8em;font-weight:700">{obs_low}°F</div>{settlement_info}</div>
             <div><div style="color:#6b7280;font-size:0.8em">HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
         </div>
     </div>
@@ -190,17 +209,29 @@ else:
     st.caption(f"Station: {cfg['nws']} | Today's readings (5-min intervals) from midnight to now")
 
 if readings and full_readings:
+    # Build 6hr data map
     six_hr_map = {}
     for r in full_readings:
         time_key = r['time']
         six_hr_map[time_key] = {
-            'max_6hr': r['max_6hr'],
-            'min_6hr': r['min_6hr']
+            'max_6hr': r['max_6hr'],  # For HIGH settlement only
+            'min_6hr': r['min_6hr']   # For LOW settlement only
         }
+    
+    # Find the LOWEST 6hr MIN for LOW settlement (rounds to nearest integer)
+    settlement_low = None
+    for r in full_readings:
+        if r['min_6hr']:
+            try:
+                min_val = float(r['min_6hr'])
+                if settlement_low is None or min_val < settlement_low:
+                    settlement_low = round(min_val)  # Kalshi rounds to nearest whole number
+            except:
+                pass
     
     low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
     
-    st.info(f"📊 Showing {len(readings)} readings")
+    st.info(f"📊 Showing {len(readings)} readings | 6hr Settlement LOW: **{settlement_low}°F** (rounded)" if settlement_low else f"📊 Showing {len(readings)} readings")
     
     for i, r in enumerate(readings):
         time_key = r['time']
