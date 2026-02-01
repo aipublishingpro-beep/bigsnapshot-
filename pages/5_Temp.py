@@ -1,3 +1,88 @@
+table_html = """
+            <style>
+            .nws-full { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
+            .nws-full th { background: #b8cce4; color: #000; padding: 6px 4px; text-align: center; border: 1px solid #7f7f7f; font-weight: 600; font-size: 11px; }
+            .nws-full td { padding: 5px 3px; text-align: center; border: 1px solid #d0d0d0; background: #fff; color: #000; font-size: 11px; }
+            .nws-full tr:nth-child(even) td { background: #f0f0f0; }
+            .temp-header { background: #dae8f5 !important; }
+            </style>
+            <div style="overflow-x: auto;">
+            <table class='nws-full'>
+            <thead>
+            <tr>
+            <th rowspan="3">Date</th>
+            <th rowspan="3">Time<br/>(est)</th>
+            <th rowspan="3">Wind<br/>(mph)</th>
+            <th rowspan="3">Vis.<br/>(mi.)</th>
+            <th rowspan="3">Weather</th>
+            <th rowspan="3">Sky<br/>Cond.</th>
+            <th colspan="4" class="temp-header">Temperature (°F)</th>
+            <th rowspan="3">Relative<br/>Humidity</th>
+            <th rowspan="3">Wind<br/>Chill<br/>(°F)</th>
+            <th rowspan="3">Heat<br/>Index<br/>(°F)</th>
+            <th colspan="3" class="temp-header">Pressure</th>
+            <th colspan="3" class="temp-header">Precipitation<br/>(in)</th>
+            </tr>
+            <tr>
+            <th rowspan="2">Air</th>
+            <th rowspan="2">Dwpt</th>
+            <th colspan="2">6 hour</th>
+            <th rowspan="2">altimeter<br/>(in)</th>
+            <th rowspan="2">sea<br/>level<br/>(mb)</th>
+            <th rowspan="2">1 hr</th>
+            <th rowspan="2">3 hr</th>
+            <th rowspan="2">6 hr</th>
+            </tr>
+            <tr>
+            <th>Max</th>
+            <th>Min</th>
+            </tr>
+            </thead>
+            <tbody>
+            """
+            
+            for r in full_readings:
+                time_key = r['time']
+                six_hr_max = r['max_6hr']
+                six_hr_min = r['min_6hr']
+                
+                # Highlight the settlement low reading
+                if settlement_low is not None and six_hr_min and int(float(six_hr_min)) == settlement_low:
+                    row_bg = "#1a2e1a"
+                    border = "2px solid #22c55e"
+                else:
+                    row_bg = "#0d1117"
+                    border = "1px solid #30363d"
+                
+                table_html += f"""<tr>
+                <td>{r['date']}</td>
+                <td>{r['time']}</td>
+                <td>{r['wind']}</td>
+                <td>{r['vis']}</td>
+                <td>{r['weather']}</td>
+                <td>{r['sky']}</td>
+                <td><b>{r['air']}</b></td>
+                <td>{r['dwpt']}</td>
+                <td><b style="color:#d00">{r['max_6hr']}</b></td>
+                <td><b style="color:#00d">{r['min_6hr']}</b></td>
+                <td colspan="7"></td>
+                </tr>"""
+            
+            table_html += "</tbody></table></div>"
+            st.markdown(table_html, unsafe_allow_html=True)
+            st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")    if OWNER_MODE:
+        st.subheader(f"📊 Recent NWS Observations + 6hr Extremes - {city_selection}")
+        
+        cfg = CITIES[city_selection]
+        current_temp, obs_low, obs_high, readings, _, oldest_time, newest_time, _ = fetch_nws_observations(cfg["nws"], cfg["tz"])
+        full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
+        settlement_low, settlement_high, low"""
+🌡️ TEMP.PY - Temperature Trading Dashboard
+SHARK: Find LOCKED settlements → Show CHEAPEST winning bracket → Run GUARDS → BUY or BLOCK
+TOM: Tomorrow's NWS forecast → Match brackets → Guards → Opportunities
+
+OWNER MODE: ?owner=true
+"""
 import streamlit as st
 import requests
 from datetime import datetime, timedelta
@@ -5,970 +90,656 @@ import pytz
 import re
 from bs4 import BeautifulSoup
 
-st.set_page_config(page_title="LOW Temp Edge Finder", page_icon="🌡️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="🌡️ Temp Trading", page_icon="🌡️", layout="wide")
 
-st.markdown("""
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQKY5VQ376"></script>
-<script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-NQKY5VQ376');</script>
-""", unsafe_allow_html=True)
+try:
+    OWNER_MODE = "owner" in st.query_params and st.query_params["owner"] == "true"
+except:
+    OWNER_MODE = False
 
-st.markdown("""
-<style>
-@media (max-width: 768px) {
-    .stColumns > div { flex: 1 1 100% !important; min-width: 100% !important; }
-    [data-testid="stMetricValue"] { font-size: 1.2rem !important; }
-    [data-testid="stMetricLabel"] { font-size: 0.8rem !important; }
-    h1 { font-size: 1.5rem !important; }
-    h2 { font-size: 1.2rem !important; }
-    h3 { font-size: 1rem !important; }
-    button { padding: 8px 12px !important; font-size: 0.85em !important; }
-}
-.stApp {background-color: #0d1117;}
-div[data-testid="stMarkdownContainer"] p {color: #c9d1d9;}
-</style>
-""", unsafe_allow_html=True)
-
-eastern = pytz.timezone("US/Eastern")
-now = datetime.now(eastern)
-
-# 5 cities only - Denver & Chicago removed (5-min intervals unreliable)
-CITY_CONFIG = {
-    "Austin": {"high": "KXHIGHAUS", "low": "KXLOWTAUS", "station": "KAUS", "lat": 30.19, "lon": -97.67, "tz": "US/Central"},
-    "Los Angeles": {"high": "KXHIGHLAX", "low": "KXLOWTLAX", "station": "KLAX", "lat": 33.94, "lon": -118.41, "tz": "US/Pacific"},
-    "Miami": {"high": "KXHIGHMIA", "low": "KXLOWTMIA", "station": "KMIA", "lat": 25.80, "lon": -80.29, "tz": "US/Eastern"},
-    "New York City": {"high": "KXHIGHNY", "low": "KXLOWTNYC", "station": "KNYC", "lat": 40.78, "lon": -73.97, "tz": "US/Eastern"},
-    "Philadelphia": {"high": "KXHIGHPHL", "low": "KXLOWTPHL", "station": "KPHL", "lat": 39.87, "lon": -75.23, "tz": "US/Eastern"},
-}
-CITY_LIST = sorted(CITY_CONFIG.keys())
-
-CHECK_TIMES_ET = {
-    "Austin": "7-8 AM ET",
-    "Los Angeles": "9-10 AM ET",
-    "Miami": "7-8 AM ET",
-    "New York City": "7-8 AM ET",
-    "Philadelphia": "7-8 AM ET",
+CITIES = {
+    "New York City": {"nws": "KNYC", "kalshi_low": "KXLOWTNYC", "kalshi_high": "KXHIGHNY", "tz": "US/Eastern", "lat": 40.78, "lon": -73.97},
+    "Philadelphia": {"nws": "KPHL", "kalshi_low": "KXLOWTPHL", "kalshi_high": "KXHIGHPHIL", "tz": "US/Eastern", "lat": 39.87, "lon": -75.23},
+    "Miami": {"nws": "KMIA", "kalshi_low": "KXLOWTMIA", "kalshi_high": "KXHIGHMIA", "tz": "US/Eastern", "lat": 25.80, "lon": -80.29},
+    "Los Angeles": {"nws": "KLAX", "kalshi_low": "KXLOWTLAX", "kalshi_high": "KXHIGHLAX", "tz": "US/Pacific", "lat": 33.94, "lon": -118.41},
+    "Austin": {"nws": "KAUS", "kalshi_low": "KXLOWTAUS", "kalshi_high": "KXHIGHAUS", "tz": "US/Central", "lat": 30.19, "lon": -97.67},
+    "Chicago": {"nws": "KMDW", "kalshi_low": "KXLOWTCHI", "kalshi_high": "KXHIGHCHI", "tz": "US/Central", "lat": 41.79, "lon": -87.75},
+    "Denver": {"nws": "KDEN", "kalshi_low": "KXLOWTDEN", "kalshi_high": "KXHIGHDEN", "tz": "US/Mountain", "lat": 39.86, "lon": -104.67},
 }
 
-query_params = st.query_params
-default_city = query_params.get("city", "New York City")
-if default_city not in CITY_LIST:
-    default_city = "New York City"
-is_owner = query_params.get("mode") == "owner"
+WEATHER_DANGER = ["cold front", "warm front", "frontal passage", "freeze", "hard freeze", "frost", "winter storm", "ice storm", "blizzard", "arctic", "polar vortex", "heat wave", "excessive heat", "heat advisory", "severe thunderstorm", "tornado", "hurricane", "record high", "record low", "rapidly falling", "rapidly rising", "sharply colder", "sharply warmer", "plunging", "soaring"]
 
-if "view_mode" not in st.session_state:
-    st.session_state.view_mode = "city"
+PRICE_FLOOR = 20
+PRICE_WARN = 40
+FORECAST_GAP = 3
 
-def format_time_ago(mins):
-    if mins is None:
-        return None
-    if mins < 60:
-        return f"{mins}m"
-    hours = mins // 60
-    remaining_mins = mins % 60
-    if remaining_mins == 0:
-        return f"{hours}h"
-    return f"{hours}h {remaining_mins}m"
+if "default_city" not in st.session_state:
+    st.session_state.default_city = "New York City"
 
-def get_bracket_bounds(range_str):
-    tl = range_str.lower()
-    below_match = re.search(r'<\s*(\d+)°', range_str)
-    if below_match:
-        return -999, int(below_match.group(1)) - 0.5
-    above_match = re.search(r'>\s*(\d+)°', range_str)
-    if above_match:
-        return int(above_match.group(1)) + 0.5, 999
-    range_match = re.search(r'(\d+)[-–]\s*(\d+)°|(\d+)°?\s*to\s*(\d+)°', range_str)
-    if range_match:
-        if range_match.group(1) and range_match.group(2):
-            low, high = int(range_match.group(1)), int(range_match.group(2))
-        else:
-            low, high = int(range_match.group(3)), int(range_match.group(4))
-        return low - 0.5, high + 0.5
-    if "or below" in tl or "below" in tl:
-        nums = re.findall(r'(\d+)°', range_str)
-        if nums:
-            return -999, int(nums[0]) + 0.5
-    if "or above" in tl or "above" in tl:
-        nums = re.findall(r'(\d+)°', range_str)
-        if nums:
-            return int(nums[0]) - 0.5, 999
-    nums = re.findall(r'(\d+)°', range_str)
-    if len(nums) >= 2:
-        return int(nums[0]) - 0.5, int(nums[1]) + 0.5
-    elif nums:
-        return int(nums[0]) - 0.5, int(nums[0]) + 0.5
-    return 0, 100
-
-def get_settlement_from_6hr(extremes_6hr, market_type="low"):
-    if not extremes_6hr:
-        return None, None
-    if market_type == "low":
-        mins = [(time_key, v["min"]) for time_key, v in extremes_6hr.items() if v.get("min") is not None]
-        if mins:
-            mins.sort(key=lambda x: x[1])
-            return int(mins[0][1]), mins[0][0]
-    else:
-        maxs = [(time_key, v["max"]) for time_key, v in extremes_6hr.items() if v.get("max") is not None]
-        if maxs:
-            maxs.sort(key=lambda x: x[1], reverse=True)
-            return int(maxs[0][1]), maxs[0][0]
-    return None, None
-
-def check_low_locked_6hr(extremes_6hr, city_tz_str):
-    if not extremes_6hr:
-        return False, None
-    for time_key, values in extremes_6hr.items():
-        if values.get("min") is not None:
-            try:
-                hour = int(time_key.split(":")[0])
-                if hour >= 6:
-                    return True, time_key
-            except:
-                continue
-    return False, None
-
-@st.cache_data(ttl=60)
-def fetch_nws_6hr_extremes(station, city_tz_str):
+@st.cache_data(ttl=300)
+def fetch_full_nws_recording(station, city_tz_str):
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
         city_tz = pytz.timezone(city_tz_str)
-        resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0"}, timeout=15)
+        today = datetime.now(city_tz).day
+        
+        resp = requests.get(url, headers={"User-Agent": "Temp/1.0"}, timeout=15)
         if resp.status_code != 200:
-            return {}
+            return []
+        
         soup = BeautifulSoup(resp.text, 'html.parser')
         table = soup.find('table')
         if not table:
-            return {}
+            return []
+        
         rows = table.find_all('tr')
-        extremes = {}
-        today = datetime.now(city_tz).day
+        readings = []
+        
         for row in rows[3:]:
             cells = row.find_all('td')
-            if len(cells) >= 10:
-                try:
-                    date_val = cells[0].text.strip()
-                    time_val = cells[1].text.strip()
-                    if date_val and int(date_val) != today:
-                        continue
-                    max_6hr_text = cells[8].text.strip() if len(cells) > 8 else ""
-                    min_6hr_text = cells[9].text.strip() if len(cells) > 9 else ""
-                    if max_6hr_text or min_6hr_text:
-                        max_val = float(max_6hr_text) if max_6hr_text else None
-                        min_val = float(min_6hr_text) if min_6hr_text else None
-                        if max_val is not None or min_val is not None:
-                            time_key = time_val.replace(":", "")[:4]
-                            time_key = time_key[:2] + ":" + time_key[2:]
-                            extremes[time_key] = {"max": max_val, "min": min_val}
-                except:
-                    continue
-        return extremes
-    except:
-        return {}
-
-@st.cache_data(ttl=60)
-def fetch_nws_observations(station, city_tz_str):
-    url = f"https://api.weather.gov/stations/{station}/observations?limit=500"
-    try:
-        city_tz = pytz.timezone(city_tz_str)
-        resp = requests.get(url, headers={"User-Agent": "TempEdge/3.0", "Cache-Control": "no-cache"}, timeout=15)
-        if resp.status_code != 200:
-            return None, None, None, [], None, None, None, None
-        observations = resp.json().get("features", [])
-        if not observations:
-            return None, None, None, [], None, None, None, None
-        now_local = datetime.now(city_tz)
-        today_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        readings = []
-        for obs in observations:
-            props = obs.get("properties", {})
-            timestamp_str = props.get("timestamp", "")
-            temp_c = props.get("temperature", {}).get("value")
-            if not timestamp_str or temp_c is None:
+            if len(cells) < 10:
                 continue
+            
             try:
-                ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                ts_local = ts.astimezone(city_tz)
-                if ts_local >= today_midnight and ts_local <= now_local:
-                    temp_f = round(temp_c * 9/5 + 32, 1)
-                    readings.append({"time": ts_local, "temp": temp_f})
+                date_val = cells[0].text.strip()
+                
+                # ONLY include today's date
+                if date_val and int(date_val) == today:
+                    readings.append({
+                        "date": date_val,
+                        "time": cells[1].text.strip(),
+                        "wind": cells[2].text.strip(),
+                        "vis": cells[3].text.strip(),
+                        "weather": cells[4].text.strip(),
+                        "sky": cells[5].text.strip(),
+                        "air": cells[6].text.strip(),
+                        "dwpt": cells[7].text.strip(),
+                        "max_6hr": cells[8].text.strip(),
+                        "min_6hr": cells[9].text.strip()
+                    })
             except:
                 continue
-        if not readings:
-            return None, None, None, [], None, None, None, None
-        readings.sort(key=lambda x: x["time"], reverse=True)
-        current = readings[0]["temp"]
-        low = min(r["temp"] for r in readings)
-        high = max(r["temp"] for r in readings)
-        readings_chrono = sorted(readings, key=lambda x: x["time"])
-        confirm_time = None
-        mins_since_confirm = None
-        low_found = False
-        for r in readings_chrono:
-            if r["temp"] == low:
-                low_found = True
-            elif low_found and r["temp"] > low:
-                confirm_time = r["time"]
-                mins_since_confirm = int((datetime.now(city_tz) - confirm_time).total_seconds() / 60)
-                break
-        oldest_time = readings_chrono[0]["time"] if readings_chrono else None
-        newest_time = readings_chrono[-1]["time"] if readings_chrono else None
-        display_readings = [{"time": r["time"].strftime("%H:%M"), "temp": r["temp"]} for r in readings]
-        return current, low, high, display_readings, confirm_time, oldest_time, newest_time, mins_since_confirm
+        
+        return readings
     except:
-        return None, None, None, [], None, None, None, None
+        return []
 
 @st.cache_data(ttl=300)
-def fetch_nws_forecast(lat, lon):
+def fetch_6hr_settlement(station, city_tz_str):
+    url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
     try:
-        points_url = f"https://api.weather.gov/points/{lat},{lon}"
-        resp = requests.get(points_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
+        city_tz = pytz.timezone(city_tz_str)
+        today = datetime.now(city_tz).day
+        resp = requests.get(url, headers={"User-Agent": "Temp/1.0"}, timeout=15)
         if resp.status_code != 200:
-            return None
-        forecast_url = resp.json().get("properties", {}).get("forecast")
-        if not forecast_url:
-            return None
-        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
-        if resp.status_code != 200:
-            return None
-        periods = resp.json().get("properties", {}).get("periods", [])
-        return periods[:4] if periods else None
-    except:
-        return None
-
-@st.cache_data(ttl=300)
-def fetch_nws_tomorrow_low(lat, lon):
-    try:
-        points_url = f"https://api.weather.gov/points/{lat},{lon}"
-        resp = requests.get(points_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
-        if resp.status_code != 200:
-            return None, None
-        forecast_url = resp.json().get("properties", {}).get("forecast")
-        if not forecast_url:
-            return None, None
-        resp = requests.get(forecast_url, headers={"User-Agent": "TempEdge/3.0"}, timeout=10)
-        if resp.status_code != 200:
-            return None, None
-        periods = resp.json().get("properties", {}).get("periods", [])
-        tomorrow = (datetime.now(eastern) + timedelta(days=1)).date()
-        for p in periods:
-            start_time = p.get("startTime", "")
-            is_day = p.get("isDaytime", True)
-            temp = p.get("temperature")
-            if start_time and not is_day:
-                try:
-                    period_date = datetime.fromisoformat(start_time.replace("Z", "+00:00")).date()
-                    if period_date == tomorrow:
-                        short_forecast = p.get("shortForecast", "")
-                        return temp, short_forecast
-                except:
+            return None, None, None, None, False, False
+        
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        table = soup.find('table')
+        if not table:
+            return None, None, None, None, False, False
+        
+        rows = table.find_all('tr')
+        all_6hr_mins, all_6hr_maxs = [], []
+        
+        for row in rows[3:]:
+            cells = row.find_all('td')
+            if len(cells) < 10:
+                continue
+            try:
+                date_val = cells[0].text.strip()
+                time_val = cells[1].text.strip()
+                if date_val and int(date_val) != today:
                     continue
-        return None, None
+                
+                max_6hr = cells[8].text.strip()
+                min_6hr = cells[9].text.strip()
+                
+                if max_6hr:
+                    max_val = int(float(max_6hr))
+                    hour = int(time_val.replace(":", "")[:2])
+                    if hour >= 12:
+                        all_6hr_maxs.append((time_val, max_val))
+                
+                if min_6hr:
+                    min_val = int(float(min_6hr))
+                    all_6hr_mins.append((time_val, min_val))
+            except:
+                continue
+        
+        settlement_low = min(all_6hr_mins, key=lambda x: x[1])[1] if all_6hr_mins else None
+        low_time = min(all_6hr_mins, key=lambda x: x[1])[0] if all_6hr_mins else None
+        settlement_high = max(all_6hr_maxs, key=lambda x: x[1])[1] if all_6hr_maxs else None
+        high_time = max(all_6hr_maxs, key=lambda x: x[1])[0] if all_6hr_maxs else None
+        
+        is_low_locked = any(int(t.replace(":", "")[:2]) >= 6 for t, _ in all_6hr_mins)
+        is_high_locked = any(int(t.replace(":", "")[:2]) >= 18 for t, _ in all_6hr_maxs)
+        
+        return settlement_low, settlement_high, low_time, high_time, is_low_locked, is_high_locked
     except:
-        return None, None
+        return None, None, None, None, False, False
 
-@st.cache_data(ttl=60)
-def fetch_kalshi_tomorrow_brackets(series_ticker, city_tz_str="US/Eastern"):
+@st.cache_data(ttl=300)
+def fetch_kalshi_brackets(series_ticker, city_tz_str, is_tomorrow=False):
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
     try:
         resp = requests.get(url, timeout=10)
         if resp.status_code != 200:
             return []
+        
         markets = resp.json().get("markets", [])
         if not markets:
             return []
+        
         city_tz = pytz.timezone(city_tz_str)
-        tomorrow = datetime.now(city_tz) + timedelta(days=1)
-        tomorrow_str = tomorrow.strftime('%y%b%d').upper()
-        tomorrow_markets = [m for m in markets if tomorrow_str in m.get("event_ticker", "").upper()]
-        if not tomorrow_markets:
-            return []
+        target_date = datetime.now(city_tz) + (timedelta(days=1) if is_tomorrow else timedelta(days=0))
+        date_str = target_date.strftime('%y%b%d').upper()
+        
+        target_markets = [m for m in markets if date_str in m.get("event_ticker", "").upper()]
+        if not target_markets:
+            target_markets = [m for m in markets if m.get("event_ticker") == markets[0].get("event_ticker")]
+        
         brackets = []
-        for m in tomorrow_markets:
+        for m in target_markets:
             title = m.get("title", "")
             ticker = m.get("ticker", "")
-            yes_bid = m.get("yes_bid", 0) or 0
             yes_ask = m.get("yes_ask", 0) or 0
-            low_bound, high_bound, bracket_name = None, None, ""
-            range_match = re.search(r'(\d+)\s*[-–to]+\s*(\d+)°', title)
-            if range_match:
-                low_bound = int(range_match.group(1))
-                high_bound = int(range_match.group(2))
-                bracket_name = f"{low_bound}-{high_bound}°"
-            above_match = re.search(r'(\d+)°?\s*(or above|or more|at least|\+)', title, re.IGNORECASE)
-            if above_match and not range_match:
-                low_bound = int(above_match.group(1))
-                high_bound = 999
-                bracket_name = f"{low_bound}° or above"
-            below_match = re.search(r'(below|under|less than)\s*(\d+)°', title, re.IGNORECASE)
-            if below_match and not range_match:
-                high_bound = int(below_match.group(2))
-                low_bound = -999
-                bracket_name = f"below {high_bound}°"
-            if low_bound is not None and high_bound is not None:
-                kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}"
-                brackets.append({"name": bracket_name, "low": low_bound, "high": high_bound, "bid": yes_bid, "ask": yes_ask, "url": kalshi_url, "ticker": ticker})
-        brackets.sort(key=lambda x: x['low'])
-        return brackets
+            
+            low, high, name = None, None, ""
+            
+            gt_match = re.search(r'>\s*(-?\d+)', title)
+            if gt_match:
+                threshold = int(gt_match.group(1))
+                low = threshold + 1
+                high = 999
+                name = f">{threshold} ({low}+)"
+            
+            if low is None:
+                lt_match = re.search(r'<\s*(-?\d+)', title)
+                if lt_match:
+                    threshold = int(lt_match.group(1))
+                    high = threshold - 1
+                    low = -999
+                    name = f"<{threshold} (≤{high})"
+            
+            if low is None:
+                range_match = re.search(r'(-?\d+)\s*to\s*(-?\d+)', title, re.I)
+                if range_match:
+                    low = int(range_match.group(1))
+                    high = int(range_match.group(2))
+                    name = f"{low} to {high}"
+            
+            if low is not None:
+                brackets.append({"name": name, "low": low, "high": high, "ask": yes_ask, "ticker": ticker})
+        
+        return sorted(brackets, key=lambda x: x['ask'])
     except:
         return []
 
-@st.cache_data(ttl=60)
-def fetch_kalshi_brackets(series_ticker, city_tz_str="US/Eastern"):
-    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
-    try:
-        resp = requests.get(url, timeout=10)
-        if resp.status_code != 200:
-            return []
-        markets = resp.json().get("markets", [])
-        if not markets:
-            return []
-        city_tz = pytz.timezone(city_tz_str)
-        today_str = datetime.now(city_tz).strftime('%y%b%d').upper()
-        today_markets = [m for m in markets if today_str in m.get("event_ticker", "").upper()]
-        if not today_markets:
-            first_event = markets[0].get("event_ticker", "")
-            today_markets = [m for m in markets if m.get("event_ticker") == first_event]
-        brackets = []
-        for m in today_markets:
-            title = m.get("title", "")
-            ticker = m.get("ticker", "")
-            yes_bid = m.get("yes_bid", 0) or 0
-            yes_ask = m.get("yes_ask", 0) or 0
-            low_bound, high_bound, bracket_name = None, None, ""
-            range_match = re.search(r'(\d+)\s*[-–to]+\s*(\d+)°', title)
-            if range_match:
-                low_bound = int(range_match.group(1))
-                high_bound = int(range_match.group(2))
-                bracket_name = f"{low_bound}-{high_bound}°"
-            above_match = re.search(r'(\d+)°?\s*(or above|or more|at least|\+)', title, re.IGNORECASE)
-            if above_match and not range_match:
-                low_bound = int(above_match.group(1))
-                high_bound = 999
-                bracket_name = f"{low_bound}° or above"
-            below_match = re.search(r'(below|under|less than)\s*(\d+)°', title, re.IGNORECASE)
-            if below_match and not range_match:
-                high_bound = int(below_match.group(2))
-                low_bound = -999
-                bracket_name = f"below {high_bound}°"
-            if low_bound is not None and high_bound is not None:
-                kalshi_url = f"https://kalshi.com/markets/{series_ticker.lower()}" if series_ticker else f"https://kalshi.com/markets/{m.get('event_ticker', '')}"
-                brackets.append({"name": bracket_name, "low": low_bound, "high": high_bound, "bid": yes_bid, "ask": yes_ask, "url": kalshi_url, "ticker": ticker})
-        brackets.sort(key=lambda x: x['low'])
-        return brackets
-    except:
-        return []
-
-def find_winning_bracket(settlement_temp, brackets):
-    if settlement_temp is None:
+def find_winning_bracket(temp, brackets):
+    if temp is None or not brackets:
         return None
     for b in brackets:
-        if b['high'] == 999 and settlement_temp >= b['low']:
-            return b
-        if b['low'] == -999 and settlement_temp < b['high']:
-            return b
-        if b['low'] <= settlement_temp <= b['high']:
-            return b
-        if b['low'] < settlement_temp <= b['high']:
+        if (b["high"] == 999 and temp >= b["low"]) or (b["low"] == -999 and temp <= b["high"]) or (b["low"] <= temp <= b["high"]):
             return b
     return None
 
-if is_owner:
-    with st.sidebar:
-        st.markdown("""
-        <div style="background:#1a2e1a;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">🔒 SETTLEMENT RULES</div>
-            <div style="color:#c9d1d9;font-size:0.85em;line-height:1.5">
-                <b>LOW:</b> LOWEST 6hr↓ after midnight<br>
-                <b>HIGH:</b> HIGHEST 6hr↑ after midnight<br><br>
-                <b>Lock Times (local):</b><br>
-                • LOW locks @ 06:53 (6hr Min)<br>
-                • HIGH locks @ 18:53 (6hr Max)<br><br>
-                <span style="color:#f59e0b">⚠️ Hourly temps ≠ settlement!</span>
-            </div>
-        </div>
-        <div style="background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#f59e0b;font-weight:700;margin-bottom:8px">🗽 YOUR TRADING SCHEDULE (ET)</div>
-            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>☀️ 7-8 AM</b> → Austin, Miami, NYC, Philly<br>
-                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">Sunrise LOWs</span><br>
-                <b>☀️ 9-10 AM</b> → Los Angeles<br>
-                <span style="color:#6b7280;font-size:0.85em;margin-left:12px">West coast</span>
-            </div>
-        </div>
-        <div style="background:#1a2e1a;border:2px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">🎨 ROW COLORS</div>
-            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <span style="color:#22c55e">🟢 GREEN</span> = 6hr LOCKED<br>
-                <span style="color:#f59e0b">🟡 AMBER</span> = Waiting for 6hr<br>
-                <span style="color:#6b7280">⬛ GRAY</span> = No data
-            </div>
-        </div>
-        <div style="background:#1a1a2e;border:1px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#22c55e;font-weight:700;margin-bottom:8px">💰 ENTRY THRESHOLDS</div>
-            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>🔥 &lt;85¢</b> = JUMP IN (+15¢)<br>
-                <b>✅ 85-90¢</b> = Good (+10-15¢)<br>
-                <b>⚠️ 90-95¢</b> = Small edge<br>
-                <b>❌ 95¢+</b> = Skip it
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+@st.cache_data(ttl=300)
+def fetch_current_temp(station):
+    try:
+        url = f"https://api.weather.gov/stations/{station}/observations/latest"
+        resp = requests.get(url, headers={"User-Agent": "Temp/1.0"}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        temp_c = resp.json().get("properties", {}).get("temperature", {}).get("value")
+        return round(temp_c * 9/5 + 32, 1) if temp_c else None
+    except:
+        return None
+
+@st.cache_data(ttl=900)
+def fetch_nws_forecast(lat, lon):
+    try:
+        points_resp = requests.get(f"https://api.weather.gov/points/{lat},{lon}", headers={"User-Agent": "Temp/1.0"}, timeout=10)
+        if points_resp.status_code != 200:
+            return None, []
+        
+        forecast_url = points_resp.json().get("properties", {}).get("forecast")
+        if not forecast_url:
+            return None, []
+        
+        forecast_resp = requests.get(forecast_url, headers={"User-Agent": "Temp/1.0"}, timeout=10)
+        if forecast_resp.status_code != 200:
+            return None, []
+        
+        periods = forecast_resp.json().get("properties", {}).get("periods", [])[:4]
+        
+        tonight_low = None
+        for p in periods:
+            if not p.get("isDaytime", True):
+                tonight_low = p.get("temperature")
+                break
+        
+        warnings = []
+        for p in periods:
+            text = (p.get("detailedForecast", "") + " " + p.get("shortForecast", "")).lower()
+            for word in WEATHER_DANGER:
+                if word in text and word not in [w.split("'")[1] for w in warnings if "'" in w]:
+                    warnings.append(f"⛈️ '{word.upper()}' in {p.get('name')}")
+        
+        return tonight_low, warnings
+    except:
+        return None, []
+
+def run_guards(settlement, market_type, ask, nws_forecast, weather_warnings):
+    guards = []
+    blocked = False
+    
+    if weather_warnings:
+        for w in weather_warnings:
+            guards.append(w)
+            blocked = True
+    
+    if ask <= PRICE_FLOOR:
+        guards.append(f"💰 PRICE BLOCK: {ask}¢ TOO CHEAP - market knows something!")
+        blocked = True
+    elif ask <= PRICE_WARN:
+        guards.append(f"💰 PRICE WARN: {ask}¢ suspiciously cheap")
+    
+    if nws_forecast and settlement:
+        gap = abs(settlement - nws_forecast)
+        if gap >= FORECAST_GAP:
+            guards.append(f"🌡️ FORECAST: NWS {nws_forecast}°F vs settlement {settlement}°F - {gap}° gap!")
+            blocked = True
+        else:
+            guards.append(f"✅ FORECAST: NWS {nws_forecast}°F within {FORECAST_GAP}° of settlement")
+    
+    return guards, blocked
+
+@st.cache_data(ttl=1800)
+def fetch_tomorrow_forecast(lat, lon):
+    try:
+        points_resp = requests.get(f"https://api.weather.gov/points/{lat},{lon}", headers={"User-Agent": "Temp/1.0"}, timeout=10)
+        forecast_url = points_resp.json().get("properties", {}).get("forecast")
+        forecast_resp = requests.get(forecast_url, headers={"User-Agent": "Temp/1.0"}, timeout=10)
+        periods = forecast_resp.json().get("properties", {}).get("periods", [])
+        
+        tomorrow_low, tomorrow_high = None, None
+        for p in periods:
+            if not any(day in p.get("name", "").lower() for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]):
+                continue
+            temp = p.get("temperature")
+            if temp is None:
+                continue
+            if not p.get("isDaytime", True) and tomorrow_low is None:
+                tomorrow_low = round(temp)
+            elif p.get("isDaytime", True) and tomorrow_high is None:
+                tomorrow_high = round(temp)
+            if tomorrow_low and tomorrow_high:
+                break
+        return tomorrow_low, tomorrow_high
+    except:
+        return None, None
+
+st.title("🌡️ Temperature Trading Dashboard")
+st.caption("⚠️ EXPERIMENTAL - EDUCATIONAL PURPOSES ONLY - NOT FINANCIAL OR BETTING ADVICE")
+if OWNER_MODE:
+    st.caption("🔑 OWNER MODE")
 else:
-    with st.sidebar:
-        st.markdown("""
-        <div style="background:#1a1a2e;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:15px">
-            <div style="color:#3b82f6;font-weight:700;margin-bottom:8px">⏰ LOW LOCK-IN TIMES (ET)</div>
-            <div style="color:#c9d1d9;font-size:0.8em;line-height:1.6">
-                <b>☀️ SUNRISE:</b> Austin/Miami ~7:40 AM, NYC ~7:51 AM, Philly ~7:54 AM, LA ~9:00 AM
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    st.caption("Public View")
 
-st.title("🌡️ LOW TEMP EDGE FINDER")
-st.caption(f"6hr Settlement Data | {now.strftime('%b %d, %Y %I:%M %p ET')}")
-
-def render_hero_box(city_name, cfg):
-    city_tz = pytz.timezone(cfg.get("tz", "US/Eastern"))
-    city_now = datetime.now(city_tz)
-    today_str = city_now.strftime("%A, %B %d, %Y")
-    extremes = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
-    settlement_low, settlement_time = get_settlement_from_6hr(extremes, "low")
-    is_locked, lock_time = check_low_locked_6hr(extremes, cfg.get("tz", "US/Eastern"))
-    brackets = fetch_kalshi_brackets(cfg.get("low", ""), cfg.get("tz", "US/Eastern"))
-    winning = find_winning_bracket(settlement_low, brackets) if settlement_low else None
-    ask = winning.get("ask", 0) if winning else 0
-    profit = 100 - ask
-    bracket_name = winning.get("name", "?") if winning else "?"
-    bracket_url = winning.get("url", "#") if winning else "#"
-    if ask < 85:
-        rating = "🔥 GREAT"
-        profit_color = "#22c55e"
-    elif ask < 90:
-        rating = "✅ GOOD"
-        profit_color = "#22c55e"
-    elif ask < 95:
-        rating = "⚠️ SMALL"
-        profit_color = "#fbbf24"
-    else:
-        rating = "😐 MEH"
-        profit_color = "#9ca3af"
-    mins_since_lock = None
-    if settlement_time and is_locked:
-        try:
-            lock_hour = int(settlement_time.split(":")[0])
-            lock_min = int(settlement_time.split(":")[1])
-            lock_datetime = city_now.replace(hour=lock_hour, minute=lock_min, second=0, microsecond=0)
-            if lock_datetime <= city_now:
-                mins_since_lock = int((city_now - lock_datetime).total_seconds() / 60)
-        except:
-            pass
-    if mins_since_lock is not None:
-        if mins_since_lock < 60:
-            time_ago_str = f"{mins_since_lock} mins ago"
-        else:
-            hours = mins_since_lock // 60
-            mins = mins_since_lock % 60
-            if mins == 0:
-                time_ago_str = f"{hours}h ago"
-            else:
-                time_ago_str = f"{hours}h {mins}m ago"
-    else:
-        time_ago_str = None
-    if settlement_low is not None and is_locked:
-        lock_info = f"🔒 Locked {time_ago_str}" if time_ago_str else "🔒 Locked"
-        if winning:
-            st.markdown(f'<div style="background:linear-gradient(135deg,#052e16,#14532d);border:4px solid #22c55e;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)"><div style="color:#22c55e;font-size:2em;font-weight:800;margin-bottom:10px">✅ LOW LOCKED & CONFIRMED</div><div style="color:#86efac;font-size:1.2em;margin-bottom:5px">{city_name}</div><div style="color:#4ade80;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div><div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(34,197,94,0.5)">{settlement_low}°F</div><div style="color:#4ade80;font-size:1.3em;font-weight:600">{lock_info}</div><div style="color:#86efac;font-size:1em;margin-top:5px">6hr Min @ {settlement_time} local</div><div style="margin-top:25px;padding:20px;background:rgba(0,0,0,0.4);border-radius:12px"><div style="display:flex;justify-content:space-around;align-items:center;flex-wrap:wrap;gap:15px;margin-bottom:15px"><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">WINNER</div><div style="color:#fbbf24;font-size:1.5em;font-weight:800">{bracket_name}</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">ASK</div><div style="color:#fff;font-size:1.5em;font-weight:800">{ask}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">PROFIT</div><div style="color:{profit_color};font-size:1.5em;font-weight:800">+{profit}¢</div></div><div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">VERDICT</div><div style="font-size:1.5em;font-weight:800">{rating}</div></div></div><a href="{bracket_url}" target="_blank" style="text-decoration:none;display:block"><div style="background:linear-gradient(135deg,#22c55e,#16a34a);padding:15px 20px;border-radius:10px;text-align:center;cursor:pointer"><span style="color:#000;font-weight:900;font-size:1.2em">🛒 BUY YES → {bracket_name} @ {ask}¢</span></div></a></div></div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div style="background:linear-gradient(135deg,#052e16,#14532d);border:4px solid #22c55e;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(34,197,94,0.3)"><div style="color:#22c55e;font-size:2em;font-weight:800;margin-bottom:10px">✅ LOW LOCKED & CONFIRMED</div><div style="color:#86efac;font-size:1.2em;margin-bottom:5px">{city_name}</div><div style="color:#4ade80;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div><div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(34,197,94,0.5)">{settlement_low}°F</div><div style="color:#4ade80;font-size:1.3em;font-weight:600">{lock_info}</div><div style="color:#86efac;font-size:1em;margin-top:5px">6hr Min @ {settlement_time} local</div><div style="margin-top:20px;padding:15px;background:rgba(0,0,0,0.3);border-radius:10px"><span style="color:#f59e0b;font-size:1.1em">⚠️ No matching bracket found on Kalshi</span></div></div>', unsafe_allow_html=True)
-    elif settlement_low is not None:
-        if winning:
-            ask = winning.get("ask", 0)
-            profit = 100 - ask
-            bracket_name = winning.get("name", "?")
-            bracket_url = winning.get("url", "")
-            trade_section = f"""
-            <div style="margin-top:25px;padding:20px;background:rgba(0,0,0,0.4);border-radius:12px">
-                <div style="display:flex;justify-content:space-around;align-items:center;flex-wrap:wrap;gap:15px;margin-bottom:15px">
-                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">CURRENT WINNER</div><div style="color:#fbbf24;font-size:1.5em;font-weight:800">{bracket_name}</div></div>
-                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">ASK</div><div style="color:#fff;font-size:1.5em;font-weight:800">{ask}¢</div></div>
-                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.8em">PROFIT IF HOLDS</div><div style="color:#60a5fa;font-size:1.5em;font-weight:800">+{profit}¢</div></div>
-                </div>
-                <div style="color:#fbbf24;font-size:0.9em;text-align:center;margin-bottom:10px">⏳ Wait for 06:53 lock before buying</div>
-            </div>"""
-        else:
-            trade_section = """
-            <div style="margin-top:20px;padding:15px;background:rgba(0,0,0,0.3);border-radius:10px">
-                <span style="color:#fbbf24;font-size:1.1em">⏳ Early 6hr data - may update at next reading</span>
-            </div>"""
-        st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#0c1929,#1e3a5f);border:4px solid #3b82f6;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(59,130,246,0.3)">
-            <div style="color:#3b82f6;font-size:2em;font-weight:800;margin-bottom:10px">📊 6hr DATA AVAILABLE</div>
-            <div style="color:#93c5fd;font-size:1.2em;margin-bottom:5px">{city_name}</div>
-            <div style="color:#60a5fa;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div>
-            <div style="color:#fff;font-size:6em;font-weight:900;margin:20px 0;text-shadow:0 0 20px rgba(59,130,246,0.5)">{settlement_low}°F</div>
-            <div style="color:#60a5fa;font-size:1.3em;font-weight:600">6hr Min @ {settlement_time} local</div>
-            {trade_section}
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        current_temp, obs_low, _, _, _, _, _, _ = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
-        preview_text = f"Hourly preview: {obs_low}°F (NOT settlement)" if obs_low else "No data yet"
-        st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#292211,#44330d);border:4px solid #f59e0b;border-radius:20px;padding:40px;margin:20px 0;text-align:center;box-shadow:0 0 30px rgba(245,158,11,0.3)">
-            <div style="color:#f59e0b;font-size:2em;font-weight:800;margin-bottom:10px">⏳ WAITING FOR 6hr DATA</div>
-            <div style="color:#fcd34d;font-size:1.2em;margin-bottom:5px">{city_name}</div>
-            <div style="color:#f59e0b;font-size:1.4em;font-weight:700;margin-bottom:15px">📅 {today_str}</div>
-            <div style="color:#6b7280;font-size:4em;font-weight:700;margin:20px 0">--°F</div>
-            <div style="color:#fbbf24;font-size:1.3em;font-weight:600">{preview_text}</div>
-            <div style="margin-top:20px;padding:15px;background:rgba(0,0,0,0.3);border-radius:10px">
-                <span style="color:#ef4444;font-size:1.1em">⚠️ 6hr settlement appears at 06:53 local time</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-if is_owner:
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        if st.button("📍 City", use_container_width=True, type="primary" if st.session_state.view_mode == "city" else "secondary"):
-            st.session_state.view_mode = "city"
-            st.rerun()
-    with col2:
-        if st.button("🔍 Today", use_container_width=True, type="primary" if st.session_state.view_mode == "today" else "secondary"):
-            st.session_state.view_mode = "today"
-            st.rerun()
-    with col3:
-        if st.button("🎰 Lottery", use_container_width=True, type="primary" if st.session_state.view_mode == "tomorrow" else "secondary"):
-            st.session_state.view_mode = "tomorrow"
-            st.rerun()
-    with col4:
-        if st.button("🦈 SHARK", use_container_width=True, type="primary" if st.session_state.view_mode == "shark" else "secondary"):
-            st.session_state.view_mode = "shark"
-            st.rerun()
-    st.markdown("---")
-
-if is_owner and st.session_state.view_mode == "today":
-    render_hero_box(default_city, CITY_CONFIG.get(default_city, {}))
-    st.subheader("🔍 All Cities Scanner")
-    if st.button("🔄 Refresh Scan", use_container_width=True):
+with st.sidebar:
+    st.header("⚙️ Settings")
+    
+    city_selection = st.selectbox("Default City for NWS Table", list(CITIES.keys()), index=list(CITIES.keys()).index(st.session_state.default_city))
+    
+    if st.button("Set as Default"):
+        st.session_state.default_city = city_selection
+        st.success(f"✅ {city_selection} set as default!")
+    
+    st.divider()
+    mode = st.radio("Mode", ["🦈 SHARK (Today)", "🦅 TOM (Tomorrow)", "📊 Both"])
+    st.divider()
+    
+    show_all_cities = st.checkbox("Show All Cities", value=True)
+    
+    st.divider()
+    if st.button("🔄 Refresh"):
         st.cache_data.clear()
         st.rerun()
-    results = []
-    et_date = datetime.now(eastern).date()
-    with st.spinner("Scanning all 5 cities (using 6hr settlement data)..."):
-        for city_name, cfg in CITY_CONFIG.items():
-            city_tz = pytz.timezone(cfg["tz"])
-            city_date = datetime.now(city_tz).date()
-            city_date_str = datetime.now(city_tz).strftime("%b %d")
-            if city_date < et_date:
-                time_until_midnight = (datetime.now(city_tz).replace(hour=23, minute=59, second=59) - datetime.now(city_tz)).total_seconds()
-                mins_left = int(time_until_midnight / 60) + 1
-                results.append({"city": city_name, "status": "⏸️ YESTERDAY", "city_date_str": city_date_str, "mins_left": mins_left})
-                continue
-            current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg["station"], cfg["tz"])
-            extremes_6hr = fetch_nws_6hr_extremes(cfg["station"], cfg["tz"])
-            brackets = fetch_kalshi_brackets(cfg["low"], cfg["tz"])
-            settlement_low, settlement_time = get_settlement_from_6hr(extremes_6hr, "low")
-            is_locked, lock_time = check_low_locked_6hr(extremes_6hr, cfg["tz"])
-            if settlement_low is None:
-                if obs_low is not None:
-                    results.append({"city": city_name, "status": "⏳ WAITING", "obs_low": obs_low, "settlement_low": None, "bracket": None, "bid": 0, "ask": 100, "edge": 0, "url": None, "locked": False, "settlement_time": None})
+
+selected_cities = list(CITIES.keys()) if show_all_cities else [city_selection]
+
+if mode in ["🦈 SHARK (Today)", "📊 Both"]:
+    st.header("🦈 SHARK - Locked Settlement Scanner")
+    
+    if OWNER_MODE:
+        st.subheader(f"📊 Recent NWS Observations + 6hr Extremes - {city_selection}")
+        
+        cfg = CITIES[city_selection]
+        current_temp, obs_low, obs_high, readings, _, oldest_time, newest_time, _ = fetch_nws_observations(cfg["nws"], cfg["tz"])
+        full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
+        settlement_low, settlement_high, low_time, high_time, is_low_locked, is_high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
+        
+        if oldest_time and newest_time:
+            st.caption(f"📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local | {len(readings)} readings")
+        
+        if settlement_low is not None:
+            lock_status = "🔒 LOCKED" if is_low_locked else "⏳ WAITING"
+            st.markdown(f"<div style='background:#1a2e1a;border:2px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px;text-align:center'><span style='color:#22c55e;font-weight:700;font-size:1.1em'>📍 SETTLEMENT LOW: {settlement_low}°F @ {low_time} {lock_status}</span></div>", unsafe_allow_html=True)
+        
+        if current_temp:
+            st.markdown(f"""
+            <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
+                <div style="display:flex;justify-content:space-around;text-align:center">
+                    <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
+                    <div><div style="color:#6b7280;font-size:0.8em">HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        if readings and full_readings:
+            # Create a map of time -> 6hr data
+            six_hr_map = {}
+            for r in full_readings:
+                time_key = r['time']
+                six_hr_map[time_key] = {
+                    'max_6hr': r['max_6hr'],
+                    'min_6hr': r['min_6hr']
+                }
+            
+            # Find the hourly low
+            low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
+            
+            for i, r in enumerate(readings):
+                time_key = r['time']
+                temp = r['temp']
+                
+                # Get 6hr data if available
+                six_hr_data = six_hr_map.get(time_key, {})
+                six_hr_max = six_hr_data.get('max_6hr', '')
+                six_hr_min = six_hr_data.get('min_6hr', '')
+                
+                # Build 6hr display
+                six_hr_display = ""
+                if six_hr_max:
+                    six_hr_display += f"<span style='color:#ef4444;font-weight:700'>6hr↑{six_hr_max}</span> "
+                if six_hr_min:
+                    six_hr_display += f"<span style='color:#22c55e;font-weight:700'>6hr↓{six_hr_min}</span>"
+                
+                # Highlight the hourly LOW with AMBER
+                if i == low_idx:
+                    row_style = "display:flex;justify-content:space-between;padding:8px;border-radius:4px;background:#2d1f0a;border:2px solid #f59e0b;margin:2px 0"
+                    temp_style = "color:#fbbf24;font-weight:700;font-size:1.1em"
+                    label = " ⬅️ HOURLY LOW"
                 else:
-                    results.append({"city": city_name, "status": "❌ NO DATA", "obs_low": None, "settlement_low": None, "bracket": None, "bid": 0, "ask": 100, "edge": 0, "url": None, "locked": False, "settlement_time": None})
-                continue
-            winning = find_winning_bracket(settlement_low, brackets)
-            if winning:
-                bid = winning["bid"]
-                ask = winning["ask"]
-                edge = (100 - ask) if is_locked and ask < 95 else 0
-                if ask < 85:
-                    rating = "🔥"
-                elif ask < 90:
-                    rating = "✅"
-                elif ask < 95:
-                    rating = "⚠️"
-                else:
-                    rating = "❌"
-                results.append({"city": city_name, "status": "✅", "obs_low": obs_low, "settlement_low": settlement_low, "settlement_time": settlement_time, "bracket": winning["name"], "bid": bid, "ask": ask, "edge": edge, "rating": rating, "url": winning["url"], "locked": is_locked})
-            else:
-                results.append({"city": city_name, "status": "⚠️ NO BRACKET", "obs_low": obs_low, "settlement_low": settlement_low, "settlement_time": settlement_time, "bracket": None, "bid": 0, "ask": 100, "edge": 0, "url": None, "locked": is_locked})
-    results_with_edge = sorted([r for r in results if r.get("edge") and r["edge"] >= 10], key=lambda x: x["edge"], reverse=True)
-    st.markdown("### 🔥 OPPORTUNITIES (6hr Settlement)")
-    if results_with_edge:
-        for r in results_with_edge:
-            lock_icon = "🔒" if r["locked"] else "⏳"
-            settle_text = f"6hr↓{r['settlement_low']}° @ {r['settlement_time']}" if r.get('settlement_time') else f"6hr↓{r['settlement_low']}°"
-            rating_color = "#22c55e" if r["rating"] == "🔥" else "#3b82f6" if r["rating"] == "✅" else "#f59e0b"
-            st.markdown(f"""
-            <div style="background:linear-gradient(135deg,#1a2e1a,#0d1117);border:2px solid {rating_color};border-radius:12px;padding:20px;margin:10px 0">
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-                    <div><span style="color:{rating_color};font-size:1.5em;font-weight:700">{r['rating']} {r['city']}</span><span style="color:#6b7280;margin-left:10px">{lock_icon}</span></div>
-                    <div style="text-align:right"><div style="color:#fbbf24;font-size:1.8em;font-weight:800">+{r['edge']:.0f}¢ EDGE</div></div>
-                </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:15px;flex-wrap:wrap;gap:10px">
-                    <div><span style="color:#9ca3af">Settlement:</span><span style="color:#22c55e;font-weight:700;margin-left:5px">{settle_text}</span></div>
-                    <div><span style="color:#9ca3af">Winner:</span><span style="color:#fbbf24;font-weight:700;margin-left:5px">{r['bracket']}</span></div>
-                </div>
-                <div style="display:flex;justify-content:center;gap:20px;margin-top:15px;padding:10px;background:#161b22;border-radius:8px">
-                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.75em">BID</div><div style="color:#22c55e;font-size:1.2em;font-weight:700">{r['bid']:.0f}¢</div></div>
-                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.75em">ASK</div><div style="color:#ef4444;font-size:1.2em;font-weight:700">{r['ask']:.0f}¢</div></div>
-                    <div style="text-align:center"><div style="color:#6b7280;font-size:0.75em">SPREAD</div><div style="color:#fbbf24;font-size:1.2em;font-weight:700">{r['ask'] - r['bid']:.0f}¢</div></div>
-                </div>
-                <a href="{r['url']}" target="_blank" style="text-decoration:none;display:block;margin-top:15px">
-                    <div style="background:linear-gradient(135deg,#22c55e,#16a34a);padding:12px 20px;border-radius:8px;text-align:center;cursor:pointer">
-                        <span style="color:#000;font-weight:800;font-size:1.1em">🛒 BUY YES → {r['bracket']}</span>
-                    </div>
-                </a>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.info("No opportunities with 10¢+ edge found.")
-    st.markdown("### 📊 ALL CITIES")
-    for r in results:
-        if r["status"] == "⏸️ YESTERDAY":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #6b7280;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#6b7280'>⏸️ {r['city']}</span><span style='color:#9ca3af;margin-left:10px'>— Still on {r['city_date_str']} (rolls over in ~{r['mins_left']} min)</span></div>", unsafe_allow_html=True)
-        elif r["status"] == "❌ NO DATA":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#ef4444'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— No NWS data</span></div>", unsafe_allow_html=True)
-        elif r["status"] == "⏳ WAITING":
-            st.markdown(f"<div style='background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>⏳ {r['city']}</span><span style='color:#9ca3af;margin-left:10px'>— Hourly: {r.get('obs_low', '?')}°F — Waiting for 6hr data</span></div>", unsafe_allow_html=True)
-        elif r["status"] == "⚠️ NO BRACKET":
-            lock_icon = "🔒" if r["locked"] else "⏳"
-            row_bg = "#1a2e1a" if r["locked"] else "#2d1f0a"
-            row_border = "#22c55e" if r["locked"] else "#f59e0b"
-            settle_text = f"6hr↓{r['settlement_low']}° @ {r['settlement_time']}" if r.get('settlement_time') else f"6hr↓{r.get('settlement_low', '?')}°"
-            st.markdown(f"<div style='background:{row_bg};border:2px solid {row_border};border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span><span style='color:#22c55e;margin-left:10px'>{settle_text}</span><span style='color:#6b7280;margin-left:10px'>— No bracket match</span></div>", unsafe_allow_html=True)
-        else:
-            lock_icon = "🔒" if r["locked"] else "⏳"
-            row_bg = "#1a2e1a" if r["locked"] else "#0d1117"
-            row_border = "#22c55e" if r["locked"] else "#30363d"
-            edge_display = f"<span style='color:#22c55e;font-weight:700'>{r.get('rating','')} +{r['edge']:.0f}¢</span>" if r.get("edge") and r["edge"] >= 10 else "<span style='color:#6b7280'>—</span>"
-            ask_color = "#22c55e" if r["ask"] < 85 else "#3b82f6" if r["ask"] < 90 else "#f59e0b" if r["ask"] < 95 else "#9ca3af"
-            settle_text = f"6hr↓{r['settlement_low']}°" if r.get('settlement_low') else "—"
-            st.markdown(f"<div style='background:{row_bg};border:2px solid {row_border};border-radius:8px;padding:12px;margin:5px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'><div><span style='color:#fff;font-weight:600'>{r['city']}</span><span style='color:#6b7280;margin-left:8px'>{lock_icon}</span></div><div><span style='color:#22c55e;font-weight:700'>{settle_text}</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#fbbf24'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:#9ca3af'>Ask:</span><span style='color:{ask_color};margin:0 3px'>{r['ask']:.0f}¢</span><span style='color:#6b7280;margin:0 5px'>|</span>{edge_display}</div></div>", unsafe_allow_html=True)
-    st.markdown("---")
-    st.markdown(f"<div style='text-align:center;color:#6b7280;font-size:0.8em'>Last scan: {now.strftime('%I:%M %p ET')} | 🟢 = 6hr LOCKED | 🟡 = Waiting for 6hr</div>", unsafe_allow_html=True)
-    st.markdown("---")
-    tomorrow_date = (datetime.now(eastern) + timedelta(days=1)).strftime('%A, %b %d')
-    st.subheader(f"🔮 TOMORROW'S LOW ({tomorrow_date})")
-    tomorrow_results = []
-    with st.spinner("Scanning tomorrow's markets..."):
-        for city_name, cfg in CITY_CONFIG.items():
-            forecast_low, forecast_desc = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
-            brackets = fetch_kalshi_tomorrow_brackets(cfg["low"], cfg["tz"])
-            if forecast_low is None:
-                tomorrow_results.append({"city": city_name, "status": "❌", "forecast_low": None, "bracket": None, "ask": None, "url": None})
-                continue
-            if not brackets:
-                tomorrow_results.append({"city": city_name, "status": "⚠️", "forecast_low": forecast_low, "bracket": None, "ask": None, "url": None})
-                continue
-            winning = find_winning_bracket(forecast_low, brackets)
-            if winning:
-                tomorrow_results.append({"city": city_name, "status": "✅", "forecast_low": forecast_low, "bracket": winning["name"], "bid": winning["bid"], "ask": winning["ask"], "url": winning["url"]})
-            else:
-                tomorrow_results.append({"city": city_name, "status": "⚠️", "forecast_low": forecast_low, "bracket": None, "ask": None, "url": None})
-    cheap_opps = [r for r in tomorrow_results if r.get("ask") and r["ask"] < 40]
-    cheap_opps.sort(key=lambda x: x["ask"])
-    if cheap_opps:
-        st.markdown("### 💰 CHEAP ENTRIES (Ask < 40¢)")
-        for r in cheap_opps:
-            potential = 100 - r["ask"]
-            st.markdown(f"""
-            <div style="background:linear-gradient(135deg,#1a1a2e,#0d1117);border:2px solid #3b82f6;border-radius:12px;padding:20px;margin:10px 0">
-                <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:#3b82f6;font-size:1.4em;font-weight:700">{r['city']}</span>
-                    <span style="color:#22c55e;font-size:1.8em;font-weight:800">{r['ask']:.0f}¢</span>
-                </div>
-                <div style="margin-top:10px"><span style="color:#9ca3af">NWS:</span><span style="color:#fbbf24;font-weight:700;margin-left:5px">{r['forecast_low']}°F</span><span style="color:#6b7280;margin:0 10px">→</span><span style="color:#22c55e;font-weight:700">{r['bracket']}</span></div>
-                <div style="margin-top:10px;color:#9ca3af">Potential: <span style="color:#22c55e;font-weight:700">+{potential:.0f}¢</span></div>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.info("No cheap entries (all > 40¢)")
-    st.markdown("### 📋 ALL CITIES - TOMORROW")
-    for r in tomorrow_results:
-        if r["status"] == "❌":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#ef4444'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— No forecast</span></div>", unsafe_allow_html=True)
-        elif r["status"] == "⚠️":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#f59e0b'>{r['city']}</span><span style='color:#6b7280;margin-left:10px'>— {r.get('forecast_low', '?')}°F — No bracket</span></div>", unsafe_allow_html=True)
-        else:
-            ask_color = "#22c55e" if r["ask"] < 30 else "#3b82f6" if r["ask"] < 40 else "#f59e0b" if r["ask"] < 50 else "#9ca3af"
-            st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0;display:flex;justify-content:space-between;align-items:center'><span style='color:#fff;font-weight:600'>{r['city']}</span><div><span style='color:#fbbf24'>{r['forecast_low']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#22c55e'>{r['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:{ask_color};font-weight:700'>{r['ask']:.0f}¢</span></div></div>", unsafe_allow_html=True)
-
-elif is_owner and st.session_state.view_mode == "shark":
-    render_hero_box(default_city, CITY_CONFIG.get(default_city, {}))
-    st.subheader("🦈 SHARK MODE - 6hr Settlement Hunter")
-    st.markdown("""
-    <div style="background:linear-gradient(135deg,#1a1a2e,#2d1f5e);border:2px solid #8b5cf6;border-radius:12px;padding:20px;margin:10px 0">
-        <div style="color:#8b5cf6;font-size:1.3em;font-weight:800;text-align:center">NOW USING 6HR SETTLEMENT DATA</div>
-        <div style="color:#c9d1d9;font-size:0.9em;margin-top:10px;text-align:center">
-            6hr↓ = Settlement LOW • 6hr↑ = Settlement HIGH<br>
-            <b style="color:#22c55e">Lock = 6hr value exists at 06:53+</b>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("🔄 Refresh All Cities", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-    st.markdown("### 📊 ALL CITIES - SHARK SCAN (6hr Settlement)")
-    et_date = datetime.now(eastern).date()
-    for city_name, cfg in CITY_CONFIG.items():
-        city_tz = pytz.timezone(cfg["tz"])
-        city_date = datetime.now(city_tz).date()
-        city_date_str = datetime.now(city_tz).strftime("%b %d")
-        if city_date < et_date:
-            time_until = datetime.now(city_tz).replace(hour=23, minute=59) - datetime.now(city_tz)
-            mins_left = int(time_until.total_seconds() / 60) + 1
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #6b7280;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#6b7280'>⏸️ {city_name}</span><span style='color:#9ca3af;margin-left:10px'>— Still on {city_date_str} (rolls over in ~{mins_left} min)</span></div>", unsafe_allow_html=True)
-            continue
-        current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg["station"], cfg["tz"])
-        extremes_6hr = fetch_nws_6hr_extremes(cfg["station"], cfg["tz"])
-        brackets = fetch_kalshi_brackets(cfg["low"], cfg["tz"])
-        settlement_low, settlement_time = get_settlement_from_6hr(extremes_6hr, "low")
-        is_locked, lock_time = check_low_locked_6hr(extremes_6hr, cfg["tz"])
-        city_hour = datetime.now(city_tz).hour
-        if settlement_low is None:
-            if obs_low is not None:
-                st.markdown(f"<div style='background:#2d1f0a;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>⏳ {city_name}</span><span style='color:#9ca3af;margin-left:10px'>— Hourly preview: {obs_low}°F — Waiting for 6hr data</span></div>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#ef4444'>❌ {city_name}</span><span style='color:#6b7280;margin-left:10px'>— No NWS data</span></div>", unsafe_allow_html=True)
-            continue
-        winning = find_winning_bracket(settlement_low, brackets)
-        if winning:
-            ask = winning["ask"]
-            if is_locked:
-                prob = 95
-            elif city_hour >= 6:
-                prob = 70
-            else:
-                prob = 40
-            if is_locked and ask <= 30:
-                row_bg = "#1a2e1a"
-                row_border = "#22c55e"
-                status_icon = "🦈"
-                status_text = f"6hr LOCKED @ {settlement_time}"
-            elif is_locked:
-                row_bg = "#1a1a2e"
-                row_border = "#3b82f6"
-                status_icon = "🔒"
-                status_text = f"6hr LOCKED @ {settlement_time}"
-            else:
-                row_bg = "#2d1f0a"
-                row_border = "#f59e0b"
-                status_icon = "⏳"
-                status_text = "Waiting for 06:53 6hr"
-            st.markdown(f"""
-            <div style="background:{row_bg};border:2px solid {row_border};border-radius:8px;padding:15px;margin:8px 0">
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-                    <div><span style="color:#fff;font-size:1.1em;font-weight:700">{status_icon} {city_name}</span><span style="color:#9ca3af;margin-left:10px;font-size:0.9em">{status_text}</span></div>
-                    <div style="text-align:right"><span style="color:#22c55e;font-weight:700">6hr↓{settlement_low}°</span><span style="color:#6b7280;margin:0 5px">→</span><span style="color:#fbbf24;font-weight:700">{winning['name']}</span><span style="color:#6b7280;margin:0 5px">|</span><span style="color:#22c55e;font-weight:700">{ask}¢</span></div>
-                </div>
-                <div style="margin-top:10px;padding:8px;background:#161b22;border-radius:6px;display:flex;justify-content:space-around;font-size:0.85em">
-                    <span style="color:#6b7280">Current: <b style="color:#fff">{current_temp}°F</b></span>
-                    <span style="color:#6b7280">Hourly Low: <b style="color:#3b82f6">{obs_low}°F</b></span>
-                    <span style="color:#6b7280">Hour: <b style="color:#fff">{city_hour}</b></span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:12px;margin:5px 0'><span style='color:#f59e0b'>⚠️ {city_name}</span><span style='color:#22c55e;margin-left:10px'>6hr↓{settlement_low}°</span><span style='color:#6b7280;margin-left:10px'>— No bracket match</span></div>", unsafe_allow_html=True)
-    st.markdown("""
-    <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin-top:20px">
-        <div style="color:#9ca3af;font-size:0.85em;line-height:1.8">
-            🦈 <b style="color:#22c55e">6hr LOCKED</b> = 6hr↓ exists at 06:53+ → Settlement confirmed<br>
-            ⏳ <b style="color:#f59e0b">Waiting</b> = Before 06:53 or no 6hr data yet<br>
-            <span style="color:#ef4444">⚠️ Hourly temps are PREVIEW ONLY - settlement uses 6hr!</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-elif is_owner and st.session_state.view_mode == "tomorrow":
-    render_hero_box(default_city, CITY_CONFIG.get(default_city, {}))
-    tomorrow_date = (datetime.now(eastern) + timedelta(days=1)).strftime('%A, %b %d')
-    st.subheader(f"🎰 TOMORROW'S LOTTERY ({tomorrow_date})")
-    st.caption("Find cheap brackets under 10¢ → Check Grok forecast → Buy matches")
-    if st.button("🔄 Refresh Scan", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-    tickets = []
-    all_cities = []
-    with st.spinner("Scanning tomorrow's markets..."):
-        for city_name, cfg in CITY_CONFIG.items():
-            pattern_icon = "☀️"
-            forecast_low, forecast_desc = fetch_nws_tomorrow_low(cfg["lat"], cfg["lon"])
-            brackets = fetch_kalshi_tomorrow_brackets(cfg["low"], cfg["tz"])
-            if forecast_low is None:
-                all_cities.append({"city": city_name, "pattern": pattern_icon, "status": "NO FORECAST", "forecast": None})
-                continue
-            if not brackets:
-                all_cities.append({"city": city_name, "pattern": pattern_icon, "status": "NO MARKET", "forecast": forecast_low})
-                continue
-            winning = find_winning_bracket(forecast_low, brackets)
-            if winning:
-                data = {"city": city_name, "pattern": pattern_icon, "forecast": forecast_low, "bracket": winning["name"], "bid": winning["bid"], "ask": winning["ask"], "url": winning["url"]}
-                all_cities.append(data)
-                if winning["ask"] <= 10:
-                    tickets.append(data)
-            else:
-                all_cities.append({"city": city_name, "pattern": pattern_icon, "status": "NO BRACKET", "forecast": forecast_low})
-    if tickets:
-        st.markdown("### 🎰 CHEAP ENTRIES (≤10¢)")
-        for t in sorted(tickets, key=lambda x: x["ask"]):
-            color = "#fbbf24" if t["ask"] <= 5 else "#22c55e"
-            potential = 100 - t["ask"]
-            check_time = CHECK_TIMES_ET.get(t['city'], "7-10 AM ET")
-            st.markdown(f"""
-            <div style="background:#0d1117;border:2px solid {color};border-radius:12px;padding:20px;margin:10px 0">
-                <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:{color};font-size:1.4em;font-weight:700">{t["pattern"]} {t["city"]}</span>
-                    <span style="color:#22c55e;font-size:1.8em;font-weight:800">{t["ask"]}¢</span>
-                </div>
-                <div style="margin-top:10px"><span style="color:#9ca3af">NWS Forecast:</span><span style="color:#fbbf24;font-weight:700;margin-left:5px">{t["forecast"]}°F</span><span style="color:#6b7280;margin:0 10px">→</span><span style="color:#22c55e;font-weight:700">{t["bracket"]}</span></div>
-                <div style="margin-top:10px;color:#9ca3af">Potential: <span style="color:#22c55e;font-weight:700">+{potential}¢</span> | Lock time: <span style="color:#3b82f6;font-weight:700">{check_time}</span></div>
-                <a href="{t["url"]}" target="_blank" style="text-decoration:none;display:block;margin-top:15px">
-                    <div style="background:linear-gradient(135deg,#22c55e,#16a34a);padding:12px;border-radius:8px;text-align:center">
-                        <span style="color:#000;font-weight:800">🎰 VIEW ON KALSHI →</span>
-                    </div>
-                </a>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.info("No cheap entries ≤10¢ found. Check back later or use Tomorrow Scanner CLI.")
-    st.markdown("### 📋 ALL CITIES - TOMORROW")
-    for c in all_cities:
-        check_time = CHECK_TIMES_ET.get(c['city'], "7-10 AM ET")
-        if c.get("status") == "NO FORECAST":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#ef4444'>{c['pattern']} {c['city']}</span><span style='color:#6b7280;margin-left:10px'>— No forecast</span></div>", unsafe_allow_html=True)
-        elif c.get("status") == "NO MARKET":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#f59e0b'>{c['pattern']} {c['city']}</span><span style='color:#6b7280;margin-left:10px'>— {c.get('forecast', '?')}°F — Market not open</span></div>", unsafe_allow_html=True)
-        elif c.get("status") == "NO BRACKET":
-            st.markdown(f"<div style='background:#1a1a2e;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0'><span style='color:#f59e0b'>{c['pattern']} {c['city']}</span><span style='color:#6b7280;margin-left:10px'>— {c.get('forecast', '?')}°F — No bracket match</span></div>", unsafe_allow_html=True)
-        else:
-            ask_color = "#22c55e" if c["ask"] <= 5 else "#fbbf24" if c["ask"] <= 10 else "#3b82f6" if c["ask"] < 40 else "#9ca3af"
-            st.markdown(f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;margin:5px 0;display:flex;justify-content:space-between;align-items:center'><span style='color:#fff;font-weight:600'>{c['pattern']} {c['city']}</span><div><span style='color:#fbbf24'>{c['forecast']}°F</span><span style='color:#6b7280;margin:0 8px'>→</span><span style='color:#22c55e'>{c['bracket']}</span><span style='color:#6b7280;margin:0 5px'>|</span><span style='color:{ask_color};font-weight:700'>{c['ask']}¢</span></div></div>", unsafe_allow_html=True)
-
-elif is_owner and st.session_state.view_mode == "city":
-    c1, c2 = st.columns([4, 1])
-    with c1:
-        city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
-    with c2:
-        cfg = CITY_CONFIG.get(city, {})
-        nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
-        st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
-    cfg = CITY_CONFIG.get(city, {})
-    if st.button("⭐ Set as Default City", use_container_width=False):
-        st.query_params["city"] = city
-        st.success(f"✓ Bookmark to save {city} as default!")
-    render_hero_box(city, cfg)
-    current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
-    extremes_6hr = fetch_nws_6hr_extremes(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
-    settlement_low, settlement_time = get_settlement_from_6hr(extremes_6hr, "low")
-    is_locked, lock_time = check_low_locked_6hr(extremes_6hr, cfg.get("tz", "US/Eastern"))
-    if current_temp:
-        st.markdown(f"""
-        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
-            <div style="display:flex;justify-content:space-around;text-align:center">
-                <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
-                <div><div style="color:#6b7280;font-size:0.8em">HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        if readings:
-            with st.expander("📊 Recent NWS Observations + 6hr Extremes", expanded=True):
-                if oldest_time and newest_time:
-                    st.markdown(f"<div style='color:#6b7280;font-size:0.8em;margin-bottom:10px;text-align:center'>📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local | {len(readings)} readings</div>", unsafe_allow_html=True)
-                if settlement_low is not None:
-                    st.markdown(f"<div style='background:#1a2e1a;border:2px solid #22c55e;border-radius:8px;padding:12px;margin-bottom:15px;text-align:center'><span style='color:#22c55e;font-weight:700;font-size:1.1em'>📍 SETTLEMENT: 6hr↓{settlement_low}° @ {settlement_time}</span></div>", unsafe_allow_html=True)
-                display_list = readings
-                low_idx = next((i for i, r in enumerate(display_list) if r['temp'] == obs_low), None)
-                for i, r in enumerate(display_list):
-                    time_key = r['time']
-                    six_hr = extremes_6hr.get(time_key, {})
-                    six_hr_display = ""
-                    if six_hr.get('max') is not None:
-                        six_hr_display += f"<span style='color:#ef4444;font-weight:700'>6hr↑{six_hr['max']:.0f}°</span> "
-                    if six_hr.get('min') is not None:
-                        six_hr_display += f"<span style='color:#22c55e;font-weight:700'>6hr↓{six_hr['min']:.0f}°</span>"
-                    if i == low_idx:
-                        row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;background:#2d1f0a;border:1px solid #f59e0b;margin:2px 0"
-                        temp_style = "color:#fbbf24;font-weight:700"
-                        label = " ↩️ HOURLY LOW"
-                    else:
-                        row_style = "display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"
-                        temp_style = "color:#fff;font-weight:600"
-                        label = ""
-                    st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:50px'>{r['time']}</span><span style='flex:1;text-align:center;font-size:0.85em'>{six_hr_display}</span><span style='{temp_style}'>{r['temp']}°F{label}</span></div>", unsafe_allow_html=True)
-    else:
-        st.warning("⚠️ Could not fetch NWS observations")
-    st.markdown("---")
-    st.subheader("📡 NWS Forecast")
-    forecast = fetch_nws_forecast(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
-    if forecast:
-        fcols = st.columns(len(forecast))
-        for i, period in enumerate(forecast):
-            with fcols[i]:
-                name = period.get("name", "")
-                temp = period.get("temperature", "")
-                unit = period.get("temperatureUnit", "F")
-                short = period.get("shortForecast", "")
-                bg = "#1a1a2e" if "night" in name.lower() else "#1f2937"
-                temp_color = "#3b82f6" if "night" in name.lower() else "#ef4444"
-                st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
-
-else:
-    c1, c2 = st.columns([4, 1])
-    with c1:
-        city = st.selectbox("📍 Select City", CITY_LIST, index=CITY_LIST.index(default_city))
-    with c2:
-        cfg = CITY_CONFIG.get(city, {})
-        nws_url = f"https://forecast.weather.gov/MapClick.php?lat={cfg.get('lat', 40.78)}&lon={cfg.get('lon', -73.97)}"
-        st.markdown(f"<a href='{nws_url}' target='_blank' style='display:block;background:#3b82f6;color:#fff;padding:8px;border-radius:6px;text-align:center;text-decoration:none;font-weight:500;margin-top:25px'>📡 NWS</a>", unsafe_allow_html=True)
-    cfg = CITY_CONFIG.get(city, {})
-    if st.button("⭐ Set as Default City", use_container_width=False):
-        st.query_params["city"] = city
-        st.success(f"✓ Bookmark to save {city} as default!")
-    current_temp, obs_low, obs_high, readings, confirm_time, oldest_time, newest_time, mins_since_confirm = fetch_nws_observations(cfg.get("station", "KNYC"), cfg.get("tz", "US/Eastern"))
-    if obs_low and current_temp:
-        st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#1a1a2e,#0d1117);border:3px solid #3b82f6;border-radius:16px;padding:25px;margin:20px 0;text-align:center">
-            <div style="color:#6b7280;font-size:1em;margin-bottom:5px">📊 Today's Observed Low</div>
-            <div style="color:#3b82f6;font-size:4.5em;font-weight:800;margin:10px 0">{obs_low}°F</div>
-            <div style="color:#9ca3af;font-size:0.9em">From NWS Station: <span style="color:#22c55e;font-weight:600">{cfg.get('station', 'N/A')}</span></div>
-        </div>
-        """, unsafe_allow_html=True)
-    if current_temp:
-        st.markdown(f"""
-        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
-            <div style="display:flex;justify-content:space-around;text-align:center">
-                <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
-                <div><div style="color:#6b7280;font-size:0.8em">HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        if readings:
-            with st.expander("📊 Recent NWS Observations", expanded=False):
-                if oldest_time and newest_time:
-                    st.markdown(f"<div style='color:#6b7280;font-size:0.8em;margin-bottom:10px;text-align:center'>📅 Data: {oldest_time.strftime('%H:%M')} to {newest_time.strftime('%H:%M')} local | {len(readings)} readings</div>", unsafe_allow_html=True)
-                display_list = readings[:12]
-                for i, r in enumerate(display_list):
-                    row_style = "display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid #30363d"
+                    row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #30363d"
                     temp_style = "color:#fff;font-weight:600"
-                    st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:50px'>{r['time']}</span><span style='{temp_style}'>{r['temp']}°F</span></div>", unsafe_allow_html=True)
-    else:
-        st.warning("⚠️ Could not fetch NWS observations")
-    st.markdown("---")
-    st.subheader("📡 NWS Forecast")
-    forecast = fetch_nws_forecast(cfg.get("lat", 40.78), cfg.get("lon", -73.97))
-    if forecast:
-        fcols = st.columns(len(forecast))
-        for i, period in enumerate(forecast):
-            with fcols[i]:
-                name = period.get("name", "")
-                temp = period.get("temperature", "")
-                unit = period.get("temperatureUnit", "F")
-                short = period.get("shortForecast", "")
-                bg = "#1a1a2e" if "night" in name.lower() else "#1f2937"
-                temp_color = "#3b82f6" if "night" in name.lower() else "#ef4444"
-                st.markdown(f'<div style="background:{bg};border:1px solid #30363d;border-radius:8px;padding:12px;text-align:center"><div style="color:#9ca3af;font-size:0.8em">{name}</div><div style="color:{temp_color};font-size:1.8em;font-weight:700">{temp}°{unit}</div><div style="color:#6b7280;font-size:0.75em">{short}</div></div>', unsafe_allow_html=True)
+                    label = ""
+                
+                st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:60px;font-weight:600'>{time_key}</span><span style='flex:1;text-align:center;font-size:0.9em'>{six_hr_display}</span><span style='{temp_style}'>{temp}°F{label}</span></div>", unsafe_allow_html=True)
+        
+        st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
+            table_html = """
+            <style>
+            .nws-full { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
+            .nws-full th { background: #b8cce4; color: #000; padding: 6px 4px; text-align: center; border: 1px solid #7f7f7f; font-weight: 600; font-size: 11px; }
+            .nws-full td { padding: 5px 3px; text-align: center; border: 1px solid #d0d0d0; background: #fff; color: #000; font-size: 11px; }
+            .nws-full tr:nth-child(even) td { background: #f0f0f0; }
+            .temp-header { background: #dae8f5 !important; }
+            </style>
+            <div style="overflow-x: auto;">
+            <table class='nws-full'>
+            <thead>
+            <tr>
+            <th rowspan="3">Date</th>
+            <th rowspan="3">Time<br/>(est)</th>
+            <th rowspan="3">Wind<br/>(mph)</th>
+            <th rowspan="3">Vis.<br/>(mi.)</th>
+            <th rowspan="3">Weather</th>
+            <th rowspan="3">Sky<br/>Cond.</th>
+            <th colspan="4" class="temp-header">Temperature (°F)</th>
+            <th rowspan="3">Relative<br/>Humidity</th>
+            <th rowspan="3">Wind<br/>Chill<br/>(°F)</th>
+            <th rowspan="3">Heat<br/>Index<br/>(°F)</th>
+            <th colspan="3" class="temp-header">Pressure</th>
+            <th colspan="3" class="temp-header">Precipitation<br/>(in)</th>
+            </tr>
+            <tr>
+            <th rowspan="2">Air</th>
+            <th rowspan="2">Dwpt</th>
+            <th colspan="2">6 hour</th>
+            <th rowspan="2">altimeter<br/>(in)</th>
+            <th rowspan="2">sea<br/>level<br/>(mb)</th>
+            <th rowspan="2">1 hr</th>
+            <th rowspan="2">3 hr</th>
+            <th rowspan="2">6 hr</th>
+            </tr>
+            <tr>
+            <th>Max</th>
+            <th>Min</th>
+            </tr>
+            </thead>
+            <tbody>
+            """
+            
+            for r in full_readings:
+                time_key = r['time']
+                six_hr_max = r['max_6hr']
+                six_hr_min = r['min_6hr']
+                
+                six_hr_display = ""
+                if six_hr_max:
+                    six_hr_display += f"<span style='color:#d00;font-weight:700'>6hr↑{six_hr_max}</span> "
+                if six_hr_min:
+                    six_hr_display += f"<span style='color:#00d;font-weight:700'>6hr↓{six_hr_min}</span>"
+                
+                # Highlight the settlement low reading
+                if settlement_low is not None and six_hr_min and int(float(six_hr_min)) == settlement_low:
+                    row_bg = "#1a2e1a"
+                    border = "2px solid #22c55e"
+                else:
+                    row_bg = "#0d1117"
+                    border = "1px solid #30363d"
+                
+                table_html += f"""<tr>
+                <td>{r['date']}</td>
+                <td>{r['time']}</td>
+                <td>{r['wind']}</td>
+                <td>{r['vis']}</td>
+                <td>{r['weather']}</td>
+                <td>{r['sky']}</td>
+                <td><b>{r['air']}</b></td>
+                <td>{r['dwpt']}</td>
+                <td><b style="color:#d00">{r['max_6hr']}</b></td>
+                <td><b style="color:#00d">{r['min_6hr']}</b></td>
+                <td colspan="7"></td>
+                </tr>"""
+            
+            table_html += "</tbody></table></div>"
+            st.markdown(table_html, unsafe_allow_html=True)
+            st.caption(f"Source: https://forecast.weather.gov/data/obhistory/{cfg['nws']}.html")
+    
+    st.divider()
+    
+    for city in selected_cities:
+        cfg = CITIES[city]
+        low_6hr, high_6hr, low_time, high_time, low_locked, high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
+        current = fetch_current_temp(cfg["nws"])
+        nws_forecast, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
+        
+        if cfg["kalshi_low"] and low_6hr and low_locked:
+            brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"])
+            winner = find_winning_bracket(low_6hr, brackets)
+            
+            if winner:
+                guards, blocked = run_guards(low_6hr, "LOW", winner["ask"], nws_forecast, weather_warnings)
+                
+                with st.expander(f"🔒 {city} LOW: {low_6hr}°F @ {low_time} → {winner['name']} @ {winner['ask']}¢", expanded=not blocked):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Settlement", f"{low_6hr}°F @ {low_time}")
+                        st.metric("Current", f"{current}°F" if current else "—")
+                    with col2:
+                        st.metric("Bracket", winner["name"])
+                        st.metric("Ask", f"{winner['ask']}¢")
+                    with col3:
+                        edge = 100 - winner["ask"]
+                        st.metric("Edge", f"{edge}¢")
+                        profit = (edge / 100) * 20
+                        st.metric("Profit (20x)", f"${profit:.2f}")
+                    
+                    st.divider()
+                    if blocked:
+                        st.error("🛡️ GUARDS BLOCKED - DO NOT BUY")
+                    else:
+                        st.success("✅ GUARDS PASSED - SAFE TO BUY")
+                    
+                    for g in guards:
+                        st.write(g)
+        
+        if cfg["kalshi_high"] and high_6hr and high_locked:
+            brackets = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"])
+            winner = find_winning_bracket(high_6hr, brackets)
+            
+            if winner:
+                guards, blocked = run_guards(high_6hr, "HIGH", winner["ask"], None, weather_warnings)
+                
+                with st.expander(f"🔒 {city} HIGH: {high_6hr}°F @ {high_time} → {winner['name']} @ {winner['ask']}¢", expanded=not blocked):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Settlement", f"{high_6hr}°F @ {high_time}")
+                        st.metric("Current", f"{current}°F" if current else "—")
+                    with col2:
+                        st.metric("Bracket", winner["name"])
+                        st.metric("Ask", f"{winner['ask']}¢")
+                    with col3:
+                        edge = 100 - winner["ask"]
+                        st.metric("Edge", f"{edge}¢")
+                        profit = (edge / 100) * 20
+                        st.metric("Profit (20x)", f"${profit:.2f}")
+                    
+                    st.divider()
+                    if blocked:
+                        st.error("🛡️ GUARDS BLOCKED - DO NOT BUY")
+                    else:
+                        st.success("✅ GUARDS PASSED - SAFE TO BUY")
+                    
+                    for g in guards:
+                        st.write(g)
 
-st.markdown("---")
-st.markdown('<div style="background:linear-gradient(90deg,#d97706,#f59e0b);padding:10px 15px;border-radius:8px;margin-bottom:20px;text-align:center"><b style="color:#000">🧪 FREE TOOL</b> <span style="color:#000">— LOW Temperature Edge Finder v9.1 (5 Cities)</span></div>', unsafe_allow_html=True)
-st.markdown('<div style="color:#6b7280;font-size:0.75em;text-align:center;margin-top:30px">⚠️ For entertainment only. Not financial advice. Now using 6hr settlement data.</div>', unsafe_allow_html=True)
+if mode in ["🦅 TOM (Tomorrow)", "📊 Both"]:
+    st.header("🦅 TOM - Tomorrow Scanner")
+    
+    for city in selected_cities:
+        cfg = CITIES[city]
+        forecast_low, forecast_high = fetch_tomorrow_forecast(cfg["lat"], cfg["lon"])
+        _, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
+        
+        if cfg["kalshi_low"] and forecast_low:
+            brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"], is_tomorrow=True)
+            match = find_winning_bracket(forecast_low, brackets)
+            
+            if match and match["ask"] <= 20:
+                guards, blocked = run_guards(None, "LOW", match["ask"], None, weather_warnings)
+                
+                with st.expander(f"🦅 {city} LOW: Forecast {forecast_low}°F → {match['name']} @ {match['ask']}¢", expanded=not blocked):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("NWS Forecast", f"{forecast_low}°F")
+                        st.metric("Bracket", match["name"])
+                    with col2:
+                        st.metric("Ask", f"{match['ask']}¢")
+                        edge = 100 - match["ask"]
+                        st.metric("Edge", f"{edge}¢")
+                    
+                    if blocked:
+                        st.error("⚠️ BLOCKED")
+                    else:
+                        st.success("✅ SAFE")
+                    for g in guards:
+                        st.write(g)
+        
+        if cfg["kalshi_high"] and forecast_high:
+            brackets = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"], is_tomorrow=True)
+            match = find_winning_bracket(forecast_high, brackets)
+            
+            if match and match["ask"] <= 20:
+                guards, blocked = run_guards(None, "HIGH", match["ask"], None, weather_warnings)
+                
+                with st.expander(f"🦅 {city} HIGH: Forecast {forecast_high}°F → {match['name']} @ {match['ask']}¢", expanded=not blocked):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("NWS Forecast", f"{forecast_high}°F")
+                        st.metric("Bracket", match["name"])
+                    with col2:
+                        st.metric("Ask", f"{match['ask']}¢")
+                        edge = 100 - match["ask"]
+                        st.metric("Edge", f"{edge}¢")
+                    
+                    if blocked:
+                        st.error("⚠️ BLOCKED")
+                    else:
+                        st.success("✅ SAFE")
+                    for g in guards:
+                        st.write(g)
+
+st.divider()
+
+st.caption("⚠️ **DISCLAIMER:** This application is for EDUCATIONAL and EXPERIMENTAL purposes ONLY. This is NOT financial advice. This is NOT betting advice. Always verify data independently before making any decisions. Past performance does not guarantee future results. Weather is inherently unpredictable. Use at your own risk.")
+
+st.divider()
+
+with st.expander("📖 How to Use This App", expanded=False):
+    st.markdown("""
+    ### 🦈 SHARK Mode (Today)
+    **Purpose:** Find locked settlement temperatures and matching Kalshi brackets
+    
+    **How it works:**
+    1. App pulls 6-hour aggregate data from NWS obhistory
+    2. LOW locks after 06:53 local time (overnight minimum captured)
+    3. HIGH locks after 18:53 local time (afternoon maximum captured)
+    4. App finds the cheapest winning bracket based on locked settlement
+    5. Guards check for weather warnings, suspicious pricing, and forecast alignment
+    
+    **What the metrics mean:**
+    - **Settlement**: The locked 6hr Min/Max temperature from NWS
+    - **Bracket**: The Kalshi market range that contains the settlement temp
+    - **Ask**: Current price to buy YES contract (pays $1 if correct)
+    - **Edge**: Profit potential (100¢ - Ask price)
+    - **Profit (20x)**: Estimated profit on 20 contracts
+    
+    ### 🦅 TOM Mode (Tomorrow)
+    **Purpose:** Find tomorrow's NWS forecast and match to cheap brackets
+    
+    **How it works:**
+    1. Fetches tomorrow's forecast from NWS
+    2. Finds brackets ≤20¢ that match the forecast
+    3. Runs guards for weather warnings and pricing
+    
+    ### 🛡️ Guards System
+    **BLOCKED** means do NOT trade - something is wrong:
+    - **Weather warnings**: Fronts, storms, extreme events make temps unpredictable
+    - **Price too cheap** (≤20¢): Market knows something you don't
+    - **Forecast gap** (≥3°): NWS forecast disagrees with settlement
+    
+    **PASSED** means guards found no red flags (but still do your own research)
+    
+    ### 📊 Full NWS Recording (Owner Mode)
+    Shows complete observation history since midnight with:
+    - **Date**: Day of month
+    - **Time (est)**: Local observation time
+    - **Air Temp (°F)**: Hourly temperature reading
+    - **6hr Max**: Maximum temp in last 6 hours (red, what Kalshi uses for HIGH)
+    - **6hr Min**: Minimum temp in last 6 hours (blue, what Kalshi uses for LOW)
+    
+    ### ⚠️ Important Notes
+    - This app is for **educational and experimental purposes only**
+    - NOT financial advice, NOT betting advice
+    - Always verify data independently before making decisions
+    - Past performance does not guarantee future results
+    - Weather is inherently unpredictable
+    """)
+
+st.divider()
+eastern = pytz.timezone("US/Eastern")
+st.caption(f"Last updated: {datetime.now(eastern).strftime('%I:%M:%S %p ET')}")
