@@ -49,12 +49,9 @@ def fetch_kalshi_brackets(series_ticker):
     year = today.strftime("%y")
     date_suffix = f"{day}{month}{year}"  # e.g., "01FEB26"
     
-    # Add event ticker filter for today's date
-    # Kalshi event format: KXLOWTCHI-01FEB26
-    event_ticker_filter = f"{series_ticker}-{date_suffix}"
-    
-    # API call with event ticker filter
-    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?event_ticker={event_ticker_filter}&status=open"
+    # Kalshi event ticker format is unclear - try without date filter
+    # Just use series_ticker and filter by subtitle matching
+    url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open&limit=100"
     
     try:
         resp = requests.get(url, timeout=10)
@@ -82,18 +79,13 @@ def fetch_kalshi_brackets(series_ticker):
             ticker = m.get("ticker", "")
             event_ticker = m.get("event_ticker", "")
             
-            # Filter for today's markets only
-            if date_suffix not in ticker and date_suffix not in event_ticker:
-                continue
+            # DON'T filter by date - just check if subtitle matches a bracket pattern
+            # We'll get all open markets and parse them
             
             # Check both 'subtitle' and 'sub_title' (API uses different fields)
             subtitle = m.get("subtitle", "") or m.get("sub_title", "") or m.get("yes_sub_title", "")
             
-            st.write(f"🔍 DEBUG: Today's market - ticker: {ticker}")
-            st.write(f"   subtitle field: '{m.get('subtitle', 'MISSING')}'")
-            st.write(f"   sub_title field: '{m.get('sub_title', 'MISSING')}'")
-            st.write(f"   yes_sub_title field: '{m.get('yes_sub_title', 'MISSING')}'")
-            st.write(f"   Combined subtitle: '{subtitle}'")
+            st.write(f"🔍 ticker: {ticker}, subtitle: '{subtitle}'")
             
             # Parse "9° to 10°" or "11° to 12°"
             match = re.search(r'(\d+)°?\s*to\s*(\d+)°?', subtitle)
