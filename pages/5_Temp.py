@@ -143,6 +143,23 @@ st.header(f"📍 {city_selection}")
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg["nws"], cfg["tz"])
 full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
 
+# FALLBACK: If JSON API fails but HTML works, use HTML temps
+if not readings and full_readings:
+    readings = []
+    for r in full_readings:
+        try:
+            air_temp = float(r['air']) if r['air'] else None
+            if air_temp is not None:
+                readings.append({"time": r['time'], "temp": air_temp})
+        except:
+            continue
+    
+    if readings:
+        temps = [r['temp'] for r in readings]
+        current_temp = temps[-1]
+        obs_low = min(temps)
+        obs_high = max(temps)
+
 if current_temp:
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
@@ -197,6 +214,23 @@ if readings and full_readings:
             label = ""
         
         st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:60px;font-weight:600'>{time_key}</span><span style='flex:1;text-align:center;font-size:0.9em'>{six_hr_display}</span><span style='{temp_style}'>{temp}°F{label}</span></div>", unsafe_allow_html=True)
+elif readings:
+    st.info(f"📊 Showing {len(readings)} readings (6hr data unavailable)")
+    low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
+    for i, r in enumerate(readings):
+        time_key = r['time']
+        temp = r['temp']
+        
+        if i == low_idx:
+            row_style = "display:flex;justify-content:space-between;padding:8px;border-radius:4px;background:#2d1f0a;border:2px solid #f59e0b;margin:2px 0"
+            temp_style = "color:#fbbf24;font-weight:700;font-size:1.1em"
+            label = " ⬅️ HOURLY LOW"
+        else:
+            row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #30363d"
+            temp_style = "color:#fff;font-weight:600"
+            label = ""
+        
+        st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:60px;font-weight:600'>{time_key}</span><span style='{temp_style}'>{temp}°F{label}</span></div>", unsafe_allow_html=True)
 else:
     st.warning("⚠️ No data available")
 
