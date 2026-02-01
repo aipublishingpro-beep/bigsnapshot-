@@ -286,7 +286,7 @@ def find_winning_bracket(markets, settlement_temp):
 
 @st.cache_data(ttl=600)
 def fetch_nws_forecast(lat, lon, city_tz_str, cache_buster=0):
-    """Fetch NWS forecast made EARLIER TODAY for today's temps"""
+    """Fetch NWS forecast - use Tonight's low for anomaly detection"""
     try:
         city_tz = pytz.timezone(city_tz_str)
         point_url = f"https://api.weather.gov/points/{lat},{lon}"
@@ -301,8 +301,10 @@ def fetch_nws_forecast(lat, lon, city_tz_str, cache_buster=0):
         
         periods = resp2.json()["properties"]["periods"]
         
+        # For LOW: Get Tonight's forecast (shows if cold front coming)
+        # For HIGH: Get Today's forecast
         today_high = None
-        today_low = None
+        tonight_low = None
         warnings = []
         
         for p in periods[:3]:
@@ -310,18 +312,21 @@ def fetch_nws_forecast(lat, lon, city_tz_str, cache_buster=0):
             temp = p.get("temperature")
             forecast = p.get("detailedForecast", "").lower()
             
+            # Today's high
             if ("today" in name or "this afternoon" in name) and not today_high:
                 today_high = temp
             
-            if ("tonight" in name or "this morning" in name) and not today_low:
-                today_low = temp
+            # Tonight's low (for anomaly detection)
+            if "tonight" in name and not tonight_low:
+                tonight_low = temp
             
+            # Check for weather warnings
             warning_keywords = ["cold front", "warm front", "storm", "severe", "warning", "advisory"]
             for keyword in warning_keywords:
                 if keyword in forecast:
                     warnings.append(keyword)
         
-        return today_high, today_low, warnings
+        return today_high, tonight_low, warnings
     except:
         return None, None, []
 
@@ -416,7 +421,7 @@ if mode == "🦈 SHARK Mode":
             
             with st.spinner("Fetching data..."):
                 markets = fetch_kalshi_markets(city_selection, settlement_type, st.session_state.cache_buster)
-                today_high_forecast, today_low_forecast, warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"], cfg["tz"], st.session_state.cache_buster)
+                today_high_forecast, tonight_low_forecast, warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"], cfg["tz"], st.session_state.cache_buster)
             
             if not markets:
                 st.error("❌ No Kalshi markets found")
@@ -427,7 +432,7 @@ if mode == "🦈 SHARK Mode":
                 if not winning:
                     st.error("❌ No winning bracket found")
                 else:
-                    forecast_temp = today_high_forecast if settlement_type == "HIGH" else today_low_forecast
+                    forecast_temp = today_high_forecast if settlement_type == "HIGH" else tonight_low_forecast
                     
                     all_pass, guards = run_shark_guards(settlement_temp, winning, forecast_temp, warnings)
                     
