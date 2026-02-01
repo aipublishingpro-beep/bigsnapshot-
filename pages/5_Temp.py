@@ -126,19 +126,15 @@ def fetch_nws_observations(station, city_tz_str):
 st.title("🌡️ Temperature Trading Dashboard")
 st.caption("⚠️ EXPERIMENTAL - EDUCATIONAL PURPOSES ONLY")
 
-with st.sidebar:
-    st.header("⚙️ Settings")
-    
-    city_selection = st.selectbox("Select City", list(CITIES.keys()), index=list(CITIES.keys()).index(st.session_state.default_city))
-    
-    if st.button("Set as Default"):
+col1, col2 = st.columns([3, 1])
+with col1:
+    city_selection = st.selectbox("📍 Select City", list(CITIES.keys()), index=list(CITIES.keys()).index(st.session_state.default_city))
+with col2:
+    if st.button("⭐ Set as Default", use_container_width=True):
         st.session_state.default_city = city_selection
-        st.success(f"✅ {city_selection} set as default!")
-    
-    st.divider()
-    if st.button("🔄 Refresh"):
-        st.cache_data.clear()
-        st.rerun()
+        st.success(f"✅ {city_selection} saved!")
+
+st.divider()
 
 cfg = CITIES[city_selection]
 
