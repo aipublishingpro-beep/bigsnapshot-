@@ -1,6 +1,7 @@
 """
 🌡️ TEMP.PY - City View with NWS Observations
 OWNER ONLY - Uses 6hr aggregate MIN for settlement (cells[9])
+✅ FIXED: Cache now 60s + manual clear button
 """
 import streamlit as st
 import requests
@@ -33,7 +34,7 @@ CITIES = {
 if "default_city" not in st.session_state:
     st.session_state.default_city = "New York City"
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)  # ✅ FIXED: 60s instead of 300s
 def fetch_nws_forecast(lat, lon):
     """Fetch tomorrow's forecast LOW from NWS"""
     try:
@@ -64,7 +65,7 @@ def fetch_nws_forecast(lat, lon):
     except:
         return None
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)  # ✅ FIXED: 60s instead of 300s
 def fetch_kalshi_brackets(series_ticker):
     """Fetch Kalshi brackets for LOW market"""
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open&limit=100"
@@ -119,7 +120,7 @@ def fetch_kalshi_brackets(series_ticker):
     except:
         return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)  # ✅ FIXED: 60s instead of 300s
 def fetch_full_nws_recording(station, city_tz_str):
     """Fetch NWS obhistory - CRITICAL: cells[9] = 6hr MIN for LOW settlement"""
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
@@ -166,7 +167,7 @@ def fetch_full_nws_recording(station, city_tz_str):
     except:
         return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)  # ✅ FIXED: 60s instead of 300s
 def fetch_nws_observations(station, city_tz_str):
     """Fetch observations from JSON API"""
     url = f"https://api.weather.gov/stations/{station}/observations?limit=500"
@@ -215,13 +216,19 @@ def fetch_nws_observations(station, city_tz_str):
 st.title("🌡️ Temperature Trading Dashboard")
 st.caption("⚠️ OWNER ONLY - EDUCATIONAL PURPOSES")
 
-col1, col2 = st.columns([3, 1])
+col1, col2, col3 = st.columns([3, 1, 1])
 with col1:
     city_selection = st.selectbox("📍 Select City", list(CITIES.keys()), index=list(CITIES.keys()).index(st.session_state.default_city))
 with col2:
     if st.button("⭐ Set as Default", use_container_width=True):
         st.session_state.default_city = city_selection
         st.success(f"✅ {city_selection} saved!")
+with col3:
+    # ✅ NEW: Manual cache clear button
+    if st.button("🔄 Clear Cache", use_container_width=True):
+        st.cache_data.clear()
+        st.success("✅ Cache cleared!")
+        st.rerun()
 
 st.divider()
 
@@ -269,9 +276,19 @@ if current_temp:
                 brackets = fetch_kalshi_brackets(kalshi_series)
                 winning_bracket = None
                 for b in brackets:
-                    if b['low'] <= settlement_temp < b['high']:
-                        winning_bracket = b['range']
-                        break
+                    # ✅ FIXED: Proper bracket matching for "or above" type
+                    if b['high'] == 999:  # "X or above" bracket
+                        if settlement_temp >= b['low']:
+                            winning_bracket = b['range']
+                            break
+                    elif b['low'] == 0:  # "X or below" bracket
+                        if settlement_temp <= b['high']:
+                            winning_bracket = b['range']
+                            break
+                    else:  # "X to Y" bracket
+                        if b['low'] <= settlement_temp <= b['high']:
+                            winning_bracket = b['range']
+                            break
                 
                 if winning_bracket:
                     settlement_info = f"<div style='color:#22c55e;font-size:1.2em;margin-top:8px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → BUY: {winning_bracket}</div>"
@@ -320,9 +337,19 @@ if readings and full_readings:
         brackets = fetch_kalshi_brackets(kalshi_series) if kalshi_series else []
         winning_bracket = None
         for b in brackets:
-            if b['low'] <= settlement_low < b['high']:
-                winning_bracket = b['range']
-                break
+            # ✅ FIXED: Proper bracket matching
+            if b['high'] == 999:
+                if settlement_low >= b['low']:
+                    winning_bracket = b['range']
+                    break
+            elif b['low'] == 0:
+                if settlement_low <= b['high']:
+                    winning_bracket = b['range']
+                    break
+            else:
+                if b['low'] <= settlement_low <= b['high']:
+                    winning_bracket = b['range']
+                    break
         
         if winning_bracket:
             st.info(f"📊 {len(readings)} readings | 6hr MIN: **{raw_6hr_min}°F** → **BUY: {winning_bracket}**")
@@ -397,9 +424,19 @@ if lat and lon:
             
             forecast_bracket = None
             for b in all_brackets:
-                if b['low'] <= forecast_settlement <= b['high']:
-                    forecast_bracket = b['range']
-                    break
+                # ✅ FIXED: Proper bracket matching
+                if b['high'] == 999:
+                    if forecast_settlement >= b['low']:
+                        forecast_bracket = b['range']
+                        break
+                elif b['low'] == 0:
+                    if forecast_settlement <= b['high']:
+                        forecast_bracket = b['range']
+                        break
+                else:
+                    if b['low'] <= forecast_settlement <= b['high']:
+                        forecast_bracket = b['range']
+                        break
             
             if forecast_bracket:
                 st.success(f"🎯 NWS Forecast LOW: **{forecast_low}°F** → Rounds to **{forecast_settlement}°F** → **TARGET: {forecast_bracket}**")
