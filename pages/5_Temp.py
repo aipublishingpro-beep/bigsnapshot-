@@ -30,9 +30,9 @@ CITIES = {
 
 WEATHER_DANGER = ["cold front", "warm front", "frontal passage", "freeze", "hard freeze", "frost", "winter storm", "ice storm", "blizzard", "arctic", "polar vortex", "heat wave", "excessive heat", "heat advisory", "severe thunderstorm", "tornado", "hurricane", "record high", "record low", "rapidly falling", "rapidly rising", "sharply colder", "sharply warmer", "plunging", "soaring"]
 
-PRICE_FLOOR = 20  # Ask ≤20¢ = too cheap, BLOCK
-PRICE_WARN = 40   # Ask ≤40¢ = warn
-FORECAST_GAP = 3  # NWS vs settlement gap ≥3° = BLOCK
+PRICE_FLOOR = 20
+PRICE_WARN = 40
+FORECAST_GAP = 3
 
 @st.cache_data(ttl=300)
 def fetch_6hr_settlement(station, city_tz_str):
@@ -89,7 +89,7 @@ def fetch_6hr_settlement(station, city_tz_str):
     except:
         return None, None, None, None, False, False
 
-@st.cache_data(ttl=60)  # Reduced cache to 60 seconds
+@st.cache_data(ttl=300)
 def fetch_kalshi_brackets(series_ticker, city_tz_str, is_tomorrow=False):
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
     try:
@@ -117,30 +117,36 @@ def fetch_kalshi_brackets(series_ticker, city_tz_str, is_tomorrow=False):
             
             low, high, name = None, None, ""
             
-            # Parse >X brackets
-            if ">°" in title or "> " in title:
-                match = re.search(r'>\s*(-?\d+)', title)
-                if match:
-                    threshold = int(match.group(1))
-                    low, high, name = threshold + 1, 999, f">{threshold} ({threshold+1}+)"
-            # Parse <X brackets
-            elif "<°" in title or "< " in title:
-                match = re.search(r'<\s*(-?\d+)', title)
-                if match:
-                    threshold = int(match.group(1))
-                    low, high, name = -999, threshold - 1, f"<{threshold} (≤{threshold-1})"
-            # Parse range brackets
-            elif "to" in title.lower():
-                match = re.search(r'(-?\d+)\s*to\s*(-?\d+)', title, re.I)
-                if match:
-                    low, high, name = int(match.group(1)), int(match.group(2)), f"{match.group(1)} to {match.group(2)}"
+            # Parse >X format
+            gt_match = re.search(r'>\s*(-?\d+)', title)
+            if gt_match:
+                threshold = int(gt_match.group(1))
+                low = threshold + 1
+                high = 999
+                name = f">{threshold} ({low}+)"
+            
+            # Parse <X format
+            if low is None:
+                lt_match = re.search(r'<\s*(-?\d+)', title)
+                if lt_match:
+                    threshold = int(lt_match.group(1))
+                    high = threshold - 1
+                    low = -999
+                    name = f"<{threshold} (≤{high})"
+            
+            # Parse X to Y format
+            if low is None:
+                range_match = re.search(r'(-?\d+)\s*to\s*(-?\d+)', title, re.I)
+                if range_match:
+                    low = int(range_match.group(1))
+                    high = int(range_match.group(2))
+                    name = f"{low} to {high}"
             
             if low is not None:
-                brackets.append({"name": name, "low": low, "high": high, "ask": yes_ask, "ticker": ticker, "title": title})
+                brackets.append({"name": name, "low": low, "high": high, "ask": yes_ask, "ticker": ticker})
         
-        return sorted(brackets, key=lambda x: x['ask'])  # Sort by CHEAPEST
-    except Exception as e:
-        st.error(f"Error fetching brackets: {e}")
+        return sorted(brackets, key=lambda x: x['ask'])
+    except:
         return []
 
 def find_winning_bracket(temp, brackets):
@@ -180,14 +186,12 @@ def fetch_nws_forecast(lat, lon):
         
         periods = forecast_resp.json().get("properties", {}).get("periods", [])[:4]
         
-        # Get tonight's low
         tonight_low = None
         for p in periods:
             if not p.get("isDaytime", True):
                 tonight_low = p.get("temperature")
                 break
         
-        # Check for weather warnings
         warnings = []
         for p in periods:
             text = (p.get("detailedForecast", "") + " " + p.get("shortForecast", "")).lower()
@@ -203,20 +207,17 @@ def run_guards(settlement, market_type, ask, nws_forecast, weather_warnings):
     guards = []
     blocked = False
     
-    # GUARD 1: Weather
     if weather_warnings:
         for w in weather_warnings:
             guards.append(w)
             blocked = True
     
-    # GUARD 2: Price
     if ask <= PRICE_FLOOR:
         guards.append(f"💰 PRICE BLOCK: {ask}¢ TOO CHEAP - market knows something!")
         blocked = True
     elif ask <= PRICE_WARN:
         guards.append(f"💰 PRICE WARN: {ask}¢ suspiciously cheap")
     
-    # GUARD 3: Forecast gap
     if nws_forecast and settlement:
         gap = abs(settlement - nws_forecast)
         if gap >= FORECAST_GAP:
@@ -252,10 +253,6 @@ def fetch_tomorrow_forecast(lat, lon):
     except:
         return None, None
 
-# ============================================================
-# UI
-# ============================================================
-
 st.title("🌡️ Temperature Trading Dashboard")
 if OWNER_MODE:
     st.caption("🔑 OWNER MODE")
@@ -276,7 +273,6 @@ if not selected_cities:
     st.warning("Select cities")
     st.stop()
 
-# SHARK MODE
 if mode in ["🦈 SHARK (Today)", "📊 Both"]:
     st.header("🦈 SHARK - Locked Settlement Scanner")
     
@@ -286,7 +282,6 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
         current = fetch_current_temp(cfg["nws"])
         nws_forecast, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
         
-        # Check LOW
         if cfg["kalshi_low"] and low_6hr and low_locked:
             brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"])
             winner = find_winning_bracket(low_6hr, brackets)
@@ -300,7 +295,7 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                         st.metric("Settlement", f"{low_6hr}°F @ {low_time}")
                         st.metric("Current", f"{current}°F" if current else "—")
                     with col2:
-                        st.metric("Bracket", f"{winner['name']}")
+                        st.metric("Bracket", winner["name"])
                         st.metric("Ask", f"{winner['ask']}¢")
                     with col3:
                         edge = 100 - winner["ask"]
@@ -317,7 +312,6 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                     for g in guards:
                         st.write(g)
         
-        # Check HIGH
         if high_6hr and high_locked:
             brackets = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"])
             winner = find_winning_bracket(high_6hr, brackets)
@@ -348,7 +342,6 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
                     for g in guards:
                         st.write(g)
 
-# TOM MODE
 if mode in ["🦅 TOM (Tomorrow)", "📊 Both"]:
     st.header("🦅 TOM - Tomorrow Scanner")
     
@@ -357,7 +350,6 @@ if mode in ["🦅 TOM (Tomorrow)", "📊 Both"]:
         forecast_low, forecast_high = fetch_tomorrow_forecast(cfg["lat"], cfg["lon"])
         _, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
         
-        # Check LOW
         if cfg["kalshi_low"] and forecast_low:
             brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"], is_tomorrow=True)
             match = find_winning_bracket(forecast_low, brackets)
@@ -382,7 +374,6 @@ if mode in ["🦅 TOM (Tomorrow)", "📊 Both"]:
                     for g in guards:
                         st.write(g)
         
-        # Check HIGH
         if forecast_high:
             brackets = fetch_kalshi_brackets(cfg["kalshi_high"], cfg["tz"], is_tomorrow=True)
             match = find_winning_bracket(forecast_high, brackets)
