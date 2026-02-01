@@ -344,11 +344,17 @@ def fetch_nws_forecast(lat, lon, city_tz_str, cache_buster=0):
             if "tonight" in name and not tonight_low:
                 tonight_low = temp
             
-            # Check for weather warnings
-            warning_keywords = ["cold front", "warm front", "storm", "severe", "warning", "advisory"]
+            # Check for weather warnings - MORE KEYWORDS
+            warning_keywords = [
+                "cold front", "warm front", "front", "frontal",
+                "storm", "severe", "warning", "advisory",
+                "freeze", "freezing", "frost",
+                "wind", "gust", "windy"
+            ]
             for keyword in warning_keywords:
                 if keyword in forecast:
                     warnings.append(keyword)
+                    break  # Only add once per period
         
         return today_high, tonight_low, warnings
     except:
