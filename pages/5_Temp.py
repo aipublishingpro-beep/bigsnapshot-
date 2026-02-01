@@ -386,45 +386,46 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
             </div>
             """, unsafe_allow_html=True)
         
-        if readings and full_readings:
-            six_hr_map = {}
-            for r in full_readings:
-                time_key = r['time']
-                six_hr_map[time_key] = {
-                    'max_6hr': r['max_6hr'],
-                    'min_6hr': r['min_6hr']
-                }
-            
-            low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
-            
-            for i, r in enumerate(readings):
-                time_key = r['time']
-                temp = r['temp']
+        with st.expander("📊 Recent NWS Observations", expanded=True):
+            if readings and full_readings:
+                six_hr_map = {}
+                for r in full_readings:
+                    time_key = r['time']
+                    six_hr_map[time_key] = {
+                        'max_6hr': r['max_6hr'],
+                        'min_6hr': r['min_6hr']
+                    }
                 
-                six_hr_data = six_hr_map.get(time_key, {})
-                six_hr_max = six_hr_data.get('max_6hr', '')
-                six_hr_min = six_hr_data.get('min_6hr', '')
+                low_idx = next((i for i, r in enumerate(readings) if r['temp'] == obs_low), None)
                 
-                six_hr_display = ""
-                if six_hr_max:
-                    six_hr_display += f"<span style='color:#ef4444;font-weight:700'>6hr↑{six_hr_max}</span> "
-                if six_hr_min:
-                    six_hr_display += f"<span style='color:#22c55e;font-weight:700'>6hr↓{six_hr_min}</span>"
-                
-                if i == low_idx:
-                    row_style = "display:flex;justify-content:space-between;padding:8px;border-radius:4px;background:#2d1f0a;border:2px solid #f59e0b;margin:2px 0"
-                    temp_style = "color:#fbbf24;font-weight:700;font-size:1.1em"
-                    label = " ⬅️ HOURLY LOW"
-                else:
-                    row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #30363d"
-                    temp_style = "color:#fff;font-weight:600"
-                    label = ""
-                
-                st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:60px;font-weight:600'>{time_key}</span><span style='flex:1;text-align:center;font-size:0.9em'>{six_hr_display}</span><span style='{temp_style}'>{temp}°F{label}</span></div>", unsafe_allow_html=True)
+                for i, r in enumerate(readings):
+                    time_key = r['time']
+                    temp = r['temp']
+                    
+                    six_hr_data = six_hr_map.get(time_key, {})
+                    six_hr_max = six_hr_data.get('max_6hr', '')
+                    six_hr_min = six_hr_data.get('min_6hr', '')
+                    
+                    six_hr_display = ""
+                    if six_hr_max:
+                        six_hr_display += f"<span style='color:#ef4444;font-weight:700'>6hr↑{six_hr_max}</span> "
+                    if six_hr_min:
+                        six_hr_display += f"<span style='color:#22c55e;font-weight:700'>6hr↓{six_hr_min}</span>"
+                    
+                    if i == low_idx:
+                        row_style = "display:flex;justify-content:space-between;padding:8px;border-radius:4px;background:#2d1f0a;border:2px solid #f59e0b;margin:2px 0"
+                        temp_style = "color:#fbbf24;font-weight:700;font-size:1.1em"
+                        label = " ⬅️ HOURLY LOW"
+                    else:
+                        row_style = "display:flex;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #30363d"
+                        temp_style = "color:#fff;font-weight:600"
+                        label = ""
+                    
+                    st.markdown(f"<div style='{row_style}'><span style='color:#9ca3af;min-width:60px;font-weight:600'>{time_key}</span><span style='flex:1;text-align:center;font-size:0.9em'>{six_hr_display}</span><span style='{temp_style}'>{temp}°F{label}</span></div>", unsafe_allow_html=True)
         
         st.divider()
-        st.subheader("📋 Full NWS Table")
-        if full_readings:
+        with st.expander("📋 Full NWS Table", expanded=False):
+            if full_readings:
             table_html = """
             <style>
             .nws-full { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
