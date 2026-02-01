@@ -367,7 +367,7 @@ with st.sidebar:
     st.header("⚙️ Settings")
     mode = st.radio("Mode", ["🦈 SHARK (Today)", "🦅 TOM (Tomorrow)", "📊 Both"])
     st.divider()
-    selected_cities = st.multiselect("Cities", list(CITIES.keys()), default=["Miami", "New York City"])
+    selected_cities = st.multiselect("Cities", list(CITIES.keys()), default=list(CITIES.keys()))
     st.divider()
     if st.button("🔄 Refresh"):
         st.cache_data.clear()
