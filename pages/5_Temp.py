@@ -143,8 +143,15 @@ st.header(f"📍 {city_selection}")
 current_temp, obs_low, obs_high, readings = fetch_nws_observations(cfg["nws"], cfg["tz"])
 full_readings = fetch_full_nws_recording(cfg["nws"], cfg["tz"])
 
+# DEBUG
+st.write(f"DEBUG: readings from JSON API = {len(readings) if readings else 0}")
+st.write(f"DEBUG: full_readings from HTML = {len(full_readings)}")
+if full_readings:
+    st.write(f"DEBUG: First HTML reading = {full_readings[0]}")
+
 # FALLBACK: If JSON API fails but HTML works, use HTML temps
 if not readings and full_readings:
+    st.warning("⚠️ JSON API unavailable - using HTML fallback")
     readings = []
     for r in full_readings:
         try:
@@ -236,7 +243,7 @@ else:
 
 st.divider()
 
-with st.expander("📋 Full NWS Table", expanded=False):
+with st.expander("📋 Full NWS Table", expanded=True):
     if full_readings:
         table_html = """
         <style>
