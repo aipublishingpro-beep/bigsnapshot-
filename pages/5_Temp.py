@@ -38,11 +38,16 @@ if "default_city" not in st.session_state:
 @st.cache_data(ttl=300)
 def fetch_kalshi_brackets(series_ticker):
     """Fetch Kalshi brackets for LOW market"""
-    # Get today's date in the format Kalshi uses (e.g., 26FEB01 for Feb 1, 2026)
+    # Get today's date in the format Kalshi uses (e.g., 01FEB26 for Feb 1, 2026)
     from datetime import datetime
     eastern = pytz.timezone("US/Eastern")
     today = datetime.now(eastern)
-    date_suffix = today.strftime("%d%b%y").upper()  # e.g., "01FEB26"
+    
+    # Kalshi format: DDMMMYY (e.g., 01FEB26 for Feb 1, 2026)
+    day = today.strftime("%d")
+    month = today.strftime("%b").upper()
+    year = today.strftime("%y")
+    date_suffix = f"{day}{month}{year}"  # e.g., "01FEB26"
     
     # Try both with and without date filter
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open"
@@ -62,6 +67,10 @@ def fetch_kalshi_brackets(series_ticker):
         data = resp.json()
         markets = data.get("markets", [])
         st.write(f"🔍 DEBUG: Total markets returned: {len(markets)}")
+        
+        # Show ALL tickers to see the date format
+        all_tickers = [m.get("ticker", "???") for m in markets]
+        st.write(f"🔍 DEBUG: All tickers: {all_tickers[:5]}")  # Show first 5
         
         brackets = []
         
