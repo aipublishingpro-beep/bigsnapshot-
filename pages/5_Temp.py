@@ -543,10 +543,13 @@ else:
         """, unsafe_allow_html=True)
     
     # 6HR LOCK STATUS HERO BOX
-    if full_readings:
+    if full_readings and obs_low:
         low_locked, high_locked, low_settlement, high_settlement = check_settlement_lock(full_readings, cfg["tz"])
         
-        if low_locked and low_settlement and obs_low:
+        # Check if any 6hr min data exists
+        has_6hr_low = any(r.get('min_6hr') for r in full_readings)
+        
+        if has_6hr_low and low_settlement:
             if abs(low_settlement - obs_low) <= 0.5:
                 st.markdown(f"""
                 <div style="background:#064e3b;border:3px solid #10b981;border-radius:12px;padding:25px;margin:20px 0">
@@ -562,7 +565,10 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
         
-        if high_locked and high_settlement and obs_high:
+        # Check if any 6hr max data exists
+        has_6hr_high = any(r.get('max_6hr') for r in full_readings)
+        
+        if has_6hr_high and high_settlement and obs_high:
             if abs(high_settlement - obs_high) <= 0.5:
                 st.markdown(f"""
                 <div style="background:#064e3b;border:3px solid #10b981;border-radius:12px;padding:25px;margin:20px 0">
