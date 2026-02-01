@@ -219,15 +219,15 @@ if current_temp:
                         break
                 
                 if winning_bracket:
-                    settlement_info = f"<div style='color:#22c55e;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → BUY: {winning_bracket}</div>"
+                    settlement_info = f"<div style='color:#22c55e;font-size:1.2em;margin-top:8px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → BUY: {winning_bracket}</div>"
                 else:
-                    settlement_info = f"<div style='color:#6b7280;font-size:0.75em;margin-top:5px;font-weight:700'>6hr MIN: {raw_6hr_min}°F → Settlement: {settlement_temp}°F</div>"
+                    settlement_info = f"<div style='color:#22c55e;font-size:1.2em;margin-top:8px;font-weight:700'>6hr MIN: {raw_6hr_min}°F (Settlement: {settlement_temp}°F)</div>"
     
     st.markdown(f"""
     <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;margin:10px 0">
         <div style="display:flex;justify-content:space-around;text-align:center">
             <div><div style="color:#6b7280;font-size:0.8em">CURRENT</div><div style="color:#fff;font-size:1.8em;font-weight:700">{current_temp}°F</div></div>
-            <div><div style="color:#6b7280;font-size:0.8em">LOW</div><div style="color:#3b82f6;font-size:1.8em;font-weight:700">{obs_low}°F</div>{settlement_info}</div>
+            <div><div style="color:#6b7280;font-size:0.8em">LOW SETTLEMENT</div>{settlement_info}</div>
             <div><div style="color:#6b7280;font-size:0.8em">HIGH</div><div style="color:#ef4444;font-size:1.8em;font-weight:700">{obs_high}°F</div></div>
         </div>
     </div>
