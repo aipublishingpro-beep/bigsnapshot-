@@ -302,28 +302,32 @@ else:
 with st.sidebar:
     st.header("⚙️ Settings")
     
-    city_selection = st.selectbox("Select City", list(CITIES.keys()), index=list(CITIES.keys()).index(st.session_state.default_city))
+    city_selection = st.selectbox("Default City for NWS Table", list(CITIES.keys()), index=list(CITIES.keys()).index(st.session_state.default_city))
     
-    if st.button("Set as Default City"):
+    if st.button("Set as Default"):
         st.session_state.default_city = city_selection
         st.success(f"✅ {city_selection} set as default!")
     
     st.divider()
     mode = st.radio("Mode", ["🦈 SHARK (Today)", "🦅 TOM (Tomorrow)", "📊 Both"])
     st.divider()
+    
+    show_all_cities = st.checkbox("Show All Cities", value=True)
+    
+    st.divider()
     if st.button("🔄 Refresh"):
         st.cache_data.clear()
         st.rerun()
 
-selected_city = city_selection
+selected_cities = list(CITIES.keys()) if show_all_cities else [city_selection]
 
 if mode in ["🦈 SHARK (Today)", "📊 Both"]:
     st.header("🦈 SHARK - Locked Settlement Scanner")
     
     if OWNER_MODE:
-        st.subheader(f"📊 Full NWS Recording - {selected_city}")
+        st.subheader(f"📊 Full NWS Recording - {city_selection}")
         
-        cfg = CITIES[selected_city]
+        cfg = CITIES[city_selection]
         full_readings = fetch_full_nws_recording(cfg["nws"])
         if full_readings:
             table_html = """
@@ -390,19 +394,20 @@ if mode in ["🦈 SHARK (Today)", "📊 Both"]:
     
     st.divider()
     
-    cfg = CITIES[selected_city]
-    low_6hr, high_6hr, low_time, high_time, low_locked, high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
-    current = fetch_current_temp(cfg["nws"])
-    nws_forecast, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
-    
-    if cfg["kalshi_low"] and low_6hr and low_locked:
-        brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"])
-        winner = find_winning_bracket(low_6hr, brackets)
+    for city in selected_cities:
+        cfg = CITIES[city]
+        low_6hr, high_6hr, low_time, high_time, low_locked, high_locked = fetch_6hr_settlement(cfg["nws"], cfg["tz"])
+        current = fetch_current_temp(cfg["nws"])
+        nws_forecast, weather_warnings = fetch_nws_forecast(cfg["lat"], cfg["lon"])
         
-        if winner:
-            guards, blocked = run_guards(low_6hr, "LOW", winner["ask"], nws_forecast, weather_warnings)
+        if cfg["kalshi_low"] and low_6hr and low_locked:
+            brackets = fetch_kalshi_brackets(cfg["kalshi_low"], cfg["tz"])
+            winner = find_winning_bracket(low_6hr, brackets)
             
-            with st.expander(f"🔒 {selected_city} LOW: {low_6hr}°F @ {low_time} → {winner['name']} @ {winner['ask']}¢", expanded=not blocked):
+            if winner:
+                guards, blocked = run_guards(low_6hr, "LOW", winner["ask"], nws_forecast, weather_warnings)
+                
+                with st.expander(f"🔒 {city} LOW: {low_6hr}°F @ {low_time} → {winner['name']} @ {winner['ask']}¢", expanded=not blocked):
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("Settlement", f"{low_6hr}°F @ {low_time}")
