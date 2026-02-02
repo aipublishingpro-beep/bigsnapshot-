@@ -34,7 +34,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "19.6 LIVE"  # Collapsed legend/guide into expandable sections
+VERSION = "19.7 LIVE"  # Added game date/time display for scheduled games
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -220,6 +220,21 @@ def fetch_nhl_games_real():
                 else:
                     away_record = record
             
+            # Get game date/time
+            game_date = event.get("date", "")
+            status = event.get("status", {})
+            status_type = status.get("type", {}).get("name", "STATUS_SCHEDULED")
+            
+            # Format game time
+            game_time = "TBD"
+            if game_date:
+                try:
+                    dt = datetime.strptime(game_date, "%Y-%m-%dT%H:%M%SZ")
+                    dt_eastern = dt.replace(tzinfo=pytz.UTC).astimezone(eastern)
+                    game_time = dt_eastern.strftime("%I:%M %p ET")
+                except:
+                    game_time = "TBD"
+            
             # Build game dict with mock supplemental data
             # (Real stats would come from separate API calls)
             game = {
@@ -228,6 +243,8 @@ def fetch_nhl_games_real():
                 "away": away_abbr,
                 "home_record": home_record,
                 "away_record": away_record,
+                "game_time": game_time,
+                "status": status_type,
                 "home_last10": "5-4-1",  # Mock - would need separate API
                 "away_last10": "6-3-1",  # Mock - would need separate API
                 "home_goalie": "starter",  # Mock - would need roster API
@@ -624,6 +641,7 @@ for analysis in game_analyses:
         
         with col2:
             st.markdown("### @")
+            st.markdown(f"**Game Time:** {game['game_time']}")
             st.markdown(f"**Kalshi:** {game['away_kalshi']}¢ / {game['home_kalshi']}¢")
             st.markdown(f"**Model:** {away_prob}% / {home_prob}%")
             st.markdown(f"**Edge Score:** {away_score} / {home_score}")
