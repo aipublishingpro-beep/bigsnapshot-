@@ -34,7 +34,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "19.7 LIVE"  # Added game date/time display for scheduled games
+VERSION = "19.8 LIVE"  # Added game date (e.g., "Sun Feb 02") + time display
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -225,14 +225,17 @@ def fetch_nhl_games_real():
             status = event.get("status", {})
             status_type = status.get("type", {}).get("name", "STATUS_SCHEDULED")
             
-            # Format game time
+            # Format game date and time
+            game_date_str = "TBD"
             game_time = "TBD"
             if game_date:
                 try:
                     dt = datetime.strptime(game_date, "%Y-%m-%dT%H:%M%SZ")
                     dt_eastern = dt.replace(tzinfo=pytz.UTC).astimezone(eastern)
+                    game_date_str = dt_eastern.strftime("%a %b %d")  # e.g., "Sun Feb 02"
                     game_time = dt_eastern.strftime("%I:%M %p ET")
                 except:
+                    game_date_str = "TBD"
                     game_time = "TBD"
             
             # Build game dict with mock supplemental data
@@ -243,6 +246,7 @@ def fetch_nhl_games_real():
                 "away": away_abbr,
                 "home_record": home_record,
                 "away_record": away_record,
+                "game_date": game_date_str,
                 "game_time": game_time,
                 "status": status_type,
                 "home_last10": "5-4-1",  # Mock - would need separate API
@@ -641,7 +645,8 @@ for analysis in game_analyses:
         
         with col2:
             st.markdown("### @")
-            st.markdown(f"**Game Time:** {game['game_time']}")
+            st.markdown(f"**{game['game_date']}**")
+            st.markdown(f"**{game['game_time']}**")
             st.markdown(f"**Kalshi:** {game['away_kalshi']}¢ / {game['home_kalshi']}¢")
             st.markdown(f"**Model:** {away_prob}% / {home_prob}%")
             st.markdown(f"**Edge Score:** {away_score} / {home_score}")
