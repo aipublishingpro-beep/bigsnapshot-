@@ -34,7 +34,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "19.3 LIVE"  # Fixed score scaling - now 1:1 mapping (edge +5 = score 10)
+VERSION = "19.4 LIVE"  # Sorted games by edge score (best picks first)
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -556,6 +556,8 @@ st.markdown("---")
 # ============================================================
 st.header("🎯 MONEYLINE PICKS")
 
+# Analyze all games and sort by pick score (highest first)
+game_analyses = []
 for game in games:
     pick_team, pick_score, reasons = analyze_game(game)
     signal_tier, tier_color = get_signal_tier(pick_score)
@@ -565,6 +567,37 @@ for game in games:
     away_score = get_normalized_score(away_edge["total"])
     home_score = get_normalized_score(home_edge["total"])
     away_prob, home_prob = calculate_model_probability(away_edge["total"], home_edge["total"])
+    
+    game_analyses.append({
+        "game": game,
+        "pick_team": pick_team,
+        "pick_score": pick_score,
+        "reasons": reasons,
+        "signal_tier": signal_tier,
+        "tier_color": tier_color,
+        "away_edge": away_edge,
+        "home_edge": home_edge,
+        "away_score": away_score,
+        "home_score": home_score,
+        "away_prob": away_prob,
+        "home_prob": home_prob
+    })
+
+# Sort by pick_score descending (highest first)
+game_analyses.sort(key=lambda x: x["pick_score"], reverse=True)
+
+# Display sorted games
+for analysis in game_analyses:
+    game = analysis["game"]
+    pick_team = analysis["pick_team"]
+    pick_score = analysis["pick_score"]
+    reasons = analysis["reasons"]
+    signal_tier = analysis["signal_tier"]
+    tier_color = analysis["tier_color"]
+    away_score = analysis["away_score"]
+    home_score = analysis["home_score"]
+    away_prob = analysis["away_prob"]
+    home_prob = analysis["home_prob"]
     
     with st.container():
         col1, col2, col3 = st.columns([2, 3, 2])
