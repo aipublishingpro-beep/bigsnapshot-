@@ -1,7 +1,7 @@
 """
 🌡️ TEMP.PY - City View with NWS Observations
 OWNER ONLY - Uses 6hr aggregate MIN for settlement (cells[9])
-✅ FIXED: Cache now 60s + manual clear button
+✅ FIXED: Auto-refresh every 60s + cache-busting
 """
 import streamlit as st
 import requests
@@ -9,6 +9,7 @@ from datetime import datetime
 import pytz
 from bs4 import BeautifulSoup
 import re
+import time
 
 st.set_page_config(page_title="🌡️ Temp Trading", page_icon="🌡️", layout="wide")
 
@@ -34,7 +35,7 @@ CITIES = {
 if "default_city" not in st.session_state:
     st.session_state.default_city = "New York City"
 
-@st.cache_data(ttl=60)  # ✅ FIXED: 60s instead of 300s
+# ✅ NO CACHE - Always fetch fresh
 def fetch_nws_forecast(lat, lon):
     """Fetch tomorrow's forecast LOW from NWS"""
     try:
@@ -65,7 +66,7 @@ def fetch_nws_forecast(lat, lon):
     except:
         return None
 
-# ✅ CACHE DISABLED - Fetch fresh brackets every time
+# ✅ NO CACHE - Fetch fresh brackets every time
 def fetch_kalshi_brackets(series_ticker):
     """Fetch Kalshi brackets for LOW market"""
     url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={series_ticker}&status=open&limit=100"
@@ -93,25 +94,25 @@ def fetch_kalshi_brackets(series_ticker):
                 })
                 continue
             
-            # Parse "X° or below" format (e.g., "13° or below")
+            # Parse "X° or below" format
             match = re.search(r'(\d+)°?\s*or\s*below', subtitle)
             if match:
                 high = int(match.group(1))
                 brackets.append({
-                    "low": 0,  # Effectively -infinity
+                    "low": 0,
                     "high": high,
                     "range": f"≤{high}°F",
                     "ticker": m.get("ticker", "")
                 })
                 continue
             
-            # Parse "X° or above" format (e.g., "22° or above")
+            # Parse "X° or above" format
             match = re.search(r'(\d+)°?\s*or\s*above', subtitle)
             if match:
                 low = int(match.group(1))
                 brackets.append({
                     "low": low,
-                    "high": 999,  # Effectively infinity
+                    "high": 999,
                     "range": f"≥{low}°F",
                     "ticker": m.get("ticker", "")
                 })
@@ -120,7 +121,7 @@ def fetch_kalshi_brackets(series_ticker):
     except:
         return []
 
-@st.cache_data(ttl=60)  # ✅ FIXED: 60s instead of 300s
+# ✅ NO CACHE + Cache-busting headers
 def fetch_full_nws_recording(station, city_tz_str):
     """Fetch NWS obhistory - CRITICAL: cells[9] = 6hr MIN for LOW settlement"""
     url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
@@ -128,7 +129,15 @@ def fetch_full_nws_recording(station, city_tz_str):
         city_tz = pytz.timezone(city_tz_str)
         today = datetime.now(city_tz).day
         
-        resp = requests.get(url, headers={"User-Agent": "Temp/1.0"}, timeout=15)
+        # ✅ Cache-busting headers
+        headers = {
+            "User-Agent": "Temp/1.0",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+        
+        resp = requests.get(url, headers=headers, timeout=15)
         if resp.status_code != 200:
             return []
         
@@ -167,13 +176,21 @@ def fetch_full_nws_recording(station, city_tz_str):
     except:
         return []
 
-@st.cache_data(ttl=60)  # ✅ FIXED: 60s instead of 300s
+# ✅ NO CACHE + Cache-busting
 def fetch_nws_observations(station, city_tz_str):
     """Fetch observations from JSON API"""
     url = f"https://api.weather.gov/stations/{station}/observations?limit=500"
     try:
         city_tz = pytz.timezone(city_tz_str)
-        resp = requests.get(url, headers={"User-Agent": "Temp/1.0"}, timeout=15)
+        
+        # ✅ Cache-busting headers
+        headers = {
+            "User-Agent": "Temp/1.0",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache"
+        }
+        
+        resp = requests.get(url, headers=headers, timeout=15)
         if resp.status_code != 200:
             return None, None, None, []
         
@@ -213,8 +230,17 @@ def fetch_nws_observations(station, city_tz_str):
     except:
         return None, None, None, []
 
+# ✅ AUTO-REFRESH: Rerun every 60 seconds
+st.markdown("""
+<script>
+setTimeout(function() {
+    window.location.reload();
+}, 60000);
+</script>
+""", unsafe_allow_html=True)
+
 st.title("🌡️ Temperature Trading Dashboard")
-st.caption("⚠️ OWNER ONLY - EDUCATIONAL PURPOSES")
+st.caption("⚠️ OWNER ONLY - EDUCATIONAL PURPOSES | 🔄 Auto-refreshes every 60s")
 
 col1, col2, col3 = st.columns([3, 1, 1])
 with col1:
@@ -224,10 +250,7 @@ with col2:
         st.session_state.default_city = city_selection
         st.success(f"✅ {city_selection} saved!")
 with col3:
-    # ✅ NEW: Manual cache clear button
-    if st.button("🔄 Clear Cache", use_container_width=True):
-        st.cache_data.clear()
-        st.success("✅ Cache cleared!")
+    if st.button("🔄 Refresh Now", use_container_width=True):
         st.rerun()
 
 st.divider()
