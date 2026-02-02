@@ -34,7 +34,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "19.4 LIVE"  # Sorted games by edge score (best picks first)
+VERSION = "19.6 LIVE"  # Collapsed legend/guide into expandable sections
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -492,7 +492,9 @@ def analyze_game(game):
 
 def get_signal_tier(score):
     """Get signal tier and color based on score"""
-    if score >= 9.0:
+    if score >= 10.0:
+        return "🔥 ELITE", "#ff0000"
+    elif score >= 9.0:
         return "🔒 STRONG", "#00ff00"
     elif score >= 7.0:
         return "🔵 BUY", "#00aaff"
@@ -522,7 +524,9 @@ with st.sidebar:
     
     st.header("📖 SIGNAL TIERS")
     st.markdown("""
-🔒 **STRONG** → 9.0+ <span style="color:#888;font-size:0.8em;">Tracked</span>
+🔥 **ELITE** → 10.0 <span style="color:#888;font-size:0.8em;">Perfect edge</span>
+
+🔒 **STRONG** → 9.0-9.9 <span style="color:#888;font-size:0.8em;">Tracked</span>
 
 🔵 **BUY** → 7.0-8.9 <span style="color:#888;font-size:0.8em;">Info only</span>
 
@@ -664,17 +668,18 @@ for analysis in game_analyses:
         st.markdown("<br>", unsafe_allow_html=True)
 
 # ============================================================
-# LEGEND & HOW TO USE
+# LEGEND & HOW TO USE (COLLAPSIBLE)
 # ============================================================
 st.markdown("---")
-st.header("📖 LEGEND & PICKING GUIDE")
 
-col_a, col_b = st.columns(2)
+with st.expander("📖 LEGEND & PICKING GUIDE"):
+    col_a, col_b = st.columns(2)
 
-with col_a:
-    st.markdown("""
+    with col_a:
+        st.markdown("""
 ### 🎯 Signal Tiers
-- **🔒 STRONG (9.0+)** → High-confidence edge, trackable
+- **🔥 ELITE (10.0)** → Perfect edge, maximum confidence
+- **🔒 STRONG (9.0-9.9)** → High-confidence edge, trackable
 - **🔵 BUY (7.0-8.9)** → Good edge, actionable
 - **🟡 LEAN (5.5-6.9)** → Slight edge, informational
 - **⚪ PASS (< 5.5)** → No significant edge
@@ -690,8 +695,8 @@ Each team gets scored **0-10** based on 7 factors:
 - **Head-to-Head** (0.5x weight) - Season matchup history
 """)
 
-with col_b:
-    st.markdown("""
+    with col_b:
+        st.markdown("""
 ### ✅ How to Pick Winners
 1. **Compare Edge Scores** - Higher score = stronger pick
 2. **Check Signal Tier** - Only bet 🔵 BUY or 🔒 STRONG
@@ -717,14 +722,8 @@ Model: 38% / 62%   ← Model says TOR 38%
 - **Avoid heavy B2B teams** unless opponent also B2B
 """)
 
-st.markdown("---")
-
-# ============================================================
-# HOW TO USE APP
-# ============================================================
-st.header("🛠️ HOW TO USE THIS APP")
-
-st.markdown("""
+with st.expander("🛠️ HOW TO USE THIS APP"):
+    st.markdown("""
 ### Step-by-Step Guide
 
 **1️⃣ Review Today's Games**
@@ -732,7 +731,7 @@ st.markdown("""
 - Each game shows both teams' records, goalies, and fatigue status
 
 **2️⃣ Identify Strong Signals**
-- Look for 🔒 STRONG (9.0+) or 🔵 BUY (7.0+) signals
+- Look for 🔥 ELITE (10.0) or 🔒 STRONG (9.0+) or 🔵 BUY (7.0+) signals
 - Read the "Reasons" section to understand the edge source
 
 **3️⃣ Compare Model vs Market**
@@ -756,7 +755,7 @@ st.markdown("""
 - Tracked in sidebar under "STRONG PICKS"
 
 ### ⚠️ Important Notes
-- **Mock Data:** Currently using test data - real ESPN integration pending
+- **Placeholder Stats:** Some advanced stats (PP%, xG, etc.) use placeholder values pending full integration
 - **Goalie Changes:** Always verify starting goalies before betting
 - **Line Movement:** Prices on Kalshi change constantly
 - **Not Financial Advice:** This tool provides analysis, not betting recommendations
