@@ -433,15 +433,16 @@ def calculate_total_edge(game, team):
 
 def get_normalized_score(edge_total):
     """
-    Map raw edge score (-10 to +10) to display score (0 to 10)
+    Map raw edge (-10 to +10) to display score (0 to 10)
     
-    FIXED SCORING - No longer forces both teams to sum to 10
-    
-    Edge of +8 or higher → 10.0
+    ADJUSTED SCALING:
+    Edge of +5 or higher → 10.0
     Edge of 0 → 5.0
-    Edge of -8 or lower → 0.0
+    Edge of -5 or lower → 0.0
+    
+    Formula: score = 5.0 + edge_total (direct 1:1 mapping)
     """
-    score = 5.0 + (edge_total / 1.6)
+    score = 5.0 + edge_total
     return round(max(0, min(10, score)), 1)
 
 def calculate_model_probability(away_edge, home_edge):
