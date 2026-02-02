@@ -34,7 +34,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "20.1 LIVE"  # Toned down signal badge colors (darker, easier on eyes)
+VERSION = "20.2 LIVE"  # Updated legend/guide to match new card layout and be more accurate
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -547,9 +547,9 @@ with st.sidebar:
     st.markdown("""
 🔥 **ELITE** → 10.0 <span style="color:#888;font-size:0.8em;">Perfect edge</span>
 
-🔒 **STRONG** → 9.0-9.9 <span style="color:#888;font-size:0.8em;">Tracked</span>
+🔒 **STRONG** → 9.0-9.9 <span style="color:#888;font-size:0.8em;">High confidence</span>
 
-🔵 **BUY** → 7.0-8.9 <span style="color:#888;font-size:0.8em;">Info only</span>
+🔵 **BUY** → 7.0-8.9 <span style="color:#888;font-size:0.8em;">Good edge</span>
 
 🟡 **LEAN** → 5.5-6.9 <span style="color:#888;font-size:0.8em;">Slight edge</span>
 
@@ -721,10 +721,10 @@ with st.expander("📖 LEGEND & PICKING GUIDE"):
         st.markdown("""
 ### 🎯 Signal Tiers
 - **🔥 ELITE (10.0)** → Perfect edge, maximum confidence
-- **🔒 STRONG (9.0-9.9)** → High-confidence edge, trackable
-- **🔵 BUY (7.0-8.9)** → Good edge, actionable
-- **🟡 LEAN (5.5-6.9)** → Slight edge, informational
-- **⚪ PASS (< 5.5)** → No significant edge
+- **🔒 STRONG (9.0-9.9)** → High-confidence edge, worth tracking
+- **🔵 BUY (7.0-8.9)** → Good edge, actionable opportunity
+- **🟡 LEAN (5.5-6.9)** → Slight edge, informational only
+- **⚪ PASS (< 5.5)** → No significant edge, avoid
 
 ### 📊 Edge Score Breakdown
 Each team gets scored **0-10** based on 7 factors:
@@ -740,70 +740,73 @@ Each team gets scored **0-10** based on 7 factors:
     with col_b:
         st.markdown("""
 ### ✅ How to Pick Winners
-1. **Compare Edge Scores** - Higher score = stronger pick
-2. **Check Signal Tier** - Only bet 🔵 BUY or 🔒 STRONG
-3. **Read the Reasons** - Understand WHY there's an edge
-4. **Compare to Kalshi Price** - Look for mispriced markets
-5. **Verify Model Probability** - Model % vs Kalshi %
+1. **Focus on Signal Tier** - Only consider 🔵 BUY (7.0+) or better
+2. **Compare Model vs Market** - Look for 5-10% gaps
+3. **Check Edge Factors** - Understand WHY there's an edge
+4. **Verify Details** - Expand matchup to check goalies, B2B, injuries
+5. **Check Market Availability** - Confirm on Kalshi before betting
 
-### 💡 Example Pick
-```
-PICK: TOR Toronto Maple Leafs
-Signal: 🔵 BUY (7.8/10)
-Reasons: Goalie edge (+1.2), Hot streak (+0.9)
-
-Kalshi: 45¢ / 55¢  ← TOR is 45¢
-Model: 38% / 62%   ← Model says TOR 38%
-```
-**Edge:** Market has TOR at 45% but model says 38%. **Fade TOR** or **buy opponent**.
-
+### 💡 Reading the Cards
+Each game card shows:
+- **Signal Badge** (left) - Rating and tier at a glance
+- **Matchup** (center) - Teams and game time
+- **Pick** - Recommended team with edge factors
+- **Market vs Model** - Price comparison with visual indicator
+  - 🟢 Green = Model higher than market (potential value)
+  - 🔴 Red = Market higher than model (potential fade)
+  
 ### 🎲 Risk Management
-- **Never bet PASS or LEAN signals**
-- **Bet size by tier:** STRONG = 2-3%, BUY = 1-2%
-- **Check goalie confirmations** before game time
-- **Avoid heavy B2B teams** unless opponent also B2B
+- **Never bet PASS or LEAN signals** - Not enough edge
+- **Bet sizing:** ELITE = 3-5%, STRONG = 2-3%, BUY = 1-2%
+- **Verify starting goalies** 1-2 hours before game time
+- **Avoid heavy B2B situations** unless opponent also on B2B
+- **Track your picks** using the TAG button for 9.0+ signals
 """)
 
 with st.expander("🛠️ HOW TO USE THIS APP"):
     st.markdown("""
 ### Step-by-Step Guide
 
-**1️⃣ Review Today's Games**
-- Scroll through all matchups with edge scores displayed
-- Each game shows both teams' records, goalies, and fatigue status
+**1️⃣ Scan the Game Cards**
+- Games are sorted by edge score (best opportunities first)
+- Signal badge shows tier and score at a glance
+- Focus on 🔵 BUY (7.0+) or better
 
-**2️⃣ Identify Strong Signals**
-- Look for 🔥 ELITE (10.0) or 🔒 STRONG (9.0+) or 🔵 BUY (7.0+) signals
-- Read the "Reasons" section to understand the edge source
+**2️⃣ Read the Pick**
+- Recommended team clearly labeled
+- Edge factors explain WHY there's value
+- Model vs Market shows pricing gap
 
-**3️⃣ Compare Model vs Market**
-- **Kalshi Price:** Current market probability (in cents)
-- **Model Probability:** Our calculated probability
-- **Edge exists when:** Model differs significantly from Kalshi
+**3️⃣ Check the Details**
+- Click "📊 Full Matchup Details" to expand
+- Verify goalie matchups, records, fatigue
+- Look for B2B situations or backup goalies
 
-**4️⃣ Make Your Decision**
-- If Model > Kalshi → Market underpricing the team
-- If Model < Kalshi → Market overpricing the team
-- Look for 5-10% gaps for best edges
+**4️⃣ Understand the Edge**
+- 🟢 Green indicator = Model sees more value than market
+- 🔴 Red indicator = Market may be overpricing
+- Bigger percentage gaps = stronger potential edge
 
-**5️⃣ Verify Before Betting**
-- Check starting goalie confirmations (usually 1-2 hours before game)
-- Verify no late-breaking injury news
-- Confirm market still available on Kalshi
+**5️⃣ Verify on Kalshi**
+- Click sidebar link to Kalshi NHL markets
+- Confirm market still available and pricing
+- Check starting goalie confirmations (1-2 hours before game)
 
-**6️⃣ Tag Strong Picks (9.0+ only)**
-- Click "🏷️ TAG" button to add to tracking system
-- Gets assigned ML number (ML-001, ML-002, etc.)
-- Tracked in sidebar under "STRONG PICKS"
+**6️⃣ Track Strong Picks**
+- For 9.0+ signals, click "TAG AS STRONG PICK"
+- Assigned ML number for tracking
+- View tagged picks in sidebar
 
 ### ⚠️ Important Notes
-- **Placeholder Stats:** Some advanced stats (PP%, xG, etc.) use placeholder values pending full integration
-- **Goalie Changes:** Always verify starting goalies before betting
-- **Line Movement:** Prices on Kalshi change constantly
-- **Not Financial Advice:** This tool provides analysis, not betting recommendations
+- **Placeholder Stats:** Advanced stats (PP%, xG, etc.) use estimated values pending full integration
+- **Goalie Confirmations:** Always verify starters before betting (usually announced ~90 min before game)
+- **Market Movement:** Kalshi prices update constantly - timing matters
+- **Not Advice:** Educational tool only, not financial or betting advice
 
-### 🔗 Kalshi Markets
-Click "NHL Markets ↗" in sidebar to access Kalshi's NHL offerings
+### 🔗 External Resources
+- **Kalshi NHL Markets:** Click sidebar link for current markets
+- **Starting Goalies:** Check DailyFaceoff.com for confirmations
+- **Injury Updates:** ESPN.com/nhl/injuries for latest news
 """)
 
 # ============================================================
