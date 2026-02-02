@@ -34,7 +34,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "19.2 LIVE"  # Fixed all KeyError issues with .get() method
+VERSION = "19.3 LIVE"  # Fixed score scaling - now 1:1 mapping (edge +5 = score 10)
 
 # ============================================================
 # STRONG PICKS SYSTEM
