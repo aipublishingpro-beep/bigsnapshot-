@@ -34,7 +34,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "19.9 LIVE"  # Removed confusing dual edge scores - only show pick score in signal box
+VERSION = "20.1 LIVE"  # Toned down signal badge colors (darker, easier on eyes)
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -514,15 +514,15 @@ def analyze_game(game):
 def get_signal_tier(score):
     """Get signal tier and color based on score"""
     if score >= 10.0:
-        return "🔥 ELITE", "#ff0000"
+        return "🔥 ELITE", "#cc0000"  # Darker red
     elif score >= 9.0:
-        return "🔒 STRONG", "#00ff00"
+        return "🔒 STRONG", "#00cc00"  # Darker green
     elif score >= 7.0:
-        return "🔵 BUY", "#00aaff"
+        return "🔵 BUY", "#0088cc"  # Darker blue
     elif score >= 5.5:
-        return "🟡 LEAN", "#ffff00"
+        return "🟡 LEAN", "#ccaa00"  # Darker yellow/gold
     else:
-        return "⚪ PASS", "#888888"
+        return "⚪ PASS", "#666666"  # Darker gray
 
 # ============================================================
 # SIDEBAR
@@ -636,7 +636,7 @@ for analysis in game_analyses:
         col_signal, col_matchup, col_time = st.columns([1, 3, 1])
         
         with col_signal:
-            st.markdown(f"<div style='text-align: center; padding: 10px; background: {tier_color}; color: white; border-radius: 5px; font-weight: bold;'>{signal_tier}<br>{pick_score}/10</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align: center; padding: 15px; background: {tier_color}; color: white; border-radius: 8px; font-weight: bold; font-size: 14px;'>{signal_tier}<br><span style='font-size: 20px;'>{pick_score}/10</span></div>", unsafe_allow_html=True)
         
         with col_matchup:
             st.markdown(f"### {game['away']} @ {game['home']}")
