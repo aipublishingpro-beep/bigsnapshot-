@@ -121,18 +121,17 @@ def fetch_kalshi_brackets(series_ticker):
     except:
         return []
 
-# ✅ NO CACHE + Cache-busting headers
+# ✅ NO CACHE + Cache-busting with timestamp
 def fetch_full_nws_recording(station, city_tz_str):
     """Fetch NWS obhistory - CRITICAL: cells[9] = 6hr MIN for LOW settlement"""
-    url = f"https://forecast.weather.gov/data/obhistory/{station}.html"
+    # Add timestamp to URL to force fresh fetch
+    timestamp = int(time.time())
+    url = f"https://forecast.weather.gov/data/obhistory/{station}.html?_={timestamp}"
     try:
-        city_tz = pytz.timezone(city_tz_str)
-        today = datetime.now(city_tz).day
-        
-        # ✅ Cache-busting headers
+        # ✅ Super aggressive cache-busting headers
         headers = {
             "User-Agent": "Temp/1.0",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
             "Pragma": "no-cache",
             "Expires": "0"
         }
@@ -155,20 +154,20 @@ def fetch_full_nws_recording(station, city_tz_str):
                 continue
             
             try:
+                # ✅ SHOW ALL ROWS (don't filter by date - need full 24hr window)
                 date_val = cells[0].text.strip()
-                if date_val and int(date_val) == today:
-                    readings.append({
-                        "date": date_val,
-                        "time": cells[1].text.strip(),
-                        "wind": cells[2].text.strip(),
-                        "vis": cells[3].text.strip(),
-                        "weather": cells[4].text.strip(),
-                        "sky": cells[5].text.strip(),
-                        "air": cells[6].text.strip(),
-                        "dwpt": cells[7].text.strip(),
-                        "max_6hr": cells[8].text.strip(),
-                        "min_6hr": cells[9].text.strip()
-                    })
+                readings.append({
+                    "date": date_val,
+                    "time": cells[1].text.strip(),
+                    "wind": cells[2].text.strip(),
+                    "vis": cells[3].text.strip(),
+                    "weather": cells[4].text.strip(),
+                    "sky": cells[5].text.strip(),
+                    "air": cells[6].text.strip(),
+                    "dwpt": cells[7].text.strip(),
+                    "max_6hr": cells[8].text.strip(),
+                    "min_6hr": cells[9].text.strip()
+                })
             except:
                 continue
         
@@ -176,10 +175,11 @@ def fetch_full_nws_recording(station, city_tz_str):
     except:
         return []
 
-# ✅ NO CACHE + Cache-busting
+# ✅ NO CACHE + Cache-busting with timestamp
 def fetch_nws_observations(station, city_tz_str):
     """Fetch observations from JSON API"""
-    url = f"https://api.weather.gov/stations/{station}/observations?limit=500"
+    timestamp = int(time.time())
+    url = f"https://api.weather.gov/stations/{station}/observations?limit=500&_={timestamp}"
     try:
         city_tz = pytz.timezone(city_tz_str)
         
@@ -230,14 +230,14 @@ def fetch_nws_observations(station, city_tz_str):
     except:
         return None, None, None, []
 
-# ✅ AUTO-REFRESH: Rerun every 60 seconds
-st.markdown("""
-<script>
-setTimeout(function() {
-    window.location.reload();
-}, 60000);
-</script>
-""", unsafe_allow_html=True)
+# ✅ AUTO-REFRESH: Force page reload every 60 seconds
+if 'last_refresh' not in st.session_state:
+    st.session_state.last_refresh = time.time()
+
+# Check if 60 seconds have passed
+if time.time() - st.session_state.last_refresh > 60:
+    st.session_state.last_refresh = time.time()
+    st.rerun()
 
 st.title("🌡️ Temperature Trading Dashboard")
 st.caption("⚠️ OWNER ONLY - EDUCATIONAL PURPOSES | 🔄 Auto-refreshes every 60s")
