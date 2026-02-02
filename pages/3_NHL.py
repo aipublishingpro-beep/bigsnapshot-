@@ -34,7 +34,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "18.5 FREE"  # Fixed scoring normalization bug + removed auth
+VERSION = "18.6 FREE"  # Fixed KeyError in goalie edge calculation
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -220,11 +220,13 @@ def calculate_goalie_edge(game, team):
         team_abbr = game["home"]
         opp_abbr = game["away"]
     
-    team_goalie = GOALIES.get(team_abbr, {})
-    opp_goalie = GOALIES.get(opp_abbr, {})
+    # Get goalie data with defaults
+    team_goalie = GOALIES.get(team_abbr, {"starter_sv": 0.910, "backup_sv": 0.900})
+    opp_goalie = GOALIES.get(opp_abbr, {"starter_sv": 0.910, "backup_sv": 0.900})
     
-    team_sv = team_goalie["starter_sv"] if goalie_status == "starter" else team_goalie["backup_sv"]
-    opp_sv = opp_goalie["starter_sv"] if opp_goalie_status == "starter" else opp_goalie["backup_sv"]
+    # Safe key access with .get() and defaults
+    team_sv = team_goalie.get("starter_sv", 0.910) if goalie_status == "starter" else team_goalie.get("backup_sv", 0.900)
+    opp_sv = opp_goalie.get("starter_sv", 0.910) if opp_goalie_status == "starter" else opp_goalie.get("backup_sv", 0.900)
     
     sv_diff = team_sv - opp_sv
     
