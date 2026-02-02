@@ -242,16 +242,118 @@ if time.time() - st.session_state.last_refresh > 60:
 st.title("🌡️ Temperature Trading Dashboard")
 st.caption("⚠️ OWNER ONLY - EDUCATIONAL PURPOSES | 🔄 Auto-refreshes every 60s")
 
-col1, col2, col3 = st.columns([3, 1, 1])
-with col1:
-    city_selection = st.selectbox("📍 Select City", list(CITIES.keys()), index=list(CITIES.keys()).index(st.session_state.default_city))
-with col2:
-    if st.button("⭐ Set as Default", use_container_width=True):
-        st.session_state.default_city = city_selection
-        st.success(f"✅ {city_selection} saved!")
-with col3:
-    if st.button("🔄 Refresh Now", use_container_width=True):
-        st.rerun()
+# ✅ LEFT SIDEBAR: City Selector + Settlement Lock Times Legend
+with st.sidebar:
+    st.header("📍 Select City")
+    city_selection = st.selectbox(
+        "Choose a city to view:",
+        list(CITIES.keys()),
+        index=list(CITIES.keys()).index(st.session_state.default_city),
+        label_visibility="collapsed"
+    )
+    
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("⭐ Set Default", use_container_width=True):
+            st.session_state.default_city = city_selection
+            st.success(f"✅ Saved!")
+    with col_b:
+        if st.button("🔄 Refresh", use_container_width=True):
+            st.rerun()
+    
+    st.divider()
+    
+    st.header("⏰ Settlement Lock Times")
+    st.caption("6hr MIN data appears at different times by timezone")
+    
+    st.markdown("""
+    <style>
+    .lock-time-box {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 12px;
+        margin: 8px 0;
+    }
+    .city-name {
+        font-weight: 700;
+        font-size: 1.1em;
+        margin-bottom: 4px;
+    }
+    .lock-info {
+        color: #8b949e;
+        font-size: 0.9em;
+    }
+    .lock-time {
+        color: #58a6ff;
+        font-weight: 600;
+    }
+    .timezone-badge {
+        display: inline-block;
+        background: #238636;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8em;
+        font-weight: 600;
+        margin-left: 6px;
+    }
+    .late-lock {
+        background: #f85149 !important;
+    }
+    </style>
+    
+    <div class="lock-time-box">
+        <div class="city-name">🗽 New York City <span class="timezone-badge">ET</span></div>
+        <div class="lock-info">Lock: <span class="lock-time">06:51 AM ET</span></div>
+        <div class="lock-info">Hourly reporting (XX:51)</div>
+    </div>
+    
+    <div class="lock-time-box">
+        <div class="city-name">🌴 Miami <span class="timezone-badge">ET</span></div>
+        <div class="lock-info">Lock: <span class="lock-time">06:53 AM ET</span></div>
+        <div class="lock-info">5-min intervals</div>
+    </div>
+    
+    <div class="lock-time-box">
+        <div class="city-name">🧀 Philadelphia <span class="timezone-badge">ET</span></div>
+        <div class="lock-info">Lock: <span class="lock-time">06:53 AM ET</span></div>
+        <div class="lock-info">5-min intervals</div>
+    </div>
+    
+    <div class="lock-time-box">
+        <div class="city-name">🤠 Austin <span class="timezone-badge">CT</span></div>
+        <div class="lock-info">Lock: <span class="lock-time">05:53 AM CT</span></div>
+        <div class="lock-info">5-min intervals</div>
+        <div class="lock-info" style="color:#f85149">= 06:53 AM ET (same as Miami)</div>
+    </div>
+    
+    <div class="lock-time-box">
+        <div class="city-name">🐻 Chicago <span class="timezone-badge">CT</span></div>
+        <div class="lock-info">Lock: <span class="lock-time">05:53 AM CT</span></div>
+        <div class="lock-info">5-min intervals (KMDW)</div>
+        <div class="lock-info" style="color:#f85149">= 06:53 AM ET</div>
+    </div>
+    
+    <div class="lock-time-box">
+        <div class="city-name">🏔️ Denver <span class="timezone-badge">MT</span></div>
+        <div class="lock-info">Lock: <span class="lock-time">04:53 AM MT</span></div>
+        <div class="lock-info">5-min intervals</div>
+        <div class="lock-info" style="color:#f85149">= 06:53 AM ET</div>
+    </div>
+    
+    <div class="lock-time-box">
+        <div class="city-name">🌴 Los Angeles <span class="timezone-badge late-lock">PT ⚠️</span></div>
+        <div class="lock-info">Lock: <span class="lock-time">03:53 AM PT</span></div>
+        <div class="lock-info">5-min intervals</div>
+        <div class="lock-info" style="color:#f85149;font-weight:700">= 06:53 AM ET</div>
+        <div class="lock-info" style="color:#ffa657;margin-top:6px">⚠️ Latest 6hr data appears hours later (e.g. 09:53 AM PT)</div>
+    </div>
+    
+    """, unsafe_allow_html=True)
+    
+    st.divider()
+    st.caption("💡 **Note:** All cities effectively lock at same time in ET, but LA's 6hr aggregate data updates continue throughout morning")
 
 st.divider()
 
