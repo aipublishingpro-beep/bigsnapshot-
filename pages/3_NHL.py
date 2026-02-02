@@ -34,7 +34,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "19.8 LIVE"  # Added game date (e.g., "Sun Feb 02") + time display
+VERSION = "19.9 LIVE"  # Removed confusing dual edge scores - only show pick score in signal box
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -649,7 +649,6 @@ for analysis in game_analyses:
             st.markdown(f"**{game['game_time']}**")
             st.markdown(f"**Kalshi:** {game['away_kalshi']}¢ / {game['home_kalshi']}¢")
             st.markdown(f"**Model:** {away_prob}% / {home_prob}%")
-            st.markdown(f"**Edge Score:** {away_score} / {home_score}")
         
         with col3:
             st.markdown(f"### {game['home']}")
@@ -669,7 +668,7 @@ for analysis in game_analyses:
         
         st.markdown("---")
         
-        # Signal display
+        # Signal display - ONLY show pick team info
         col_pick, col_tag = st.columns([3, 1])
         with col_pick:
             pick_team_name = NHL_TEAMS.get(pick_team, {}).get('name', pick_team)
