@@ -768,15 +768,4 @@ Click "NHL Markets ↗" in sidebar to access Kalshi's NHL offerings
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.caption("NHL Edge Finder • Kalshi Contract Analysis")
-st.caption("⚠️ Using ESPN API for games. Additional stats (PP%, xG, etc.) currently use placeholder values pending full integration.")
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; padding: 20px; background: #1a1a1a; border-radius: 5px; margin-top: 20px;'>
-<strong>⚠️ DISCLAIMER</strong><br>
-This tool is for <strong>educational purposes only</strong> and does not constitute financial advice.<br>
-All analysis, predictions, and recommendations are provided for informational purposes.<br>
-Sports betting involves risk. Never bet more than you can afford to lose.<br>
-Past performance does not guarantee future results.
-</div>
-""", unsafe_allow_html=True)
+st.caption("⚠️ Educational only. Not financial advice. v19.6")
