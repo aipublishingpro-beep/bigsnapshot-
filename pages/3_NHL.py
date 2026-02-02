@@ -34,7 +34,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "18.6 FREE"  # Fixed KeyError in goalie edge calculation
+VERSION = "19.1 LIVE"  # Added disclaimer - educational purposes only
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -158,51 +158,105 @@ GOALIES = {
 eastern = pytz.timezone('US/Eastern')
 
 # ============================================================
-# MOCK DATA GENERATION
+# TEAM ABBREVIATION MAPPING
 # ============================================================
-def fetch_mock_nhl_games():
-    """Generate realistic mock NHL games for testing"""
-    teams = list(NHL_TEAMS.keys())
+TEAM_ABBREVS = {
+    "Anaheim Ducks": "ANA", "Arizona Coyotes": "ARI", "Boston Bruins": "BOS",
+    "Buffalo Sabres": "BUF", "Calgary Flames": "CGY", "Carolina Hurricanes": "CAR",
+    "Chicago Blackhawks": "CHI", "Colorado Avalanche": "COL", "Columbus Blue Jackets": "CBJ",
+    "Dallas Stars": "DAL", "Detroit Red Wings": "DET", "Edmonton Oilers": "EDM",
+    "Florida Panthers": "FLA", "Los Angeles Kings": "LAK", "Minnesota Wild": "MIN",
+    "Montreal Canadiens": "MTL", "Nashville Predators": "NSH", "New Jersey Devils": "NJD",
+    "New York Islanders": "NYI", "New York Rangers": "NYR", "Ottawa Senators": "OTT",
+    "Philadelphia Flyers": "PHI", "Pittsburgh Penguins": "PIT", "San Jose Sharks": "SJS",
+    "Seattle Kraken": "SEA", "St. Louis Blues": "STL", "Tampa Bay Lightning": "TBL",
+    "Toronto Maple Leafs": "TOR", "Utah Hockey Club": "UTA", "Vancouver Canucks": "VAN",
+    "Vegas Golden Knights": "VGK", "Washington Capitals": "WSH", "Winnipeg Jets": "WPG"
+}
+
+# ============================================================
+# ESPN API - REAL NHL DATA
+# ============================================================
+@st.cache_data(ttl=60)
+def fetch_nhl_games_real():
+    """Fetch today's NHL games from ESPN API"""
+    today_date = datetime.now(eastern).strftime('%Y%m%d')
+    url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates={today_date}"
+    
     games = []
     
-    for i in range(6):
-        home = teams[i * 2]
-        away = teams[i * 2 + 1]
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
         
-        # Random records
-        home_w, home_l, home_ot = 25 + i, 15 - i, 5
-        away_w, away_l, away_ot = 20 + i, 20 - i, 6
+        for event in data.get("events", []):
+            comp = event.get("competitions", [{}])[0]
+            competitors = comp.get("competitors", [])
+            
+            if len(competitors) < 2:
+                continue
+            
+            home_team, away_team = None, None
+            home_abbr, away_abbr = "", ""
+            
+            for c in competitors:
+                full_name = c.get("team", {}).get("displayName", "")
+                abbr = TEAM_ABBREVS.get(full_name, c.get("team", {}).get("abbreviation", ""))
+                
+                if c.get("homeAway") == "home":
+                    home_team = full_name
+                    home_abbr = abbr
+                else:
+                    away_team = full_name
+                    away_abbr = abbr
+            
+            # Get records (W-L-OT format)
+            home_record = "0-0-0"
+            away_record = "0-0-0"
+            for c in competitors:
+                record = c.get("records", [{}])[0].get("summary", "0-0-0")
+                if c.get("homeAway") == "home":
+                    home_record = record
+                else:
+                    away_record = record
+            
+            # Build game dict with mock supplemental data
+            # (Real stats would come from separate API calls)
+            game = {
+                "id": event.get("id"),
+                "home": home_abbr,
+                "away": away_abbr,
+                "home_record": home_record,
+                "away_record": away_record,
+                "home_last10": "5-4-1",  # Mock - would need separate API
+                "away_last10": "6-3-1",  # Mock - would need separate API
+                "home_goalie": "starter",  # Mock - would need roster API
+                "away_goalie": "starter",  # Mock - would need roster API
+                "home_b2b": False,  # Would calculate from yesterday's games
+                "away_b2b": False,  # Would calculate from yesterday's games
+                "home_rest": 1,
+                "away_rest": 1,
+                "home_pp": 22.0,  # Mock - would need stats API
+                "away_pp": 20.0,
+                "home_pk": 82.0,
+                "away_pk": 80.0,
+                "home_xgf": 3.0,
+                "home_xga": 2.7,
+                "away_xgf": 2.9,
+                "away_xga": 2.8,
+                "h2h_home": 3,
+                "h2h_away": 2,
+                "home_kalshi": 55,  # Mock - would scrape from Kalshi
+                "away_kalshi": 45,
+            }
+            
+            games.append(game)
         
-        game = {
-            "id": f"mock_{i}",
-            "home": home,
-            "away": away,
-            "home_record": f"{home_w}-{home_l}-{home_ot}",
-            "away_record": f"{away_w}-{away_l}-{away_ot}",
-            "home_last10": f"{7-i}-{2+i}-1",
-            "away_last10": f"{6-i}-{3+i}-1",
-            "home_goalie": "starter",
-            "away_goalie": "starter" if i % 2 == 0 else "backup",
-            "home_b2b": i % 3 == 0,
-            "away_b2b": i % 4 == 0,
-            "home_rest": 1 if i % 3 == 0 else 2,
-            "away_rest": 1 if i % 4 == 0 else 2,
-            "home_pp": 22.0 + i,
-            "away_pp": 20.0 + i,
-            "home_pk": 82.0 - i,
-            "away_pk": 80.0 - i,
-            "home_xgf": 3.1 + (i * 0.1),
-            "home_xga": 2.7 - (i * 0.1),
-            "away_xgf": 2.9 + (i * 0.1),
-            "away_xga": 2.8 - (i * 0.1),
-            "h2h_home": 3,
-            "h2h_away": 2,
-            "home_kalshi": 55,
-            "away_kalshi": 45,
-        }
-        games.append(game)
-    
-    return games
+        return games
+        
+    except Exception as e:
+        st.error(f"ESPN API error: {e}")
+        return []
 
 # ============================================================
 # EDGE CALCULATION FUNCTIONS
@@ -486,9 +540,9 @@ with st.sidebar:
 # MAIN
 # ============================================================
 st.title("🏒 NHL EDGE FINDER")
-st.caption(f"v{VERSION} | {now.strftime('%I:%M:%S %p ET')} | Mock Data (Testing)")
+st.caption(f"v{VERSION} | {now.strftime('%I:%M:%S %p ET')} | Real ESPN Data")
 
-games = fetch_mock_nhl_games()
+games = fetch_nhl_games_real()
 
 if not games:
     st.warning("No NHL games scheduled today.")
@@ -573,8 +627,120 @@ for game in games:
         st.markdown("<br>", unsafe_allow_html=True)
 
 # ============================================================
+# LEGEND & HOW TO USE
+# ============================================================
+st.markdown("---")
+st.header("📖 LEGEND & PICKING GUIDE")
+
+col_a, col_b = st.columns(2)
+
+with col_a:
+    st.markdown("""
+### 🎯 Signal Tiers
+- **🔒 STRONG (9.0+)** → High-confidence edge, trackable
+- **🔵 BUY (7.0-8.9)** → Good edge, actionable
+- **🟡 LEAN (5.5-6.9)** → Slight edge, informational
+- **⚪ PASS (< 5.5)** → No significant edge
+
+### 📊 Edge Score Breakdown
+Each team gets scored **0-10** based on 7 factors:
+- **Goalie Matchup** (1.5x weight) - Save % differential
+- **Fatigue** (1.2x weight) - B2B games, rest days
+- **Home Ice** (1.0x weight) - Home advantage
+- **Recent Form** (1.0x weight) - Last 10 games
+- **xG Differential** (1.0x weight) - Expected goals
+- **Special Teams** (0.8x weight) - PP/PK %
+- **Head-to-Head** (0.5x weight) - Season matchup history
+""")
+
+with col_b:
+    st.markdown("""
+### ✅ How to Pick Winners
+1. **Compare Edge Scores** - Higher score = stronger pick
+2. **Check Signal Tier** - Only bet 🔵 BUY or 🔒 STRONG
+3. **Read the Reasons** - Understand WHY there's an edge
+4. **Compare to Kalshi Price** - Look for mispriced markets
+5. **Verify Model Probability** - Model % vs Kalshi %
+
+### 💡 Example Pick
+```
+PICK: TOR Toronto Maple Leafs
+Signal: 🔵 BUY (7.8/10)
+Reasons: Goalie edge (+1.2), Hot streak (+0.9)
+
+Kalshi: 45¢ / 55¢  ← TOR is 45¢
+Model: 38% / 62%   ← Model says TOR 38%
+```
+**Edge:** Market has TOR at 45% but model says 38%. **Fade TOR** or **buy opponent**.
+
+### 🎲 Risk Management
+- **Never bet PASS or LEAN signals**
+- **Bet size by tier:** STRONG = 2-3%, BUY = 1-2%
+- **Check goalie confirmations** before game time
+- **Avoid heavy B2B teams** unless opponent also B2B
+""")
+
+st.markdown("---")
+
+# ============================================================
+# HOW TO USE APP
+# ============================================================
+st.header("🛠️ HOW TO USE THIS APP")
+
+st.markdown("""
+### Step-by-Step Guide
+
+**1️⃣ Review Today's Games**
+- Scroll through all matchups with edge scores displayed
+- Each game shows both teams' records, goalies, and fatigue status
+
+**2️⃣ Identify Strong Signals**
+- Look for 🔒 STRONG (9.0+) or 🔵 BUY (7.0+) signals
+- Read the "Reasons" section to understand the edge source
+
+**3️⃣ Compare Model vs Market**
+- **Kalshi Price:** Current market probability (in cents)
+- **Model Probability:** Our calculated probability
+- **Edge exists when:** Model differs significantly from Kalshi
+
+**4️⃣ Make Your Decision**
+- If Model > Kalshi → Market underpricing the team
+- If Model < Kalshi → Market overpricing the team
+- Look for 5-10% gaps for best edges
+
+**5️⃣ Verify Before Betting**
+- Check starting goalie confirmations (usually 1-2 hours before game)
+- Verify no late-breaking injury news
+- Confirm market still available on Kalshi
+
+**6️⃣ Tag Strong Picks (9.0+ only)**
+- Click "🏷️ TAG" button to add to tracking system
+- Gets assigned ML number (ML-001, ML-002, etc.)
+- Tracked in sidebar under "STRONG PICKS"
+
+### ⚠️ Important Notes
+- **Mock Data:** Currently using test data - real ESPN integration pending
+- **Goalie Changes:** Always verify starting goalies before betting
+- **Line Movement:** Prices on Kalshi change constantly
+- **Not Financial Advice:** This tool provides analysis, not betting recommendations
+
+### 🔗 Kalshi Markets
+Click "NHL Markets ↗" in sidebar to access Kalshi's NHL offerings
+""")
+
+# ============================================================
 # FOOTER
 # ============================================================
 st.markdown("---")
 st.caption("NHL Edge Finder • Kalshi Contract Analysis")
-st.caption("⚠️ Currently using mock data for testing. Real ESPN API integration pending.")
+st.caption("⚠️ Using ESPN API for games. Additional stats (PP%, xG, etc.) currently use placeholder values pending full integration.")
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; padding: 20px; background: #1a1a1a; border-radius: 5px; margin-top: 20px;'>
+<strong>⚠️ DISCLAIMER</strong><br>
+This tool is for <strong>educational purposes only</strong> and does not constitute financial advice.<br>
+All analysis, predictions, and recommendations are provided for informational purposes.<br>
+Sports betting involves risk. Never bet more than you can afford to lose.<br>
+Past performance does not guarantee future results.
+</div>
+""", unsafe_allow_html=True)
