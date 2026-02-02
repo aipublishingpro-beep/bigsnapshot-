@@ -624,68 +624,88 @@ for analysis in game_analyses:
     away_prob = analysis["away_prob"]
     home_prob = analysis["home_prob"]
     
+    # Determine if pick is away or home
+    is_pick_away = (pick_team == game['away'])
+    pick_team_name = NHL_TEAMS.get(pick_team, {}).get('name', pick_team)
+    opp_team = game['home'] if is_pick_away else game['away']
+    opp_team_name = NHL_TEAMS.get(opp_team, {}).get('name', opp_team)
+    
+    # Create clean card layout
     with st.container():
-        col1, col2, col3 = st.columns([2, 3, 2])
+        # Header row - Signal badge and matchup
+        col_signal, col_matchup, col_time = st.columns([1, 3, 1])
         
-        with col1:
-            st.markdown(f"### {game['away']}")
-            away_team_name = NHL_TEAMS.get(game['away'], {}).get('name', game['away'])
-            st.caption(f"{away_team_name}")
-            st.caption(f"Record: {game['away_record']} | L10: {game['away_last10']}")
-            
-            goalie_data = GOALIES.get(game['away'], {})
-            goalie_type = game["away_goalie"]
-            if goalie_type == "starter":
-                st.caption(f"🥅 {goalie_data.get('starter', 'TBD')} ({goalie_data.get('starter_sv', 0):.3f})")
-            else:
-                st.caption(f"🥅 {goalie_data.get('backup', 'TBD')} ⚠️ BACKUP")
-            
-            if game["away_b2b"]:
-                st.caption("⚠️ BACK-TO-BACK")
+        with col_signal:
+            st.markdown(f"<div style='text-align: center; padding: 10px; background: {tier_color}; color: white; border-radius: 5px; font-weight: bold;'>{signal_tier}<br>{pick_score}/10</div>", unsafe_allow_html=True)
         
-        with col2:
-            st.markdown("### @")
+        with col_matchup:
+            st.markdown(f"### {game['away']} @ {game['home']}")
+            st.caption(f"{NHL_TEAMS.get(game['away'], {}).get('name', game['away'])} at {NHL_TEAMS.get(game['home'], {}).get('name', game['home'])}")
+        
+        with col_time:
             st.markdown(f"**{game['game_date']}**")
-            st.markdown(f"**{game['game_time']}**")
-            st.markdown(f"**Kalshi:** {game['away_kalshi']}¢ / {game['home_kalshi']}¢")
-            st.markdown(f"**Model:** {away_prob}% / {home_prob}%")
-        
-        with col3:
-            st.markdown(f"### {game['home']}")
-            home_team_name = NHL_TEAMS.get(game['home'], {}).get('name', game['home'])
-            st.caption(f"{home_team_name}")
-            st.caption(f"Record: {game['home_record']} | L10: {game['home_last10']}")
-            
-            goalie_data = GOALIES.get(game['home'], {})
-            goalie_type = game["home_goalie"]
-            if goalie_type == "starter":
-                st.caption(f"🥅 {goalie_data.get('starter', 'TBD')} ({goalie_data.get('starter_sv', 0):.3f})")
-            else:
-                st.caption(f"🥅 {goalie_data.get('backup', 'TBD')} ⚠️ BACKUP")
-            
-            if game["home_b2b"]:
-                st.caption("⚠️ BACK-TO-BACK")
+            st.caption(f"{game['game_time']}")
         
         st.markdown("---")
         
-        # Signal display - ONLY show pick team info
-        col_pick, col_tag = st.columns([3, 1])
-        with col_pick:
-            pick_team_name = NHL_TEAMS.get(pick_team, {}).get('name', pick_team)
-            st.markdown(f"<div style='padding: 10px; background: {tier_color}22; border-left: 4px solid {tier_color};'>"
-                       f"<strong>PICK:</strong> {pick_team} {pick_team_name}<br>"
-                       f"<strong>Signal:</strong> {signal_tier} ({pick_score}/10)<br>"
-                       f"<strong>Reasons:</strong> {', '.join(reasons) if reasons else 'Base model edge'}"
-                       f"</div>", unsafe_allow_html=True)
+        # Main content row
+        col_pick, col_odds = st.columns([2, 1])
         
-        with col_tag:
-            if pick_score >= 9.0:
-                if st.button("🏷️ TAG", key=f"tag_{game['id']}", use_container_width=True):
-                    ml_num = add_strong_pick("NHL", pick_team, 
-                                            game['home'] if pick_team == game['away'] else game['away'],
-                                            pick_score, reasons)
-                    st.success(f"Tagged as ML-{ml_num:03d}")
-                    st.rerun()
+        with col_pick:
+            st.markdown(f"**PICK: {pick_team} {pick_team_name}**")
+            st.caption(f"vs {opp_team} {opp_team_name}")
+            if reasons:
+                st.caption(f"**Edge Factors:** {', '.join(reasons)}")
+            else:
+                st.caption("**Edge Factors:** Base model edge")
+        
+        with col_odds:
+            pick_kalshi = game['away_kalshi'] if is_pick_away else game['home_kalshi']
+            pick_model = away_prob if is_pick_away else home_prob
+            st.markdown(f"**Market:** {pick_kalshi}¢")
+            st.markdown(f"**Model:** {pick_model}%")
+            edge_diff = pick_model - pick_kalshi
+            if edge_diff > 5:
+                st.caption(f"🟢 Model +{edge_diff}% vs market")
+            elif edge_diff < -5:
+                st.caption(f"🔴 Market +{abs(edge_diff)}% vs model")
+        
+        # Details expander
+        with st.expander("📊 Full Matchup Details"):
+            detail_col1, detail_col2 = st.columns(2)
+            
+            with detail_col1:
+                st.markdown(f"**{game['away']} {NHL_TEAMS.get(game['away'], {}).get('name', game['away'])}**")
+                st.caption(f"Record: {game['away_record']}")
+                st.caption(f"Last 10: {game['away_last10']}")
+                goalie_data = GOALIES.get(game['away'], {})
+                goalie_type = game["away_goalie"]
+                if goalie_type == "starter":
+                    st.caption(f"🥅 {goalie_data.get('starter', 'TBD')} ({goalie_data.get('starter_sv', 0):.3f})")
+                else:
+                    st.caption(f"🥅 {goalie_data.get('backup', 'TBD')} ⚠️ BACKUP")
+                if game["away_b2b"]:
+                    st.caption("⚠️ BACK-TO-BACK")
+            
+            with detail_col2:
+                st.markdown(f"**{game['home']} {NHL_TEAMS.get(game['home'], {}).get('name', game['home'])}**")
+                st.caption(f"Record: {game['home_record']}")
+                st.caption(f"Last 10: {game['home_last10']}")
+                goalie_data = GOALIES.get(game['home'], {})
+                goalie_type = game["home_goalie"]
+                if goalie_type == "starter":
+                    st.caption(f"🥅 {goalie_data.get('starter', 'TBD')} ({goalie_data.get('starter_sv', 0):.3f})")
+                else:
+                    st.caption(f"🥅 {goalie_data.get('backup', 'TBD')} ⚠️ BACKUP")
+                if game["home_b2b"]:
+                    st.caption("⚠️ BACK-TO-BACK")
+        
+        # Tag button for strong picks
+        if pick_score >= 9.0:
+            if st.button("🏷️ TAG AS STRONG PICK", key=f"tag_{game['id']}", use_container_width=True):
+                ml_num = add_strong_pick("NHL", pick_team, opp_team, pick_score, reasons)
+                st.success(f"Tagged as ML-{ml_num:03d}")
+                st.rerun()
         
         st.markdown("<br>", unsafe_allow_html=True)
 
