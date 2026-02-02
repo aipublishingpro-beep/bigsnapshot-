@@ -34,7 +34,7 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "19.1 LIVE"  # Added disclaimer - educational purposes only
+VERSION = "19.2 LIVE"  # Fixed all KeyError issues with .get() method
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -570,7 +570,8 @@ for game in games:
         
         with col1:
             st.markdown(f"### {game['away']}")
-            st.caption(f"{NHL_TEAMS[game['away']]['name']}")
+            away_team_name = NHL_TEAMS.get(game['away'], {}).get('name', game['away'])
+            st.caption(f"{away_team_name}")
             st.caption(f"Record: {game['away_record']} | L10: {game['away_last10']}")
             
             goalie_data = GOALIES.get(game['away'], {})
@@ -591,7 +592,8 @@ for game in games:
         
         with col3:
             st.markdown(f"### {game['home']}")
-            st.caption(f"{NHL_TEAMS[game['home']]['name']}")
+            home_team_name = NHL_TEAMS.get(game['home'], {}).get('name', game['home'])
+            st.caption(f"{home_team_name}")
             st.caption(f"Record: {game['home_record']} | L10: {game['home_last10']}")
             
             goalie_data = GOALIES.get(game['home'], {})
@@ -609,8 +611,9 @@ for game in games:
         # Signal display
         col_pick, col_tag = st.columns([3, 1])
         with col_pick:
+            pick_team_name = NHL_TEAMS.get(pick_team, {}).get('name', pick_team)
             st.markdown(f"<div style='padding: 10px; background: {tier_color}22; border-left: 4px solid {tier_color};'>"
-                       f"<strong>PICK:</strong> {pick_team} {NHL_TEAMS[pick_team]['name']}<br>"
+                       f"<strong>PICK:</strong> {pick_team} {pick_team_name}<br>"
                        f"<strong>Signal:</strong> {signal_tier} ({pick_score}/10)<br>"
                        f"<strong>Reasons:</strong> {', '.join(reasons) if reasons else 'Base model edge'}"
                        f"</div>", unsafe_allow_html=True)
