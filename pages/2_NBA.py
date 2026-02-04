@@ -59,7 +59,7 @@ def speak_play(text):
     js = f'''<script>if(!window.lastSpoken||window.lastSpoken!=="{clean_text}"){{window.lastSpoken="{clean_text}";var u=new SpeechSynthesisUtterance("{clean_text}");u.rate=1.1;window.speechSynthesis.speak(u);}}</script>'''
     components.html(js, height=0)
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=15)
 def fetch_espn_games():
     today = datetime.now(eastern).strftime('%Y%m%d')
     url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=" + today
