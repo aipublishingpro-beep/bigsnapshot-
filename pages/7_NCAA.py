@@ -29,7 +29,7 @@ eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
 VERSION = "NCAA 1.0"
-LEAGUE_AVG_TOTAL = 145  # NCAA avg total ~140-150
+LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5]
 
 if 'positions' not in st.session_state:
@@ -47,8 +47,8 @@ TEAM_ABBREVS = {
     "Oregon Ducks": "Oregon", "Purdue Boilermakers": "Purdue", "Saint Mary's Gaels": "Saint Mary's",
     "San Diego State Aztecs": "San Diego State", "Seton Hall Pirates": "Seton Hall", "Tennessee Volunteers": "Tennessee",
     "Texas Longhorns": "Texas", "UCLA Bruins": "UCLA", "USC Trojans": "USC", "Villanova Wildcats": "Villanova",
-    "Virginia Cavaliers": "Virginia", "Wisconsin Badgers": "Wisconsin", "Xavier Musketeers": "Xavier",
-    # Add more NCAA teams as needed — this is a starter set
+    "Virginia Cavaliers": "Virginia", "Wisconsin Badgers": "Wisconsin", "Xavier Musketeers": "Xavier"
+    # Expand as needed for more teams
 }
 
 KALSHI_CODES = {
@@ -60,7 +60,6 @@ KALSHI_CODES = {
     "Purdue": "PUR", "Saint Mary's": "SMC", "San Diego State": "SDSU", "Seton Hall": "SHU",
     "Tennessee": "TENN", "Texas": "TEX", "UCLA": "UCLA", "USC": "USC", "Villanova": "NOVA",
     "Virginia": "UVA", "Wisconsin": "WIS", "Xavier": "XAV"
-    # Expand as needed
 }
 
 TEAM_COLORS = {
@@ -75,8 +74,6 @@ TEAM_COLORS = {
     "USC": "#990000", "Villanova": "#00205B", "Virginia": "#232D4B", "Wisconsin": "#C5050C",
     "Xavier": "#00205B"
 }
-
-# (Add NCAA-specific TEAM_STATS, STAR_PLAYERS, STAR_TIERS, PLAYER_TEAMS if you have them — or leave as empty dicts for now)
 
 def american_to_implied_prob(odds):
     if odds is None: return None
@@ -124,7 +121,7 @@ def fetch_espn_games():
                             else: minutes_played = completed_halves + 20
                         except: minutes_played = completed_halves + 20
                     else: minutes_played = completed_halves
-                else: minutes_played = 40 + (period - 2) * 5  # OT
+                else: minutes_played = 40 + (period - 2) * 5
             game_date = event.get("date", "")
             game_time_str, game_datetime_str = "", ""
             if game_date:
@@ -142,9 +139,9 @@ def fetch_espn_games():
         return games
     except Exception as e: st.error("ESPN NCAA fetch error: " + str(e)); return []
 
-    @st.cache_data(ttl=60)
+@st.cache_data(ttl=60)
 def fetch_kalshi_ml():
-    url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNCBBGAME&status=open&limit=200"  # NCAA series ticker
+    url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNCBBGAME&status=open&limit=200"
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
@@ -169,16 +166,40 @@ def fetch_kalshi_ml():
         return markets
     except Exception as e: st.error("Kalshi NCAA ML fetch error: " + str(e)); return {}
 
-games = fetch_espn_games()
+def get_kalshi_game_link(away, home):
+    away_code = KALSHI_CODES.get(away, "XXX").lower()
+    home_code = KALSHI_CODES.get(home, "XXX").lower()
+    date_str = datetime.now(eastern).strftime('%y%b%d').lower()
+    return f"https://kalshi.com/markets/kxncbgame/professional-basketball-game/kxncbgame-{date_str}{away_code}{home_code}"
+
+# Add any other helper functions you had (speak_play, render_scoreboard, get_play_badge, render_nba_court, get_play_icon, calc_projection, get_pace_label, etc.)
+# For now, add placeholders if missing - you can copy from NBA version later
+
+def calc_projection(total_score, minutes_played):
+    if minutes_played >= 8:
+        pace = total_score / minutes_played
+        weight = min(1.0, (minutes_played - 8) / 16)
+        blended_pace = (pace * weight) + ((LEAGUE_AVG_TOTAL / 40) * (1 - weight))  # NCAA 40 min
+        return max(110, min(190, round(blended_pace * 40)))
+    elif minutes_played >= 6:
+        pace = total_score / minutes_played
+        return max(110, min(190, round(((pace * 0.3) + ((LEAGUE_AVG_TOTAL / 40) * 0.7)) * 40)))
+    return LEAGUE_AVG_TOTAL
+
+def get_pace_label(pace):
+    if pace < 3.5: return "🐢 SLOW", "#22c55e"
+    elif pace < 3.8: return "⚖️ AVG", "#eab308"
+    elif pace < 4.2: return "🔥 FAST", "#f97316"
+    return "💥 SHOOTOUT", "#ef4444"
+    games = fetch_espn_games()
 kalshi_ml = fetch_kalshi_ml()
-# (add fetch_kalshi_spreads, fetch_injuries, fetch_yesterday_teams if you want them — NCAA may need different endpoints)
 
 live_games = [g for g in games if g['status'] in ['STATUS_IN_PROGRESS', 'STATUS_HALFTIME', 'STATUS_END_PERIOD'] or (g['period'] > 0 and g['status'] not in ['STATUS_FINAL', 'STATUS_FULL_TIME'])]
 scheduled_games = [g for g in games if g['status'] == 'STATUS_SCHEDULED' and g['period'] == 0]
 final_games = [g for g in games if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']]
 
 st.title("🏀 BIGSNAPSHOT NCAA EDGE FINDER")
-st.caption(f"v{VERSION} • {now.strftime('%b %d, %Y %I:%M %p ET')} • Vegas vs Kalshi Mispricing Detector (NCAA)")
+st.caption(f"v{VERSION} • {now.strftime('%b %d, %Y %I:%M %p ET')} • Vegas vs Kalshi Mispricing Detector (College)")
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Today's Games", len(games))
@@ -334,7 +355,217 @@ if live_games:
         st.divider()
 else:
     st.info("No live NCAA games right now")
+    st.subheader("🎯 CUSHION SCANNER (Totals)")
+all_game_options = ["All Games"] + [f"{g['away']} @ {g['home']}" for g in games]
+cush_col1, cush_col2, cush_col3 = st.columns(3)
+with cush_col1: selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
+with cush_col2: min_mins = st.selectbox("Min PLAY TIME:", [8, 12, 16, 20, 24], index=1, key="cush_mins")
+with cush_col3: side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
 
+if min_mins == 8: st.info("🦈 SHARK MODE: 8 min played = early entry. Only buy if cushion ≥12 (✅ SAFE or 🔒 FORTRESS)")
+elif min_mins == 12: st.info("✅ SMART MONEY: 12 min played = pace locked. Cushion ≥6 is tradeable.")
+
+cushion_data = []
+for g in games:
+    if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: continue
+    game_name = f"{g['away']} @ {g['home']}"
+    if selected_game != "All Games" and game_name != selected_game: continue
+    if g['minutes_played'] < min_mins: continue
+    total, mins = g['total_score'], g['minutes_played']
+    vegas_ou = g.get('vegas_odds', {}).get('overUnder')
+    if mins >= 8:
+        proj = calc_projection(total, mins)
+        pace_label = get_pace_label(total / mins)[0]
+        status_text = f"Q{g['period']} {g['clock']}" if g['period'] > 0 else "Live"
+    elif vegas_ou:
+        try: proj = round(float(vegas_ou)); pace_label = "📊 VEGAS"; status_text = "Scheduled" if mins == 0 else f"Q{g['period']} {g['clock']} (early)"
+        except: proj = LEAGUE_AVG_TOTAL; pace_label = "⏳ PRE"; status_text = "Scheduled"
+    else: proj = LEAGUE_AVG_TOTAL; pace_label = "⏳ PRE"; status_text = "Scheduled"
+    if side_choice == "YES (Over)": thresh_sorted = sorted(THRESHOLDS)
+    else: thresh_sorted = sorted(THRESHOLDS, reverse=True)
+    for idx, thresh in enumerate(thresh_sorted):
+        cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
+        if cushion >= 6 or (selected_game != "All Games"):
+            if cushion >= 20: safety_label = "🔒 FORTRESS"
+            elif cushion >= 12: safety_label = "✅ SAFE"
+            elif cushion >= 6: safety_label = "🎯 TIGHT"
+            else: safety_label = "⚠️ RISKY"
+            cushion_data.append({"game": game_name, "status": status_text, "proj": proj, "line": thresh, "cushion": cushion, "pace": pace_label, "link": get_kalshi_game_link(g['away'], g['home']), "mins": mins, "is_live": mins >= 8, "safety": safety_label, "is_recommended": idx == 0 and cushion >= 12})
+
+safety_order = {"🔒 FORTRESS": 0, "✅ SAFE": 1, "🎯 TIGHT": 2, "⚠️ RISKY": 3}
+cushion_data.sort(key=lambda x: (not x['is_live'], safety_order.get(x['safety'], 3), -x['cushion']))
+if cushion_data:
+    direction = "go LOW for safety" if side_choice == "YES (Over)" else "go HIGH for safety"
+    st.caption(f"💡 {side_choice.split()[0]} bets: {direction}")
+    max_results = 20 if selected_game != "All Games" else 10
+    for cd in cushion_data[:max_results]:
+        cc1, cc2, cc3, cc4 = st.columns([3, 1.2, 1.3, 2])
+        with cc1:
+            rec_badge = " ⭐REC" if cd.get('is_recommended') else ""
+            st.markdown(f"**{cd['game']}** • {cd['status']}{rec_badge}")
+            if cd['mins'] > 0: st.caption(f"{cd['pace']} • {cd['mins']} min played")
+            else: st.caption(f"{cd['pace']} O/U: {cd['proj']}")
+        with cc2: st.write(f"Proj: {cd['proj']} | Line: {cd['line']}")
+        with cc3:
+            cushion_color = "#22c55e" if cd['cushion'] >= 12 else ("#eab308" if cd['cushion'] >= 6 else "#ef4444")
+            st.markdown(f"<span style='color:{cushion_color};font-weight:bold'>{cd['safety']}<br>+{round(cd['cushion'])}</span>", unsafe_allow_html=True)
+        with cc4: st.link_button(f"BUY {'NO' if 'NO' in side_choice else 'YES'} {cd['line']}", cd['link'], use_container_width=True)
+else:
+    if selected_game != "All Games": st.info(f"Select a side and see all lines for {selected_game}")
+    else:
+        live_count = sum(1 for g in games if g['minutes_played'] >= min_mins and g['status'] not in ['STATUS_FINAL', 'STATUS_FULL_TIME'])
+        if live_count == 0: st.info(f"⏳ No games have reached {min_mins}+ min play time yet. Waiting for tip-off...")
+        else: st.info(f"No {side_choice.split()[0]} opportunities with 6+ cushion. Try switching sides or wait for pace to develop.")
+
+st.divider()
+
+st.subheader("📈 PACE SCANNER")
+pace_data = [{"game": f"{g['away']} @ {g['home']}", "status": f"Q{g['period']} {g['clock']}", "total": g['total_score'], "pace": g['total_score']/g['minutes_played'], "pace_label": get_pace_label(g['total_score']/g['minutes_played'])[0], "pace_color": get_pace_label(g['total_score']/g['minutes_played'])[1], "proj": calc_projection(g['total_score'], g['minutes_played'])} for g in live_games if g['minutes_played'] >= 6]
+pace_data.sort(key=lambda x: x['pace'])
+if pace_data:
+    for pd in pace_data:
+        pc1, pc2, pc3, pc4 = st.columns([3, 2, 2, 2])
+        with pc1: st.markdown(f"**{pd['game']}**")
+        with pc2: st.write(f"{pd['status']} • {pd['total']} pts")
+        with pc3: st.markdown(f"<span style='color:{pd['pace_color']};font-weight:bold'>{pd['pace_label']}</span>", unsafe_allow_html=True)
+        with pc4: st.write(f"Proj: {pd['proj']}")
+else: st.info("No live games with 6+ minutes played")
+
+st.divider()
+
+with st.expander("🎯 PRE-GAME ALIGNMENT (Speculative)", expanded=True):
+    st.caption("Model prediction for scheduled games • Click ➕ to add to tracker")
+    if scheduled_games:
+        all_picks = []
+        for g in scheduled_games:
+            away, home = g['away'], g['home']
+            edge_score = calc_pregame_edge(away, home, injuries, b2b_teams)
+            if edge_score >= 70: pick, edge_label, edge_color = home, "🟢 STRONG", "#22c55e"
+            elif edge_score >= 60: pick, edge_label, edge_color = home, "🟢 GOOD", "#22c55e"
+            elif edge_score <= 30: pick, edge_label, edge_color = away, "🟢 STRONG", "#22c55e"
+            elif edge_score <= 40: pick, edge_label, edge_color = away, "🟢 GOOD", "#22c55e"
+            else: pick, edge_label, edge_color = "WAIT", "🟡 NEUTRAL", "#eab308"
+            all_picks.append({"away": away, "home": home, "pick": pick, "edge_label": edge_label, "edge_color": edge_color})
+        actionable = [p for p in all_picks if p['pick'] != "WAIT"]
+        if actionable:
+            add_col1, add_col2 = st.columns([3, 1])
+            with add_col1: st.caption(f"📊 {len(actionable)} actionable picks out of {len(all_picks)} games")
+            with add_col2:
+                if st.button(f"➕ ADD ALL ({len(actionable)})", key="add_all_pregame", use_container_width=True):
+                    added = 0
+                    for p in actionable:
+                        game_key = f"{p['away']}@{p['home']}"
+                        if not any(pos['game'] == game_key for pos in st.session_state.positions):
+                            st.session_state.positions.append({"game": game_key, "pick": p['pick'], "type": "ML", "line": "-", "price": 50, "contracts": 10, "link": get_kalshi_game_link(p['away'], p['home']), "id": str(uuid.uuid4())[:8]}); added += 1
+                    st.toast(f"✅ Added {added} positions!"); st.rerun()
+            st.markdown("---")
+        for p in all_picks:
+            pg1, pg2, pg3, pg4 = st.columns([2.5, 1, 2, 1])
+            game_datetime = next((g.get('game_datetime', '') for g in scheduled_games if g['away'] == p['away'] and g['home'] == p['home']), '')
+            with pg1:
+                st.markdown(f"**{p['away']} @ {p['home']}**")
+                if game_datetime: st.caption(game_datetime)
+            with pg2: st.markdown(f"<span style='color:{p['edge_color']}'>{p['edge_label']}</span>", unsafe_allow_html=True)
+            with pg3:
+                if p['pick'] != "WAIT": st.link_button(f"🎯 {p['pick']} ML", get_kalshi_game_link(p['away'], p['home']), use_container_width=True)
+                else: st.caption("Wait for better edge")
+            with pg4:
+                if p['pick'] != "WAIT":
+                    game_key = f"{p['away']}@{p['home']}"
+                    if any(pos['game'] == game_key for pos in st.session_state.positions): st.caption("✅ Tracked")
+                    elif st.button("➕", key=f"quick_{p['away']}_{p['home']}"):
+                        st.session_state.positions.append({"game": game_key, "pick": p['pick'], "type": "ML", "line": "-", "price": 50, "contracts": 10, "link": get_kalshi_game_link(p['away'], p['home']), "id": str(uuid.uuid4())[:8]}); st.rerun()
+    else: st.info("No scheduled games")
+
+st.divider()
+
+st.subheader("🏥 INJURY REPORT")
+today_teams = set([g['away'] for g in games] + [g['home'] for g in games])
+injury_found = False
+for team in sorted(today_teams):
+    for inj in injuries.get(team, []):
+        if inj['name'] in STAR_PLAYERS.get(team, []):
+            injury_found = True
+            tier = STAR_TIERS.get(inj['name'], 1)
+            st.markdown(f"**{team}**: {'⭐⭐⭐' if tier==3 else '⭐⭐' if tier==2 else '⭐'} {inj['name']} - {inj['status']}")
+if not injury_found: st.info("No star player injuries reported")
+
+st.divider()
+
+st.subheader("📊 POSITION TRACKER")
+today_games = [(f"{g['away']} @ {g['home']}", g['away'], g['home']) for g in games]
+
+with st.expander("➕ ADD NEW POSITION", expanded=False):
+    if today_games:
+        ac1, ac2 = st.columns(2)
+        with ac1: game_sel = st.selectbox("Select Game", [g[0] for g in today_games], key="add_game"); sel_game = next((g for g in today_games if g[0] == game_sel), None)
+        with ac2: bet_type = st.selectbox("Bet Type", ["ML (Moneyline)", "Totals (Over/Under)", "Spread"], key="add_type")
+        ac3, ac4 = st.columns(2)
+        with ac3:
+            if bet_type == "ML (Moneyline)": pick = st.selectbox("Pick", [sel_game[1], sel_game[2]] if sel_game else [], key="add_pick")
+            elif bet_type == "Spread": pick = st.selectbox("Pick Team", [sel_game[1], sel_game[2]] if sel_game else [], key="add_pick")
+            else: pick = st.selectbox("Pick", ["YES (Over)", "NO (Under)"], key="add_totals_pick")
+        with ac4:
+            if bet_type == "Spread":
+                if sel_game:
+                    away_code = KALSHI_CODES.get(sel_game[1], "XXX"); home_code = KALSHI_CODES.get(sel_game[2], "XXX")
+                    game_spread_key = f"{away_code}@{home_code}"
+                    kalshi_spread_list = kalshi_spreads.get(game_spread_key, [])
+                    if kalshi_spread_list:
+                        spread_options = [f"{sp['line']} ({sp['team_code']}) @ {sp['yes_price']}¢" for sp in kalshi_spread_list]
+                        line = st.selectbox("Kalshi Spreads", spread_options, key="add_spread_line")
+                        line = line.split()[0] if line else "-7.5"
+                    else:
+                        spread_options = ["-1.5", "-2.5", "-3.5", "-4.5", "-5.5", "-6.5", "-7.5", "-8.5", "-9.5", "-10.5", "-11.5", "-12.5", "+1.5", "+2.5", "+3.5", "+4.5", "+5.5", "+6.5", "+7.5", "+8.5", "+9.5", "+10.5", "+11.5", "+12.5"]
+                        line = st.selectbox("Spread Line (Manual)", spread_options, index=5, key="add_spread_line")
+                else: line = "-7.5"
+            elif "Totals" in bet_type: line = st.selectbox("Line", THRESHOLDS, key="add_line")
+            else: line = "-"
+        ac5, ac6, ac7 = st.columns(3)
+        with ac5: entry_price = st.number_input("Entry Price (¢)", 1, 99, 50, key="add_price")
+        with ac6: contracts = st.number_input("Contracts", 1, 10000, 10, key="add_contracts")
+        with ac7: cost = entry_price * contracts / 100; st.metric("Cost", f"${cost:.2f}"); st.caption(f"Win: +${contracts - cost:.2f}")
+        if st.button("✅ ADD POSITION", use_container_width=True, key="add_pos_btn"):
+            if sel_game:
+                if bet_type == "ML (Moneyline)": pos_type, pos_pick, pos_line = "ML", pick, "-"
+                elif bet_type == "Spread": pos_type, pos_pick, pos_line = "Spread", pick, str(line)
+                else: pos_type, pos_pick, pos_line = "Totals", pick.split()[0], str(line)
+                st.session_state.positions.append({"game": f"{sel_game[1]}@{sel_game[2]}", "pick": pos_pick, "type": pos_type, "line": pos_line, "price": entry_price, "contracts": contracts, "link": get_kalshi_game_link(sel_game[1], sel_game[2]), "id": str(uuid.uuid4())[:8]}); st.success("Added!"); st.rerun()
+
+if st.session_state.positions:
+    st.markdown("---")
+    for idx, pos in enumerate(st.session_state.positions):
+        current = next((g for g in games if f"{g['away']}@{g['home']}" == pos['game']), None)
+        pc1, pc2, pc3, pc4, pc5 = st.columns([2.5, 1.5, 1.5, 1.5, 1])
+        with pc1:
+            st.markdown(f"**{pos['game']}**")
+            if current:
+                if current['period'] > 0: st.caption(f"🔴 LIVE Q{current['period']} {current['clock']} | {current['away_score']}-{current['home_score']}")
+                elif current['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: st.caption(f"✅ FINAL {current['away_score']}-{current['home_score']}")
+                else: st.caption("⏳ Scheduled")
+        with pc2: st.write(f"🎯 {pos['pick']} ML" if pos['type']=="ML" else (f"📏 {pos['pick']} {pos['line']}" if pos['type']=="Spread" else f"📊 {pos['pick']} {pos['line']}"))
+        with pc3: st.write(f"{pos.get('contracts',10)} @ {pos.get('price',50)}¢"); st.caption(f"${pos.get('price',50)*pos.get('contracts',10)/100:.2f}")
+        with pc4: st.link_button("🔗 Kalshi", pos['link'], use_container_width=True)
+        with pc5:
+            if st.button("🗑️", key=f"del_{pos['id']}"): remove_position(pos['id']); st.rerun()
+    st.markdown("---")
+    if st.button("🗑️ CLEAR ALL POSITIONS", use_container_width=True, type="primary"): st.session_state.positions = []; st.rerun()
+else: st.caption("No positions tracked yet. Use ➕ ADD ALL buttons above or add manually.")
+
+st.divider()
+
+st.subheader("📋 ALL GAMES TODAY")
+for g in games:
+    if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: status, color = f"FINAL: {g['away_score']}-{g['home_score']}", "#666"
+    elif g['period'] > 0: status, color = f"LIVE Q{g['period']} {g['clock']} | {g['away_score']}-{g['home_score']}", "#22c55e"
+    else: status, color = f"{g.get('game_datetime', 'TBD')} | Spread: {g.get('vegas_odds',{}).get('spread','N/A')}", "#888"
+    st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid {color}'><b style='color:#fff'>{g['away']} @ {g['home']}</b><br><span style='color:{color}'>{status}</span></div>", unsafe_allow_html=True)
+
+st.divider()
+st.caption(f"v{VERSION} • Educational only • Not financial advice")
+st.caption("Stay small. Stay quiet. Win.")
+
+# Secret Sauce Early Edge - always visible, only real edges
 st.divider()
 
 st.subheader("🔥 SECRET SAUCE EARLY EDGE")
