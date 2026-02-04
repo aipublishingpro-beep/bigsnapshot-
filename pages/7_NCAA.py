@@ -48,7 +48,7 @@ TEAM_ABBREVS = {
     "San Diego State Aztecs": "San Diego State", "Seton Hall Pirates": "Seton Hall", "Tennessee Volunteers": "Tennessee",
     "Texas Longhorns": "Texas", "UCLA Bruins": "UCLA", "USC Trojans": "USC", "Villanova Wildcats": "Villanova",
     "Virginia Cavaliers": "Virginia", "Wisconsin Badgers": "Wisconsin", "Xavier Musketeers": "Xavier"
-    # Expand as needed for more teams
+    # Add more NCAA teams as needed
 }
 
 KALSHI_CODES = {
@@ -172,14 +172,11 @@ def get_kalshi_game_link(away, home):
     date_str = datetime.now(eastern).strftime('%y%b%d').lower()
     return f"https://kalshi.com/markets/kxncbgame/professional-basketball-game/kxncbgame-{date_str}{away_code}{home_code}"
 
-# Add any other helper functions you had (speak_play, render_scoreboard, get_play_badge, render_nba_court, get_play_icon, calc_projection, get_pace_label, etc.)
-# For now, add placeholders if missing - you can copy from NBA version later
-
 def calc_projection(total_score, minutes_played):
     if minutes_played >= 8:
         pace = total_score / minutes_played
         weight = min(1.0, (minutes_played - 8) / 16)
-        blended_pace = (pace * weight) + ((LEAGUE_AVG_TOTAL / 40) * (1 - weight))  # NCAA 40 min
+        blended_pace = (pace * weight) + ((LEAGUE_AVG_TOTAL / 40) * (1 - weight))
         return max(110, min(190, round(blended_pace * 40)))
     elif minutes_played >= 6:
         pace = total_score / minutes_played
