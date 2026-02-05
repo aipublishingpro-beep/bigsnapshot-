@@ -127,38 +127,38 @@ DOME_STADIUMS = ["ARI", "ATL", "DAL", "DET", "HOU", "IND", "LV", "LAC", "LAR", "
 # TEAM STATS
 # ============================================================
 TEAM_STATS = {
-    "ARI": {"pwr": -12.5, "rank": 27, "home_win": 0.42, "record": "4-13", "form": "LLLWL"},
-    "ATL": {"pwr": 2.5, "rank": 18, "home_win": 0.55, "record": "8-9", "form": "LWLWL"},
-    "BAL": {"pwr": 15.5, "rank": 3, "home_win": 0.72, "record": "12-5", "form": "WWWLW"},
-    "BUF": {"pwr": 18.2, "rank": 2, "home_win": 0.78, "record": "13-4", "form": "WWWWL"},
-    "CAR": {"pwr": -18.5, "rank": 30, "home_win": 0.35, "record": "5-12", "form": "LLWLL"},
-    "CHI": {"pwr": -8.5, "rank": 22, "home_win": 0.45, "record": "5-12", "form": "LLLLL"},
-    "CIN": {"pwr": 5.8, "rank": 14, "home_win": 0.58, "record": "9-8", "form": "WWWWL"},
-    "CLE": {"pwr": -25.0, "rank": 32, "home_win": 0.38, "record": "3-14", "form": "LLLLL"},
-    "DAL": {"pwr": -5.2, "rank": 20, "home_win": 0.52, "record": "7-10", "form": "LLWLL"},
-    "DEN": {"pwr": 8.5, "rank": 8, "home_win": 0.65, "record": "10-7", "form": "WLWWL"},
-    "DET": {"pwr": 22.5, "rank": 1, "home_win": 0.78, "record": "15-2", "form": "WWWWW"},
-    "GB": {"pwr": 12.2, "rank": 6, "home_win": 0.70, "record": "11-6", "form": "WWLWW"},
-    "HOU": {"pwr": 10.5, "rank": 7, "home_win": 0.68, "record": "10-7", "form": "WLWWW"},
-    "IND": {"pwr": -2.5, "rank": 16, "home_win": 0.55, "record": "8-9", "form": "LWLWL"},
-    "JAX": {"pwr": -8.5, "rank": 23, "home_win": 0.45, "record": "4-13", "form": "LLLWL"},
-    "KC": {"pwr": 18.5, "rank": 4, "home_win": 0.82, "record": "15-2", "form": "WWWWW"},
-    "LV": {"pwr": -10.2, "rank": 25, "home_win": 0.42, "record": "4-13", "form": "LLLLW"},
-    "LAC": {"pwr": 11.8, "rank": 5, "home_win": 0.62, "record": "11-6", "form": "WLWWW"},
-    "LAR": {"pwr": 8.5, "rank": 9, "home_win": 0.62, "record": "10-7", "form": "WWLWW"},
-    "MIA": {"pwr": -2.5, "rank": 17, "home_win": 0.55, "record": "8-9", "form": "WLLWL"},
-    "MIN": {"pwr": 12.5, "rank": 5, "home_win": 0.68, "record": "14-3", "form": "WWWWL"},
-    "NE": {"pwr": -12.5, "rank": 24, "home_win": 0.42, "record": "4-13", "form": "LLLLL"},
-    "NO": {"pwr": -8.8, "rank": 21, "home_win": 0.48, "record": "5-12", "form": "LLLWL"},
-    "NYG": {"pwr": -15.5, "rank": 29, "home_win": 0.35, "record": "3-14", "form": "LLLLL"},
-    "NYJ": {"pwr": -6.5, "rank": 19, "home_win": 0.45, "record": "5-12", "form": "WLLLL"},
-    "PHI": {"pwr": 14.8, "rank": 4, "home_win": 0.75, "record": "14-3", "form": "WWWWW"},
-    "PIT": {"pwr": 4.8, "rank": 12, "home_win": 0.62, "record": "10-7", "form": "LLWWL"},
-    "SF": {"pwr": -4.5, "rank": 18, "home_win": 0.52, "record": "6-11", "form": "LWLLL"},
-    "SEA": {"pwr": 6.5, "rank": 10, "home_win": 0.62, "record": "10-7", "form": "WLWWL"},
-    "TB": {"pwr": 5.8, "rank": 11, "home_win": 0.58, "record": "10-7", "form": "WWWLW"},
-    "TEN": {"pwr": -14.8, "rank": 28, "home_win": 0.40, "record": "3-14", "form": "LLLLW"},
-    "WAS": {"pwr": 8.5, "rank": 8, "home_win": 0.62, "record": "12-5", "form": "WWWWL"}
+    "ARI": {"pwr": -5.0, "rank": 22, "home_win": 0.45, "record": "6-11", "form": "LWLLL"},
+    "ATL": {"pwr": -3.5, "rank": 20, "home_win": 0.48, "record": "7-10", "form": "WLLWL"},
+    "BAL": {"pwr": 0.5, "rank": 17, "home_win": 0.50, "record": "4-5", "form": "WWWLL"},
+    "BUF": {"pwr": 8.5, "rank": 8, "home_win": 0.68, "record": "10-7", "form": "WWLWL"},
+    "CAR": {"pwr": 4.0, "rank": 13, "home_win": 0.55, "record": "10-7", "form": "WLWWL"},
+    "CHI": {"pwr": 12.0, "rank": 4, "home_win": 0.72, "record": "12-5", "form": "WWLWW"},
+    "CIN": {"pwr": -2.0, "rank": 19, "home_win": 0.48, "record": "3-6", "form": "LLWLL"},
+    "CLE": {"pwr": -12.0, "rank": 30, "home_win": 0.35, "record": "2-7", "form": "LLLLL"},
+    "DAL": {"pwr": -1.5, "rank": 18, "home_win": 0.50, "record": "3-5-1", "form": "LLWDL"},
+    "DEN": {"pwr": 18.0, "rank": 1, "home_win": 0.82, "record": "14-3", "form": "WWWWW"},
+    "DET": {"pwr": 2.0, "rank": 16, "home_win": 0.55, "record": "8-9", "form": "LWLLW"},
+    "GB": {"pwr": 6.5, "rank": 10, "home_win": 0.62, "record": "10-7", "form": "WLWWL"},
+    "HOU": {"pwr": 7.5, "rank": 9, "home_win": 0.65, "record": "10-7", "form": "WWLWW"},
+    "IND": {"pwr": 5.0, "rank": 12, "home_win": 0.72, "record": "8-2", "form": "WWWWL"},
+    "JAX": {"pwr": 6.0, "rank": 11, "home_win": 0.58, "record": "10-7", "form": "WLWLW"},
+    "KC": {"pwr": -0.5, "rank": 15, "home_win": 0.52, "record": "5-4", "form": "LLWLW"},
+    "LV": {"pwr": -8.0, "rank": 26, "home_win": 0.40, "record": "2-7", "form": "LLLLW"},
+    "LAC": {"pwr": 8.0, "rank": 7, "home_win": 0.62, "record": "7-3", "form": "WWWLW"},
+    "LAR": {"pwr": 10.0, "rank": 6, "home_win": 0.65, "record": "11-6", "form": "WLWWW"},
+    "MIA": {"pwr": -6.0, "rank": 23, "home_win": 0.42, "record": "3-7", "form": "LLLWL"},
+    "MIN": {"pwr": 3.0, "rank": 14, "home_win": 0.55, "record": "8-9", "form": "LWLWL"},
+    "NE": {"pwr": 15.0, "rank": 2, "home_win": 0.75, "record": "14-3", "form": "WWWWW"},
+    "NO": {"pwr": -7.5, "rank": 25, "home_win": 0.42, "record": "4-13", "form": "LLLWL"},
+    "NYG": {"pwr": -10.0, "rank": 28, "home_win": 0.38, "record": "3-7", "form": "LLWLL"},
+    "NYJ": {"pwr": -9.0, "rank": 27, "home_win": 0.38, "record": "2-8", "form": "LLLLL"},
+    "PHI": {"pwr": 11.0, "rank": 5, "home_win": 0.70, "record": "7-2", "form": "WWWLW"},
+    "PIT": {"pwr": 3.5, "rank": 13, "home_win": 0.58, "record": "5-4", "form": "LWWLL"},
+    "SF": {"pwr": 5.5, "rank": 11, "home_win": 0.55, "record": "8-9", "form": "LWWLW"},
+    "SEA": {"pwr": 16.0, "rank": 3, "home_win": 0.78, "record": "14-3", "form": "WWWWW"},
+    "TB": {"pwr": 4.5, "rank": 14, "home_win": 0.58, "record": "10-7", "form": "WWLWW"},
+    "TEN": {"pwr": -14.0, "rank": 31, "home_win": 0.35, "record": "1-8", "form": "LLLLL"},
+    "WAS": {"pwr": -6.5, "rank": 24, "home_win": 0.45, "record": "3-7", "form": "LLLLL"}
 }
 
 STADIUM_COORDS = {
@@ -825,14 +825,17 @@ st.markdown("""
 <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 18px 22px; border-radius: 12px; border-left: 5px solid #ffd700; margin-bottom: 20px;">
     <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
         <div>
-            <span style="font-size: 1.4em; font-weight: bold; color: #ffd700;">🏆 SUPER BOWL LIX</span><br>
-            <span style="color: #fff; font-size: 1.1em;">February 9, 2025</span><br>
-            <span style="color: #aaa;">Caesars Superdome • New Orleans, LA</span>
+            <span style="font-size: 1.4em; font-weight: bold; color: #ffd700;">🏆 SUPER BOWL LX</span><br>
+            <span style="color: #fff; font-size: 1.1em;">February 8, 2026 • 6:30 PM ET</span><br>
+            <span style="color: #aaa;">Levi's Stadium • Santa Clara, CA</span><br>
+            <span style="color: #fff; font-size: 1.05em; margin-top: 6px; display: inline-block;">🦅 <b>SEA Seahawks (14-3)</b> vs <b>NE Patriots (14-3)</b> 🏴‍☠️</span><br>
+            <span style="color: #ffd700;">SEA -4.5 • O/U 45.5 • NBC/Peacock</span>
         </div>
         <div style="text-align: right;">
             <span style="color: #888; font-size: 0.9em;">CONFERENCE CHAMPIONSHIPS</span><br>
-            <span style="color: #fff;">January 26, 2025</span><br>
-            <span style="color: #aaa;">AFC & NFC Title Games</span>
+            <span style="color: #fff;">NFC: SEA 41, SF 6</span><br>
+            <span style="color: #fff;">AFC: NE 10, DEN 7</span><br>
+            <span style="color: #aaa; font-size: 0.85em;">Halftime: Bad Bunny 🎶</span>
         </div>
     </div>
 </div>
@@ -842,10 +845,13 @@ st.markdown("""
 <div style="background: #0f172a; padding: 15px 20px; border-radius: 10px; margin-bottom: 15px;">
     <div style="font-weight: bold; color: #3b82f6; margin-bottom: 10px;">🔵 AFC PLAYOFF BRACKET</div>
     <div style="display: flex; gap: 20px; flex-wrap: wrap; color: #ccc; font-size: 0.95em;">
-        <div><span style="color: #ffd700;">1.</span> KC (15-2) — BYE</div>
-        <div><span style="color: #c0c0c0;">2.</span> BUF (13-4) — BYE</div>
-        <div><span style="color: #cd7f32;">3.</span> BAL (12-5)</div>
-        <div>4. HOU (10-7)</div><div>5. LAC (11-6)</div><div>6. PIT (10-7)</div><div>7. DEN (10-7)</div>
+        <div><span style="color: #ffd700;">1.</span> DEN (14-3) — BYE → W 33-30 OT vs BUF → <span style="color:#ef4444;">L 7-10 vs NE</span></div>
+        <div><span style="color: #c0c0c0;">2.</span> <b style="color:#22c55e;">NE (14-3)</b> — W 16-3 vs LAC → W 28-16 vs HOU → <span style="color:#22c55e;">W 10-7 vs DEN → 🏆 SB LX</span></div>
+        <div>3. JAX — L 24-27 vs BUF</div>
+        <div>4. PIT — L 6-30 vs HOU</div>
+        <div>5. HOU — W 30-6 vs PIT → L 16-28 vs NE</div>
+        <div>6. BUF — W 27-24 vs JAX → L 30-33 OT vs DEN</div>
+        <div>7. LAC — L 3-16 vs NE</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -854,22 +860,24 @@ st.markdown("""
 <div style="background: #0f172a; padding: 15px 20px; border-radius: 10px; margin-bottom: 15px;">
     <div style="font-weight: bold; color: #ef4444; margin-bottom: 10px;">🔴 NFC PLAYOFF BRACKET</div>
     <div style="display: flex; gap: 20px; flex-wrap: wrap; color: #ccc; font-size: 0.95em;">
-        <div><span style="color: #ffd700;">1.</span> DET (15-2) — BYE</div>
-        <div><span style="color: #c0c0c0;">2.</span> PHI (14-3) — BYE</div>
-        <div><span style="color: #cd7f32;">3.</span> MIN (14-3)</div>
-        <div>4. LAR (10-7)</div><div>5. TB (10-7)</div><div>6. WAS (12-5)</div><div>7. GB (11-6)</div>
+        <div><span style="color: #ffd700;">1.</span> <b style="color:#22c55e;">SEA (14-3)</b> — BYE → W 31-27 vs LAR → <span style="color:#22c55e;">W 41-6 vs SF → 🏆 SB LX</span></div>
+        <div><span style="color: #c0c0c0;">2.</span> CHI (12-5) — W 31-27 vs GB → L vs SF</div>
+        <div>3. PHI — L vs SF</div>
+        <div>4. CAR — L 31-34 vs LAR</div>
+        <div>5. LAR — W 34-31 vs CAR → L 27-31 vs SEA</div>
+        <div>6. SF — W vs PHI → W vs CHI → <span style="color:#ef4444;">L 6-41 vs SEA</span></div>
+        <div>7. GB — L 27-31 vs CHI</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 st.markdown("""
 <div style="background: #1e293b; padding: 12px 18px; border-radius: 8px; margin-bottom: 15px;">
-    <span style="font-weight: bold; color: #fff;">📅 KEY DATES</span>
-    <span style="color: #888; margin-left: 20px;">Wild Card: Jan 11-13</span>
-    <span style="color: #888; margin-left: 15px;">Divisional: Jan 18-19</span>
-    <span style="color: #888; margin-left: 15px;">Conf Champ: Jan 26</span>
-    <span style="color: #888; margin-left: 15px;">Pro Bowl: Feb 2</span>
-    <span style="color: #ffd700; margin-left: 15px; font-weight: bold;">Super Bowl: Feb 9</span>
+    <span style="font-weight: bold; color: #fff;">📅 RESULTS</span>
+    <span style="color: #888; margin-left: 20px;">Wild Card: Jan 10-12 ✅</span>
+    <span style="color: #888; margin-left: 15px;">Divisional: Jan 17-18 ✅</span>
+    <span style="color: #888; margin-left: 15px;">Conf Champ: Jan 25 ✅</span>
+    <span style="color: #ffd700; margin-left: 15px; font-weight: bold;">Super Bowl LX: Feb 8 — SEA vs NE</span>
 </div>
 """, unsafe_allow_html=True)
 
