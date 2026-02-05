@@ -364,7 +364,20 @@ def calc_pregame_edge(away, home, injuries, b2b_teams):
 
 def remove_position(pos_id):
     st.session_state.positions = [p for p in st.session_state.positions if p['id'] != pos_id]
-
+def calculate_net_rating(game):
+    mins = game.get('minutes_played', 0)
+    if mins < 1:
+        return 0, 0, 0, 0
+    home_score = game['home_score']
+    away_score = game['away_score']
+    est_poss_per_team = mins * 2.08
+    possessions = round(est_poss_per_team)
+    if possessions < 1:
+        return 0, 0, 0, 0
+    home_ortg = (home_score / est_poss_per_team) * 100
+    away_ortg = (away_score / est_poss_per_team) * 100
+    net_rating = round(home_ortg - away_ortg, 1)
+    return round(home_ortg, 1), round(away_ortg, 1), net_rating, possessions
 games = fetch_espn_games()
 kalshi_ml = fetch_kalshi_ml()
 kalshi_spreads = fetch_kalshi_spreads()
