@@ -28,7 +28,7 @@ import pytz
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
 
-VERSION = "12.0"
+VERSION = "13.0"
 LEAGUE_AVG_TOTAL = 145
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5, 165.5, 170.5]
 
@@ -51,7 +51,7 @@ TEAM_COLORS = {
     "FLOR": "#0021A5", "NCST": "#CC0000", "WAKE": "#9E7E38", "CLEM": "#F56600",
     "PITT": "#003594", "LOU": "#AD0000", "VTECH": "#630031", "SYRA": "#F76900",
     "ND": "#0C2340", "BC": "#98002E", "STAN": "#8C1515", "WASH": "#4B2E83",
-    "USC": "#990000", "COLO": "#CFB87C", "UTAH": "#CC0000"
+    "USC": "#990000", "COLO": "#CFB87C", "UTAH": "#CC0000", "PSU": "#041E42"
 }
 
 def escape_html(text):
@@ -59,11 +59,22 @@ def escape_html(text):
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 def american_to_implied_prob(odds):
-    if odds is None: return None
+    """FIXED: handles big negative ML correctly (-5000, -8000 etc)"""
+    if odds is None or odds == 0: return 0.5
     if odds > 0: return 100 / (odds + 100)
     else: return abs(odds) / (abs(odds) + 100)
 
 def build_kalshi_ncaa_url(away_abbrev, home_abbrev):
+    """Build URL — tries to match actual Kalshi ticker first, falls back to constructed URL"""
+    kalshi_data = st.session_state.get('ncaa_kalshi_data', {})
+    a_lower = away_abbrev.lower()
+    h_lower = home_abbrev.lower()
+    for ticker, m in kalshi_data.items():
+        title = (m.get("title", "") + " " + m.get("subtitle", "")).lower()
+        if a_lower in title and h_lower in title:
+            return f"https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game/{ticker.lower()}"
+        if a_lower in ticker.lower() and h_lower in ticker.lower():
+            return f"https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game/{ticker.lower()}"
     date_str = datetime.now(eastern).strftime("%y%b%d").lower()
     a = away_abbrev.lower().replace(" ", "").replace(".", "").replace("'", "")[:4]
     h = home_abbrev.lower().replace(" ", "").replace(".", "").replace("'", "")[:4]
@@ -72,8 +83,8 @@ def build_kalshi_ncaa_url(away_abbrev, home_abbrev):
 
 def get_conference_tier(conf_name):
     if not conf_name: return 3
-    if any(p in conf_name for p in POWER_CONFERENCES): return 1
-    if any(h in conf_name for h in HIGH_MAJOR): return 2
+    if any(p in str(conf_name) for p in POWER_CONFERENCES): return 1
+    if any(h in str(conf_name) for h in HIGH_MAJOR): return 2
     return 3
 
 def get_minutes_played_ncaa(period, clock, status_type):
@@ -165,8 +176,12 @@ def fetch_espn_ncaa_games():
         st.error("ESPN NCAA fetch error: " + str(e))
         return []
 
-@st.cache_data(ttl=60)
-def fetch_kalshi_ncaa_ml():
+def fetch_kalshi_ncaa_ml(force_refresh=False):
+    """NO CACHE — fetches fresh every run or on force refresh"""
+    if not force_refresh and 'ncaa_kalshi_data' in st.session_state and 'ncaa_kalshi_time' in st.session_state:
+        age = (datetime.now(eastern) - st.session_state.ncaa_kalshi_time).total_seconds()
+        if age < 15:
+            return st.session_state.ncaa_kalshi_data
     url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNCAAMBGAME&status=open&limit=200"
     try:
         resp = requests.get(url, timeout=10)
@@ -175,17 +190,37 @@ def fetch_kalshi_ncaa_ml():
         for m in data.get("markets", []):
             ticker = m.get("ticker", "")
             title = m.get("title", "")
+            subtitle = m.get("subtitle", "")
             yes_bid = m.get("yes_bid", 0) or 0
             yes_ask = m.get("yes_ask", 0) or 0
-            yes_price = yes_ask if yes_ask > 0 else (yes_bid if yes_bid > 0 else 50)
-            subtitle = m.get("subtitle", "")
+            last_price = m.get("last_price", 0) or 0
+            yes_price = yes_ask if yes_ask > 0 else (last_price if last_price > 0 else (yes_bid if yes_bid > 0 else 0))
             markets[ticker] = {
                 "ticker": ticker, "title": title, "subtitle": subtitle,
-                "yes_bid": yes_bid, "yes_ask": yes_ask, "yes_price": yes_price
+                "yes_bid": yes_bid, "yes_ask": yes_ask, "yes_price": yes_price,
+                "last_price": last_price
             }
+        st.session_state.ncaa_kalshi_data = markets
+        st.session_state.ncaa_kalshi_time = datetime.now(eastern)
         return markets
     except:
-        return {}
+        return st.session_state.get('ncaa_kalshi_data', {})
+
+def find_kalshi_price_for_game(kalshi_data, away_abbrev, home_abbrev, team_abbrev):
+    """Search Kalshi markets for a specific game and team's YES price"""
+    a_lower = away_abbrev.lower()
+    h_lower = home_abbrev.lower()
+    t_lower = team_abbrev.lower()
+    for ticker, m in kalshi_data.items():
+        search_text = (ticker + " " + m.get("title", "") + " " + m.get("subtitle", "")).lower()
+        if (a_lower in search_text or a_lower[:3] in search_text) and (h_lower in search_text or h_lower[:3] in search_text):
+            title_lower = m.get("title", "").lower()
+            if t_lower in title_lower or t_lower[:3] in title_lower:
+                return m.get("yes_price", 0)
+            else:
+                yes_p = m.get("yes_price", 0)
+                if yes_p > 0: return 100 - yes_p
+    return 0
 
 @st.cache_data(ttl=300)
 def fetch_ncaa_rankings():
@@ -231,8 +266,7 @@ def speak_play(text):
     js = f'''<script>if(!window.lastSpoken||window.lastSpoken!=="{clean_text}"){{window.lastSpoken="{clean_text}";var u=new SpeechSynthesisUtterance("{clean_text}");u.rate=1.1;window.speechSynthesis.speak(u);}}</script>'''
     components.html(js, height=0)
     # ═══════════════════════════════════════════════
-# PART 2 — RENDERING + LIVE EDGE MONITOR
-# Paste directly after Part 1 (no blank lines needed)
+# PART 2 — RENDERING + HELPERS (paste after Part 1)
 # ═══════════════════════════════════════════════
 
 def render_scoreboard(away, home, away_abbrev, home_abbrev, away_score, home_score, period, clock, away_rank=0, home_rank=0, away_record="", home_record=""):
@@ -344,20 +378,18 @@ def calc_pregame_edge_ncaa(home_rank, away_rank, home_conf_tier, away_conf_tier,
 def calculate_net_rating(game):
     mins = game.get('minutes_played', 0)
     if mins < 1: return 0, 0, 0, 0
-    home_score = game['home_score']
-    away_score = game['away_score']
     est_poss_per_team = mins * 1.6
     possessions = round(est_poss_per_team)
     if possessions < 1: return 0, 0, 0, 0
-    home_ortg = (home_score / est_poss_per_team) * 100
-    away_ortg = (away_score / est_poss_per_team) * 100
+    home_ortg = (game['home_score'] / est_poss_per_team) * 100
+    away_ortg = (game['away_score'] / est_poss_per_team) * 100
     net_rating = round(home_ortg - away_ortg, 1)
     return round(home_ortg, 1), round(away_ortg, 1), net_rating, possessions
 
 def remove_ncaa_position(pos_id):
     st.session_state.ncaa_positions = [p for p in st.session_state.ncaa_positions if p['id'] != pos_id]
     # ═══════════════════════════════════════════════
-# PART 3 — MAIN UI (paste after Part 2)
+# PART 3 — MAIN UI WITH FIXED EDGE CALC (paste after Part 2)
 # ═══════════════════════════════════════════════
 
 games = fetch_espn_ncaa_games()
@@ -380,34 +412,71 @@ c4.metric("Final", len(final_games))
 st.divider()
 
 # ───────────────────────────────────────────────
-# VEGAS vs KALSHI MISPRICING
+# VEGAS vs KALSHI MISPRICING — FIXED
 # ───────────────────────────────────────────────
 st.subheader("💰 VEGAS vs KALSHI MISPRICING ALERT")
-st.caption("Buy when Kalshi underprices Vegas favorite • 5%+ gap = edge")
+
+refresh_col1, refresh_col2 = st.columns([3, 1])
+with refresh_col1:
+    kalshi_time = st.session_state.get('ncaa_kalshi_time')
+    if kalshi_time:
+        age = (datetime.now(eastern) - kalshi_time).total_seconds()
+        freshness = f"🟢 {int(age)}s ago" if age < 30 else (f"🟡 {int(age)}s ago" if age < 60 else f"🔴 {int(age)}s ago — STALE")
+        st.caption(f"Kalshi data: {freshness} • ESPN odds: soft book (not sharp)")
+    else:
+        st.caption("Kalshi data: not yet loaded")
+with refresh_col2:
+    if st.button("🔄 Refresh Kalshi Prices", key="refresh_kalshi"):
+        kalshi_ml = fetch_kalshi_ncaa_ml(force_refresh=True)
+        st.success("Kalshi refreshed!")
+        st.rerun()
+
+st.caption("Buy when Kalshi underprices Vegas favorite • 5%+ gap = real edge • ⚠️ ESPN odds are soft book — verify on Kalshi")
 
 mispricings = []
 for g in games:
     if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: continue
     vegas = g.get('vegas_odds', {})
-    home_ml, away_ml, spread = vegas.get('homeML'), vegas.get('awayML'), vegas.get('spread')
-    if home_ml and away_ml:
+    home_ml, away_ml = vegas.get('homeML'), vegas.get('awayML')
+    spread = vegas.get('spread')
+
+    vegas_home_prob, vegas_away_prob = 0, 0
+    if home_ml and away_ml and home_ml != 0 and away_ml != 0:
         vegas_home_prob = american_to_implied_prob(home_ml) * 100
         vegas_away_prob = american_to_implied_prob(away_ml) * 100
         total = vegas_home_prob + vegas_away_prob
-        if total > 0: vegas_home_prob, vegas_away_prob = vegas_home_prob / total * 100, vegas_away_prob / total * 100
+        if total > 0:
+            vegas_home_prob = vegas_home_prob / total * 100
+            vegas_away_prob = vegas_away_prob / total * 100
     elif spread:
-        try: vegas_home_prob = max(10, min(90, 50 - (float(spread) * 2.8))); vegas_away_prob = 100 - vegas_home_prob
+        try:
+            vegas_home_prob = max(10, min(90, 50 - (float(spread) * 2.8)))
+            vegas_away_prob = 100 - vegas_home_prob
         except: continue
     else: continue
-    kalshi_link = build_kalshi_ncaa_url(g['away_abbrev'], g['home_abbrev'])
-    home_edge = vegas_home_prob - 50
-    away_edge = vegas_away_prob - 50
-    if home_edge >= 5 or away_edge >= 5:
-        if home_edge >= away_edge:
-            team, team_abbrev, vegas_prob, edge = g['home'], g['home_abbrev'], vegas_home_prob, home_edge
-        else:
-            team, team_abbrev, vegas_prob, edge = g['away'], g['away_abbrev'], vegas_away_prob, away_edge
-        mispricings.append({'game': g, 'team': team, 'team_abbrev': team_abbrev, 'vegas_prob': vegas_prob, 'edge': edge, 'link': kalshi_link})
+
+    # FIXED: Get ACTUAL Kalshi price for each team instead of default 50
+    kalshi_home_price = find_kalshi_price_for_game(kalshi_ml, g['away_abbrev'], g['home_abbrev'], g['home_abbrev'])
+    kalshi_away_price = find_kalshi_price_for_game(kalshi_ml, g['away_abbrev'], g['home_abbrev'], g['away_abbrev'])
+
+    # Skip if no Kalshi data found (price = 0)
+    if kalshi_home_price == 0 and kalshi_away_price == 0: continue
+
+    # FIXED: Edge = Vegas implied prob - Kalshi actual price
+    home_edge = vegas_home_prob - kalshi_home_price if kalshi_home_price > 0 else 0
+    away_edge = vegas_away_prob - kalshi_away_price if kalshi_away_price > 0 else 0
+
+    # Only show if 5%+ edge AND Kalshi price is not already near fair value (< 90¢)
+    if (home_edge >= 5 and kalshi_home_price < 90) or (away_edge >= 5 and kalshi_away_price < 90):
+        if home_edge >= away_edge and home_edge >= 5 and kalshi_home_price < 90:
+            team, team_abbrev = g['home'], g['home_abbrev']
+            vegas_prob, kalshi_price, edge = vegas_home_prob, kalshi_home_price, home_edge
+        elif away_edge >= 5 and kalshi_away_price < 90:
+            team, team_abbrev = g['away'], g['away_abbrev']
+            vegas_prob, kalshi_price, edge = vegas_away_prob, kalshi_away_price, away_edge
+        else: continue
+        kalshi_link = build_kalshi_ncaa_url(g['away_abbrev'], g['home_abbrev'])
+        mispricings.append({'game': g, 'team': team, 'team_abbrev': team_abbrev, 'vegas_prob': vegas_prob, 'kalshi_price': kalshi_price, 'edge': edge, 'link': kalshi_link})
 
 mispricings.sort(key=lambda x: x['edge'], reverse=True)
 
@@ -421,10 +490,15 @@ if mispricings:
         rank_h = f"#{g['home_rank']} " if g['home_rank'] > 0 else ""
         status_text = f"H{g['period']} {g['clock']}" if g['period'] > 0 else (g.get('game_datetime', 'Scheduled') or 'Scheduled')
         st.markdown(f"**{rank_a}{g['away_abbrev']} @ {rank_h}{g['home_abbrev']}** • {status_text}")
-        st.markdown(f"""<div style="background:#0f172a;padding:16px;border-radius:10px;border:2px solid {edge_color};margin-bottom:12px"><div style="font-size:1.4em;font-weight:bold;color:#fff;margin-bottom:8px">🎯 BUY <span style="color:#22c55e">{mp['team_abbrev']}</span> on Kalshi</div><div style="color:#aaa;margin-bottom:8px">Vegas: {round(mp['vegas_prob'])}% implied • Edge: <span style="color:{edge_color};font-weight:bold">+{round(mp['edge'])}%</span></div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div style="background:#0f172a;padding:16px;border-radius:10px;border:2px solid {edge_color};margin-bottom:12px">
+            <div style="font-size:1.4em;font-weight:bold;color:#fff;margin-bottom:8px">🎯 BUY <span style="color:#22c55e">{mp['team_abbrev']}</span> on Kalshi</div>
+            <table style="width:100%;text-align:center;color:#fff"><tr style="color:#888"><td>Vegas Implied</td><td>Kalshi Price</td><td>EDGE</td></tr>
+            <tr style="font-size:1.3em;font-weight:bold"><td>{round(mp['vegas_prob'])}%</td><td>{round(mp['kalshi_price'])}¢</td><td style="color:{edge_color}">+{round(mp['edge'])}%</td></tr></table>
+            <div style="color:#888;font-size:0.8em;margin-top:8px">⚠️ ESPN odds (soft book) — verify spread on Kalshi before buying</div>
+        </div>""", unsafe_allow_html=True)
         st.link_button(f"🎯 BUY {mp['team_abbrev']} on Kalshi", mp['link'], use_container_width=True)
 else:
-    st.info("🔍 No mispricings found (need 5%+ gap between Vegas & Kalshi)")
+    st.info("🔍 No real mispricings found (need 5%+ gap AND Kalshi price < 90¢)")
 
 st.divider()
 
@@ -650,14 +724,4 @@ for g in games:
     rank_a = f"#{g['away_rank']} " if g['away_rank'] > 0 else ""
     rank_h = f"#{g['home_rank']} " if g['home_rank'] > 0 else ""
     if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']:
-        status, color = f"FINAL: {g['away_score']}-{g['home_score']}", "#666"
-    elif g['period'] > 0:
-        status, color = f"LIVE H{g['period']} {g['clock']} | {g['away_score']}-{g['home_score']}", "#22c55e"
-    else:
-        status, color = f"{g.get('game_datetime', 'TBD')} | Spread: {g.get('vegas_odds',{}).get('spread','N/A')}", "#888"
-    st.markdown(f"<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid {color}'><b style='color:#fff'>{rank_a}{g['away_abbrev']} @ {rank_h}{g['home_abbrev']}</b><br><span style='color:{color}'>{status}</span></div>", unsafe_allow_html=True)
-
-st.divider()
-st.caption(f"v{VERSION} • Educational only • Not financial advice")
-st.caption("Stay small. Stay quiet. Win.")
-st.divider()
+        status, color = f"FINAL: {g['away_score']}-{
