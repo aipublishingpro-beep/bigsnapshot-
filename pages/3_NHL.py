@@ -18,11 +18,6 @@ def send_ga4_event(page_title, page_path):
 send_ga4_event("NHL Edge Finder", "/NHL")
 
 # ============================================================
-# AUTH REMOVED - FREE APP
-# ============================================================
-# No authentication required for NHL Edge Finder
-
-# ============================================================
 # IMPORTS
 # ============================================================
 import requests
@@ -34,7 +29,229 @@ from styles import apply_styles
 
 apply_styles()
 
-VERSION = "20.2 LIVE"  # Updated legend/guide to match new card layout and be more accurate
+VERSION = "21.1 LIVE"
+
+# ============================================================
+# MOBILE-RESPONSIVE CSS
+# ============================================================
+st.markdown("""
+<style>
+/* Game card container */
+.game-card {
+    background: #1a1a2e;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+/* Card header: signal badge + matchup + time */
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* Signal badge */
+.signal-badge {
+    text-align: center;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 13px;
+    color: white;
+    min-width: 90px;
+    flex-shrink: 0;
+}
+.signal-badge .score {
+    font-size: 20px;
+    display: block;
+    margin-top: 2px;
+}
+
+/* Matchup info */
+.matchup-info {
+    flex: 1;
+    min-width: 180px;
+}
+.matchup-info .teams {
+    font-size: 20px;
+    font-weight: bold;
+    color: #ffffff;
+    margin: 0;
+}
+.matchup-info .names {
+    font-size: 12px;
+    color: #999;
+    margin: 2px 0 0 0;
+}
+
+/* Game time */
+.game-time {
+    text-align: right;
+    flex-shrink: 0;
+    min-width: 100px;
+}
+.game-time .date {
+    font-weight: bold;
+    color: #ddd;
+    font-size: 14px;
+}
+.game-time .time {
+    font-size: 12px;
+    color: #999;
+}
+
+/* Pick row */
+.pick-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #333;
+    flex-wrap: wrap;
+}
+.pick-info {
+    flex: 1;
+    min-width: 200px;
+}
+.pick-info .pick-team {
+    font-size: 16px;
+    font-weight: bold;
+    color: #00ff88;
+    margin: 0;
+}
+.pick-info .pick-vs {
+    font-size: 12px;
+    color: #888;
+    margin: 2px 0;
+}
+.pick-info .edge-factors {
+    font-size: 12px;
+    color: #aaa;
+    margin: 4px 0 0 0;
+}
+
+/* Model probability */
+.model-box {
+    text-align: right;
+    min-width: 120px;
+    flex-shrink: 0;
+}
+.model-box .model-pct {
+    font-size: 18px;
+    font-weight: bold;
+    color: #00aaff;
+}
+.model-box .model-sub {
+    font-size: 12px;
+    color: #888;
+}
+
+/* B2B warning badge */
+.b2b-badge {
+    display: inline-block;
+    background: #cc3300;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    margin-left: 6px;
+}
+
+/* Detail stats grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 8px;
+}
+.stats-grid .stat-col {
+    background: #111;
+    border-radius: 8px;
+    padding: 12px;
+}
+.stats-grid .stat-col h4 {
+    color: #fff;
+    margin: 0 0 8px 0;
+    font-size: 14px;
+}
+.stats-grid .stat-line {
+    font-size: 12px;
+    color: #bbb;
+    margin: 3px 0;
+}
+.stats-grid .stat-line.warn {
+    color: #ff6644;
+    font-weight: bold;
+}
+
+/* Edge breakdown */
+.edge-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 8px;
+}
+.edge-col {
+    background: #111;
+    border-radius: 8px;
+    padding: 10px;
+}
+.edge-col .edge-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #ddd;
+    margin-bottom: 6px;
+}
+.edge-col .edge-line {
+    font-size: 11px;
+    color: #aaa;
+    margin: 2px 0;
+}
+.edge-col .edge-line.pos { color: #00cc66; }
+.edge-col .edge-line.neg { color: #ff5555; }
+
+/* MOBILE: stack everything vertically */
+@media (max-width: 768px) {
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .signal-badge {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 8px 14px;
+    }
+    .signal-badge .score {
+        display: inline;
+        margin-top: 0;
+    }
+    .game-time {
+        text-align: left;
+    }
+    .pick-row {
+        flex-direction: column;
+    }
+    .model-box {
+        text-align: left;
+    }
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    .edge-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ============================================================
 # STRONG PICKS SYSTEM
@@ -62,18 +279,12 @@ def get_next_ml_number():
 def add_strong_pick(sport, team, opponent, edge_score, reasons):
     picks_data = st.session_state.strong_picks
     ml_num = get_next_ml_number()
-    
     pick = {
-        "ml_number": ml_num,
-        "sport": sport,
-        "team": team,
-        "opponent": opponent,
-        "edge_score": edge_score,
-        "reasons": reasons,
+        "ml_number": ml_num, "sport": sport, "team": team,
+        "opponent": opponent, "edge_score": edge_score, "reasons": reasons,
         "timestamp": datetime.now(pytz.timezone('US/Eastern')).isoformat(),
         "result": "PENDING"
     }
-    
     picks_data["picks"].append(pick)
     picks_data["next_ml"] = ml_num + 1
     save_strong_picks(picks_data)
@@ -87,86 +298,33 @@ if "strong_picks" not in st.session_state:
 # TEAM DATA
 # ============================================================
 NHL_TEAMS = {
-    "ANA": {"name": "Anaheim Ducks", "conference": "West", "division": "Pacific"},
-    "ARI": {"name": "Arizona Coyotes", "conference": "West", "division": "Central"},
-    "BOS": {"name": "Boston Bruins", "conference": "East", "division": "Atlantic"},
-    "BUF": {"name": "Buffalo Sabres", "conference": "East", "division": "Atlantic"},
-    "CGY": {"name": "Calgary Flames", "conference": "West", "division": "Pacific"},
-    "CAR": {"name": "Carolina Hurricanes", "conference": "East", "division": "Metropolitan"},
-    "CHI": {"name": "Chicago Blackhawks", "conference": "West", "division": "Central"},
-    "COL": {"name": "Colorado Avalanche", "conference": "West", "division": "Central"},
-    "CBJ": {"name": "Columbus Blue Jackets", "conference": "East", "division": "Metropolitan"},
-    "DAL": {"name": "Dallas Stars", "conference": "West", "division": "Central"},
-    "DET": {"name": "Detroit Red Wings", "conference": "East", "division": "Atlantic"},
-    "EDM": {"name": "Edmonton Oilers", "conference": "West", "division": "Pacific"},
-    "FLA": {"name": "Florida Panthers", "conference": "East", "division": "Atlantic"},
-    "LAK": {"name": "Los Angeles Kings", "conference": "West", "division": "Pacific"},
-    "MIN": {"name": "Minnesota Wild", "conference": "West", "division": "Central"},
-    "MTL": {"name": "Montreal Canadiens", "conference": "East", "division": "Atlantic"},
-    "NSH": {"name": "Nashville Predators", "conference": "West", "division": "Central"},
-    "NJD": {"name": "New Jersey Devils", "conference": "East", "division": "Metropolitan"},
-    "NYI": {"name": "New York Islanders", "conference": "East", "division": "Metropolitan"},
-    "NYR": {"name": "New York Rangers", "conference": "East", "division": "Metropolitan"},
-    "OTT": {"name": "Ottawa Senators", "conference": "East", "division": "Atlantic"},
-    "PHI": {"name": "Philadelphia Flyers", "conference": "East", "division": "Metropolitan"},
-    "PIT": {"name": "Pittsburgh Penguins", "conference": "East", "division": "Metropolitan"},
-    "SJS": {"name": "San Jose Sharks", "conference": "West", "division": "Pacific"},
-    "SEA": {"name": "Seattle Kraken", "conference": "West", "division": "Pacific"},
-    "STL": {"name": "St. Louis Blues", "conference": "West", "division": "Central"},
-    "TBL": {"name": "Tampa Bay Lightning", "conference": "East", "division": "Atlantic"},
-    "TOR": {"name": "Toronto Maple Leafs", "conference": "East", "division": "Atlantic"},
-    "VAN": {"name": "Vancouver Canucks", "conference": "West", "division": "Pacific"},
-    "VGK": {"name": "Vegas Golden Knights", "conference": "West", "division": "Pacific"},
-    "WSH": {"name": "Washington Capitals", "conference": "East", "division": "Metropolitan"},
-    "WPG": {"name": "Winnipeg Jets", "conference": "West", "division": "Central"},
-}
-
-GOALIES = {
-    "ANA": {"starter": "Dostal", "starter_sv": 0.908, "backup": "Gibson", "backup_sv": 0.888},
-    "BOS": {"starter": "Swayman", "starter_sv": 0.916, "backup": "Korpisalo", "backup_sv": 0.899},
-    "BUF": {"starter": "Luukkonen", "starter_sv": 0.910, "backup": "Levi", "backup_sv": 0.894},
-    "CGY": {"starter": "Wolf", "starter_sv": 0.915, "backup": "Vladar", "backup_sv": 0.901},
-    "CAR": {"starter": "Andersen", "starter_sv": 0.914, "backup": "Kochetkov", "backup_sv": 0.909},
-    "CHI": {"starter": "Mrazek", "starter_sv": 0.907, "backup": "Soderblom", "backup_sv": 0.896},
-    "COL": {"starter": "Georgiev", "starter_sv": 0.897, "backup": "Annunen", "backup_sv": 0.905},
-    "CBJ": {"starter": "Merzlikins", "starter_sv": 0.901, "backup": "Tarasov", "backup_sv": 0.908},
-    "DAL": {"starter": "Oettinger", "starter_sv": 0.913, "backup": "DeSmith", "backup_sv": 0.903},
-    "DET": {"starter": "Talbot", "starter_sv": 0.911, "backup": "Lyon", "backup_sv": 0.904},
-    "EDM": {"starter": "Skinner", "starter_sv": 0.905, "backup": "Pickard", "backup_sv": 0.909},
-    "FLA": {"starter": "Bobrovsky", "starter_sv": 0.915, "backup": "Knight", "backup_sv": 0.903},
-    "LAK": {"starter": "Kuemper", "starter_sv": 0.908, "backup": "Rittich", "backup_sv": 0.901},
-    "MIN": {"starter": "Gustavsson", "starter_sv": 0.911, "backup": "Fleury", "backup_sv": 0.906},
-    "MTL": {"starter": "Montembeault", "starter_sv": 0.903, "backup": "Primeau", "backup_sv": 0.890},
-    "NSH": {"starter": "Saros", "starter_sv": 0.918, "backup": "Wedgewood", "backup_sv": 0.900},
-    "NJD": {"starter": "Markstrom", "starter_sv": 0.910, "backup": "Allen", "backup_sv": 0.904},
-    "NYI": {"starter": "Sorokin", "starter_sv": 0.919, "backup": "Varlamov", "backup_sv": 0.912},
-    "NYR": {"starter": "Shesterkin", "starter_sv": 0.917, "backup": "Quick", "backup_sv": 0.903},
-    "OTT": {"starter": "Ullmark", "starter_sv": 0.913, "backup": "Forsberg", "backup_sv": 0.901},
-    "PHI": {"starter": "Ersson", "starter_sv": 0.907, "backup": "Fedotov", "backup_sv": 0.897},
-    "PIT": {"starter": "Jarry", "starter_sv": 0.903, "backup": "Blomqvist", "backup_sv": 0.909},
-    "SJS": {"starter": "Askarov", "starter_sv": 0.898, "backup": "Blackwood", "backup_sv": 0.894},
-    "SEA": {"starter": "Daccord", "starter_sv": 0.912, "backup": "Grubauer", "backup_sv": 0.899},
-    "STL": {"starter": "Binnington", "starter_sv": 0.907, "backup": "Hofer", "backup_sv": 0.910},
-    "TBL": {"starter": "Vasilevskiy", "starter_sv": 0.915, "backup": "Johansson", "backup_sv": 0.902},
-    "TOR": {"starter": "Woll", "starter_sv": 0.914, "backup": "Stolarz", "backup_sv": 0.912},
-    "VAN": {"starter": "Demko", "starter_sv": 0.918, "backup": "Lankinen", "backup_sv": 0.908},
-    "VGK": {"starter": "Hill", "starter_sv": 0.912, "backup": "Samsonov", "backup_sv": 0.903},
-    "WSH": {"starter": "Thompson", "starter_sv": 0.911, "backup": "Lindgren", "backup_sv": 0.903},
-    "WPG": {"starter": "Hellebuyck", "starter_sv": 0.923, "backup": "Comrie", "backup_sv": 0.897},
+    "ANA": {"name": "Anaheim Ducks"}, "BOS": {"name": "Boston Bruins"},
+    "BUF": {"name": "Buffalo Sabres"}, "CGY": {"name": "Calgary Flames"},
+    "CAR": {"name": "Carolina Hurricanes"}, "CHI": {"name": "Chicago Blackhawks"},
+    "COL": {"name": "Colorado Avalanche"}, "CBJ": {"name": "Columbus Blue Jackets"},
+    "DAL": {"name": "Dallas Stars"}, "DET": {"name": "Detroit Red Wings"},
+    "EDM": {"name": "Edmonton Oilers"}, "FLA": {"name": "Florida Panthers"},
+    "LAK": {"name": "Los Angeles Kings"}, "MIN": {"name": "Minnesota Wild"},
+    "MTL": {"name": "Montreal Canadiens"}, "NSH": {"name": "Nashville Predators"},
+    "NJD": {"name": "New Jersey Devils"}, "NYI": {"name": "New York Islanders"},
+    "NYR": {"name": "New York Rangers"}, "OTT": {"name": "Ottawa Senators"},
+    "PHI": {"name": "Philadelphia Flyers"}, "PIT": {"name": "Pittsburgh Penguins"},
+    "SJS": {"name": "San Jose Sharks"}, "SEA": {"name": "Seattle Kraken"},
+    "STL": {"name": "St. Louis Blues"}, "TBL": {"name": "Tampa Bay Lightning"},
+    "TOR": {"name": "Toronto Maple Leafs"}, "UTA": {"name": "Utah Hockey Club"},
+    "VAN": {"name": "Vancouver Canucks"}, "VGK": {"name": "Vegas Golden Knights"},
+    "WSH": {"name": "Washington Capitals"}, "WPG": {"name": "Winnipeg Jets"},
 }
 
 eastern = pytz.timezone('US/Eastern')
 
-# ============================================================
-# TEAM ABBREVIATION MAPPING
-# ============================================================
 TEAM_ABBREVS = {
-    "Anaheim Ducks": "ANA", "Arizona Coyotes": "ARI", "Boston Bruins": "BOS",
-    "Buffalo Sabres": "BUF", "Calgary Flames": "CGY", "Carolina Hurricanes": "CAR",
-    "Chicago Blackhawks": "CHI", "Colorado Avalanche": "COL", "Columbus Blue Jackets": "CBJ",
-    "Dallas Stars": "DAL", "Detroit Red Wings": "DET", "Edmonton Oilers": "EDM",
-    "Florida Panthers": "FLA", "Los Angeles Kings": "LAK", "Minnesota Wild": "MIN",
-    "Montreal Canadiens": "MTL", "Nashville Predators": "NSH", "New Jersey Devils": "NJD",
+    "Anaheim Ducks": "ANA", "Boston Bruins": "BOS", "Buffalo Sabres": "BUF",
+    "Calgary Flames": "CGY", "Carolina Hurricanes": "CAR", "Chicago Blackhawks": "CHI",
+    "Colorado Avalanche": "COL", "Columbus Blue Jackets": "CBJ", "Dallas Stars": "DAL",
+    "Detroit Red Wings": "DET", "Edmonton Oilers": "EDM", "Florida Panthers": "FLA",
+    "Los Angeles Kings": "LAK", "Minnesota Wild": "MIN", "Montreal Canadiens": "MTL",
+    "Montréal Canadiens": "MTL", "Nashville Predators": "NSH", "New Jersey Devils": "NJD",
     "New York Islanders": "NYI", "New York Rangers": "NYR", "Ottawa Senators": "OTT",
     "Philadelphia Flyers": "PHI", "Pittsburgh Penguins": "PIT", "San Jose Sharks": "SJS",
     "Seattle Kraken": "SEA", "St. Louis Blues": "STL", "Tampa Bay Lightning": "TBL",
@@ -174,355 +332,314 @@ TEAM_ABBREVS = {
     "Vegas Golden Knights": "VGK", "Washington Capitals": "WSH", "Winnipeg Jets": "WPG"
 }
 
+ESPN_TEAM_IDS = {}
+
 # ============================================================
-# ESPN API - REAL NHL DATA
+# ESPN API FUNCTIONS
 # ============================================================
-@st.cache_data(ttl=60)
-def fetch_nhl_games_real():
-    """Fetch today's NHL games from ESPN API"""
-    today_date = datetime.now(eastern).strftime('%Y%m%d')
-    url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates={today_date}"
-    
-    games = []
-    
+@st.cache_data(ttl=3600)
+def fetch_yesterday_teams():
+    yesterday = (datetime.now(eastern) - timedelta(days=1)).strftime('%Y%m%d')
+    url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates={yesterday}"
+    teams_played = set()
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
-        
+        for event in data.get("events", []):
+            comp = event.get("competitions", [{}])[0]
+            status_name = event.get("status", {}).get("type", {}).get("name", "")
+            if status_name in ("STATUS_FINAL", "STATUS_IN_PROGRESS", "STATUS_END_PERIOD"):
+                for c in comp.get("competitors", []):
+                    full_name = c.get("team", {}).get("displayName", "")
+                    abbr = TEAM_ABBREVS.get(full_name, c.get("team", {}).get("abbreviation", ""))
+                    if abbr:
+                        teams_played.add(abbr)
+    except: pass
+    return teams_played
+
+@st.cache_data(ttl=3600)
+def fetch_team_stats():
+    stats = {}
+    try:
+        url = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/standings"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        for group in data.get("children", []):
+            for div in group.get("standings", {}).get("entries", []):
+                team_obj = div.get("team", {})
+                full_name = team_obj.get("displayName", "")
+                abbr = TEAM_ABBREVS.get(full_name, team_obj.get("abbreviation", ""))
+                espn_id = team_obj.get("id", "")
+                if abbr:
+                    ESPN_TEAM_IDS[abbr] = espn_id
+                    ts = {}
+                    for s in div.get("stats", []):
+                        ts[s.get("name", "")] = s.get("value", 0)
+                    gp = max(int(ts.get("gamesPlayed", 1)), 1)
+                    stats[abbr] = {
+                        "wins": int(ts.get("wins", 0)),
+                        "losses": int(ts.get("losses", 0)),
+                        "otl": int(ts.get("OTLosses", ts.get("otLosses", 0))),
+                        "points": int(ts.get("points", 0)),
+                        "gp": gp,
+                        "gf_per_game": round(ts.get("pointsFor", 0) / gp, 2),
+                        "ga_per_game": round(ts.get("pointsAgainst", 0) / gp, 2),
+                        "point_pct": round(ts.get("points", 0) / (gp * 2), 3),
+                    }
+    except Exception as e:
+        st.warning(f"Could not fetch team stats: {e}")
+    return stats
+
+@st.cache_data(ttl=3600)
+def fetch_team_special_teams():
+    special = {}
+    try:
+        url = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams?limit=40"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        for team_entry in data.get("sports", [{}])[0].get("leagues", [{}])[0].get("teams", []):
+            t = team_entry.get("team", {})
+            full_name = t.get("displayName", "")
+            abbr = TEAM_ABBREVS.get(full_name, t.get("abbreviation", ""))
+            espn_id = t.get("id", "")
+            if abbr and espn_id:
+                try:
+                    stats_url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams/{espn_id}/statistics"
+                    sr = requests.get(stats_url, timeout=5)
+                    sd = sr.json()
+                    ts = {}
+                    for cat in sd.get("results", {}).get("stats", {}).get("categories", []):
+                        for stat in cat.get("stats", []):
+                            ts[stat.get("name", "")] = stat.get("value", 0)
+                    pp = ts.get("powerPlayPct", ts.get("PPPctg", 0))
+                    pk = ts.get("penaltyKillPct", ts.get("PKPctg", 0))
+                    special[abbr] = {
+                        "pp_pct": round(float(pp), 1) if pp else 20.0,
+                        "pk_pct": round(float(pk), 1) if pk else 80.0,
+                    }
+                except:
+                    special[abbr] = {"pp_pct": 20.0, "pk_pct": 80.0}
+    except: pass
+    return special
+
+@st.cache_data(ttl=1800)
+def fetch_last10_record(team_abbr):
+    espn_id = ESPN_TEAM_IDS.get(team_abbr, "")
+    if not espn_id:
+        return "?-?-?"
+    try:
+        now_et = datetime.now(eastern)
+        season_year = now_et.year if now_et.month >= 9 else now_et.year
+        url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams/{espn_id}/schedule?season={season_year}&seasontype=2"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        completed = []
+        for event in data.get("events", []):
+            if event.get("status", {}).get("type", {}).get("name", "") == "STATUS_FINAL":
+                comp = event.get("competitions", [{}])[0]
+                for c in comp.get("competitors", []):
+                    t_abbr = TEAM_ABBREVS.get(c.get("team", {}).get("displayName", ""), c.get("team", {}).get("abbreviation", ""))
+                    if t_abbr == team_abbr:
+                        winner = c.get("winner", False)
+                        period = event.get("status", {}).get("period", 3)
+                        completed.append("W" if winner else ("OT" if period > 3 else "L"))
+                        break
+        last10 = completed[-10:] if len(completed) >= 10 else completed
+        return f"{last10.count('W')}-{last10.count('L')}-{last10.count('OT')}"
+    except:
+        return "?-?-?"
+
+@st.cache_data(ttl=900)
+def fetch_probable_goalies(event_id):
+    home_goalie, away_goalie = "TBD", "TBD"
+    try:
+        url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/summary?event={event_id}"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        for item in data.get("rosters", []):
+            ha = item.get("homeAway", "")
+            for entry in item.get("roster", []):
+                if entry.get("probable", False) or entry.get("starter", False):
+                    if entry.get("position", {}).get("abbreviation", "") == "G":
+                        name = entry.get("athlete", {}).get("shortName", "TBD")
+                        if ha == "home": home_goalie = name
+                        else: away_goalie = name
+        if home_goalie == "TBD" or away_goalie == "TBD":
+            for comp in data.get("header", {}).get("competitions", []):
+                for c in comp.get("competitors", []):
+                    for lc in c.get("leaders", []):
+                        if lc.get("abbreviation", "") == "SV%":
+                            athletes = lc.get("leaders", [])
+                            if athletes:
+                                gn = athletes[0].get("athlete", {}).get("shortName", "TBD")
+                                if c.get("homeAway") == "home" and home_goalie == "TBD": home_goalie = gn
+                                elif c.get("homeAway") == "away" and away_goalie == "TBD": away_goalie = gn
+    except: pass
+    return home_goalie, away_goalie
+
+@st.cache_data(ttl=120)
+def fetch_nhl_games_real():
+    today_date = datetime.now(eastern).strftime('%Y%m%d')
+    url = f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates={today_date}"
+    yesterday_teams = fetch_yesterday_teams()
+    team_stats = fetch_team_stats()
+    special_teams = fetch_team_special_teams()
+    games = []
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
         for event in data.get("events", []):
             comp = event.get("competitions", [{}])[0]
             competitors = comp.get("competitors", [])
-            
-            if len(competitors) < 2:
-                continue
-            
-            home_team, away_team = None, None
-            home_abbr, away_abbr = "", ""
-            
+            if len(competitors) < 2: continue
+            home_team, away_team, home_abbr, away_abbr = None, None, "", ""
+            home_record, away_record = "0-0-0", "0-0-0"
             for c in competitors:
-                full_name = c.get("team", {}).get("displayName", "")
-                abbr = TEAM_ABBREVS.get(full_name, c.get("team", {}).get("abbreviation", ""))
-                
+                fn = c.get("team", {}).get("displayName", "")
+                ab = TEAM_ABBREVS.get(fn, c.get("team", {}).get("abbreviation", ""))
+                rec = c.get("records", [{}])[0].get("summary", "0-0-0") if c.get("records") else "0-0-0"
                 if c.get("homeAway") == "home":
-                    home_team = full_name
-                    home_abbr = abbr
+                    home_team, home_abbr, home_record = fn, ab, rec
                 else:
-                    away_team = full_name
-                    away_abbr = abbr
-            
-            # Get records (W-L-OT format)
-            home_record = "0-0-0"
-            away_record = "0-0-0"
-            for c in competitors:
-                record = c.get("records", [{}])[0].get("summary", "0-0-0")
-                if c.get("homeAway") == "home":
-                    home_record = record
-                else:
-                    away_record = record
-            
-            # Get game date/time
-            game_date = event.get("date", "")
-            status = event.get("status", {})
-            status_type = status.get("type", {}).get("name", "STATUS_SCHEDULED")
-            
-            # Format game date and time
-            game_date_str = "TBD"
-            game_time = "TBD"
-            if game_date:
-                try:
-                    dt = datetime.strptime(game_date, "%Y-%m-%dT%H:%M%SZ")
-                    dt_eastern = dt.replace(tzinfo=pytz.UTC).astimezone(eastern)
-                    game_date_str = dt_eastern.strftime("%a %b %d")  # e.g., "Sun Feb 02"
-                    game_time = dt_eastern.strftime("%I:%M %p ET")
-                except:
-                    game_date_str = "TBD"
-                    game_time = "TBD"
-            
-            # Build game dict with mock supplemental data
-            # (Real stats would come from separate API calls)
-            game = {
-                "id": event.get("id"),
-                "home": home_abbr,
-                "away": away_abbr,
-                "home_record": home_record,
-                "away_record": away_record,
-                "game_date": game_date_str,
-                "game_time": game_time,
-                "status": status_type,
-                "home_last10": "5-4-1",  # Mock - would need separate API
-                "away_last10": "6-3-1",  # Mock - would need separate API
-                "home_goalie": "starter",  # Mock - would need roster API
-                "away_goalie": "starter",  # Mock - would need roster API
-                "home_b2b": False,  # Would calculate from yesterday's games
-                "away_b2b": False,  # Would calculate from yesterday's games
-                "home_rest": 1,
-                "away_rest": 1,
-                "home_pp": 22.0,  # Mock - would need stats API
-                "away_pp": 20.0,
-                "home_pk": 82.0,
-                "away_pk": 80.0,
-                "home_xgf": 3.0,
-                "home_xga": 2.7,
-                "away_xgf": 2.9,
-                "away_xga": 2.8,
-                "h2h_home": 3,
-                "h2h_away": 2,
-                "home_kalshi": 55,  # Mock - would scrape from Kalshi
-                "away_kalshi": 45,
-            }
-            
-            games.append(game)
-        
+                    away_team, away_abbr, away_record = fn, ab, rec
+            gd = event.get("date", "")
+            status_type = event.get("status", {}).get("type", {}).get("name", "STATUS_SCHEDULED")
+            game_date_str, game_time = "TBD", "TBD"
+            if gd:
+                for fmt in ["%Y-%m-%dT%H:%M%SZ", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z"]:
+                    try:
+                        dt = datetime.strptime(gd[:20].rstrip("Z"), fmt.replace("Z","").replace("%z",""))
+                        dt_e = dt.replace(tzinfo=pytz.UTC).astimezone(eastern)
+                        game_date_str = dt_e.strftime("%a %b %d")
+                        game_time = dt_e.strftime("%I:%M %p ET")
+                        break
+                    except: continue
+            home_st = special_teams.get(home_abbr, {"pp_pct": 20.0, "pk_pct": 80.0})
+            away_st = special_teams.get(away_abbr, {"pp_pct": 20.0, "pk_pct": 80.0})
+            home_ts = team_stats.get(home_abbr, {"gf_per_game": 3.0, "ga_per_game": 3.0, "point_pct": 0.500})
+            away_ts = team_stats.get(away_abbr, {"gf_per_game": 3.0, "ga_per_game": 3.0, "point_pct": 0.500})
+            eid = event.get("id", "")
+            hg, ag = fetch_probable_goalies(eid)
+            games.append({
+                "id": eid, "home": home_abbr, "away": away_abbr,
+                "home_name": home_team, "away_name": away_team,
+                "home_record": home_record, "away_record": away_record,
+                "game_date": game_date_str, "game_time": game_time, "status": status_type,
+                "home_b2b": home_abbr in yesterday_teams, "away_b2b": away_abbr in yesterday_teams,
+                "home_rest": 0 if home_abbr in yesterday_teams else 1,
+                "away_rest": 0 if away_abbr in yesterday_teams else 1,
+                "home_pp": home_st["pp_pct"], "away_pp": away_st["pp_pct"],
+                "home_pk": home_st["pk_pct"], "away_pk": away_st["pk_pct"],
+                "home_gf_pg": home_ts["gf_per_game"], "home_ga_pg": home_ts["ga_per_game"],
+                "away_gf_pg": away_ts["gf_per_game"], "away_ga_pg": away_ts["ga_per_game"],
+                "home_point_pct": home_ts["point_pct"], "away_point_pct": away_ts["point_pct"],
+                "home_goalie_name": hg, "away_goalie_name": ag,
+            })
         return games
-        
     except Exception as e:
         st.error(f"ESPN API error: {e}")
         return []
 
 # ============================================================
-# EDGE CALCULATION FUNCTIONS
+# EDGE CALCULATIONS
 # ============================================================
-def calculate_goalie_edge(game, team):
-    """Calculate goalie save percentage edge (-2 to +2)"""
-    if team == "away":
-        goalie_status = game["away_goalie"]
-        opp_goalie_status = game["home_goalie"]
-        team_abbr = game["away"]
-        opp_abbr = game["home"]
-    else:
-        goalie_status = game["home_goalie"]
-        opp_goalie_status = game["away_goalie"]
-        team_abbr = game["home"]
-        opp_abbr = game["away"]
-    
-    # Get goalie data with defaults
-    team_goalie = GOALIES.get(team_abbr, {"starter_sv": 0.910, "backup_sv": 0.900})
-    opp_goalie = GOALIES.get(opp_abbr, {"starter_sv": 0.910, "backup_sv": 0.900})
-    
-    # Safe key access with .get() and defaults
-    team_sv = team_goalie.get("starter_sv", 0.910) if goalie_status == "starter" else team_goalie.get("backup_sv", 0.900)
-    opp_sv = opp_goalie.get("starter_sv", 0.910) if opp_goalie_status == "starter" else opp_goalie.get("backup_sv", 0.900)
-    
-    sv_diff = team_sv - opp_sv
-    
-    if goalie_status == "backup" and opp_goalie_status == "starter":
-        sv_diff -= 0.008
-    elif goalie_status == "starter" and opp_goalie_status == "backup":
-        sv_diff += 0.008
-    
-    edge = sv_diff * 100
+def calc_goalie_edge(game, team):
+    g = game[f"{team}_goalie_name"]
+    o = game[f"{'home' if team == 'away' else 'away'}_goalie_name"]
+    edge = 0
+    if g != "TBD" and o == "TBD": edge += 0.3
+    elif g == "TBD" and o != "TBD": edge -= 0.3
     return max(-2, min(2, edge))
 
-def calculate_fatigue_edge(game, team):
-    """Calculate back-to-back and rest edge (-1.5 to +1.5)"""
-    if team == "away":
-        b2b = game["away_b2b"]
-        rest = game["away_rest"]
-        opp_b2b = game["home_b2b"]
-        opp_rest = game["home_rest"]
-    else:
-        b2b = game["home_b2b"]
-        rest = game["home_rest"]
-        opp_b2b = game["away_b2b"]
-        opp_rest = game["away_rest"]
-    
+def calc_fatigue_edge(game, team):
+    opp = "home" if team == "away" else "away"
+    b2b, ob2b = game[f"{team}_b2b"], game[f"{opp}_b2b"]
+    r, or_ = game[f"{team}_rest"], game[f"{opp}_rest"]
     edge = 0
-    
-    if b2b and not opp_b2b:
-        edge -= 1.0
-    elif not b2b and opp_b2b:
-        edge += 1.0
-    
-    rest_diff = rest - opp_rest
-    edge += rest_diff * 0.25
-    
+    if b2b and not ob2b: edge -= 1.0
+    elif not b2b and ob2b: edge += 1.0
+    edge += (r - or_) * 0.25
     return max(-1.5, min(1.5, edge))
 
-def calculate_home_ice_edge(game, team):
-    """Calculate home ice advantage (+0.5 for home, -0.3 for away)"""
-    if team == "home":
-        return 0.5
-    else:
-        return -0.3
+def calc_home_ice(game, team):
+    return 0.5 if team == "home" else -0.3
 
-def calculate_form_edge(game, team):
-    """Calculate recent form edge based on last 10 games (-1.5 to +1.5)"""
-    if team == "away":
-        last10 = game["away_last10"]
-        opp_last10 = game["home_last10"]
-    else:
-        last10 = game["home_last10"]
-        opp_last10 = game["away_last10"]
-    
-    def parse_record(rec):
-        parts = rec.split("-")
-        w, l, ot = int(parts[0]), int(parts[1]), int(parts[2])
-        return (w * 2 + ot) / 20
-    
-    team_pct = parse_record(last10)
-    opp_pct = parse_record(opp_last10)
-    
-    diff = team_pct - opp_pct
-    return max(-1.5, min(1.5, diff * 3))
+def calc_form_edge(game, team):
+    opp = "home" if team == "away" else "away"
+    diff = game[f"{team}_point_pct"] - game[f"{opp}_point_pct"]
+    return max(-1.5, min(1.5, diff * 6))
 
-def calculate_special_teams_edge(game, team):
-    """Calculate special teams edge (-1 to +1)"""
-    if team == "away":
-        pp = game["away_pp"]
-        pk = game["away_pk"]
-        opp_pp = game["home_pp"]
-        opp_pk = game["home_pk"]
-    else:
-        pp = game["home_pp"]
-        pk = game["home_pk"]
-        opp_pp = game["away_pp"]
-        opp_pk = game["away_pk"]
-    
-    pp_edge = (pp - opp_pk) / 100
-    pk_edge = (pk - opp_pp) / 100
-    
-    combined = (pp_edge + pk_edge) * 5
-    return max(-1, min(1, combined))
+def calc_st_edge(game, team):
+    opp = "home" if team == "away" else "away"
+    pp_e = (game[f"{team}_pp"] - game[f"{opp}_pk"]) / 100
+    pk_e = (game[f"{team}_pk"] - game[f"{opp}_pp"]) / 100
+    return max(-1, min(1, (pp_e + pk_e) * 5))
 
-def calculate_xg_edge(game, team):
-    """Calculate expected goals edge (-1.5 to +1.5)"""
-    if team == "away":
-        xgf = game["away_xgf"]
-        xga = game["away_xga"]
-        opp_xgf = game["home_xgf"]
-        opp_xga = game["home_xga"]
-    else:
-        xgf = game["home_xgf"]
-        xga = game["home_xga"]
-        opp_xgf = game["away_xgf"]
-        opp_xga = game["away_xga"]
-    
-    team_diff = xgf - xga
-    opp_diff = opp_xgf - opp_xga
-    
-    edge = (team_diff - opp_diff) / 2
-    return max(-1.5, min(1.5, edge))
+def calc_gfga_edge(game, team):
+    opp = "home" if team == "away" else "away"
+    td = game[f"{team}_gf_pg"] - game[f"{team}_ga_pg"]
+    od = game[f"{opp}_gf_pg"] - game[f"{opp}_ga_pg"]
+    return max(-1.5, min(1.5, (td - od) / 2))
 
-def calculate_h2h_edge(game, team):
-    """Calculate head-to-head edge (-0.5 to +0.5)"""
-    if team == "away":
-        wins = game["h2h_away"]
-        losses = game["h2h_home"]
-    else:
-        wins = game["h2h_home"]
-        losses = game["h2h_away"]
-    
-    total = wins + losses
-    if total == 0:
-        return 0
-    
-    win_pct = wins / total
-    edge = (win_pct - 0.5) * 1
-    return max(-0.5, min(0.5, edge))
+def calc_record_edge(game, team):
+    opp = "home" if team == "away" else "away"
+    def prs(rec):
+        try:
+            p = rec.split("-")
+            w, l = int(p[0]), int(p[1])
+            ot = int(p[2]) if len(p) > 2 else 0
+            t = w + l + ot
+            return (w * 2 + ot) / (t * 2) if t > 0 else 0.5
+        except: return 0.5
+    return max(-0.5, min(0.5, (prs(game[f"{team}_record"]) - prs(game[f"{opp}_record"])) * 2))
 
-def calculate_total_edge(game, team):
-    """Calculate total edge score for a team"""
-    goalie = calculate_goalie_edge(game, team)
-    fatigue = calculate_fatigue_edge(game, team)
-    home_ice = calculate_home_ice_edge(game, team)
-    form = calculate_form_edge(game, team)
-    special_teams = calculate_special_teams_edge(game, team)
-    xg = calculate_xg_edge(game, team)
-    h2h = calculate_h2h_edge(game, team)
-    
-    # Weighted total
-    total = (
-        goalie * 1.5 +
-        fatigue * 1.2 +
-        home_ice * 1.0 +
-        form * 1.0 +
-        special_teams * 0.8 +
-        xg * 1.0 +
-        h2h * 0.5
-    )
-    
-    return {
-        "total": round(total, 2),
-        "goalie": round(goalie, 2),
-        "fatigue": round(fatigue, 2),
-        "home_ice": round(home_ice, 2),
-        "form": round(form, 2),
-        "special_teams": round(special_teams, 2),
-        "xg": round(xg, 2),
-        "h2h": round(h2h, 2),
-    }
+def calc_total_edge(game, team):
+    g = calc_goalie_edge(game, team)
+    f = calc_fatigue_edge(game, team)
+    h = calc_home_ice(game, team)
+    fo = calc_form_edge(game, team)
+    st = calc_st_edge(game, team)
+    gf = calc_gfga_edge(game, team)
+    r = calc_record_edge(game, team)
+    total = g*1.5 + f*1.2 + h*1.0 + fo*1.0 + st*0.8 + gf*1.0 + r*0.5
+    return {"total": round(total,2), "goalie": round(g,2), "fatigue": round(f,2),
+            "home_ice": round(h,2), "form": round(fo,2), "special_teams": round(st,2),
+            "gf_ga": round(gf,2), "record": round(r,2)}
 
-def get_normalized_score(edge_total):
-    """
-    Map raw edge (-10 to +10) to display score (0 to 10)
-    
-    ADJUSTED SCALING:
-    Edge of +5 or higher → 10.0
-    Edge of 0 → 5.0
-    Edge of -5 or lower → 0.0
-    
-    Formula: score = 5.0 + edge_total (direct 1:1 mapping)
-    """
-    score = 5.0 + edge_total
-    return round(max(0, min(10, score)), 1)
+def get_score(edge_total):
+    return round(max(0, min(10, 5.0 + edge_total)), 1)
 
-def calculate_model_probability(away_edge, home_edge):
-    """Calculate model probability from edge scores"""
-    edge_diff = home_edge - away_edge
-    home_prob = max(10, min(90, 50 + (edge_diff * 5)))
-    return round(100 - home_prob), round(home_prob)
+def get_model_prob(ae, he):
+    d = he - ae
+    hp = max(10, min(90, 50 + d * 5))
+    return round(100 - hp), round(hp)
 
 def analyze_game(game):
-    """Analyze a game and return pick recommendation"""
-    away_edge = calculate_total_edge(game, "away")
-    home_edge = calculate_total_edge(game, "home")
-    
-    # FIXED: Use absolute scoring instead of relative normalization
-    away_final = get_normalized_score(away_edge["total"])
-    home_final = get_normalized_score(home_edge["total"])
-    
-    away_model_prob, home_model_prob = calculate_model_probability(away_edge["total"], home_edge["total"])
-    
-    reasons_home = []
-    reasons_away = []
-    
-    if home_edge["goalie"] >= 0.5:
-        reasons_home.append(f"Goalie edge (+{home_edge['goalie']:.2f})")
-    elif away_edge["goalie"] >= 0.5:
-        reasons_away.append(f"Goalie edge (+{away_edge['goalie']:.2f})")
-    
-    if home_edge["fatigue"] >= 0.7:
-        reasons_home.append(f"Rest advantage (+{home_edge['fatigue']:.2f})")
-    elif away_edge["fatigue"] >= 0.7:
-        reasons_away.append(f"Rest advantage (+{away_edge['fatigue']:.2f})")
-    
-    if home_edge["form"] >= 0.5:
-        reasons_home.append(f"Hot streak (+{home_edge['form']:.2f})")
-    elif away_edge["form"] >= 0.5:
-        reasons_away.append(f"Hot streak (+{away_edge['form']:.2f})")
-    
-    if home_edge["special_teams"] >= 0.3:
-        reasons_home.append(f"Special teams (+{home_edge['special_teams']:.2f})")
-    elif away_edge["special_teams"] >= 0.3:
-        reasons_away.append(f"Special teams (+{away_edge['special_teams']:.2f})")
-    
-    if home_final >= away_final:
-        return game["home"], home_final, reasons_home[:4]
+    ae = calc_total_edge(game, "away")
+    he = calc_total_edge(game, "home")
+    a_sc = get_score(ae["total"])
+    h_sc = get_score(he["total"])
+    reasons_h, reasons_a = [], []
+    if he["fatigue"] >= 0.7: reasons_h.append(f"Rest adv (+{he['fatigue']:.1f})")
+    elif ae["fatigue"] >= 0.7: reasons_a.append(f"Rest adv (+{ae['fatigue']:.1f})")
+    if he["form"] >= 0.5: reasons_h.append(f"Better form (+{he['form']:.1f})")
+    elif ae["form"] >= 0.5: reasons_a.append(f"Better form (+{ae['form']:.1f})")
+    if he["special_teams"] >= 0.3: reasons_h.append(f"Special teams (+{he['special_teams']:.1f})")
+    elif ae["special_teams"] >= 0.3: reasons_a.append(f"Special teams (+{ae['special_teams']:.1f})")
+    if he["gf_ga"] >= 0.3: reasons_h.append(f"GF/GA edge (+{he['gf_ga']:.1f})")
+    elif ae["gf_ga"] >= 0.3: reasons_a.append(f"GF/GA edge (+{ae['gf_ga']:.1f})")
+    reasons_h.append("Home ice (+0.5)")
+    if h_sc >= a_sc:
+        return game["home"], h_sc, reasons_h[:4]
     else:
-        return game["away"], away_final, reasons_away[:4]
+        return game["away"], a_sc, reasons_a[:4]
 
-def get_signal_tier(score):
-    """Get signal tier and color based on score"""
-    if score >= 10.0:
-        return "🔥 ELITE", "#cc0000"  # Darker red
-    elif score >= 9.0:
-        return "🔒 STRONG", "#00cc00"  # Darker green
-    elif score >= 7.0:
-        return "🔵 BUY", "#0088cc"  # Darker blue
-    elif score >= 5.5:
-        return "🟡 LEAN", "#ccaa00"  # Darker yellow/gold
-    else:
-        return "⚪ PASS", "#666666"  # Darker gray
+def get_tier(score):
+    if score >= 10.0: return "🔥 ELITE", "#cc0000"
+    elif score >= 9.0: return "🔒 STRONG", "#00cc00"
+    elif score >= 7.0: return "🔵 BUY", "#0088cc"
+    elif score >= 5.5: return "🟡 LEAN", "#ccaa00"
+    else: return "⚪ PASS", "#666666"
 
 # ============================================================
 # SIDEBAR
@@ -533,284 +650,191 @@ today_str = now.strftime("%Y-%m-%d")
 with st.sidebar:
     st.page_link("Home.py", label="🏠 Home", use_container_width=True)
     st.divider()
-    
     st.header("🏷️ STRONG PICKS")
-    today_tags = len([p for p in st.session_state.strong_picks.get('picks', []) 
+    today_tags = len([p for p in st.session_state.strong_picks.get('picks', [])
                       if p.get('sport') == 'NHL' and today_str in p.get('timestamp', '')])
-    st.markdown(f"""
-**Next ML#:** ML-{get_next_ml_number():03d}  
-**Today's Tags:** {today_tags}
-""")
+    st.markdown(f"**Next ML#:** ML-{get_next_ml_number():03d}  \n**Today's Tags:** {today_tags}")
     st.divider()
-    
     st.header("📖 SIGNAL TIERS")
     st.markdown("""
-🔥 **ELITE** → 10.0 <span style="color:#888;font-size:0.8em;">Perfect edge</span>
-
-🔒 **STRONG** → 9.0-9.9 <span style="color:#888;font-size:0.8em;">High confidence</span>
-
-🔵 **BUY** → 7.0-8.9 <span style="color:#888;font-size:0.8em;">Good edge</span>
-
-🟡 **LEAN** → 5.5-6.9 <span style="color:#888;font-size:0.8em;">Slight edge</span>
-
-⚪ **PASS** → Below 5.5 <span style="color:#888;font-size:0.8em;">No edge</span>
-""", unsafe_allow_html=True)
+🔥 **ELITE** → 10.0  
+🔒 **STRONG** → 9.0-9.9  
+🔵 **BUY** → 7.0-8.9  
+🟡 **LEAN** → 5.5-6.9  
+⚪ **PASS** → Below 5.5
+""")
     st.divider()
-    
     st.header("🔗 KALSHI")
-    st.markdown('<a href="https://kalshi.com/?search=nhl" target="_blank" style="color: #00aaff;">NHL Markets ↗</a>', unsafe_allow_html=True)
+    st.markdown('<a href="https://kalshi.com/?search=nhl" target="_blank" style="color:#00aaff;">NHL Markets ↗</a>', unsafe_allow_html=True)
     st.divider()
-    st.caption(f"v{VERSION}")
+    st.caption(f"v{VERSION} | ESPN Live Data")
 
 # ============================================================
 # MAIN
 # ============================================================
 st.title("🏒 NHL EDGE FINDER")
-st.caption(f"v{VERSION} | {now.strftime('%I:%M:%S %p ET')} | Real ESPN Data")
+st.caption(f"v{VERSION} | {now.strftime('%I:%M:%S %p ET')} | Live ESPN Data")
 
 games = fetch_nhl_games_real()
-
 if not games:
     st.warning("No NHL games scheduled today.")
     st.stop()
 
-st.markdown("---")
-
-# ============================================================
-# ML PICKS
-# ============================================================
 st.header("🎯 MONEYLINE PICKS")
 
-# Analyze all games and sort by pick score (highest first)
-game_analyses = []
+# Analyze and sort
+analyses = []
 for game in games:
-    pick_team, pick_score, reasons = analyze_game(game)
-    signal_tier, tier_color = get_signal_tier(pick_score)
-    
-    away_edge = calculate_total_edge(game, "away")
-    home_edge = calculate_total_edge(game, "home")
-    away_score = get_normalized_score(away_edge["total"])
-    home_score = get_normalized_score(home_edge["total"])
-    away_prob, home_prob = calculate_model_probability(away_edge["total"], home_edge["total"])
-    
-    game_analyses.append({
-        "game": game,
-        "pick_team": pick_team,
-        "pick_score": pick_score,
-        "reasons": reasons,
-        "signal_tier": signal_tier,
-        "tier_color": tier_color,
-        "away_edge": away_edge,
-        "home_edge": home_edge,
-        "away_score": away_score,
-        "home_score": home_score,
-        "away_prob": away_prob,
-        "home_prob": home_prob
-    })
+    pt, ps, reasons = analyze_game(game)
+    tier, tc = get_tier(ps)
+    ae = calc_total_edge(game, "away")
+    he = calc_total_edge(game, "home")
+    ap, hp = get_model_prob(ae["total"], he["total"])
+    analyses.append({"game": game, "pick_team": pt, "pick_score": ps, "reasons": reasons,
+                      "tier": tier, "tc": tc, "ae": ae, "he": he, "ap": ap, "hp": hp})
+analyses.sort(key=lambda x: x["pick_score"], reverse=True)
 
-# Sort by pick_score descending (highest first)
-game_analyses.sort(key=lambda x: x["pick_score"], reverse=True)
+for a in analyses:
+    g = a["game"]
+    pt, ps = a["pick_team"], a["pick_score"]
+    tier, tc = a["tier"], a["tc"]
+    is_away = pt == g["away"]
+    pick_name = NHL_TEAMS.get(pt, {}).get("name", pt)
+    opp = g["home"] if is_away else g["away"]
+    opp_name = NHL_TEAMS.get(opp, {}).get("name", opp)
+    pick_prob = a["ap"] if is_away else a["hp"]
+    opp_prob = a["hp"] if is_away else a["ap"]
 
-# Display sorted games
-for analysis in game_analyses:
-    game = analysis["game"]
-    pick_team = analysis["pick_team"]
-    pick_score = analysis["pick_score"]
-    reasons = analysis["reasons"]
-    signal_tier = analysis["signal_tier"]
-    tier_color = analysis["tier_color"]
-    away_score = analysis["away_score"]
-    home_score = analysis["home_score"]
-    away_prob = analysis["away_prob"]
-    home_prob = analysis["home_prob"]
-    
-    # Determine if pick is away or home
-    is_pick_away = (pick_team == game['away'])
-    pick_team_name = NHL_TEAMS.get(pick_team, {}).get('name', pick_team)
-    opp_team = game['home'] if is_pick_away else game['away']
-    opp_team_name = NHL_TEAMS.get(opp_team, {}).get('name', opp_team)
-    
-    # Create clean card layout
-    with st.container():
-        # Header row - Signal badge and matchup
-        col_signal, col_matchup, col_time = st.columns([1, 3, 1])
-        
-        with col_signal:
-            st.markdown(f"<div style='text-align: center; padding: 15px; background: {tier_color}; color: white; border-radius: 8px; font-weight: bold; font-size: 14px;'>{signal_tier}<br><span style='font-size: 20px;'>{pick_score}/10</span></div>", unsafe_allow_html=True)
-        
-        with col_matchup:
-            st.markdown(f"### {game['away']} @ {game['home']}")
-            st.caption(f"{NHL_TEAMS.get(game['away'], {}).get('name', game['away'])} at {NHL_TEAMS.get(game['home'], {}).get('name', game['home'])}")
-        
-        with col_time:
-            st.markdown(f"**{game['game_date']}**")
-            st.caption(f"{game['game_time']}")
-        
-        st.markdown("---")
-        
-        # Main content row
-        col_pick, col_odds = st.columns([2, 1])
-        
-        with col_pick:
-            st.markdown(f"**PICK: {pick_team} {pick_team_name}**")
-            st.caption(f"vs {opp_team} {opp_team_name}")
-            if reasons:
-                st.caption(f"**Edge Factors:** {', '.join(reasons)}")
-            else:
-                st.caption("**Edge Factors:** Base model edge")
-        
-        with col_odds:
-            pick_kalshi = game['away_kalshi'] if is_pick_away else game['home_kalshi']
-            pick_model = away_prob if is_pick_away else home_prob
-            st.markdown(f"**Market:** {pick_kalshi}¢")
-            st.markdown(f"**Model:** {pick_model}%")
-            edge_diff = pick_model - pick_kalshi
-            if edge_diff > 5:
-                st.caption(f"🟢 Model +{edge_diff}% vs market")
-            elif edge_diff < -5:
-                st.caption(f"🔴 Market +{abs(edge_diff)}% vs model")
-        
-        # Details expander
-        with st.expander("📊 Full Matchup Details"):
-            detail_col1, detail_col2 = st.columns(2)
-            
-            with detail_col1:
-                st.markdown(f"**{game['away']} {NHL_TEAMS.get(game['away'], {}).get('name', game['away'])}**")
-                st.caption(f"Record: {game['away_record']}")
-                st.caption(f"Last 10: {game['away_last10']}")
-                goalie_data = GOALIES.get(game['away'], {})
-                goalie_type = game["away_goalie"]
-                if goalie_type == "starter":
-                    st.caption(f"🥅 {goalie_data.get('starter', 'TBD')} ({goalie_data.get('starter_sv', 0):.3f})")
-                else:
-                    st.caption(f"🥅 {goalie_data.get('backup', 'TBD')} ⚠️ BACKUP")
-                if game["away_b2b"]:
-                    st.caption("⚠️ BACK-TO-BACK")
-            
-            with detail_col2:
-                st.markdown(f"**{game['home']} {NHL_TEAMS.get(game['home'], {}).get('name', game['home'])}**")
-                st.caption(f"Record: {game['home_record']}")
-                st.caption(f"Last 10: {game['home_last10']}")
-                goalie_data = GOALIES.get(game['home'], {})
-                goalie_type = game["home_goalie"]
-                if goalie_type == "starter":
-                    st.caption(f"🥅 {goalie_data.get('starter', 'TBD')} ({goalie_data.get('starter_sv', 0):.3f})")
-                else:
-                    st.caption(f"🥅 {goalie_data.get('backup', 'TBD')} ⚠️ BACKUP")
-                if game["home_b2b"]:
-                    st.caption("⚠️ BACK-TO-BACK")
-        
-        # Tag button for strong picks
-        if pick_score >= 9.0:
-            if st.button("🏷️ TAG AS STRONG PICK", key=f"tag_{game['id']}", use_container_width=True):
-                ml_num = add_strong_pick("NHL", pick_team, opp_team, pick_score, reasons)
-                st.success(f"Tagged as ML-{ml_num:03d}")
-                st.rerun()
-        
-        st.markdown("<br>", unsafe_allow_html=True)
+    # B2B badges
+    away_b2b_html = ' <span class="b2b-badge">B2B</span>' if g["away_b2b"] else ""
+    home_b2b_html = ' <span class="b2b-badge">B2B</span>' if g["home_b2b"] else ""
+
+    reasons_html = ", ".join(a["reasons"]) if a["reasons"] else "Base model edge"
+
+    # Render card as pure HTML for mobile responsiveness
+    card_html = f"""
+    <div class="game-card">
+        <div class="card-header">
+            <div class="signal-badge" style="background:{tc};">
+                {tier} <span class="score">{ps}/10</span>
+            </div>
+            <div class="matchup-info">
+                <p class="teams">{g['away']}{away_b2b_html} @ {g['home']}{home_b2b_html}</p>
+                <p class="names">{g.get('away_name','')} at {g.get('home_name','')}</p>
+            </div>
+            <div class="game-time">
+                <div class="date">{g['game_date']}</div>
+                <div class="time">{g['game_time']}</div>
+            </div>
+        </div>
+        <div class="pick-row">
+            <div class="pick-info">
+                <p class="pick-team">PICK: {pt} {pick_name}</p>
+                <p class="pick-vs">vs {opp} {opp_name}</p>
+                <p class="edge-factors">Edge: {reasons_html}</p>
+            </div>
+            <div class="model-box">
+                <div class="model-pct">{pt} {pick_prob}%</div>
+                <div class="model-sub">{opp} {opp_prob}%</div>
+            </div>
+        </div>
+    </div>
+    """
+    st.markdown(card_html, unsafe_allow_html=True)
+
+    # Expandable details (Streamlit native - works on mobile)
+    with st.expander(f"📊 {g['away']} @ {g['home']} — Full Details"):
+        ae, he = a["ae"], a["he"]
+
+        # Stats as HTML grid (responsive)
+        away_b2b_warn = '<p class="stat-line warn">⚠️ BACK-TO-BACK</p>' if g["away_b2b"] else ""
+        home_b2b_warn = '<p class="stat-line warn">⚠️ BACK-TO-BACK</p>' if g["home_b2b"] else ""
+
+        stats_html = f"""
+        <div class="stats-grid">
+            <div class="stat-col">
+                <h4>{g['away']} {g.get('away_name','')}</h4>
+                <p class="stat-line">Record: {g['away_record']}</p>
+                <p class="stat-line">Pt%: {g['away_point_pct']:.3f}</p>
+                <p class="stat-line">GF/G: {g['away_gf_pg']:.2f} | GA/G: {g['away_ga_pg']:.2f}</p>
+                <p class="stat-line">PP: {g['away_pp']:.1f}% | PK: {g['away_pk']:.1f}%</p>
+                <p class="stat-line">🥅 {g['away_goalie_name']}</p>
+                {away_b2b_warn}
+            </div>
+            <div class="stat-col">
+                <h4>{g['home']} {g.get('home_name','')}</h4>
+                <p class="stat-line">Record: {g['home_record']}</p>
+                <p class="stat-line">Pt%: {g['home_point_pct']:.3f}</p>
+                <p class="stat-line">GF/G: {g['home_gf_pg']:.2f} | GA/G: {g['home_ga_pg']:.2f}</p>
+                <p class="stat-line">PP: {g['home_pp']:.1f}% | PK: {g['home_pk']:.1f}%</p>
+                <p class="stat-line">🥅 {g['home_goalie_name']}</p>
+                {home_b2b_warn}
+            </div>
+        </div>
+        """
+        st.markdown(stats_html, unsafe_allow_html=True)
+
+        # Last 10 (fetched on demand)
+        l10_away = fetch_last10_record(g['away'])
+        l10_home = fetch_last10_record(g['home'])
+        st.caption(f"Last 10: {g['away']} {l10_away} | {g['home']} {l10_home}")
+
+        # Edge breakdown as HTML
+        def edge_class(v):
+            return "pos" if v > 0.05 else ("neg" if v < -0.05 else "")
+
+        edge_html = f"""
+        <div class="edge-grid">
+            <div class="edge-col">
+                <div class="edge-title">{g['away']} Edge: {ae['total']:+.2f}</div>
+                <p class="edge-line {edge_class(ae['goalie'])}">Goalie: {ae['goalie']:+.2f}</p>
+                <p class="edge-line {edge_class(ae['fatigue'])}">Fatigue: {ae['fatigue']:+.2f}</p>
+                <p class="edge-line {edge_class(ae['home_ice'])}">Home Ice: {ae['home_ice']:+.2f}</p>
+                <p class="edge-line {edge_class(ae['form'])}">Form: {ae['form']:+.2f}</p>
+                <p class="edge-line {edge_class(ae['special_teams'])}">ST: {ae['special_teams']:+.2f}</p>
+                <p class="edge-line {edge_class(ae['gf_ga'])}">GF/GA: {ae['gf_ga']:+.2f}</p>
+                <p class="edge-line {edge_class(ae['record'])}">Record: {ae['record']:+.2f}</p>
+            </div>
+            <div class="edge-col">
+                <div class="edge-title">{g['home']} Edge: {he['total']:+.2f}</div>
+                <p class="edge-line {edge_class(he['goalie'])}">Goalie: {he['goalie']:+.2f}</p>
+                <p class="edge-line {edge_class(he['fatigue'])}">Fatigue: {he['fatigue']:+.2f}</p>
+                <p class="edge-line {edge_class(he['home_ice'])}">Home Ice: {he['home_ice']:+.2f}</p>
+                <p class="edge-line {edge_class(he['form'])}">Form: {he['form']:+.2f}</p>
+                <p class="edge-line {edge_class(he['special_teams'])}">ST: {he['special_teams']:+.2f}</p>
+                <p class="edge-line {edge_class(he['gf_ga'])}">GF/GA: {he['gf_ga']:+.2f}</p>
+                <p class="edge-line {edge_class(he['record'])}">Record: {he['record']:+.2f}</p>
+            </div>
+        </div>
+        """
+        st.markdown(edge_html, unsafe_allow_html=True)
+
+    # Tag button
+    if ps >= 9.0:
+        if st.button("🏷️ TAG AS STRONG PICK", key=f"tag_{g['id']}", use_container_width=True):
+            ml_num = add_strong_pick("NHL", pt, opp, ps, a["reasons"])
+            st.success(f"Tagged as ML-{ml_num:03d}")
+            st.rerun()
 
 # ============================================================
-# LEGEND & HOW TO USE (COLLAPSIBLE)
+# LEGEND
 # ============================================================
 st.markdown("---")
-
-with st.expander("📖 LEGEND & PICKING GUIDE"):
-    col_a, col_b = st.columns(2)
-
-    with col_a:
-        st.markdown("""
-### 🎯 Signal Tiers
-- **🔥 ELITE (10.0)** → Perfect edge, maximum confidence
-- **🔒 STRONG (9.0-9.9)** → High-confidence edge, worth tracking
-- **🔵 BUY (7.0-8.9)** → Good edge, actionable opportunity
-- **🟡 LEAN (5.5-6.9)** → Slight edge, informational only
-- **⚪ PASS (< 5.5)** → No significant edge, avoid
-
-### 📊 Edge Score Breakdown
-Each team gets scored **0-10** based on 7 factors:
-- **Goalie Matchup** (1.5x weight) - Save % differential
-- **Fatigue** (1.2x weight) - B2B games, rest days
-- **Home Ice** (1.0x weight) - Home advantage
-- **Recent Form** (1.0x weight) - Last 10 games
-- **xG Differential** (1.0x weight) - Expected goals
-- **Special Teams** (0.8x weight) - PP/PK %
-- **Head-to-Head** (0.5x weight) - Season matchup history
-""")
-
-    with col_b:
-        st.markdown("""
-### ✅ How to Pick Winners
-1. **Focus on Signal Tier** - Only consider 🔵 BUY (7.0+) or better
-2. **Compare Model vs Market** - Look for 5-10% gaps
-3. **Check Edge Factors** - Understand WHY there's an edge
-4. **Verify Details** - Expand matchup to check goalies, B2B, injuries
-5. **Check Market Availability** - Confirm on Kalshi before betting
-
-### 💡 Reading the Cards
-Each game card shows:
-- **Signal Badge** (left) - Rating and tier at a glance
-- **Matchup** (center) - Teams and game time
-- **Pick** - Recommended team with edge factors
-- **Market vs Model** - Price comparison with visual indicator
-  - 🟢 Green = Model higher than market (potential value)
-  - 🔴 Red = Market higher than model (potential fade)
-  
-### 🎲 Risk Management
-- **Never bet PASS or LEAN signals** - Not enough edge
-- **Bet sizing:** ELITE = 3-5%, STRONG = 2-3%, BUY = 1-2%
-- **Verify starting goalies** 1-2 hours before game time
-- **Avoid heavy B2B situations** unless opponent also on B2B
-- **Track your picks** using the TAG button for 9.0+ signals
-""")
-
-with st.expander("🛠️ HOW TO USE THIS APP"):
+with st.expander("📖 LEGEND & GUIDE"):
     st.markdown("""
-### Step-by-Step Guide
+### Signal Tiers
+🔥 **ELITE (10.0)** — Perfect edge | 🔒 **STRONG (9.0-9.9)** — High confidence | 🔵 **BUY (7.0-8.9)** — Good edge | 🟡 **LEAN (5.5-6.9)** — Slight edge | ⚪ **PASS (<5.5)** — No edge
 
-**1️⃣ Scan the Game Cards**
-- Games are sorted by edge score (best opportunities first)
-- Signal badge shows tier and score at a glance
-- Focus on 🔵 BUY (7.0+) or better
+### Edge Factors (All Real ESPN Data)
+**Goalie** (1.5x) — Confirmed starter vs TBD | **Fatigue** (1.2x) — B2B from schedule | **Home Ice** (1.0x) — Home advantage | **Form** (1.0x) — Point % from standings | **GF/GA** (1.0x) — Goals per game differential | **Special Teams** (0.8x) — PP% and PK% | **Record** (0.5x) — W-L-OTL strength
 
-**2️⃣ Read the Pick**
-- Recommended team clearly labeled
-- Edge factors explain WHY there's value
-- Model vs Market shows pricing gap
-
-**3️⃣ Check the Details**
-- Click "📊 Full Matchup Details" to expand
-- Verify goalie matchups, records, fatigue
-- Look for B2B situations or backup goalies
-
-**4️⃣ Understand the Edge**
-- 🟢 Green indicator = Model sees more value than market
-- 🔴 Red indicator = Market may be overpricing
-- Bigger percentage gaps = stronger potential edge
-
-**5️⃣ Verify on Kalshi**
-- Click sidebar link to Kalshi NHL markets
-- Confirm market still available and pricing
-- Check starting goalie confirmations (1-2 hours before game)
-
-**6️⃣ Track Strong Picks**
-- For 9.0+ signals, click "TAG AS STRONG PICK"
-- Assigned ML number for tracking
-- View tagged picks in sidebar
-
-### ⚠️ Important Notes
-- **Placeholder Stats:** Advanced stats (PP%, xG, etc.) use estimated values pending full integration
-- **Goalie Confirmations:** Always verify starters before betting (usually announced ~90 min before game)
-- **Market Movement:** Kalshi prices update constantly - timing matters
-- **Not Advice:** Educational tool only, not financial or betting advice
-
-### 🔗 External Resources
-- **Kalshi NHL Markets:** Click sidebar link for current markets
-- **Starting Goalies:** Check DailyFaceoff.com for confirmations
-- **Injury Updates:** ESPN.com/nhl/injuries for latest news
+### How to Use
+1. Focus on 🔵 BUY (7.0+) or better
+2. Expand details to verify stats and goalies
+3. Confirm on Kalshi before trading
+4. TAG strong picks (9.0+) for tracking
+5. Verify goalies on DailyFaceoff.com ~90 min before game
 """)
 
-# ============================================================
-# FOOTER
-# ============================================================
 st.markdown("---")
-st.caption("⚠️ Educational only. Not financial advice. v19.6")
+st.caption(f"⚠️ Educational only. Not financial advice. v{VERSION}")
