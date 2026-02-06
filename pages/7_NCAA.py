@@ -81,8 +81,18 @@ def calc_minutes_elapsed(period, clock_str):
     except Exception: return 0.0
 
 def get_kalshi_game_link(date_str, away_abbr, home_abbr):
-    d = str(date_str or datetime.now(timezone.utc).strftime("%Y%m%d"))
-    return "https://kalshi.com/markets/kxncaagame/college-basketball-game/kxncaagame-" + d + str(away_abbr or "").upper() + str(home_abbr or "").upper()
+    """Build correct Kalshi NCAA URL: kxncaambgame-26feb06{away}{home} all lowercase"""
+    try:
+        now = datetime.now(timezone.utc)
+        date_code = now.strftime("%y%b%d").lower()  # 26feb06
+        a = str(away_abbr or "").lower()
+        h = str(home_abbr or "").lower()
+        if a and h:
+            ticker = "kxncaambgame-" + date_code + a + h
+            return "https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game/" + ticker
+    except Exception:
+        pass
+    return "https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game"
 
 def calc_projection(home_score, away_score, minutes_elapsed):
     total = home_score + away_score
