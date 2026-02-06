@@ -82,7 +82,7 @@ def calc_minutes_elapsed(period, clock_str):
 
 def get_kalshi_game_link(date_str, away_abbr, home_abbr):
     """Link to Kalshi NCAA games page — shows today's games, user clicks their match"""
-    return "https://kalshi.com/sports/basketball/college-basketball-m/games"
+    return "https://kalshi.com/sports/basketball/college-basketball-m/games?t=" + str(int(time.time()))
 
 def calc_projection(home_score, away_score, minutes_elapsed):
     total = home_score + away_score
