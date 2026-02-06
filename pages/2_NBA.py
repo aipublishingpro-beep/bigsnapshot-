@@ -892,6 +892,8 @@ for g in scheduled_games:
     if edge.get("strength") in ("STRONG", "MODERATE"):
         edge_games.append((g, edge))
 
+edge_games.sort(key=lambda x: (0 if x[1].get("strength") == "STRONG" else 1, -abs(x[1].get("score", 0))))
+
 if not edge_games:
     st.info("No STRONG or MODERATE edges found today. All games are LEAN or TOSS-UP.")
 else:
