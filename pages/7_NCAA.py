@@ -898,66 +898,96 @@ if live_games:
 
 # ── PRE-GAME ALIGNMENT (9-Factor Edge Model) ─────────────────────────
 if scheduled_games:
-    st.markdown("### PRE-GAME ALIGNMENT -- 9-Factor Edge Model")
-    st.caption("ESPN BPI + Vegas + Home Court + Records + Rankings + B2B + Scoring + Injuries + 3PT")
+    st.markdown("### PRE-GAME ALIGNMENT -- Edge Model")
 
-    if st.button("ADD ALL PRE-GAME PICKS", key="add_all_pre"):
-        for g in scheduled_games:
-            ticker = "KXNCAAGAME-" + str(g["away_abbr"]) + str(g["home_abbr"])
-            if ticker not in st.session_state["positions"]:
-                summary = fetch_game_summary(g["id"])
-                edge = calc_advanced_edge(g, b2b_teams, summary=summary, injuries=injuries)
-                st.session_state["positions"][ticker] = {
-                    "ticker": ticker, "game": g["shortName"],
-                    "side": edge.get("side", "HOME"), "type": "ML",
-                    "contracts": 1, "price": 50, "edges": edge.get("edges", []),
-                    "game_id": g["id"], "home_abbr": g["home_abbr"], "away_abbr": g["away_abbr"]}
-        st.rerun()
+    with st.expander("How Edges Are Rated"):
+        st.markdown(
+            "Our proprietary model analyzes multiple data points for each game "
+            "including team efficiency metrics, situational factors, market pricing, "
+            "and historical performance indicators.\n\n"
+            "| Rating | Meaning | Action |\n"
+            "|--------|---------|--------|\n"
+            "| **STRONG** | Multiple factors aligned, high conviction | Best opportunities |\n"
+            "| **MODERATE** | Solid edge, fewer factors aligned | Worth considering |\n"
+            "| LEAN | Slight edge, mixed signals | Filtered out |\n"
+            "| TOSS-UP | No clear edge | Filtered out |\n\n"
+            "Only **STRONG** and **MODERATE** games are shown below. "
+            "Weak games are hidden to reduce noise and keep you focused on actionable plays."
+        )
 
-    for idx, g in enumerate(scheduled_games):
+    st.caption("ESPN BPI + Vegas + situational factors | Only showing STRONG + MODERATE edges")
+
+    # Filter to STRONG and MODERATE edges only — no noise
+    edge_games = []
+    for g in scheduled_games:
         summary = fetch_game_summary(g["id"])
         edge = calc_advanced_edge(g, b2b_teams, summary=summary, injuries=injuries)
-        edge_list = edge.get("edges", [])
-        strength = edge.get("strength", "TOSS-UP")
-        pick = edge.get("pick", "")
-        sc = edge.get("score", 0)
+        if edge.get("strength") in ("STRONG", "MODERATE"):
+            edge_games.append((g, edge))
 
-        # Color code by strength
-        if strength == "STRONG": badge_color = "#2ecc71"
-        elif strength == "MODERATE": badge_color = "#f39c12"
-        elif strength == "LEAN": badge_color = "#3498db"
-        else: badge_color = "#888"
+    if not edge_games:
+        st.info("No STRONG or MODERATE edges found today. All games are LEAN or TOSS-UP.")
+    else:
+        st.markdown("**" + str(len(edge_games)) + " actionable edges** out of " + str(len(scheduled_games)) + " scheduled games")
 
-        hr = "#" + str(g["home_rank"]) + " " if g.get("home_rank", 99) <= 25 else ""
-        ar = "#" + str(g["away_rank"]) + " " if g.get("away_rank", 99) <= 25 else ""
-        spread = g.get("odds", {}).get("spread", "N/A")
-        ou = g.get("odds", {}).get("overUnder", "N/A")
+        if st.button("ADD ALL EDGE PICKS", key="add_all_pre"):
+            for g, edge in edge_games:
+                ticker = "KXNCAAGAME-" + str(g["away_abbr"]) + str(g["home_abbr"])
+                if ticker not in st.session_state["positions"]:
+                    st.session_state["positions"][ticker] = {
+                        "ticker": ticker, "game": g["shortName"],
+                        "side": edge.get("side", "HOME"), "type": "ML",
+                        "contracts": 1, "price": 50, "edges": edge.get("edges", []),
+                        "game_id": g["id"], "home_abbr": g["home_abbr"], "away_abbr": g["away_abbr"]}
+            st.rerun()
 
-        with st.container():
-            st.markdown(
-                "<div style='background:#1a1a2e;border-radius:8px;padding:10px;margin:8px 0;"
-                "border-left:4px solid " + badge_color + "'>"
-                "<span style='color:" + badge_color + ";font-weight:700;font-size:14px'>" + strength + "</span> "
-                "<span style='color:white;font-weight:700'>" + ar + str(g["away_team"]) + " @ " + hr + str(g["home_team"]) + "</span>"
-                "<br><span style='color:#aaa;font-size:12px'>Spread: " + str(spread) + " | O/U: " + str(ou) + " | " + str(g.get("broadcast", "")) + "</span>"
-                "</div>", unsafe_allow_html=True)
+        for idx, (g, edge) in enumerate(edge_games):
+            edge_list = edge.get("edges", [])
+            strength = edge.get("strength", "TOSS-UP")
+            pick = edge.get("pick", "")
+            sc = edge.get("score", 0)
 
-            for e in edge_list:
-                if "EDGE:" in e:
-                    st.markdown("**" + e + "**")
-                elif "STAR OUT" in e:
-                    st.markdown("<span style='color:#e74c3c;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
-                elif "3PT EDGE" in e:
-                    st.markdown("<span style='color:#3498db;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
-                elif "BPI vs VEGAS GAP" in e:
-                    st.markdown("<span style='color:#2ecc71;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
-                else:
-                    st.markdown("  " + e)
+            # Color code by strength
+            if strength == "STRONG": badge_color = "#2ecc71"
+            elif strength == "MODERATE": badge_color = "#f39c12"
+            else: badge_color = "#888"
 
-            today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
-            link = get_kalshi_game_link(today_str, g["away_abbr"], g["home_abbr"])
-            st.markdown("[Trade on Kalshi](" + link + ")")
-            st.markdown("---")
+            hr = "#" + str(g["home_rank"]) + " " if g.get("home_rank", 99) <= 25 else ""
+            ar = "#" + str(g["away_rank"]) + " " if g.get("away_rank", 99) <= 25 else ""
+            spread = g.get("odds", {}).get("spread", "N/A")
+            ou = g.get("odds", {}).get("overUnder", "N/A")
+
+            with st.container():
+                st.markdown(
+                    "<div style='background:#1a1a2e;border-radius:8px;padding:10px;margin:8px 0;"
+                    "border-left:4px solid " + badge_color + "'>"
+                    "<span style='color:" + badge_color + ";font-weight:700;font-size:14px'>" + strength + "</span> "
+                    "<span style='color:white;font-weight:700'>" + ar + str(g["away_team"]) + " @ " + hr + str(g["home_team"]) + "</span>"
+                    "<br><span style='color:#aaa;font-size:12px'>Spread: " + str(spread) + " | O/U: " + str(ou) + " | " + str(g.get("broadcast", "")) + "</span>"
+                    "</div>", unsafe_allow_html=True)
+
+                for e in edge_list:
+                    if "EDGE:" in e:
+                        st.markdown("**" + e + "**")
+                    elif "STAR OUT" in e or "INJURY" in e:
+                        st.markdown("<span style='color:#e74c3c;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
+                    elif "3PT EDGE" in e:
+                        st.markdown("<span style='color:#3498db;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
+                    elif "BPI vs VEGAS GAP" in e or "GAP" in e:
+                        st.markdown("<span style='color:#2ecc71;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
+                    elif "FATIGUE" in e:
+                        st.markdown("<span style='color:#e67e22;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("  " + e)
+
+                with st.expander("View Full Breakdown"):
+                    for e in edge_list:
+                        st.markdown("- " + e)
+
+                today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+                link = get_kalshi_game_link(today_str, g["away_abbr"], g["home_abbr"])
+                st.markdown("[Trade on Kalshi](" + link + ")")
+                st.markdown("---")
     st.divider()
 
 # ── INJURY REPORT ────────────────────────────────────────────────────
@@ -1067,10 +1097,68 @@ for conf_name in sorted(conf_groups.keys()):
 st.divider()
 
 # ── Footer ───────────────────────────────────────────────────────────
+st.divider()
+
+with st.expander("How to Use This App", expanded=False):
+    st.markdown("""
+### Pre-Game
+
+1. Check **Pre-Game Alignment** for STRONG and MODERATE edges
+2. Review the breakdown — look for multiple factors aligning
+3. Note injury impacts (star players OUT = major swing)
+4. Check 3PT shooting mismatches for totals plays
+5. Compare ESPN BPI vs Vegas vs Kalshi for mispricing
+
+### In-Game
+
+1. Wait for 5+ minutes of game action
+2. Check **Pace Scanner** for slow/fast games vs the O/U line
+3. Use **Cushion Scanner** for safe totals entries
+4. **Live Edge Monitor** shows real-time projections and possession
+
+### The Scalp
+
+- Buy at mispriced levels
+- Sell at +3c profit or better
+- Repeat
+
+### Understanding Edge Ratings
+
+| Rating | Score | Meaning |
+|--------|-------|---------|
+| **STRONG** | 8+ | Multiple factors aligned, high conviction |
+| **MODERATE** | 4-8 | Solid edge with supporting data |
+| LEAN | 1.5-4 | Slight edge, not shown |
+| TOSS-UP | <1.5 | No edge, not shown |
+
+### Cushion Scanner Labels
+
+| Label | Meaning |
+|-------|---------|
+| **FORTRESS** | Extremely safe, would need collapse to lose |
+| **SAFE** | Comfortable cushion, pace supports it |
+| **TIGHT** | Close, could go either way |
+| **RISKY** | Against current pace, needs reversal |
+| **SHARK MODE** | Under 6 min left, high confidence window |
+
+### Important Notes
+
+- This app is for **educational and informational purposes only**
+- This is **NOT financial advice** and NOT betting advice
+- Edge Score does NOT equal win probability
+- Past performance does **NOT** guarantee future results
+- Prediction markets involve real financial risk
+- **Only trade what you can afford to lose**
+- Always verify data independently before making any decisions
+- The creator assumes no liability for any losses
+- We reserve the right to implement paid subscriptions at any time
+    """)
+
 st.markdown(
-    "<div style='text-align:center;color:#555;font-size:12px;padding:20px'>"
-    "BigSnapshot NCAA Edge Finder v" + VERSION + " | 9-Factor Edge Model | "
-    "ESPN BPI + Vegas + Home Court + Records + Rankings + B2B + Scoring + Injuries + 3PT | "
-    "For entertainment and research only | Not financial advice | "
+    "<div style='text-align:center;color:#555;font-size:11px;padding:20px'>"
+    "<b>BigSnapshot NCAA Edge Finder v" + VERSION + "</b><br>"
+    "For entertainment and educational purposes only. Not financial advice.<br>"
+    "Past performance does not guarantee future results. Prediction markets involve risk.<br>"
+    "Only wager what you can afford to lose.<br><br>"
     "<a href='https://bigsnapshot.com' style='color:#888'>bigsnapshot.com</a>"
     "</div>", unsafe_allow_html=True)
