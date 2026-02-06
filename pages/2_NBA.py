@@ -24,31 +24,53 @@ THRESHOLDS = [210.5, 215.5, 220.5, 225.5, 230.5, 235.5, 240.5, 245.5]
 if 'positions' not in st.session_state:
     st.session_state.positions = []
 
-TEAM_ABBREVS = {"Atlanta Hawks": "Atlanta", "Boston Celtics": "Boston", "Brooklyn Nets": "Brooklyn", "Charlotte Hornets": "Charlotte", "Chicago Bulls": "Chicago", "Cleveland Cavaliers": "Cleveland", "Dallas Mavericks": "Dallas", "Denver Nuggets": "Denver", "Detroit Pistons": "Detroit", "Golden State Warriors": "Golden State", "Houston Rockets": "Houston", "Indiana Pacers": "Indiana", "LA Clippers": "LA Clippers", "Los Angeles Clippers": "LA Clippers", "LA Lakers": "LA Lakers", "Los Angeles Lakers": "LA Lakers", "Memphis Grizzlies": "Memphis", "Miami Heat": "Miami", "Milwaukee Bucks": "Milwaukee", "Minnesota Timberwolves": "Minnesota", "New Orleans Pelicans": "New Orleans", "New York Knicks": "New York", "Oklahoma City Thunder": "Oklahoma City", "Orlando Magic": "Orlando", "Philadelphia 76ers": "Philadelphia", "Phoenix Suns": "Phoenix", "Portland Trail Blazers": "Portland", "Sacramento Kings": "Sacramento", "San Antonio Spurs": "San Antonio", "Toronto Raptors": "Toronto", "Utah Jazz": "Utah", "Washington Wizards": "Washington"}
+TEAM_ABBREVS = {
+    "Atlanta Hawks": "Atlanta", "Boston Celtics": "Boston", "Brooklyn Nets": "Brooklyn",
+    "Charlotte Hornets": "Charlotte", "Chicago Bulls": "Chicago", "Cleveland Cavaliers": "Cleveland",
+    "Dallas Mavericks": "Dallas", "Denver Nuggets": "Denver", "Detroit Pistons": "Detroit",
+    "Golden State Warriors": "Golden State", "Houston Rockets": "Houston", "Indiana Pacers": "Indiana",
+    "LA Clippers": "LA Clippers", "Los Angeles Clippers": "LA Clippers", "LA Lakers": "LA Lakers",
+    "Los Angeles Lakers": "LA Lakers", "Memphis Grizzlies": "Memphis", "Miami Heat": "Miami",
+    "Milwaukee Bucks": "Milwaukee", "Minnesota Timberwolves": "Minnesota", "New Orleans Pelicans": "New Orleans",
+    "New York Knicks": "New York", "Oklahoma City Thunder": "Oklahoma City", "Orlando Magic": "Orlando",
+    "Philadelphia 76ers": "Philadelphia", "Phoenix Suns": "Phoenix", "Portland Trail Blazers": "Portland",
+    "Sacramento Kings": "Sacramento", "San Antonio Spurs": "San Antonio", "Toronto Raptors": "Toronto",
+    "Utah Jazz": "Utah", "Washington Wizards": "Washington"
+}
 
-KALSHI_CODES = {"Atlanta": "ATL", "Boston": "BOS", "Brooklyn": "BKN", "Charlotte": "CHA", "Chicago": "CHI", "Cleveland": "CLE", "Dallas": "DAL", "Denver": "DEN", "Detroit": "DET", "Golden State": "GSW", "Houston": "HOU", "Indiana": "IND", "LA Clippers": "LAC", "LA Lakers": "LAL", "Memphis": "MEM", "Miami": "MIA", "Milwaukee": "MIL", "Minnesota": "MIN", "New Orleans": "NOP", "New York": "NYK", "Oklahoma City": "OKC", "Orlando": "ORL", "Philadelphia": "PHI", "Phoenix": "PHX", "Portland": "POR", "Sacramento": "SAC", "San Antonio": "SAS", "Toronto": "TOR", "Utah": "UTA", "Washington": "WAS"}
+KALSHI_CODES = {
+    "Atlanta": "ATL", "Boston": "BOS", "Brooklyn": "BKN", "Charlotte": "CHA", "Chicago": "CHI",
+    "Cleveland": "CLE", "Dallas": "DAL", "Denver": "DEN", "Detroit": "DET", "Golden State": "GSW",
+    "Houston": "HOU", "Indiana": "IND", "LA Clippers": "LAC", "LA Lakers": "LAL", "Memphis": "MEM",
+    "Miami": "MIA", "Milwaukee": "MIL", "Minnesota": "MIN", "New Orleans": "NOP", "New York": "NYK",
+    "Oklahoma City": "OKC", "Orlando": "ORL", "Philadelphia": "PHI", "Phoenix": "PHX", "Portland": "POR",
+    "Sacramento": "SAC", "San Antonio": "SAS", "Toronto": "TOR", "Utah": "UTA", "Washington": "WAS"
+}
 
-TEAM_COLORS = {"Atlanta": "#E03A3E", "Boston": "#007A33", "Brooklyn": "#000000", "Charlotte": "#1D1160", "Chicago": "#CE1141", "Cleveland": "#860038", "Dallas": "#00538C", "Denver": "#0E2240", "Detroit": "#C8102E", "Golden State": "#1D428A", "Houston": "#CE1141", "Indiana": "#002D62", "LA Clippers": "#C8102E", "LA Lakers": "#552583", "Memphis": "#5D76A9", "Miami": "#98002E", "Milwaukee": "#00471B", "Minnesota": "#0C2340", "New Orleans": "#0C2340", "New York": "#006BB6", "Oklahoma City": "#007AC1", "Orlando": "#0077C0", "Philadelphia": "#006BB6", "Phoenix": "#1D1160", "Portland": "#E03A3E", "Sacramento": "#5A2D81", "San Antonio": "#C4CED4", "Toronto": "#CE1141", "Utah": "#002B5C", "Washington": "#002B5C"}
+TEAM_COLORS = {
+    "Atlanta": "#E03A3E", "Boston": "#007A33", "Brooklyn": "#000000", "Charlotte": "#1D1160",
+    "Chicago": "#CE1141", "Cleveland": "#860038", "Dallas": "#00538C", "Denver": "#0E2240",
+    "Detroit": "#C8102E", "Golden State": "#1D428A", "Houston": "#CE1141", "Indiana": "#002D62",
+    "LA Clippers": "#C8102E", "LA Lakers": "#552583", "Memphis": "#5D76A9", "Miami": "#98002E",
+    "Milwaukee": "#00471B", "Minnesota": "#0C2340", "New Orleans": "#0C2340", "New York": "#006BB6",
+    "Oklahoma City": "#007AC1", "Orlando": "#0077C0", "Philadelphia": "#006BB6", "Phoenix": "#1D1160",
+    "Portland": "#E03A3E", "Sacramento": "#5A2D81", "San Antonio": "#C4CED4", "Toronto": "#CE1141",
+    "Utah": "#002B5C", "Washington": "#002B5C"
+}
 
 def american_to_implied_prob(odds):
     if odds is None or odds == 0: return 0.5
     if odds > 0: return 100 / (odds + 100)
     else: return abs(odds) / (abs(odds) + 100)
-
-def speak_play(text):
-    clean_text = text.replace("'", "").replace('"', '').replace('\n', ' ')[:100]
-    js = f'''<script>if(!window.lastSpoken||window.lastSpoken!=="{clean_text}"){{window.lastSpoken="{clean_text}";var u=new SpeechSynthesisUtterance("{clean_text}");u.rate=1.1;window.speechSynthesis.speak(u);}}</script>'''
-    components.html(js, height=0)
-    @st.cache_data(ttl=30)
 def fetch_espn_games():
     today = datetime.now(eastern).strftime('%Y%m%d')
-    url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=" + today
+    url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={today}"
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
         games = []
         for event in data.get("events", []):
-            comp = event.get("competitions", [{}] )[0]
+            comp = event.get("competitions", [{}])[0]
             competitors = comp.get("competitors", [])
             if len(competitors) < 2: continue
             home_team, away_team, home_score, away_score = None, None, 0, 0
@@ -59,8 +81,10 @@ def fetch_espn_games():
                 score = int(c.get("score", 0) or 0)
                 records = c.get("records", [])
                 record = records[0].get("summary", "") if records else ""
-                if c.get("homeAway") == "home": home_team, home_score, home_record = team_name, score, record
-                else: away_team, away_score, away_record = team_name, score, record
+                if c.get("homeAway") == "home":
+                    home_team, home_score, home_record = team_name, score, record
+                else:
+                    away_team, away_score, away_record = team_name, score, record
             status = event.get("status", {}).get("type", {}).get("name", "STATUS_SCHEDULED")
             period = event.get("status", {}).get("period", 0)
             clock = event.get("status", {}).get("displayClock", "")
@@ -71,27 +95,29 @@ def fetch_espn_games():
                     completed_quarters = (period - 1) * 12
                     if clock:
                         try:
-                            if ":" in clock: minutes_played = completed_quarters + (12 - int(clock.split(":")[0]))
-                            else: minutes_played = completed_quarters + 12
-                        except: minutes_played = completed_quarters + 12
-                    else: minutes_played = completed_quarters
-                else: minutes_played = 48 + (period - 4) * 5
-            game_date = event.get("date", "")
-            game_time_str, game_datetime_str = "", ""
-            if game_date:
-                try:
-                    game_dt = datetime.fromisoformat(game_date.replace("Z", "+00:00")).astimezone(eastern)
-                    game_time_str = game_dt.strftime("%I:%M %p ET")
-                    game_datetime_str = game_dt.strftime("%b %d, %I:%M %p ET")
-                except: pass
-            odds_data = comp.get("odds", [])
-            vegas_odds = {}
-            if odds_data and len(odds_data) > 0:
-                odds = odds_data[0]
-                vegas_odds = {"spread": odds.get("spread"), "overUnder": odds.get("overUnder"), "homeML": odds.get("homeTeamOdds", {}).get("moneyLine"), "awayML": odds.get("awayTeamOdds", {}).get("moneyLine")}
-            games.append({"away": away_team, "home": home_team, "away_score": away_score, "home_score": home_score, "away_record": away_record, "home_record": home_record, "status": status, "period": period, "clock": clock, "minutes_played": minutes_played, "total_score": home_score + away_score, "game_id": game_id, "vegas_odds": vegas_odds, "game_time": game_time_str, "game_datetime": game_datetime_str})
+                            if ":" in clock:
+                                minutes_played = completed_quarters + (12 - int(clock.split(":")[0]))
+                            else:
+                                minutes_played = completed_quarters + 12
+                        except:
+                            minutes_played = completed_quarters + 12
+                    else:
+                        minutes_played = completed_quarters
+                else:
+                    minutes_played = 48 + (period - 4) * 5
+            games.append({
+                "away": away_team, "home": home_team,
+                "away_score": away_score, "home_score": home_score,
+                "away_record": away_record, "home_record": home_record,
+                "status": status, "period": period, "clock": clock,
+                "minutes_played": minutes_played,
+                "total_score": home_score + away_score,
+                "game_id": game_id
+            })
         return games
-    except Exception as e: st.error("ESPN fetch error: " + str(e)); return []
+    except Exception as e:
+        st.error("ESPN fetch error: " + str(e))
+        return []
 
 def fetch_kalshi_ml(force_refresh=False):
     if not force_refresh and 'nba_kalshi_data' in st.session_state and 'nba_kalshi_time' in st.session_state:
@@ -122,10 +148,12 @@ def fetch_kalshi_ml(force_refresh=False):
             yes_price = yes_ask if yes_ask > 0 else (last_price if last_price > 0 else (yes_bid if yes_bid > 0 else 0))
 
             markets[game_key] = {
-                "away_code": away_code, "home_code": home_code,
+                "away_code": away_code,
+                "home_code": home_code,
                 "yes_team_code": yes_team_code.upper(),
                 "ticker": ticker,
-                "yes_bid": yes_bid, "yes_ask": yes_ask,
+                "yes_bid": yes_bid,
+                "yes_ask": yes_ask,
                 "yes_price": yes_price,
                 "last_price": last_price
             }
@@ -150,7 +178,7 @@ def get_kalshi_game_link(away, home):
     home_code = KALSHI_CODES.get(home, "XXX").lower()
     date_str = datetime.now(eastern).strftime('%y%b%d').lower()
     return f"https://kalshi.com/markets/kxnbagame/professional-basketball-game/kxnbagame-{date_str}{away_code}{home_code}"
-    def render_scoreboard(away, home, away_score, home_score, period, clock, away_record="", home_record=""):
+def render_scoreboard(away, home, away_score, home_score, period, clock, away_record="", home_record=""):
     away_code = KALSHI_CODES.get(away, away[:3].upper())
     home_code = KALSHI_CODES.get(home, home[:3].upper())
     away_color = TEAM_COLORS.get(away, "#666")
@@ -203,8 +231,10 @@ def get_play_badge(last_play):
     return ""
 
 def render_nba_court(away, home, away_score, home_score, period, clock, last_play=None):
-    away_color, home_color = TEAM_COLORS.get(away, "#666"), TEAM_COLORS.get(home, "#666")
-    away_code, home_code = KALSHI_CODES.get(away, "AWY"), KALSHI_CODES.get(home, "HME")
+    away_color = TEAM_COLORS.get(away, "#666")
+    home_color = TEAM_COLORS.get(home, "#666")
+    away_code = KALSHI_CODES.get(away, away[:3].upper())
+    home_code = KALSHI_CODES.get(home, home[:3].upper())
     period_text = f"Q{period}" if period <= 4 else f"OT{period-4}"
     play_badge = get_play_badge(last_play)
     return f'''<div style="background:#1a1a2e;border-radius:12px;padding:10px;"><svg viewBox="0 0 500 280" style="width:100%;max-width:500px;"><rect x="20" y="20" width="460" height="200" fill="#2d4a22" stroke="#fff" stroke-width="2" rx="8"/><circle cx="250" cy="120" r="35" fill="none" stroke="#fff" stroke-width="2"/><circle cx="250" cy="120" r="4" fill="#fff"/><line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="2"/><path d="M 20 50 Q 100 120 20 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="20" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="90" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="35" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/><path d="M 480 50 Q 400 120 480 190" fill="none" stroke="#fff" stroke-width="2"/><rect x="410" y="70" width="70" height="100" fill="none" stroke="#fff" stroke-width="2"/><circle cx="410" cy="120" r="25" fill="none" stroke="#fff" stroke-width="2"/><circle cx="465" cy="120" r="8" fill="none" stroke="#ff6b35" stroke-width="3"/>{play_badge}<rect x="40" y="228" width="90" height="48" fill="{away_color}" rx="6"/><text x="85" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{away_code}</text><text x="85" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{away_score}</text><rect x="370" y="228" width="90" height="48" fill="{home_color}" rx="6"/><text x="415" y="250" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">{home_code}</text><text x="415" y="270" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">{home_score}</text><text x="250" y="258" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">{period_text} {clock}</text></svg></div>'''
@@ -218,53 +248,8 @@ def get_play_icon(play_type, score_value):
     elif "foul" in play_lower: return "🚨", "#eab308"
     elif "timeout" in play_lower: return "⏸️", "#a855f7"
     return "•", "#888"
-
-def calc_projection(total_score, minutes_played):
-    if minutes_played >= 8:
-        pace = total_score / minutes_played
-        weight = min(1.0, (minutes_played - 8) / 16)
-        blended_pace = (pace * weight) + ((LEAGUE_AVG_TOTAL / 48) * (1 - weight))
-        return max(185, min(265, round(blended_pace * 48)))
-    elif minutes_played >= 6:
-        pace = total_score / minutes_played
-        return max(185, min(265, round(((pace * 0.3) + ((LEAGUE_AVG_TOTAL / 48) * 0.7)) * 48)))
-    return LEAGUE_AVG_TOTAL
-
-def get_pace_label(pace):
-    if pace < 4.2: return "🐢 SLOW", "#22c55e"
-    elif pace < 4.5: return "⚖️ AVG", "#eab308"
-    elif pace < 5.0: return "🔥 FAST", "#f97316"
-    return "💥 SHOOTOUT", "#ef4444"
-
-def calc_pregame_edge(away, home, injuries, b2b_teams):
-    away_stats = TEAM_STATS.get(away, {"net": 0, "pace": 98})
-    home_stats = TEAM_STATS.get(home, {"net": 0, "pace": 98})
-    score = 50 + ((home_stats["net"] - away_stats["net"] + 3) * 2)
-    for inj in injuries.get(away, []):
-        if inj["name"] in STAR_TIERS: score += 5 if STAR_TIERS[inj["name"]] == 3 else 3
-    for inj in injuries.get(home, []):
-        if inj["name"] in STAR_TIERS: score -= 5 if STAR_TIERS[inj["name"]] == 3 else 3
-    if away in b2b_teams: score += 3
-    if home in b2b_teams: score -= 3
-    return max(0, min(100, round(score)))
-
-def calculate_net_rating(game):
-    mins = game.get('minutes_played', 0)
-    if mins < 1: return 0, 0, 0, 0
-    est_poss_per_team = mins * 2.08
-    possessions = round(est_poss_per_team)
-    if possessions < 1: return 0, 0, 0, 0
-    home_ortg = (game['home_score'] / est_poss_per_team) * 100
-    away_ortg = (game['away_score'] / est_poss_per_team) * 100
-    net_rating = round(home_ortg - away_ortg, 1)
-    return round(home_ortg, 1), round(away_ortg, 1), net_rating, possessions
-
-def remove_position(pos_id):
-    st.session_state.positions = [p for p in st.session_state.positions if p['id'] != pos_id]
-    games = fetch_espn_games()
+games = fetch_espn_games()
 kalshi_ml = fetch_kalshi_ml()
-injuries = fetch_injuries()
-b2b_teams = fetch_yesterday_teams()
 
 live_games = [g for g in games if g['status'] in ['STATUS_IN_PROGRESS', 'STATUS_HALFTIME', 'STATUS_END_PERIOD'] or (g['period'] > 0 and g['status'] not in ['STATUS_FINAL', 'STATUS_FULL_TIME'])]
 scheduled_games = [g for g in games if g['status'] == 'STATUS_SCHEDULED' and g['period'] == 0]
