@@ -81,8 +81,8 @@ def calc_minutes_elapsed(period, clock_str):
     except Exception: return 0.0
 
 def get_kalshi_game_link(date_str, away_abbr, home_abbr):
-    """Link to main Kalshi NCAA market page — Kalshi team codes don't match ESPN"""
-    return "https://kalshi.com/markets/kxncaambgame/mens-college-basketball-mens-game"
+    """Link to Kalshi NCAA games page — shows today's games, user clicks their match"""
+    return "https://kalshi.com/sports/basketball/college-basketball-m/games"
 
 def calc_projection(home_score, away_score, minutes_elapsed):
     total = home_score + away_score
