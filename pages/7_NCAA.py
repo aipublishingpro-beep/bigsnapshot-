@@ -602,7 +602,7 @@ if live_games:
 
             today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
             link = get_kalshi_game_link(today_str, g["away_abbr"], g["home_abbr"])
-            st.link_button("Trade on Kalshi", str(link), key="live_" + str(g['id']))
+            st.markdown("[Trade on Kalshi](" + link + ")")
 
     st.divider()
 
@@ -735,7 +735,7 @@ if scheduled_games:
             with rc:
                 today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
                 link = get_kalshi_game_link(today_str, g["away_abbr"], g["home_abbr"])
-                st.link_button("Kalshi", str(link), key="pre_" + str(idx) + "_" + str(g['away_abbr']) + "_" + str(g['home_abbr']))
+                st.markdown("[Trade on Kalshi](" + link + ")")
             st.markdown("---")
     st.divider()
 
@@ -814,7 +814,7 @@ if st.session_state["positions"]:
         )
         today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
         link = get_kalshi_game_link(today_str, pos.get("away_abbr", ""), pos.get("home_abbr", ""))
-        pc2.link_button("Kalshi", str(link), key="pos_" + str(ticker))
+        pc2.markdown("[Kalshi](" + link + ")")
         if pc3.button("Delete", key="del_" + str(ticker)):
             remove_position(ticker)
             st.rerun()
