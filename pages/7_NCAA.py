@@ -964,29 +964,25 @@ if scheduled_games:
                     "<span style='color:" + badge_color + ";font-weight:700;font-size:14px'>" + strength + "</span> "
                     "<span style='color:white;font-weight:700'>" + ar + str(g["away_team"]) + " @ " + hr + str(g["home_team"]) + "</span>"
                     "<br><span style='color:#aaa;font-size:12px'>Spread: " + str(spread) + " | O/U: " + str(ou) + " | " + str(g.get("broadcast", "")) + "</span>"
+                    "<br><span style='color:" + badge_color + ";font-size:12px'>PICK: " + str(edge.get("side", "")) + " (" + str(pick) + ") | Score: " + "{:+.1f}".format(sc) + "</span>"
                     "</div>", unsafe_allow_html=True)
-
-                for e in edge_list:
-                    if "EDGE:" in e:
-                        st.markdown("**" + e + "**")
-                    elif "STAR OUT" in e or "INJURY" in e:
-                        st.markdown("<span style='color:#e74c3c;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
-                    elif "3PT EDGE" in e:
-                        st.markdown("<span style='color:#3498db;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
-                    elif "BPI vs VEGAS GAP" in e or "GAP" in e:
-                        st.markdown("<span style='color:#2ecc71;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
-                    elif "FATIGUE" in e:
-                        st.markdown("<span style='color:#e67e22;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
-                    else:
-                        st.markdown("  " + e)
-
-                with st.expander("View Full Breakdown"):
-                    for e in edge_list:
-                        st.markdown("- " + e)
 
                 today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
                 link = get_kalshi_game_link(today_str, g["away_abbr"], g["home_abbr"])
                 st.markdown("[Trade on Kalshi](" + link + ")")
+
+                with st.expander("View Breakdown"):
+                    for e in edge_list:
+                        if "STAR OUT" in e or "INJURY" in e:
+                            st.markdown("<span style='color:#e74c3c;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
+                        elif "3PT EDGE" in e:
+                            st.markdown("<span style='color:#3498db;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
+                        elif "BPI vs VEGAS GAP" in e or "GAP" in e:
+                            st.markdown("<span style='color:#2ecc71;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
+                        elif "FATIGUE" in e:
+                            st.markdown("<span style='color:#e67e22;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
+                        else:
+                            st.markdown("- " + e)
                 st.markdown("---")
     st.divider()
 
