@@ -1,5 +1,6 @@
 import streamlit as st
 st.set_page_config(page_title="BigSnapshot NCAA Edge Finder", page_icon="🏀", layout="wide")
+import streamlit.components.v1 as components
 
 import requests, json, time, hashlib, base64, datetime as dt
 from datetime import datetime, timedelta, timezone
@@ -101,6 +102,11 @@ def get_pace_label(ppm):
     if ppm >= 3.2: return "AVERAGE"
     if ppm >= 2.8: return "LOW"
     return "VERY LOW"
+
+def speak_play(text):
+    clean_text = text.replace("'", "").replace('"', '').replace('\n', ' ')[:100]
+    js = '<script>if(!window.lastSpoken||window.lastSpoken!=="' + clean_text + '"){window.lastSpoken="' + clean_text + '";var u=new SpeechSynthesisUtterance("' + clean_text + '");u.rate=1.1;window.speechSynthesis.speak(u);}</script>'
+    components.html(js, height=0)
 
 # ══════════════════════════════════════════════════════════════════════
 # DATA FETCHERS
@@ -807,10 +813,13 @@ if live_games:
 
             if plays:
                 st.markdown("**Recent Plays:**")
-                for p in plays[-6:]:
+                tts_on = st.checkbox("Announce plays", key="tts_" + str(g["id"]))
+                for idx_p, p in enumerate(plays[-6:]):
                     icon = get_play_icon(p.get("type", ""))
                     hp = "H" + str(p["period"]) if p.get("period", 0) <= 2 else "OT" + str(p["period"] - 2)
                     st.markdown("<span style='color:#888;font-size:12px'>" + hp + " " + str(p.get("clock", "")) + " " + icon + " " + str(p.get("text", "")) + "</span>", unsafe_allow_html=True)
+                    if idx_p == len(plays[-6:]) - 1 and tts_on and p.get("text"):
+                        speak_play(hp + " " + p.get("clock", "") + ". " + p.get("text", ""))
 
             today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
             link = get_kalshi_game_link(today_str, g["away_abbr"], g["home_abbr"])
