@@ -800,7 +800,7 @@ if scheduled_games:
             with rc:
                 today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
                 link = get_kalshi_game_link(today_str, g["away_abbr"], g["home_abbr"])
-                st.link_button("📈 Kalshi", link, key=f"pre_{g['id']}")
+                st.link_button("📈 Kalshi", link, key=f"pre_{g['id']}_{g['away_abbr']}_{g['home_abbr']}")
             st.markdown("---")
     st.divider()
 
