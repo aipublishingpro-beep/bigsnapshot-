@@ -43,7 +43,6 @@ KALSHI_CODES = {"Atlanta": "ATL", "Boston": "BOS", "Brooklyn": "BKN", "Charlotte
 
 TEAM_COLORS = {"Atlanta": "#E03A3E", "Boston": "#007A33", "Brooklyn": "#000000", "Charlotte": "#1D1160", "Chicago": "#CE1141", "Cleveland": "#860038", "Dallas": "#00538C", "Denver": "#0E2240", "Detroit": "#C8102E", "Golden State": "#1D428A", "Houston": "#CE1141", "Indiana": "#002D62", "LA Clippers": "#C8102E", "LA Lakers": "#552583", "Memphis": "#5D76A9", "Miami": "#98002E", "Milwaukee": "#00471B", "Minnesota": "#0C2340", "New Orleans": "#0C2340", "New York": "#006BB6", "Oklahoma City": "#007AC1", "Orlando": "#0077C0", "Philadelphia": "#006BB6", "Phoenix": "#1D1160", "Portland": "#E03A3E", "Sacramento": "#5A2D81", "San Antonio": "#C4CED4", "Toronto": "#CE1141", "Utah": "#002B5C", "Washington": "#002B5C"}
 
-# ── ESPN TEAM ID MAP (for team stats API) ────────────────────────────
 ESPN_TEAM_IDS = {"Atlanta": "1", "Boston": "2", "Brooklyn": "17", "Charlotte": "30", "Chicago": "4", "Cleveland": "5", "Dallas": "6", "Denver": "7", "Detroit": "8", "Golden State": "9", "Houston": "10", "Indiana": "11", "LA Clippers": "12", "LA Lakers": "13", "Memphis": "29", "Miami": "14", "Milwaukee": "15", "Minnesota": "16", "New Orleans": "3", "New York": "18", "Oklahoma City": "25", "Orlando": "19", "Philadelphia": "20", "Phoenix": "21", "Portland": "22", "Sacramento": "23", "San Antonio": "24", "Toronto": "28", "Utah": "26", "Washington": "27"}
 
 def american_to_implied_prob(odds):
@@ -78,10 +77,6 @@ def get_pace_label(pace):
     elif pace < 4.5: return "⚖️ AVG", "#eab308"
     elif pace < 5.0: return "🔥 FAST", "#f97316"
     return "💥 SHOOTOUT", "#ef4444"
-
-# ══════════════════════════════════════════════════════════════════════
-# DATA FETCHERS
-# ══════════════════════════════════════════════════════════════════════
 
 @st.cache_data(ttl=30)
 def fetch_espn_games():
@@ -368,17 +363,11 @@ def fetch_plays(game_id):
         return plays[-10:]
     except: return []
 
-# ══════════════════════════════════════════════════════════════════════
-# 9-FACTOR NBA EDGE MODEL (matches NCAA architecture)
-# ══════════════════════════════════════════════════════════════════════
-
 def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
     edges = []
     score = 0.0
     home = game.get("home", "")
     away = game.get("away", "")
-
-    # ── Factor 1: ESPN BPI Predictor ──────────────────────────────────
     bpi = None
     if summary:
         bpi = parse_predictor(summary)
@@ -391,8 +380,6 @@ def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
         score += bpi_edge
     else:
         edges.append("ESPN BPI: unavailable")
-
-    # ── Factor 2: BPI vs Vegas vs Kalshi mismatch ─────────────────────
     home_ml = game.get("vegas_odds", {}).get("homeML")
     if home_ml and bpi:
         try:
@@ -404,12 +391,8 @@ def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
                 edges.append("BPI vs VEGAS GAP: " + "{:.1%}".format(abs(gap)) + " edge on " + who)
                 score += gap * 15
         except (ValueError, TypeError): pass
-
-    # ── Factor 3: Home court advantage ────────────────────────────────
     edges.append("Home court: " + home + " +" + str(HOME_COURT_ADV))
     score += HOME_COURT_ADV / 2
-
-    # ── Factor 4: Record / win percentage ─────────────────────────────
     home_rec = game.get("home_record", "")
     away_rec = game.get("away_record", "")
     home_wpct = _parse_win_pct(home_rec)
@@ -420,8 +403,6 @@ def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
         edges.append("Records: " + home + " (" + home_rec + " | " +
                      "{:.0%}".format(home_wpct) + ") vs " + away + " (" +
                      away_rec + " | " + "{:.0%}".format(away_wpct) + ")")
-
-    # ── Factor 5: Net rating from ESPN summary stats ──────────────────
     home_stats, away_stats = {}, {}
     if summary:
         home_stats, away_stats = parse_team_stats_from_summary(summary)
@@ -440,16 +421,12 @@ def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
                 edges.append("Net Rating: " + home + " " + "{:+.1f}".format(h_net) +
                              " vs " + away + " " + "{:+.1f}".format(a_net))
         except (ValueError, TypeError): pass
-
-    # ── Factor 6: Back-to-back fatigue ────────────────────────────────
     if home in b2b_teams:
         edges.append("FATIGUE: " + home + " on B2B")
         score -= 2.5
     if away in b2b_teams:
         edges.append("FATIGUE: " + away + " on B2B")
         score += 2.5
-
-    # ── Factor 7: PPG offensive matchup ───────────────────────────────
     if home_stats or away_stats:
         h_ppg = home_stats.get("avgPoints", home_stats.get("points", 0))
         a_ppg = away_stats.get("avgPoints", away_stats.get("points", 0))
@@ -461,8 +438,6 @@ def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
                 edges.append("Scoring: " + home + " " + "{:.1f}".format(h_ppg) +
                              " PPG vs " + away + " " + "{:.1f}".format(a_ppg) + " PPG")
         except (ValueError, TypeError): pass
-
-    # ── Factor 8: Injury impact (star detection via leaders) ──────────
     if injuries:
         home_leaders = _get_team_leaders(summary, "home")
         away_leaders = _get_team_leaders(summary, "away")
@@ -496,8 +471,6 @@ def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
         for p in away_dtd:
             edges.append("INJURY [DTD]: " + away + " - " + p.get("name", ""))
             score += 0.5
-
-    # ── Factor 9: 3PT shooting differential ───────────────────────────
     if home_stats or away_stats:
         h_3pct = home_stats.get("threePointFieldGoalPct", home_stats.get("threePointPct", 0))
         a_3pct = away_stats.get("threePointFieldGoalPct", away_stats.get("threePointPct", 0))
@@ -518,35 +491,24 @@ def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
                     who = home if pct_gap > 0 else away
                     edges.append("3PT EDGE: " + who + " has " + "{:.1f}".format(abs(pct_gap)) + "% advantage from deep")
         except (ValueError, TypeError): pass
-
-    # ── Composite verdict ─────────────────────────────────────────────
     if abs(score) >= 8: strength = "STRONG"
     elif abs(score) >= 4: strength = "MODERATE"
     elif abs(score) >= 1.5: strength = "LEAN"
     else: strength = "TOSS-UP"
-
     if score > 0:
         pick = home
         side = "HOME"
     else:
         pick = away
         side = "AWAY"
-
     edges.insert(0, "EDGE: " + strength + " " + side + " (" + pick + ") | Score: " + "{:+.1f}".format(score))
-
     return {"edges": edges, "score": score, "pick": pick, "side": side, "strength": strength, "bpi": bpi}
-
-# ══════════════════════════════════════════════════════════════════════
-# DISPLAY FUNCTIONS
-# ══════════════════════════════════════════════════════════════════════
 
 def infer_possession(plays, away, home):
     if not plays: return None, None
     last_play = plays[-1]
     play_text = (last_play.get("text", "") or "").lower()
     team_id = str(last_play.get("team_id", ""))
-    # Try to match team_id to home/away
-    # Fallback to text matching
     acting_team = None
     away_code = KALSHI_CODES.get(away, "XXX").lower()
     home_code = KALSHI_CODES.get(home, "XXX").lower()
@@ -608,7 +570,7 @@ def get_play_badge(last_play):
     elif "rebound" in play_text:
         return '<rect x="175" y="25" width="150" height="30" fill="#3b82f6" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">REBOUND</text>'
     elif "foul" in play_text:
-        return '<rect x="175" y="25" width="150" height="30" fill="#eab308" rx="6"/><text x="250" y="46" fill="#000" font-size="14" font-weight="bold" text-anchor="middle">FOUL</text>'
+        return '<rect x="175" y="25" width="150" height="30" fill="#eab308" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">FOUL</text>'
     elif "timeout" in play_text:
         return '<rect x="175" y="25" width="150" height="30" fill="#a855f7" rx="6"/><text x="250" y="46" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle">TIMEOUT</text>'
     return ""
@@ -658,10 +620,6 @@ def get_play_icon(play_type, score_value):
 def remove_position(pos_id):
     st.session_state.positions = [p for p in st.session_state.positions if p['id'] != pos_id]
 
-# ══════════════════════════════════════════════════════════════════════
-# MAIN PAGE — HEADER + FETCH DATA
-# ══════════════════════════════════════════════════════════════════════
-
 games = fetch_espn_games()
 kalshi_ml = fetch_kalshi_ml()
 kalshi_spreads = fetch_kalshi_spreads()
@@ -682,164 +640,6 @@ c3.metric("Scheduled", len(scheduled_games))
 c4.metric("Final", len(final_games))
 st.divider()
 
-# ── LIVE EDGE MONITOR ────────────────────────────────────────────────
-st.subheader("LIVE EDGE MONITOR")
-
-if live_games:
-    for g in live_games:
-        away, home = g['away'], g['home']
-        total, mins, game_id = g['total_score'], g['minutes_played'], g['game_id']
-        plays = fetch_plays(game_id)
-        st.markdown("### " + away + " @ " + home)
-        st.markdown(render_scoreboard(away, home, g['away_score'], g['home_score'], g['period'], g['clock'], g.get('away_record', ''), g.get('home_record', '')), unsafe_allow_html=True)
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            last_play = plays[-1] if plays else None
-            st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], g['period'], g['clock'], last_play), unsafe_allow_html=True)
-            poss_team, poss_text = infer_possession(plays, away, home)
-            if poss_text:
-                poss_color = TEAM_COLORS.get(poss_team, "#ffd700") if poss_team else "#888"
-                st.markdown("<div style='text-align:center;padding:8px;background:#1a1a2e;border-radius:6px;margin-top:4px'><span style='color:" + poss_color + ";font-size:1.3em;font-weight:bold'>" + str(poss_text) + " BALL</span></div>", unsafe_allow_html=True)
-        with col2:
-            st.markdown("**LAST 10 PLAYS**")
-            tts_on = st.checkbox("Announce plays", key="tts_" + str(game_id))
-            if plays:
-                for i, p in enumerate(reversed(plays)):
-                    icon, color = get_play_icon(p['play_type'], p['score_value'])
-                    play_text = p['text'][:60] if p['text'] else "Play"
-                    st.markdown("<div style='padding:4px 8px;margin:2px 0;background:#1e1e2e;border-radius:4px;border-left:3px solid " + color + "'><span style='color:" + color + "'>" + icon + "</span> Q" + str(p['period']) + " " + p['clock'] + " | " + play_text + "</div>", unsafe_allow_html=True)
-                    if i == 0 and tts_on and p['text']:
-                        speak_play("Q" + str(p['period']) + " " + p['clock'] + ". " + p['text'])
-            else:
-                st.caption("Waiting for plays...")
-        if mins >= 6:
-            proj = calc_projection(total, mins)
-            pace = total / mins if mins > 0 else 0
-            pace_label, pace_color = get_pace_label(pace)
-            lead = g['home_score'] - g['away_score']
-            leader = home if g['home_score'] > g['away_score'] else away
-            kalshi_link = get_kalshi_game_link(away, home)
-            st.markdown("<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> " + str(total) + " pts in " + str(mins) + " min | <b>Pace:</b> <span style='color:" + pace_color + "'>" + pace_label + "</span> (" + "{:.1f}".format(pace) + "/min)<br><b>Projection:</b> " + str(proj) + " pts | <b>Lead:</b> " + leader + " +" + str(abs(lead)) + "</div>", unsafe_allow_html=True)
-            # ML recommendation
-            st.markdown("**MONEYLINE**")
-            if abs(lead) >= 10:
-                ml_confidence = "STRONG" if abs(lead) >= 15 else "GOOD"
-                st.link_button(ml_confidence + " " + leader + " ML | Lead +" + str(abs(lead)), kalshi_link, use_container_width=True)
-            else:
-                st.caption("Wait for larger lead (currently " + leader + " +" + str(abs(lead)) + ")")
-            # Totals
-            st.markdown("**TOTALS**")
-            yes_lines = [(t, proj - t) for t in sorted(THRESHOLDS) if proj - t >= 6]
-            no_lines = [(t, t - proj) for t in sorted(THRESHOLDS, reverse=True) if t - proj >= 6]
-            tc1, tc2 = st.columns(2)
-            with tc1:
-                st.markdown("<span style='color:#22c55e;font-weight:bold'>YES (Over) — go LOW</span>", unsafe_allow_html=True)
-                if yes_lines:
-                    for i, (line, cushion) in enumerate(yes_lines[:3]):
-                        if cushion >= 20: safety = "FORTRESS"
-                        elif cushion >= 12: safety = "SAFE"
-                        else: safety = "TIGHT"
-                        rec = " *REC" if i == 0 and cushion >= 12 else ""
-                        st.link_button(safety + " YES " + str(line) + " (+" + str(int(cushion)) + ")" + rec, kalshi_link, use_container_width=True)
-                else:
-                    st.caption("No safe YES lines (need 6+ cushion)")
-            with tc2:
-                st.markdown("<span style='color:#ef4444;font-weight:bold'>NO (Under) — go HIGH</span>", unsafe_allow_html=True)
-                if no_lines:
-                    for i, (line, cushion) in enumerate(no_lines[:3]):
-                        if cushion >= 20: safety = "FORTRESS"
-                        elif cushion >= 12: safety = "SAFE"
-                        else: safety = "TIGHT"
-                        rec = " *REC" if i == 0 and cushion >= 12 else ""
-                        st.link_button(safety + " NO " + str(line) + " (+" + str(int(cushion)) + ")" + rec, kalshi_link, use_container_width=True)
-                else:
-                    st.caption("No safe NO lines (need 6+ cushion)")
-        else:
-            st.caption("Waiting for 6+ minutes...")
-        st.divider()
-else:
-    st.info("No live games right now")
-
-# ── CUSHION SCANNER ──────────────────────────────────────────────────
-st.subheader("CUSHION SCANNER (Totals)")
-all_game_options = ["All Games"] + [g['away'] + " @ " + g['home'] for g in games]
-cush_col1, cush_col2, cush_col3 = st.columns(3)
-with cush_col1:
-    selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
-with cush_col2:
-    min_mins = st.selectbox("Min PLAY TIME:", [8, 12, 16, 20, 24], index=1, key="cush_mins")
-with cush_col3:
-    side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
-
-cushion_data = []
-for g in games:
-    if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: continue
-    game_name = g['away'] + " @ " + g['home']
-    if selected_game != "All Games" and game_name != selected_game: continue
-    if g['minutes_played'] < min_mins: continue
-    total, mins = g['total_score'], g['minutes_played']
-    vegas_ou = g.get('vegas_odds', {}).get('overUnder')
-    if mins >= 8:
-        proj = calc_projection(total, mins)
-        pace_label = get_pace_label(total / mins)[0]
-        status_text = "Q" + str(g['period']) + " " + g['clock'] if g['period'] > 0 else "Live"
-    elif vegas_ou:
-        try:
-            proj = round(float(vegas_ou))
-            pace_label = "VEGAS"
-            status_text = "Scheduled" if mins == 0 else "Q" + str(g['period']) + " " + g['clock']
-        except:
-            proj = LEAGUE_AVG_TOTAL
-            pace_label = "PRE"
-            status_text = "Scheduled"
-    else:
-        proj = LEAGUE_AVG_TOTAL
-        pace_label = "PRE"
-        status_text = "Scheduled"
-    if side_choice == "YES (Over)":
-        thresh_sorted = sorted(THRESHOLDS)
-    else:
-        thresh_sorted = sorted(THRESHOLDS, reverse=True)
-    for idx, thresh in enumerate(thresh_sorted):
-        cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
-        if cushion >= 6 or (selected_game != "All Games"):
-            if cushion >= 20: safety_label = "FORTRESS"
-            elif cushion >= 12: safety_label = "SAFE"
-            elif cushion >= 6: safety_label = "TIGHT"
-            else: safety_label = "RISKY"
-            cushion_data.append({"game": game_name, "status": status_text, "proj": proj,
-                "line": thresh, "cushion": cushion, "pace": pace_label,
-                "link": get_kalshi_game_link(g['away'], g['home']),
-                "mins": mins, "is_live": mins >= 8, "safety": safety_label,
-                "is_recommended": idx == 0 and cushion >= 12})
-
-safety_order = {"FORTRESS": 0, "SAFE": 1, "TIGHT": 2, "RISKY": 3}
-cushion_data.sort(key=lambda x: (not x['is_live'], safety_order.get(x['safety'], 3), -x['cushion']))
-if cushion_data:
-    direction = "go LOW for safety" if side_choice == "YES (Over)" else "go HIGH for safety"
-    st.caption(side_choice.split()[0] + " bets: " + direction)
-    max_results = 20 if selected_game != "All Games" else 10
-    for cd in cushion_data[:max_results]:
-        cc1, cc2, cc3, cc4 = st.columns([3, 1.2, 1.3, 2])
-        with cc1:
-            rec_badge = " *REC" if cd.get('is_recommended') else ""
-            st.markdown("**" + cd['game'] + "** | " + cd['status'] + rec_badge)
-        with cc2:
-            st.write("Proj: " + str(cd['proj']) + " | Line: " + str(cd['line']))
-        with cc3:
-            cushion_color = "#22c55e" if cd['cushion'] >= 12 else ("#eab308" if cd['cushion'] >= 6 else "#ef4444")
-            st.markdown("<span style='color:" + cushion_color + ";font-weight:bold'>" + cd['safety'] + " +" + str(round(cd['cushion'])) + "</span>", unsafe_allow_html=True)
-        with cc4:
-            side_btn = "NO" if "NO" in side_choice else "YES"
-            st.link_button("BUY " + side_btn + " " + str(cd['line']), cd['link'], use_container_width=True)
-else:
-    if selected_game != "All Games":
-        st.info("Select a side and see all lines for " + selected_game)
-    else:
-        st.info("No opportunities with 6+ cushion. Try switching sides or wait for pace.")
-st.divider()
-
-# ── PACE SCANNER ─────────────────────────────────────────────────────
 st.subheader("PACE SCANNER")
 pace_data = []
 for g in live_games:
@@ -863,7 +663,6 @@ else:
     st.info("No live games with 6+ minutes played")
 st.divider()
 
-# ── PRE-GAME ALIGNMENT (9-Factor Edge Model) ─────────────────────────
 st.subheader("PRE-GAME ALIGNMENT — 9-Factor Edge Model")
 
 with st.expander("How Edges Are Rated"):
@@ -901,7 +700,7 @@ else:
     if st.button("ADD ALL EDGE PICKS", key="add_all_pre"):
         for g, edge in edge_games:
             game_key = g['away'] + "@" + g['home']
-            if not any(pos['game'] == game_key for pos in st.session_state.positions):
+            if not any(p['game'] == game_key for p in st.session_state.positions):
                 st.session_state.positions.append({"game": game_key,
                     "pick": edge.get("pick", ""), "type": "ML", "line": "-",
                     "price": 50, "contracts": 10,
@@ -935,7 +734,7 @@ else:
                 st.link_button("Trade on Kalshi", get_kalshi_game_link(g['away'], g['home']), use_container_width=True)
             with bc2:
                 game_key = g['away'] + "@" + g['home']
-                already = any(pos['game'] == game_key for pos in st.session_state.positions)
+                already = any(p['game'] == game_key for p in st.session_state.positions)
                 if already:
                     st.success("Tracked")
                 elif st.button("Track", key="pre_" + game_key):
@@ -959,7 +758,6 @@ else:
             st.markdown("---")
 st.divider()
 
-# ── INJURY REPORT ────────────────────────────────────────────────────
 st.subheader("INJURY REPORT")
 today_teams = set([g['away'] for g in games] + [g['home'] for g in games])
 injury_found = False
@@ -977,7 +775,6 @@ if not injury_found:
     st.info("No injuries reported for today's teams.")
 st.divider()
 
-# ── POSITION TRACKER ─────────────────────────────────────────────────
 st.subheader("POSITION TRACKER")
 today_games = [(g['away'] + " @ " + g['home'], g['away'], g['home']) for g in games]
 
@@ -1066,7 +863,6 @@ else:
     st.caption("No positions tracked yet.")
 st.divider()
 
-# ── ALL GAMES TODAY ──────────────────────────────────────────────────
 st.subheader("ALL GAMES TODAY")
 for g in games:
     if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']:
@@ -1084,7 +880,6 @@ st.divider()
 st.caption("v" + VERSION + " | Educational only | Not financial advice")
 st.caption("Stay small. Stay quiet. Win.")
 
-# ── VEGAS vs KALSHI MISPRICING ALERT ─────────────────────────────────
 st.subheader("VEGAS vs KALSHI MISPRICING ALERT")
 st.caption("Buy when Kalshi underprices Vegas favorite | 5%+ gap = edge")
 
@@ -1114,7 +909,6 @@ for g in games:
     else: continue
     kalshi_home_prob = kalshi_data.get('home_implied', 50)
     kalshi_away_prob = kalshi_data.get('away_implied', 50)
-    # Also check BPI for triple-source
     summary = fetch_game_summary(g["game_id"])
     bpi = parse_predictor(summary) if summary else None
     bpi_prob = bpi.get("home_win_pct", 0) * 100 if bpi else 0
@@ -1151,7 +945,7 @@ if mispricings:
             for mp in mispricings:
                 g = mp['game']
                 game_key = g['away'] + "@" + g['home']
-                if not any(pos['game'] == game_key for pos in st.session_state.positions):
+                if not any(p['game'] == game_key for p in st.session_state.positions):
                     st.session_state.positions.append({"game": game_key,
                         "pick": mp['action'] + " (" + mp['team'] + ")", "type": "ML",
                         "line": "-", "price": round(mp['kalshi_prob']),
@@ -1188,7 +982,7 @@ if mispricings:
             st.link_button("BUY " + mp['action'] + " (" + mp['team'] + ")", get_kalshi_game_link(g['away'], g['home']), use_container_width=True)
         with bc2:
             game_key = g['away'] + "@" + g['home']
-            already = any(pos['game'] == game_key for pos in st.session_state.positions)
+            already = any(p['game'] == game_key for p in st.session_state.positions)
             if already:
                 st.success("Tracked")
             elif st.button("Track", key="mp_" + game_key):
@@ -1200,4 +994,157 @@ if mispricings:
                 st.rerun()
 else:
     st.info("No mispricings found (need 5%+ gap between Vegas and Kalshi)")
+st.divider()
+
+st.subheader("LIVE EDGE MONITOR")
+
+if live_games:
+    for g in live_games:
+        away, home = g['away'], g['home']
+        total, mins, game_id = g['total_score'], g['minutes_played'], g['game_id']
+        plays = fetch_plays(game_id)
+        st.markdown("### " + away + " @ " + home)
+        st.markdown(render_scoreboard(away, home, g['away_score'], g['home_score'], g['period'], g['clock'], g.get('away_record', ''), g.get('home_record', '')), unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            last_play = plays[-1] if plays else None
+            st.markdown(render_nba_court(away, home, g['away_score'], g['home_score'], g['period'], g['clock'], last_play), unsafe_allow_html=True)
+            poss_team, poss_text = infer_possession(plays, away, home)
+            if poss_text:
+                poss_color = TEAM_COLORS.get(poss_team, "#ffd700") if poss_team else "#888"
+                st.markdown("<div style='text-align:center;padding:8px;background:#1a1a2e;border-radius:6px;margin-top:4px'><span style='color:" + poss_color + ";font-size:1.3em;font-weight:bold'>" + str(poss_text) + " BALL</span></div>", unsafe_allow_html=True)
+        with col2:
+            st.markdown("**LAST 10 PLAYS**")
+            tts_on = st.checkbox("Announce plays", key="tts_" + str(game_id))
+            if plays:
+                for i, p in enumerate(reversed(plays)):
+                    icon, color = get_play_icon(p['play_type'], p['score_value'])
+                    play_text = p['text'][:60] if p['text'] else "Play"
+                    st.markdown("<div style='padding:4px 8px;margin:2px 0;background:#1e1e2e;border-radius:4px;border-left:3px solid " + color + "'><span style='color:" + color + "'>" + icon + "</span> Q" + str(p['period']) + " " + p['clock'] + " | " + play_text + "</div>", unsafe_allow_html=True)
+                    if i == 0 and tts_on and p['text']:
+                        speak_play("Q" + str(p['period']) + " " + p['clock'] + ". " + p['text'])
+            else:
+                st.caption("Waiting for plays...")
+        if mins >= 6:
+            proj = calc_projection(total, mins)
+            pace = total / mins if mins > 0 else 0
+            pace_label, pace_color = get_pace_label(pace)
+            lead = g['home_score'] - g['away_score']
+            leader = home if g['home_score'] > g['away_score'] else away
+            kalshi_link = get_kalshi_game_link(away, home)
+            st.markdown("<div style='background:#1e1e2e;padding:12px;border-radius:8px;margin-top:8px'><b>Score:</b> " + str(total) + " pts in " + str(mins) + " min | <b>Pace:</b> <span style='color:" + pace_color + "'>" + pace_label + "</span> (" + "{:.1f}".format(pace) + "/min)<br><b>Projection:</b> " + str(proj) + " pts | <b>Lead:</b> " + leader + " +" + str(abs(lead)) + "</div>", unsafe_allow_html=True)
+            st.markdown("**MONEYLINE**")
+            if abs(lead) >= 10:
+                ml_confidence = "STRONG" if abs(lead) >= 15 else "GOOD"
+                st.link_button(ml_confidence + " " + leader + " ML | Lead +" + str(abs(lead)), kalshi_link, use_container_width=True)
+            else:
+                st.caption("Wait for larger lead (currently " + leader + " +" + str(abs(lead)) + ")")
+            st.markdown("**TOTALS**")
+            yes_lines = [(t, proj - t) for t in sorted(THRESHOLDS) if proj - t >= 6]
+            no_lines = [(t, t - proj) for t in sorted(THRESHOLDS, reverse=True) if t - proj >= 6]
+            tc1, tc2 = st.columns(2)
+            with tc1:
+                st.markdown("<span style='color:#22c55e;font-weight:bold'>YES (Over) — go LOW</span>", unsafe_allow_html=True)
+                if yes_lines:
+                    for i, (line, cushion) in enumerate(yes_lines[:3]):
+                        if cushion >= 20: safety = "FORTRESS"
+                        elif cushion >= 12: safety = "SAFE"
+                        else: safety = "TIGHT"
+                        rec = " *REC" if i == 0 and cushion >= 12 else ""
+                        st.link_button(safety + " YES " + str(line) + " (+" + str(int(cushion)) + ")" + rec, kalshi_link, use_container_width=True)
+                else:
+                    st.caption("No safe YES lines (need 6+ cushion)")
+            with tc2:
+                st.markdown("<span style='color:#ef4444;font-weight:bold'>NO (Under) — go HIGH</span>", unsafe_allow_html=True)
+                if no_lines:
+                    for i, (line, cushion) in enumerate(no_lines[:3]):
+                        if cushion >= 20: safety = "FORTRESS"
+                        elif cushion >= 12: safety = "SAFE"
+                        else: safety = "TIGHT"
+                        rec = " *REC" if i == 0 and cushion >= 12 else ""
+                        st.link_button(safety + " NO " + str(line) + " (+" + str(int(cushion)) + ")" + rec, kalshi_link, use_container_width=True)
+                else:
+                    st.caption("No safe NO lines (need 6+ cushion)")
+        else:
+            st.caption("Waiting for 6+ minutes...")
+        st.divider()
+else:
+    st.info("No live games right now")
+
+st.subheader("CUSHION SCANNER (Totals)")
+all_game_options = ["All Games"] + [g['away'] + " @ " + g['home'] for g in games]
+cush_col1, cush_col2, cush_col3 = st.columns(3)
+with cush_col1:
+    selected_game = st.selectbox("Select Game:", all_game_options, key="cush_game")
+with cush_col2:
+    min_mins = st.selectbox("Min PLAY TIME:", [8, 12, 16, 20, 24], index=1, key="cush_mins")
+with cush_col3:
+    side_choice = st.selectbox("Side:", ["NO (Under)", "YES (Over)"], key="cush_side")
+
+cushion_data = []
+for g in games:
+    if g['status'] in ['STATUS_FINAL', 'STATUS_FULL_TIME']: continue
+    game_name = g['away'] + " @ " + g['home']
+    if selected_game != "All Games" and game_name != selected_game: continue
+    if g['minutes_played'] < min_mins: continue
+    total, mins = g['total_score'], g['minutes_played']
+    vegas_ou = g.get('vegas_odds', {}).get('overUnder')
+    if mins >= 8:
+        proj = calc_projection(total, mins)
+        pace_label = get_pace_label(total / mins)[0]
+        status_text = "Q" + str(g['period']) + " " + g['clock'] if g['period'] > 0 else "Live"
+    elif vegas_ou:
+        try:
+            proj = round(float(vegas_ou))
+            pace_label = "VEGAS"
+            status_text = "Scheduled" if mins == 0 else "Q" + str(g['period']) + " " + g['clock']
+        except:
+            proj = LEAGUE_AVG_TOTAL
+            pace_label = "PRE"
+            status_text = "Scheduled"
+    else:
+        proj = LEAGUE_AVG_TOTAL
+        pace_label = "PRE"
+        status_text = "Scheduled"
+    if side_choice == "YES (Over)":
+        thresh_sorted = sorted(THRESHOLDS)
+    else:
+        thresh_sorted = sorted(THRESHOLDS, reverse=True)
+    for idx, thresh in enumerate(thresh_sorted):
+        cushion = (thresh - proj) if side_choice == "NO (Under)" else (proj - thresh)
+        if cushion >= 6 or (selected_game != "All Games"):
+            if cushion >= 20: safety_label = "FORTRESS"
+            elif cushion >= 12: safety_label = "SAFE"
+            elif cushion >= 6: safety_label = "TIGHT"
+            else: safety_label = "RISKY"
+            cushion_data.append({"game": game_name, "status": status_text, "proj": proj,
+                "line": thresh, "cushion": cushion, "pace": pace_label,
+                "link": get_kalshi_game_link(g['away'], g['home']),
+                "mins": mins, "is_live": mins >= 8, "safety": safety_label,
+                "is_recommended": idx == 0 and cushion >= 12})
+
+safety_order = {"FORTRESS": 0, "SAFE": 1, "TIGHT": 2, "RISKY": 3}
+cushion_data.sort(key=lambda x: (not x['is_live'], safety_order.get(x['safety'], 3), -x['cushion']))
+if cushion_data:
+    direction = "go LOW for safety" if side_choice == "YES (Over)" else "go HIGH for safety"
+    st.caption(side_choice.split()[0] + " bets: " + direction)
+    max_results = 20 if selected_game != "All Games" else 10
+    for cd in cushion_data[:max_results]:
+        cc1, cc2, cc3, cc4 = st.columns([3, 1.2, 1.3, 2])
+        with cc1:
+            rec_badge = " *REC" if cd.get('is_recommended') else ""
+            st.markdown("**" + cd['game'] + "** | " + cd['status'] + rec_badge)
+        with cc2:
+            st.write("Proj: " + str(cd['proj']) + " | Line: " + str(cd['line']))
+        with cc3:
+            cushion_color = "#22c55e" if cd['cushion'] >= 12 else ("#eab308" if cd['cushion'] >= 6 else "#ef4444")
+            st.markdown("<span style='color:" + cushion_color + ";font-weight:bold'>" + cd['safety'] + " +" + str(round(cd['cushion'])) + "</span>", unsafe_allow_html=True)
+        with cc4:
+            side_btn = "NO" if "NO" in side_choice else "YES"
+            st.link_button("BUY " + side_btn + " " + str(cd['line']), cd['link'], use_container_width=True)
+else:
+    if selected_game != "All Games":
+        st.info("Select a side and see all lines for " + selected_game)
+    else:
+        st.info("No opportunities with 6+ cushion. Try switching sides or wait for pace.")
 st.divider()
