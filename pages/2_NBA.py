@@ -1691,4 +1691,3 @@ with tab_cushion:
 st.divider()
 st.caption(f"v{VERSION} | Educational only | Not financial advice")
 st.caption("Stay small. Stay quiet. Win.")
-
