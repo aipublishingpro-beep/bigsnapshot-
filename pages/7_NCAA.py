@@ -1,1172 +1,1703 @@
 import streamlit as st
-st.set_page_config(page_title="BigSnapshot NCAA Edge Finder", page_icon="🏀", layout="wide")
-import streamlit.components.v1 as components
-
-import requests, json, time, hashlib, base64, datetime as dt
-from datetime import datetime, timedelta, timezone
 from streamlit_autorefresh import st_autorefresh
+import streamlit.components.v1 as components
+st.set_page_config(page_title="BigSnapshot NCAA Edge Finder", page_icon="🏀", layout="wide")
+from auth import require_auth
+require_auth()
+st_autorefresh(interval=30000, key="ncaa_datarefresh")
+import uuid, re, requests, pytz
+import requests as req_ga
+from datetime import datetime, timedelta
 
-try:
-    from auth import create_kalshi_signature
-except ImportError:
-    def create_kalshi_signature(*a, **k):
-        return "", ""
-
-# ── GA4 ───────────────────────────────────────────────────────────────
-GA4_MID = "G-XXXXXXXXXX"
-GA4_SECRET = ""
-def send_ga4(event_name, params=None):
-    if not GA4_SECRET: return
+# ── GA4 ──
+def send_ga4_event(page_title, page_path):
     try:
-        cid = hashlib.md5(st.session_state.get("session_id", "ncaa").encode()).hexdigest()
-        requests.post(
-            "https://www.google-analytics.com/mp/collect?measurement_id=" + GA4_MID + "&api_secret=" + GA4_SECRET,
-            json={"client_id": cid, "events": [{"name": event_name, "params": params or {}}]}, timeout=2)
-    except Exception: pass
+        url = "https://www.google-analytics.com/mp/collect?measurement_id=G-NQKY5VQ376&api_secret=n4oBJjH7RXi0dA7aQo2CZA"
+        payload = {"client_id": str(uuid.uuid4()), "events": [{"name": "page_view", "params": {"page_title": page_title, "page_location": "https://bigsnapshot.streamlit.app" + page_path}}]}
+        req_ga.post(url, json=payload, timeout=2)
+    except: pass
+send_ga4_event("BigSnapshot NCAA Edge Finder", "/NCAA")
 
-st_autorefresh(interval=30_000, limit=10000, key="ncaa_refresh")
-
-# ── Config ────────────────────────────────────────────────────────────
-VERSION = "2.0"
+# ── Timezone + Constants ──
+eastern = pytz.timezone("US/Eastern")
+now = datetime.now(eastern)
+VERSION = "3.0"
 LEAGUE_AVG_TOTAL = 135
+GAME_MINUTES = 40
+HALF_MINUTES = 20
 THRESHOLDS = [120.5, 125.5, 130.5, 135.5, 140.5, 145.5, 150.5, 155.5, 160.5]
 HOME_COURT_ADV = 4.0
-GAME_MINUTES = 40
-HALVES = 2
-HALF_MINUTES = 20
-KALSHI_BASE = "https://trading-api.kalshi.com/trade-api/v2"
-KALSHI_HEADERS = {"Content-Type": "application/json"}
+MIN_UNDERDOG_LEAD = 8
+MIN_SPREAD_BRACKET = 8
+MAX_NO_PRICE = 85
+MIN_WP_EDGE = 8
+LEAD_BY_HALF = {1: 8, 2: 12}
+KALSHI_GAME_LINK = "https://kalshi.com/sports/basketball/college-basketball-m/games"
+KALSHI_SPREAD_LINK = "https://kalshi.com/sports/basketball/college-basketball-m/spreads"
 
-if "session_id" not in st.session_state:
-    st.session_state["session_id"] = hashlib.md5(str(time.time()).encode()).hexdigest()[:12]
-if "positions" not in st.session_state:
-    st.session_state["positions"] = {}
-if "kalshi_token" not in st.session_state:
-    st.session_state["kalshi_token"] = None
+# ── Session State ──
+if 'ncaa_positions' not in st.session_state: st.session_state.ncaa_positions = []
+if 'ncaa_sniper_alerts' not in st.session_state: st.session_state.ncaa_sniper_alerts = []
+if 'ncaa_comeback_alerts' not in st.session_state: st.session_state.ncaa_comeback_alerts = []
+if 'ncaa_comeback_tracking' not in st.session_state: st.session_state.ncaa_comeback_tracking = {}
+if 'ncaa_alerted_games' not in st.session_state: st.session_state.ncaa_alerted_games = set()
+if 'ncaa_comeback_alerted' not in st.session_state: st.session_state.ncaa_comeback_alerted = set()
 
-TEAM_COLORS = {
-    "DUKE": "#003087", "UNC": "#7BAFD4", "KU": "#0051BA", "UK": "#0033A0",
-    "GONZ": "#002967", "HOU": "#C8102E", "AUB": "#0C2340", "TENN": "#FF8200",
-    "PUR": "#CEB888", "ALA": "#9E1B32", "BAY": "#154734", "ARIZ": "#CC0033",
-    "MARQ": "#003366", "CONN": "#000E2F", "IOWA": "#FFCD00", "MSU": "#18453B",
-    "CREI": "#005CA9", "ILL": "#E84A27", "FLOR": "#0021A5", "TEX": "#BF5700",
-    "UCLA": "#2D68C4", "WIS": "#C5050C", "ORE": "#154733", "MICH": "#00274C",
-    "ISU": "#C8102E", "TXAM": "#500000", "OHST": "#BB0000", "NCST": "#CC0000",
-    "PITT": "#003594", "OKLA": "#841617", "ARK": "#9D2235", "LSU": "#461D7C",
-}
-def get_team_color(abbr):
-    return TEAM_COLORS.get(abbr.upper(), "#555555") if abbr else "#555555"
+# ── Helper: get_team_color ──
+def get_team_color(game, side):
+    return game.get(f'{side}_color', '#555555')
 
-def get_kalshi_headers():
-    token = st.session_state.get("kalshi_token")
-    if token: return {**KALSHI_HEADERS, "Authorization": "Bearer " + token}
-    return KALSHI_HEADERS
-
+# ── Helper: american_to_implied_prob ──
 def american_to_implied_prob(odds):
-    if odds is None or odds == 0: return 0.0
-    if odds > 0: return 100.0 / (odds + 100.0)
-    return abs(odds) / (abs(odds) + 100.0)
+    if odds is None or odds == 0:
+        return None
+    if odds > 0:
+        return 100 / (odds + 100)
+    else:
+        return abs(odds) / (abs(odds) + 100)
 
-def calc_minutes_elapsed(period, clock_str):
-    try:
-        if not clock_str:
-            return max(0, ((period or 1) - 1)) * HALF_MINUTES
-        parts = clock_str.replace(" ", "").split(":")
-        if len(parts) == 2:
-            mins_left, secs_left = int(parts[0]), int(parts[1])
-        else:
-            mins_left, secs_left = 0, 0
-        elapsed = HALF_MINUTES - mins_left - (secs_left / 60.0)
-        return (max(0, ((period or 1) - 1)) * HALF_MINUTES) + max(0, elapsed)
-    except Exception: return 0.0
-
-def get_kalshi_game_link(date_str, away_abbr, home_abbr):
-    """Link to Kalshi NCAA games page — shows today's games, user clicks their match"""
-    return "https://kalshi.com/sports/basketball/college-basketball-m/games?t=" + str(int(time.time()))
-
-def calc_projection(home_score, away_score, minutes_elapsed):
-    total = home_score + away_score
-    if minutes_elapsed <= 0: return LEAGUE_AVG_TOTAL
-    cur_pace = total / minutes_elapsed
-    lg_pace = LEAGUE_AVG_TOTAL / GAME_MINUTES
-    pct = minutes_elapsed / GAME_MINUTES
-    if pct < 0.15: blend = 0.3
-    elif pct < 0.5: blend = 0.5 + (pct - 0.15) * 1.0
-    else: blend = 0.85 + (pct - 0.5) * 0.3
-    blend = min(blend, 0.98)
-    return round(((cur_pace * blend) + (lg_pace * (1 - blend))) * GAME_MINUTES, 1)
-
-def get_pace_label(ppm):
-    if ppm >= 4.0: return "VERY HIGH"
-    if ppm >= 3.6: return "HIGH"
-    if ppm >= 3.2: return "AVERAGE"
-    if ppm >= 2.8: return "LOW"
-    return "VERY LOW"
-
+# ── Helper: speak_play ──
 def speak_play(text):
-    clean_text = text.replace("'", "").replace('"', '').replace('\n', ' ')[:100]
-    js = '<script>if(!window.lastSpoken||window.lastSpoken!=="' + clean_text + '"){window.lastSpoken="' + clean_text + '";var u=new SpeechSynthesisUtterance("' + clean_text + '");u.rate=1.1;window.speechSynthesis.speak(u);}</script>'
+    clean = re.sub(r'["\'\n\r]', ' ', str(text))[:100]
+    js = f"""
+    <script>
+    (function(){{
+        if(window.lastSpoken==='{clean}') return;
+        window.lastSpoken='{clean}';
+        var u=new SpeechSynthesisUtterance('{clean}');
+        u.rate=1.1;
+        window.speechSynthesis.speak(u);
+    }})();
+    </script>
+    """
     components.html(js, height=0)
 
-# ══════════════════════════════════════════════════════════════════════
-# DATA FETCHERS
-# ══════════════════════════════════════════════════════════════════════
-
-def fetch_espn_games():
-    games = []
-    today = datetime.now(timezone.utc).strftime("%Y%m%d")
-    url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=" + today + "&limit=200&groups=50"
+# ── Helper: calc_minutes_elapsed ──
+def calc_minutes_elapsed(period, clock_str):
     try:
-        r = requests.get(url, timeout=10)
-        if r.status_code != 200: return games
-        data = r.json()
-        for event in data.get("events", []):
-            comp = event.get("competitions", [{}])[0]
-            competitors = comp.get("competitors", [])
-            if len(competitors) < 2: continue
-            home = away = None
-            for c in competitors:
-                if c.get("homeAway") == "home": home = c
-                elif c.get("homeAway") == "away": away = c
-            if not home or not away: continue
-            ht, at = home.get("team", {}), away.get("team", {})
-            status = event.get("status", {})
-            state = status.get("type", {}).get("state", "pre")
-            period = status.get("period", 0)
-            clock = status.get("displayClock", "")
-            conf_name = ""
-            notes = event.get("notes", [])
-            if notes: conf_name = notes[0].get("headline", "")
-            # Parse records
-            home_record = home.get("records", [{}])[0].get("summary", "") if home.get("records") else ""
-            away_record = away.get("records", [{}])[0].get("summary", "") if away.get("records") else ""
-            game = {
-                "id": str(event.get("id", "")),
-                "name": event.get("name", ""),
-                "shortName": event.get("shortName", ""),
-                "state": state, "period": period, "clock": clock,
-                "home_team": ht.get("displayName", ""), "home_abbr": ht.get("abbreviation", ""),
-                "home_score": int(home.get("score", 0) or 0), "home_id": str(ht.get("id", "")),
-                "home_color": "#" + str(ht.get("color", "555555")),
-                "home_rank": home.get("curatedRank", {}).get("current", 99),
-                "home_record": home_record,
-                "away_team": at.get("displayName", ""), "away_abbr": at.get("abbreviation", ""),
-                "away_score": int(away.get("score", 0) or 0), "away_id": str(at.get("id", "")),
-                "away_color": "#" + str(at.get("color", "555555")),
-                "away_rank": away.get("curatedRank", {}).get("current", 99),
-                "away_record": away_record,
-                "broadcast": "", "venue": comp.get("venue", {}).get("fullName", ""),
-                "conference": conf_name, "odds": {}, "minutes_elapsed": 0.0,
-            }
-            odds_list = comp.get("odds", [])
-            if odds_list:
-                o = odds_list[0]
-                game["odds"] = {
-                    "spread": o.get("spread", ""), "overUnder": o.get("overUnder", ""),
-                    "home_ml": o.get("homeTeamOdds", {}).get("moneyLine", ""),
-                    "away_ml": o.get("awayTeamOdds", {}).get("moneyLine", ""),
-                }
-            bcasts = comp.get("broadcasts", [])
-            if bcasts:
-                names = []
-                for b in bcasts:
-                    for n in b.get("names", []): names.append(n)
-                game["broadcast"] = ", ".join(names)
-            if state == "in":
-                game["minutes_elapsed"] = calc_minutes_elapsed(period, clock)
-            games.append(game)
-    except Exception as e:
-        st.error("ESPN fetch error: " + str(e))
-    return games
+        period = int(period) if period else 1
+        if not clock_str or clock_str == "0:00":
+            if period <= 2:
+                return period * HALF_MINUTES
+            else:
+                return GAME_MINUTES + (period - 2) * 5
+        parts = clock_str.replace(" ", "").split(":")
+        minutes_left = int(parts[0])
+        seconds_left = int(parts[1]) if len(parts) > 1 else 0
+        remaining = minutes_left + seconds_left / 60.0
+        if period == 1:
+            half_length = HALF_MINUTES
+            completed = 0
+        elif period == 2:
+            half_length = HALF_MINUTES
+            completed = HALF_MINUTES
+        else:
+            half_length = 5
+            completed = GAME_MINUTES + (period - 3) * 5
+        elapsed = completed + (half_length - remaining)
+        return max(0, elapsed)
+    except:
+        return 0
 
-# ── ESPN GAME SUMMARY — BPI PREDICTOR + TEAM STATS ──────────────────
+# ── Helper: calc_projection ──
+def calc_projection(total_score, minutes_elapsed):
+    if minutes_elapsed < 6:
+        return LEAGUE_AVG_TOTAL
+    pace = total_score / minutes_elapsed
+    progress = minutes_elapsed / GAME_MINUTES
+    if progress >= 0.50:
+        weight = 0.98
+    elif progress >= 0.15:
+        weight = 0.3 + (progress - 0.15) / (0.50 - 0.15) * (0.98 - 0.3)
+    else:
+        weight = 0.3
+    league_pace = LEAGUE_AVG_TOTAL / GAME_MINUTES
+    blended_pace = weight * pace + (1 - weight) * league_pace
+    proj = blended_pace * GAME_MINUTES
+    return max(100, min(200, proj))
+
+# ── Helper: get_pace_label ──
+def get_pace_label(pace):
+    if pace < 2.8:
+        return "🐢 SLOW", "#22c55e"
+    elif pace < 3.2:
+        return "⚖️ AVG", "#eab308"
+    elif pace < 3.6:
+        return "🔥 FAST", "#f97316"
+    else:
+        return "💥 SHOOTOUT", "#ef4444"
+
+# ── Helper: parse_record ──
+def parse_record(s):
+    try:
+        parts = str(s).split("-")
+        return (int(parts[0]), int(parts[1]))
+    except:
+        return (0, 0)
+
+# ── Helper: get_favorite_side ──
+def get_favorite_side(home_record, away_record, home_ml=0, home_rank=99, away_rank=99):
+    if home_ml != 0:
+        return "home" if home_ml < 0 else "away"
+    if home_rank <= 25 and away_rank <= 25:
+        return "home" if home_rank < away_rank else "away"
+    if home_rank <= 25:
+        return "home"
+    if away_rank <= 25:
+        return "away"
+    hw, hl = parse_record(home_record)
+    aw, al = parse_record(away_record)
+    home_wpct = hw / (hw + hl) if (hw + hl) > 0 else 0
+    away_wpct = aw / (aw + al) if (aw + al) > 0 else 0
+    return "home" if home_wpct >= away_wpct else "away"
+
+# ── Helper: _parse_win_pct ──
+def _parse_win_pct(record_str):
+    try:
+        parts = str(record_str).strip().split(" ")[0].split("-")
+        w, l = int(parts[0]), int(parts[1])
+        return w / (w + l) if (w + l) > 0 else None
+    except:
+        return None
+
+# ── Helper: remove_position ──
+def remove_position(pos_id):
+    st.session_state.ncaa_positions = [p for p in st.session_state.ncaa_positions if p.get('id') != pos_id]
+
+# ── ESPN: fetch_espn_games ──
+@st.cache_data(ttl=30)
+def fetch_espn_games():
+    try:
+        today = datetime.now(eastern).strftime("%Y%m%d")
+        url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates={today}&limit=200&groups=50"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        games = []
+        for event in data.get("events", []):
+            try:
+                comp = event["competitions"][0]
+                competitors = comp.get("competitors", [])
+                home_team_data = None
+                away_team_data = None
+                for c in competitors:
+                    if c.get("homeAway") == "home":
+                        home_team_data = c
+                    else:
+                        away_team_data = c
+                if not home_team_data or not away_team_data:
+                    continue
+                ht = home_team_data.get("team", {})
+                at = away_team_data.get("team", {})
+                status_obj = event.get("status", {})
+                status_type = status_obj.get("type", {})
+                state = status_type.get("state", "pre")
+                period = status_obj.get("period", 0)
+                clock = status_obj.get("displayClock", "")
+                status_detail = status_type.get("detail", "")
+                home_score = int(home_team_data.get("score", 0) or 0)
+                away_score = int(away_team_data.get("score", 0) or 0)
+                home_record_str = ""
+                away_record_str = ""
+                for rec in home_team_data.get("records", []):
+                    if rec.get("type") == "total":
+                        home_record_str = rec.get("summary", "")
+                        break
+                for rec in away_team_data.get("records", []):
+                    if rec.get("type") == "total":
+                        away_record_str = rec.get("summary", "")
+                        break
+                home_color = "#" + ht.get("color", "555555")
+                away_color = "#" + at.get("color", "555555")
+                home_rank = home_team_data.get("curatedRank", {}).get("current", 99)
+                away_rank = away_team_data.get("curatedRank", {}).get("current", 99)
+                vegas = {}
+                home_ml_val = 0
+                odds_list = comp.get("odds", [])
+                if odds_list:
+                    o = odds_list[0]
+                    vegas = {
+                        "spread": o.get("details", ""),
+                        "overUnder": o.get("overUnder", ""),
+                        "homeML": o.get("homeTeamOdds", {}).get("moneyLine", 0),
+                        "awayML": o.get("awayTeamOdds", {}).get("moneyLine", 0)
+                    }
+                    home_ml_val = vegas.get("homeML", 0) or 0
+                conference = ""
+                notes = comp.get("notes", [])
+                if notes:
+                    conference = notes[0].get("headline", "")
+                venue_name = comp.get("venue", {}).get("fullName", "")
+                broadcast = ""
+                broadcasts = comp.get("broadcasts", [])
+                if broadcasts:
+                    names = [n.get("names", [""])[0] for n in broadcasts if n.get("names")]
+                    broadcast = ", ".join(names)
+                game_dt_str = event.get("date", "")
+                game_time = ""
+                game_datetime = ""
+                if game_dt_str:
+                    try:
+                        utc_dt = datetime.strptime(game_dt_str[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.utc)
+                        et_dt = utc_dt.astimezone(eastern)
+                        game_time = et_dt.strftime("%-I:%M %p ET")
+                        game_datetime = et_dt.strftime("%Y-%m-%d %H:%M")
+                    except:
+                        game_time = game_dt_str
+                minutes_elapsed = calc_minutes_elapsed(period, clock) if state == "in" else 0
+                g = {
+                    "away_team": at.get("displayName", at.get("shortDisplayName", "")),
+                    "home_team": ht.get("displayName", ht.get("shortDisplayName", "")),
+                    "away_abbr": at.get("abbreviation", "").upper(),
+                    "home_abbr": ht.get("abbreviation", "").upper(),
+                    "away_score": away_score,
+                    "home_score": home_score,
+                    "away_record": away_record_str,
+                    "home_record": home_record_str,
+                    "away_id": str(at.get("id", "")),
+                    "home_id": str(ht.get("id", "")),
+                    "away_color": away_color,
+                    "home_color": home_color,
+                    "away_rank": away_rank if away_rank != 99 else 99,
+                    "home_rank": home_rank if home_rank != 99 else 99,
+                    "away_full": at.get("displayName", ""),
+                    "home_full": ht.get("displayName", ""),
+                    "status": status_detail,
+                    "state": state,
+                    "period": period,
+                    "clock": clock,
+                    "minutes_elapsed": minutes_elapsed,
+                    "total_score": home_score + away_score,
+                    "game_id": event.get("id", ""),
+                    "vegas_odds": vegas,
+                    "home_ml": home_ml_val,
+                    "conference": conference,
+                    "venue": venue_name,
+                    "broadcast": broadcast,
+                    "shortName": event.get("shortName", ""),
+                    "game_time": game_time,
+                    "game_datetime": game_datetime
+                }
+                games.append(g)
+            except:
+                continue
+        return games
+    except:
+        return []
+
+# ── ESPN: fetch_game_summary ──
 @st.cache_data(ttl=300)
 def fetch_game_summary(game_id):
-    """Fetch ESPN summary for a game — includes predictor (BPI win %), team stats, and odds."""
     try:
-        url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event=" + str(game_id)
-        r = requests.get(url, timeout=10)
-        if r.status_code != 200: return None
-        return r.json()
-    except Exception: return None
+        url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event={game_id}"
+        resp = requests.get(url, timeout=10)
+        return resp.json()
+    except:
+        return None
 
+# ── ESPN: fetch_espn_win_prob ──
+@st.cache_data(ttl=20)
+def fetch_espn_win_prob(game_id):
+    try:
+        url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event={game_id}"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        wp = data.get("winprobability", [])
+        if wp:
+            return wp[-1].get("homeWinPercentage", 0.5) * 100
+        pred = data.get("predictor", {})
+        if pred:
+            return float(pred.get("homeTeam", {}).get("gameProjection", 50))
+        return None
+    except:
+        return None
+
+# ── ESPN: parse_predictor ──
 def parse_predictor(summary):
-    """Extract ESPN BPI win probabilities from game summary."""
-    if not summary: return None
+    if not summary:
+        return None, None
     pred = summary.get("predictor", {})
-    if not pred: return None
-    home_proj = pred.get("homeTeam", {})
-    away_proj = pred.get("awayTeam", {})
-    return {
-        "home_win_pct": float(home_proj.get("gameProjection", 0)) / 100.0,
-        "away_win_pct": float(away_proj.get("gameProjection", 0)) / 100.0,
-        "home_team": home_proj.get("team", {}).get("abbreviation", ""),
-        "away_team": away_proj.get("team", {}).get("abbreviation", ""),
-    }
+    if not pred:
+        return None, None
+    home_pct = None
+    away_pct = None
+    ht = pred.get("homeTeam", {})
+    at = pred.get("awayTeam", {})
+    if ht:
+        try:
+            home_pct = float(ht.get("gameProjection", 0)) / 100.0
+        except:
+            home_pct = None
+    if at:
+        try:
+            away_pct = float(at.get("gameProjection", 0)) / 100.0
+        except:
+            away_pct = None
+    if home_pct is not None and away_pct is None:
+        away_pct = 1.0 - home_pct
+    if away_pct is not None and home_pct is None:
+        home_pct = 1.0 - away_pct
+    return home_pct, away_pct
 
+# ── ESPN: parse_team_stats_from_summary ──
 def parse_team_stats_from_summary(summary):
-    """Extract team season stats from game summary boxscore or season stats."""
-    if not summary: return {}, {}
-    home_stats, away_stats = {}, {}
-    # Try boxscore for season averages
-    boxscore = summary.get("boxscore", {})
-    teams = boxscore.get("teams", [])
-    for t in teams:
-        team_data = t.get("team", {})
-        abbr = team_data.get("abbreviation", "")
-        stats_list = t.get("statistics", [])
-        parsed = {}
-        for s in stats_list:
-            name = s.get("name", "")
-            val = s.get("displayValue", "0")
-            try:
-                parsed[name] = float(val)
-            except (ValueError, TypeError):
-                parsed[name] = val
-        ha = t.get("homeAway", "")
-        if ha == "home": home_stats = parsed
-        elif ha == "away": away_stats = parsed
+    home_stats = {}
+    away_stats = {}
+    if not summary:
+        return home_stats, away_stats
+    try:
+        boxscore = summary.get("boxscore", {})
+        teams = boxscore.get("teams", [])
+        for t in teams:
+            side = t.get("homeAway", "")
+            stats_list = t.get("statistics", [])
+            stats_dict = {}
+            for s in stats_list:
+                stats_dict[s.get("name", "")] = s.get("displayValue", "")
+            if side == "home":
+                home_stats = stats_dict
+            else:
+                away_stats = stats_dict
+    except:
+        pass
     return home_stats, away_stats
 
-# ── ESPN TEAM SEASON STATS ───────────────────────────────────────────
-@st.cache_data(ttl=600)
-def fetch_team_stats(team_id):
-    """Fetch full season stats for a team: PPG, opp PPG, FG%, TO, REB."""
+# ── ESPN: _get_team_leaders ──
+def _get_team_leaders(summary, home_away):
+    leaders = []
+    if not summary:
+        return leaders
     try:
-        url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams/" + str(team_id) + "?enable=stats"
-        r = requests.get(url, timeout=10)
-        if r.status_code != 200: return {}
-        data = r.json()
-        team = data.get("team", {})
-        stats_raw = {}
-        # Season stats come in team.record.items or team.statistics
-        for stat_group in team.get("record", {}).get("items", []):
-            for s in stat_group.get("stats", []):
-                stats_raw[s.get("name", "")] = s.get("value", 0)
-        # Also check nextEvent statistics
-        for stat_entry in team.get("statistics", []):
-            if isinstance(stat_entry, dict):
-                stats_raw[stat_entry.get("name", "")] = stat_entry.get("value", 0)
-        return stats_raw
-    except Exception:
-        return {}
+        for leader_cat in summary.get("leaders", []):
+            cat_name = leader_cat.get("name", "")
+            if cat_name in ("points", "rating"):
+                for team_leader in leader_cat.get("leaders", []):
+                    if team_leader.get("homeAway") == home_away or team_leader.get("team", {}).get("homeAway") == home_away:
+                        for entry in team_leader.get("leaders", [])[:3]:
+                            athlete = entry.get("athlete", {})
+                            name = athlete.get("displayName", "")
+                            if name:
+                                leaders.append(name)
+    except:
+        pass
+    return leaders
 
-# ── KALSHI FETCHERS ───────────────────────────────────────────────────
-def fetch_kalshi_ml():
-    markets = {}
+# ── ESPN: _is_star_player ──
+def _is_star_player(player_name, leaders_list):
     try:
-        headers = get_kalshi_headers()
-        r = requests.get(KALSHI_BASE + "/markets?series_ticker=KXNCAAGAME&limit=200&status=open", headers=headers, timeout=10)
-        if r.status_code == 200:
-            for m in r.json().get("markets", []):
-                t = m.get("ticker", "")
-                markets[t] = {"ticker": t, "title": m.get("title", ""),
-                    "yes_price": m.get("yes_ask", 0) or m.get("last_price", 0),
-                    "no_price": m.get("no_ask", 0), "volume": m.get("volume", 0)}
-    except Exception: pass
-    return markets
+        last_name = player_name.strip().split()[-1].lower()
+        for leader in leaders_list[:3]:
+            if leader.strip().split()[-1].lower() == last_name:
+                return True
+    except:
+        pass
+    return False
 
-def fetch_kalshi_spreads():
-    markets = {}
-    try:
-        headers = get_kalshi_headers()
-        r = requests.get(KALSHI_BASE + "/markets?series_ticker=KXNCAASPREAD&limit=200&status=open", headers=headers, timeout=10)
-        if r.status_code == 200:
-            for m in r.json().get("markets", []):
-                t = m.get("ticker", "")
-                markets[t] = {"ticker": t, "title": m.get("title", ""),
-                    "yes_price": m.get("yes_ask", 0) or m.get("last_price", 0),
-                    "no_price": m.get("no_ask", 0), "volume": m.get("volume", 0)}
-    except Exception: pass
-    return markets
-
+# ── ESPN: fetch_injuries ──
+@st.cache_data(ttl=300)
 def fetch_injuries():
-    injuries = {}
+    injury_dict = {}
     try:
-        r = requests.get("https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/injuries", timeout=10)
-        if r.status_code == 200:
-            for tb in r.json().get("items", []):
-                tn = tb.get("team", {}).get("displayName", "Unknown")
-                ta = tb.get("team", {}).get("abbreviation", "")
-                plist = []
-                for inj in tb.get("injuries", []):
-                    ath = inj.get("athlete", {})
-                    plist.append({"name": ath.get("displayName", "Unknown"),
-                        "position": ath.get("position", {}).get("abbreviation", ""),
-                        "status": inj.get("status", ""),
-                        "detail": inj.get("longComment", inj.get("shortComment", ""))})
-                if plist: injuries[ta] = {"team": tn, "players": plist}
-    except Exception: pass
-    return injuries
+        url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/injuries"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        for team_entry in data.get("items", []):
+            team_info = team_entry.get("team", {})
+            abbr = team_info.get("abbreviation", "").upper()
+            display = team_info.get("displayName", abbr)
+            players = []
+            for inj in team_entry.get("injuries", []):
+                athlete = inj.get("athlete", {})
+                players.append({
+                    "name": athlete.get("displayName", "Unknown"),
+                    "position": athlete.get("position", {}).get("abbreviation", ""),
+                    "status": inj.get("status", ""),
+                    "detail": inj.get("longComment", inj.get("shortComment", ""))
+                })
+            if players:
+                injury_dict[abbr] = {"team": display, "players": players}
+    except:
+        pass
+    return injury_dict
 
+# ── ESPN: fetch_yesterday_teams ──
+@st.cache_data(ttl=300)
 def fetch_yesterday_teams():
     b2b = set()
     try:
-        y = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y%m%d")
-        r = requests.get("https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=" + y + "&limit=200", timeout=10)
-        if r.status_code == 200:
-            for ev in r.json().get("events", []):
-                for comp in ev.get("competitions", []):
-                    for c in comp.get("competitors", []):
-                        a = c.get("team", {}).get("abbreviation", "")
-                        if a: b2b.add(a.upper())
-    except Exception: pass
+        yest = (datetime.now(eastern) - timedelta(days=1)).strftime("%Y%m%d")
+        url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates={yest}&limit=200&groups=50"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        for event in data.get("events", []):
+            for comp in event.get("competitions", []):
+                for c in comp.get("competitors", []):
+                    abbr = c.get("team", {}).get("abbreviation", "").upper()
+                    if abbr:
+                        b2b.add(abbr)
+    except:
+        pass
     return b2b
 
-# ══════════════════════════════════════════════════════════════════════
-# EDGE MODEL — 7-FACTOR NCAA PREGAME EDGE CALCULATOR
-# ══════════════════════════════════════════════════════════════════════
-
-def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
-    """
-    9-factor edge model:
-    1. ESPN BPI win probability (ESPN's own model — SOS, pace, travel, altitude)
-    2. Vegas implied probability vs BPI mismatch
-    3. Home court advantage (weighted)
-    4. Team record / win %
-    5. Ranking gap
-    6. Back-to-back fatigue
-    7. Offensive vs defensive matchup (PPG)
-    8. Injury impact (star players OUT = real penalty)
-    9. 3-point shooting differential
-    Returns dict with edge details and a composite score.
-    """
-    edges = []
-    score = 0.0  # positive = lean home, negative = lean away
-    ha = game.get("home_abbr", "").upper()
-    aa = game.get("away_abbr", "").upper()
-
-    # ── Factor 1: ESPN BPI Predictor ──────────────────────────────────
-    bpi = None
-    if summary:
-        bpi = parse_predictor(summary)
-    if bpi:
-        home_bpi = bpi.get("home_win_pct", 0.5)
-        away_bpi = bpi.get("away_win_pct", 0.5)
-        edges.append("ESPN BPI: " + game["home_team"] + " " + "{:.0%}".format(home_bpi) +
-                     " | " + game["away_team"] + " " + "{:.0%}".format(away_bpi))
-        # BPI is heavily weighted — it already incorporates efficiency, SOS, pace, travel
-        bpi_edge = (home_bpi - 0.5) * 20  # scale to points
-        score += bpi_edge
-    else:
-        edges.append("ESPN BPI: unavailable")
-
-    # ── Factor 2: Vegas implied vs BPI mismatch ──────────────────────
-    home_ml = game.get("odds", {}).get("home_ml")
-    if home_ml and bpi:
-        try:
-            vegas_prob = american_to_implied_prob(float(home_ml))
-            bpi_prob = bpi.get("home_win_pct", 0.5)
-            gap = bpi_prob - vegas_prob
-            if abs(gap) >= 0.03:
-                who = game["home_team"] if gap > 0 else game["away_team"]
-                edges.append("BPI vs VEGAS GAP: " + "{:.1%}".format(abs(gap)) + " edge on " + who)
-                score += gap * 15
-        except (ValueError, TypeError): pass
-
-    # ── Factor 3: Home court advantage ────────────────────────────────
-    edges.append("Home court: " + game["home_team"] + " +" + str(HOME_COURT_ADV))
-    score += HOME_COURT_ADV / 2  # ~2 points of edge
-
-    # ── Factor 4: Record / win percentage ─────────────────────────────
-    home_rec = game.get("home_record", "")
-    away_rec = game.get("away_record", "")
-    home_wpct = _parse_win_pct(home_rec)
-    away_wpct = _parse_win_pct(away_rec)
-    if home_wpct is not None and away_wpct is not None:
-        rec_edge = (home_wpct - away_wpct) * 10
-        score += rec_edge
-        edges.append("Records: " + game["home_team"] + " (" + home_rec + " | " +
-                     "{:.0%}".format(home_wpct) + ") vs " + game["away_team"] + " (" +
-                     away_rec + " | " + "{:.0%}".format(away_wpct) + ")")
-
-    # ── Factor 5: Ranking gap ─────────────────────────────────────────
-    hr = game.get("home_rank", 99)
-    ar = game.get("away_rank", 99)
-    if hr <= 25 or ar <= 25:
-        if hr <= 25 and ar <= 25:
-            rank_edge = (ar - hr) * 0.3  # higher rank number = worse
-            edges.append("Ranked matchup: #" + str(hr) + " vs #" + str(ar))
-        elif hr <= 25:
-            rank_edge = 3.0
-            edges.append(game["home_team"] + " ranked #" + str(hr) + " (unranked opponent)")
-        else:
-            rank_edge = -3.0
-            edges.append(game["away_team"] + " ranked #" + str(ar) + " (unranked opponent)")
-        score += rank_edge
-
-    # ── Factor 6: Back-to-back fatigue ────────────────────────────────
-    if ha in b2b_teams:
-        edges.append("FATIGUE: " + game["home_team"] + " on B2B")
-        score -= 2.0
-    if aa in b2b_teams:
-        edges.append("FATIGUE: " + game["away_team"] + " on B2B")
-        score += 2.0
-
-    # ── Factor 7: Offensive/Defensive matchup from summary ────────────
-    home_stats, away_stats = {}, {}
-    if summary:
-        home_stats, away_stats = parse_team_stats_from_summary(summary)
-        h_ppg = home_stats.get("avgPoints", home_stats.get("points", 0))
-        a_ppg = away_stats.get("avgPoints", away_stats.get("points", 0))
-        if h_ppg and a_ppg:
-            try:
-                h_ppg, a_ppg = float(h_ppg), float(a_ppg)
-                ppg_edge = (h_ppg - a_ppg) * 0.3
-                score += ppg_edge
-                edges.append("Scoring: " + game["home_team"] + " " + "{:.1f}".format(h_ppg) +
-                             " PPG vs " + game["away_team"] + " " + "{:.1f}".format(a_ppg) + " PPG")
-            except (ValueError, TypeError): pass
-
-    # ── Factor 8: Injury impact (star players OUT) ────────────────────
-    if injuries:
-        # Get leading scorers from summary if available
-        home_leaders = _get_team_leaders(summary, "home")
-        away_leaders = _get_team_leaders(summary, "away")
-
-        home_inj = injuries.get(ha, {}).get("players", [])
-        away_inj = injuries.get(aa, {}).get("players", [])
-
-        home_out = [p for p in home_inj if "out" in (p.get("status", "") or "").lower()]
-        away_out = [p for p in away_inj if "out" in (p.get("status", "") or "").lower()]
-        home_dtd = [p for p in home_inj if "day" in (p.get("status", "") or "").lower() or "doubt" in (p.get("status", "") or "").lower()]
-        away_dtd = [p for p in away_inj if "day" in (p.get("status", "") or "").lower() or "doubt" in (p.get("status", "") or "").lower()]
-
-        for p in home_out:
-            pname = p.get("name", "")
-            is_star = _is_star_player(pname, home_leaders)
-            if is_star:
-                edges.append("INJURY [STAR OUT]: " + game["home_team"] + " - " + pname + " (OUT)")
-                score -= 4.0  # big penalty for star player out
-            else:
-                edges.append("INJURY [OUT]: " + game["home_team"] + " - " + pname)
-                score -= 1.0
-        for p in home_dtd:
-            edges.append("INJURY [DTD]: " + game["home_team"] + " - " + p.get("name", ""))
-            score -= 0.5
-
-        for p in away_out:
-            pname = p.get("name", "")
-            is_star = _is_star_player(pname, away_leaders)
-            if is_star:
-                edges.append("INJURY [STAR OUT]: " + game["away_team"] + " - " + pname + " (OUT)")
-                score += 4.0  # big boost for opponent when star is out
-            else:
-                edges.append("INJURY [OUT]: " + game["away_team"] + " - " + pname)
-                score += 1.0
-        for p in away_dtd:
-            edges.append("INJURY [DTD]: " + game["away_team"] + " - " + p.get("name", ""))
-            score += 0.5
-
-    # ── Factor 9: 3-point shooting differential ──────────────────────
-    if home_stats or away_stats:
-        h_3pct = home_stats.get("threePointFieldGoalPct", home_stats.get("threePointPct", 0))
-        a_3pct = away_stats.get("threePointFieldGoalPct", away_stats.get("threePointPct", 0))
-        h_3pm = home_stats.get("avgThreePointFieldGoalsMade", home_stats.get("threePointFieldGoalsMade", 0))
-        a_3pm = away_stats.get("avgThreePointFieldGoalsMade", away_stats.get("threePointFieldGoalsMade", 0))
-        try:
-            h_3pct, a_3pct = float(h_3pct), float(a_3pct)
-            h_3pm, a_3pm = float(h_3pm), float(a_3pm)
-            if h_3pct > 0 and a_3pct > 0:
-                pct_gap = h_3pct - a_3pct
-                made_gap = h_3pm - a_3pm
-                # A team shooting 38% vs 30% from 3 is a significant edge
-                three_edge = pct_gap * 0.15 + made_gap * 0.3
-                score += three_edge
-                edges.append("3PT: " + game["home_team"] + " " + "{:.1f}".format(h_3pct) + "% (" +
-                             "{:.1f}".format(h_3pm) + " made/gm) vs " + game["away_team"] + " " +
-                             "{:.1f}".format(a_3pct) + "% (" + "{:.1f}".format(a_3pm) + " made/gm)")
-                if abs(pct_gap) >= 5:
-                    who = game["home_team"] if pct_gap > 0 else game["away_team"]
-                    edges.append("3PT EDGE: " + who + " has " + "{:.1f}".format(abs(pct_gap)) + "% shooting advantage from deep")
-        except (ValueError, TypeError): pass
-
-    # ── Composite verdict ─────────────────────────────────────────────
-    if abs(score) >= 8:
-        strength = "STRONG"
-    elif abs(score) >= 4:
-        strength = "MODERATE"
-    elif abs(score) >= 1.5:
-        strength = "LEAN"
-    else:
-        strength = "TOSS-UP"
-
-    if score > 0:
-        pick = game["home_team"]
-        side = "HOME"
-    else:
-        pick = game["away_team"]
-        side = "AWAY"
-
-    edges.insert(0, "EDGE: " + strength + " " + side + " (" + pick + ") | Score: " + "{:+.1f}".format(score))
-
-    return {"edges": edges, "score": score, "pick": pick, "side": side, "strength": strength, "bpi": bpi}
-
-def _parse_win_pct(record_str):
-    """Parse '18-3' into win percentage."""
-    try:
-        if not record_str or "-" not in record_str: return None
-        parts = record_str.split("-")
-        w, l = int(parts[0]), int(parts[1].split(" ")[0])
-        total = w + l
-        if total == 0: return None
-        return w / total
-    except Exception: return None
-
-def _get_team_leaders(summary, home_away):
-    """Extract top scorers from ESPN summary leaders section."""
-    leaders = []
-    if not summary: return leaders
-    try:
-        for leader_group in summary.get("leaders", []):
-            team_data = leader_group.get("team", {})
-            # Match by homeAway field or by position in array
-            for cat in leader_group.get("leaders", []):
-                if cat.get("name", "").lower() in ("points", "rating"):
-                    for athlete_entry in cat.get("leaders", []):
-                        athlete = athlete_entry.get("athlete", {})
-                        display = athlete.get("displayName", "")
-                        ppg = athlete_entry.get("displayValue", "0")
-                        if display:
-                            leaders.append({"name": display, "value": ppg})
-    except Exception: pass
-    return leaders
-
-def _is_star_player(player_name, leaders_list):
-    """Check if injured player is a team leader (top 3 scorer)."""
-    if not leaders_list or not player_name: return False
-    pname = player_name.lower().strip()
-    for i, leader in enumerate(leaders_list[:3]):
-        lname = leader.get("name", "").lower().strip()
-        # Fuzzy match — last name match is enough
-        p_parts = pname.split()
-        l_parts = lname.split()
-        if p_parts and l_parts:
-            if p_parts[-1] == l_parts[-1]:
-                return True
-            if pname in lname or lname in pname:
-                return True
-    return False
-
+# ── ESPN: fetch_plays ──
+@st.cache_data(ttl=30)
 def fetch_plays(game_id):
-    plays = []
     try:
-        url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event=" + str(game_id)
-        r = requests.get(url, timeout=10)
-        if r.status_code == 200:
-            data = r.json()
-            for item in data.get("plays", []):
-                plays.append({"text": item.get("text", ""),
-                    "period": item.get("period", {}).get("number", 0),
-                    "clock": item.get("clock", {}).get("displayValue", ""),
-                    "score": item.get("scoreValue", 0),
-                    "team_id": str(item.get("team", {}).get("id", "")),
-                    "type": item.get("type", {}).get("text", "")})
-    except Exception: pass
-    return plays
+        url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event={game_id}"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        plays_raw = []
+        for drive in data.get("plays", []):
+            if isinstance(drive, dict):
+                plays_raw.append(drive)
+            elif isinstance(drive, list):
+                plays_raw.extend(drive)
+        last_15 = plays_raw[-15:] if len(plays_raw) >= 15 else plays_raw
+        result = []
+        for p in last_15[-10:]:
+            text = p.get("text", "")
+            period = p.get("period", {}).get("number", 0) if isinstance(p.get("period"), dict) else p.get("period", 0)
+            clock = p.get("clock", {}).get("displayValue", "") if isinstance(p.get("clock"), dict) else p.get("clock", "")
+            sv = p.get("scoreValue", 0)
+            pt = p.get("type", {}).get("text", "") if isinstance(p.get("type"), dict) else str(p.get("type", ""))
+            tid = ""
+            if p.get("team"):
+                tid = str(p["team"].get("id", "")) if isinstance(p["team"], dict) else str(p["team"])
+            result.append({
+                "text": text,
+                "period": period,
+                "clock": clock,
+                "score_value": sv,
+                "play_type": pt,
+                "team_id": tid
+            })
+        return result
+    except:
+        return []
 
-def remove_position(ticker):
-    if ticker in st.session_state["positions"]:
-        del st.session_state["positions"][ticker]
+# ── Kalshi: fetch_kalshi_ml ──
+@st.cache_data(ttl=60)
+def fetch_kalshi_ml():
+    ml = {}
+    try:
+        url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNCAAGAME&limit=200&status=open"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        for m in data.get("markets", []):
+            ticker = m.get("ticker", "")
+            yes_price = m.get("yes_bid", 0) or 0
+            no_price = 100 - yes_price if yes_price else 0
+            ml[ticker] = {
+                "ticker": ticker,
+                "title": m.get("title", ""),
+                "yes_price": yes_price,
+                "no_price": no_price,
+                "volume": m.get("volume", 0)
+            }
+    except:
+        pass
+    return ml
 
-# ══════════════════════════════════════════════════════════════════════
-# PART 2: DISPLAY FUNCTIONS + LIVE EDGE MONITOR
-# ══════════════════════════════════════════════════════════════════════
+# ── Kalshi: fetch_kalshi_spreads_raw ──
+@st.cache_data(ttl=60)
+def fetch_kalshi_spreads_raw():
+    spreads = {}
+    spread_list = []
+    try:
+        url = "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNCAASPREAD&limit=200&status=open"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        for m in data.get("markets", []):
+            ticker = m.get("ticker", "")
+            title = m.get("title", "").lower()
+            subtitle = m.get("subtitle", "").lower()
+            yes_price = m.get("yes_bid", 0) or 0
+            no_price = 100 - yes_price if yes_price else 0
+            spreads[ticker] = {
+                "ticker": ticker,
+                "title": m.get("title", ""),
+                "subtitle": m.get("subtitle", ""),
+                "yes_price": yes_price,
+                "no_price": no_price,
+                "volume": m.get("volume", 0)
+            }
+            if any(kw in title or kw in subtitle for kw in ["wins by", "spread", "margin"]):
+                spread_list.append(m)
+    except:
+        pass
+    return spreads, spread_list
 
-def render_scoreboard(g):
-    state = g["state"]
-    ha, aa = g["home_abbr"], g["away_abbr"]
-    hc = g.get("home_color", get_team_color(ha))
-    ac = g.get("away_color", get_team_color(aa))
-    hr = "#" + str(g["home_rank"]) + " " if g.get("home_rank", 99) <= 25 else ""
-    ar = "#" + str(g["away_rank"]) + " " if g.get("away_rank", 99) <= 25 else ""
-    h_rec = " (" + g.get("home_record", "") + ")" if g.get("home_record") else ""
-    a_rec = " (" + g.get("away_record", "") + ")" if g.get("away_record") else ""
-    if state == "in":
-        p = g.get("period", 0)
-        hl = "H" + str(p) if p <= 2 else "OT" + str(p - 2)
-        status_html = "<span style='color:#e74c3c;font-weight:700'>LIVE " + hl + " " + str(g.get("clock", "")) + "</span>"
-    elif state == "post":
-        status_html = "<span style='color:#888'>FINAL</span>"
-    else:
-        status_html = "<span style='color:#aaa'>" + str(g.get("broadcast", "TBD")) + "</span>"
-    conf = g.get("conference", "")
-    conf_html = "<div style='font-size:10px;color:#888;margin-bottom:2px'>" + conf + "</div>" if conf else ""
-    venue = g.get("venue", "")
-    venue_html = "<div style='font-size:10px;color:#777'>" + venue + "</div>" if venue else ""
-    html = (
-        "<div style='background:#1a1a2e;border-radius:10px;padding:12px;margin:6px 0;"
-        "border-left:4px solid " + ac + ";border-right:4px solid " + hc + "'>"
-        + conf_html +
-        "<div style='display:flex;justify-content:space-between;align-items:center'>"
-        "<div style='text-align:left;flex:1'>"
-        "<div style='font-size:11px;color:" + ac + "'>" + ar + str(g["away_team"]) + a_rec + "</div>"
-        "<div style='font-size:22px;font-weight:700;color:white'>" + str(g["away_score"]) + "</div>"
-        "</div>"
-        "<div style='text-align:center;flex:1'>" + status_html + "</div>"
-        "<div style='text-align:right;flex:1'>"
-        "<div style='font-size:11px;color:" + hc + "'>" + hr + str(g["home_team"]) + h_rec + "</div>"
-        "<div style='font-size:22px;font-weight:700;color:white'>" + str(g["home_score"]) + "</div>"
-        "</div></div>" + venue_html + "</div>"
-    )
-    st.markdown(html, unsafe_allow_html=True)
+# ── Kalshi: find_spread_markets_for_game ──
+def find_spread_markets_for_game(home_abbr, away_abbr, home_name, away_name, spread_list):
+    matches = []
+    ha = home_abbr.upper()
+    aa = away_abbr.upper()
+    hn = home_name.lower()
+    an = away_name.lower()
+    for m in spread_list:
+        title = m.get("title", "")
+        subtitle = m.get("subtitle", "")
+        ticker = m.get("ticker", "")
+        searchable = (title + " " + subtitle + " " + ticker).lower()
+        if (ha.lower() in searchable or hn in searchable) and (aa.lower() in searchable or an in searchable):
+            spread_val = 0
+            spread_match = re.search(r'(\d+\.?\d*)\+?\s*points?', title.lower())
+            if not spread_match:
+                spread_match = re.search(r'by\s+(\d+\.?\d*)', title.lower())
+            if spread_match:
+                spread_val = float(spread_match.group(1))
+            yes_price = m.get("yes_bid", 0) or 0
+            no_price = 100 - yes_price if yes_price else 0
+            matches.append({
+                "ticker": ticker,
+                "title": title,
+                "subtitle": subtitle,
+                "spread_val": spread_val,
+                "yes_price": yes_price,
+                "no_price": no_price,
+                "volume": m.get("volume", 0)
+            })
+    matches.sort(key=lambda x: x["spread_val"], reverse=True)
+    return matches
 
-def get_play_badge(play_type):
-    badges = {"three": ("3PT", "#e74c3c"), "dunk": ("DUNK", "#e67e22"), "steal": ("STL", "#2ecc71"),
-        "block": ("BLK", "#9b59b6"), "turnover": ("TO", "#e74c3c"), "foul": ("FOUL", "#f39c12"),
-        "free throw": ("FT", "#3498db"), "rebound": ("REB", "#1abc9c")}
-    for key, (lbl, color) in badges.items():
-        if key in (play_type or "").lower(): return lbl, color
-    return "PLAY", "#555"
-
-def get_play_icon(text):
-    t = (text or "").lower()
-    if "three" in t or "3pt" in t: return "[3PT]"
-    if "dunk" in t: return "[DUNK]"
-    if "steal" in t: return "[STL]"
-    if "block" in t: return "[BLK]"
-    if "turnover" in t: return "[TO]"
-    if "foul" in t: return "[FOUL]"
-    if "free throw" in t: return "[FT]"
-    if "rebound" in t: return "[REB]"
-    return ">"
-
-def infer_possession(plays, home_abbr, away_abbr, home_name, away_name, home_id="", away_id=""):
-    """Infer who has the ball from recent play-by-play. Returns (team_name, side) or (None, None)."""
-    if not plays: return None, None
-    h_ab, a_ab = home_abbr.lower(), away_abbr.lower()
-    h_nm, a_nm = home_name.lower(), away_name.lower()
-    h_id, a_id = str(home_id), str(away_id)
-
-    def _match_home(tid, txt):
-        tid = str(tid)
-        return tid == h_id or h_ab in txt or h_nm in txt
-
-    def _match_away(tid, txt):
-        tid = str(tid)
-        return tid == a_id or a_ab in txt or a_nm in txt
-
-    for p in reversed(plays[-12:]):
-        tid = str(p.get("team_id", ""))
-        txt = (p.get("text", "") or "").lower()
-        ptype = (p.get("type", "") or "").lower()
-        # Steal — stealer has ball
-        if "steal" in ptype or "steal" in txt:
-            if _match_home(tid, txt): return home_name, "home"
-            if _match_away(tid, txt): return away_name, "away"
-        # Turnover — skip, let next play resolve
-        if "turnover" in ptype or "turnover" in txt: continue
-        # Made shot — other team inbounds
-        if "made" in txt or "make" in ptype:
-            if _match_home(tid, txt): return away_name, "away"
-            if _match_away(tid, txt): return home_name, "home"
-        # Rebound — that team has ball
-        if "rebound" in ptype or "rebound" in txt:
-            if _match_home(tid, txt): return home_name, "home"
-            if _match_away(tid, txt): return away_name, "away"
-        # Foul — skip, ambiguous
-        if "foul" in ptype or "foul" in txt: continue
-        # Missed shot — check for rebound next, skip
-        if "missed" in txt or "miss" in ptype: continue
-        # Fallback: last team to act
-        if _match_home(tid, txt): return home_name, "home"
-        if _match_away(tid, txt): return away_name, "away"
+# ── Kalshi: find_ml_price_for_team ──
+def find_ml_price_for_team(home_abbr, away_abbr, fav_side, kalshi_ml_dict):
+    ha = home_abbr.upper()
+    aa = away_abbr.upper()
+    for ticker, info in kalshi_ml_dict.items():
+        t_upper = ticker.upper()
+        if ha in t_upper and aa in t_upper:
+            if fav_side == "home":
+                return info.get("yes_price"), ticker
+            else:
+                return info.get("no_price"), ticker
     return None, None
 
-def render_court(home_abbr, away_abbr, score_home=0, score_away=0, poss_name=None, poss_side=None):
-    ball_x = 375 if poss_side == "home" else 125 if poss_side == "away" else -100
-    ball_vis = "visible" if poss_side in ("home", "away") else "hidden"
-    svg = (
-        "<svg viewBox='0 0 500 280' style='width:100%;max-width:500px;background:#1a1a2e;border-radius:8px'>"
-        "<rect x='25' y='15' width='450' height='230' fill='none' stroke='#444' stroke-width='2' rx='5'/>"
-        "<line x1='250' y1='15' x2='250' y2='245' stroke='#444' stroke-width='1.5'/>"
-        "<circle cx='250' cy='130' r='35' fill='none' stroke='#444' stroke-width='1.5'/>"
-        "<rect x='25' y='70' width='80' height='120' fill='none' stroke='#444' stroke-width='1'/>"
-        "<rect x='395' y='70' width='80' height='120' fill='none' stroke='#444' stroke-width='1'/>"
-        "<text x='125' y='135' text-anchor='middle' fill='#aaa' font-size='16' font-weight='700'>" + str(away_abbr) + "</text>"
-        "<text x='375' y='135' text-anchor='middle' fill='#aaa' font-size='16' font-weight='700'>" + str(home_abbr) + "</text>"
-        "<text x='125' y='155' text-anchor='middle' fill='white' font-size='20' font-weight='700'>" + str(score_away) + "</text>"
-        "<text x='375' y='155' text-anchor='middle' fill='white' font-size='20' font-weight='700'>" + str(score_home) + "</text>"
-        "<text x='" + str(ball_x) + "' y='270' text-anchor='middle' fill='#f1c40f' font-size='13' font-weight='700' visibility='" + ball_vis + "'>BALL</text>"
-        "</svg>"
+# ── 9-Factor Edge Model ──
+def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
+    edges = []
+    total_score = 0.0
+
+    # Factor 1: ESPN BPI
+    home_bpi, away_bpi = parse_predictor(summary)
+    bpi_val = None
+    if home_bpi is not None:
+        bpi_val = home_bpi
+        factor_score = (home_bpi - 0.5) * 20
+        edges.append({"factor": "ESPN BPI", "value": round(factor_score, 1), "detail": f"Home {home_bpi*100:.0f}% / Away {away_bpi*100:.0f}%"})
+        total_score += factor_score
+
+    # Factor 2: BPI vs Vegas gap
+    if home_bpi is not None and game.get("home_ml") and game["home_ml"] != 0:
+        vegas_implied = american_to_implied_prob(game["home_ml"])
+        if vegas_implied:
+            gap = (home_bpi - vegas_implied) * 100
+            if abs(gap) >= 3:
+                factor_score = gap * 0.15
+                edges.append({"factor": "BPI vs Vegas", "value": round(factor_score, 1), "detail": f"BPI {home_bpi*100:.0f}% vs Vegas {vegas_implied*100:.0f}% (gap {gap:+.1f}%)"})
+                total_score += factor_score
+
+    # Factor 3: Home court advantage
+    hca_score = HOME_COURT_ADV / 2
+    edges.append({"factor": "Home Court", "value": round(hca_score, 1), "detail": f"+{HOME_COURT_ADV} pts college HCA"})
+    total_score += hca_score
+
+    # Factor 4: Records
+    hw, hl = parse_record(game.get("home_record", ""))
+    aw, al = parse_record(game.get("away_record", ""))
+    home_wpct = hw / (hw + hl) if (hw + hl) > 0 else 0.5
+    away_wpct = aw / (aw + al) if (aw + al) > 0 else 0.5
+    rec_score = (home_wpct - away_wpct) * 10
+    edges.append({"factor": "Records", "value": round(rec_score, 1), "detail": f"Home .{home_wpct*1000:.0f} vs Away .{away_wpct*1000:.0f}"})
+    total_score += rec_score
+
+    # Factor 5: Ranking gap (NCAA-specific)
+    home_rank = game.get("home_rank", 99)
+    away_rank = game.get("away_rank", 99)
+    if home_rank <= 25 or away_rank <= 25:
+        if home_rank <= 25 and away_rank <= 25:
+            rank_score = (away_rank - home_rank) * 0.3
+            edges.append({"factor": "Ranking Gap", "value": round(rank_score, 1), "detail": f"#{home_rank} Home vs #{away_rank} Away"})
+        elif home_rank <= 25:
+            rank_score = 3.0
+            edges.append({"factor": "Ranking Gap", "value": round(rank_score, 1), "detail": f"Home #{home_rank} ranked, Away unranked"})
+        else:
+            rank_score = -3.0
+            edges.append({"factor": "Ranking Gap", "value": round(rank_score, 1), "detail": f"Away #{away_rank} ranked, Home unranked"})
+        total_score += rank_score
+
+    # Factor 6: B2B fatigue
+    home_b2b = game.get("home_abbr", "") in b2b_teams
+    away_b2b = game.get("away_abbr", "") in b2b_teams
+    if home_b2b:
+        edges.append({"factor": "B2B Fatigue", "value": -2.0, "detail": "Home on B2B"})
+        total_score -= 2.0
+    if away_b2b:
+        edges.append({"factor": "B2B Fatigue", "value": 2.0, "detail": "Away on B2B"})
+        total_score += 2.0
+
+    # Factor 7: PPG from boxscore
+    home_stats, away_stats = parse_team_stats_from_summary(summary)
+    home_ppg_str = home_stats.get("avgPoints", home_stats.get("points", ""))
+    away_ppg_str = away_stats.get("avgPoints", away_stats.get("points", ""))
+    try:
+        home_ppg = float(home_ppg_str)
+        away_ppg = float(away_ppg_str)
+        ppg_score = (home_ppg - away_ppg) * 0.3
+        edges.append({"factor": "PPG", "value": round(ppg_score, 1), "detail": f"Home {home_ppg:.1f} vs Away {away_ppg:.1f}"})
+        total_score += ppg_score
+    except:
+        pass
+
+    # Factor 8: Injuries
+    if injuries:
+        home_abbr = game.get("home_abbr", "")
+        away_abbr = game.get("away_abbr", "")
+        home_leaders = _get_team_leaders(summary, "home")
+        away_leaders = _get_team_leaders(summary, "away")
+        home_inj = injuries.get(home_abbr, {}).get("players", [])
+        away_inj = injuries.get(away_abbr, {}).get("players", [])
+        inj_score = 0
+        for p in home_inj:
+            stat = p.get("status", "").lower()
+            is_star = _is_star_player(p.get("name", ""), home_leaders)
+            if "out" in stat:
+                inj_score -= 4.0 if is_star else 1.0
+            elif "day" in stat or "dtd" in stat or "doubtful" in stat:
+                inj_score -= 0.5
+        for p in away_inj:
+            stat = p.get("status", "").lower()
+            is_star = _is_star_player(p.get("name", ""), away_leaders)
+            if "out" in stat:
+                inj_score += 4.0 if is_star else 1.0
+            elif "day" in stat or "dtd" in stat or "doubtful" in stat:
+                inj_score += 0.5
+        if inj_score != 0:
+            edges.append({"factor": "Injuries", "value": round(inj_score, 1), "detail": f"Home: {len(home_inj)} injured, Away: {len(away_inj)} injured"})
+            total_score += inj_score
+
+    # Factor 9: 3PT shooting
+    h3p = home_stats.get("threePointFieldGoalPct", home_stats.get("threePointPct", ""))
+    a3p = away_stats.get("threePointFieldGoalPct", away_stats.get("threePointPct", ""))
+    h3m = home_stats.get("threePointFieldGoalsMade", home_stats.get("threesMade", ""))
+    a3m = away_stats.get("threePointFieldGoalsMade", away_stats.get("threesMade", ""))
+    try:
+        h3pf = float(h3p)
+        a3pf = float(a3p)
+        pct_gap = h3pf - a3pf
+        three_score = pct_gap * 0.15
+        try:
+            h3mf = float(h3m)
+            a3mf = float(a3m)
+            three_score += (h3mf - a3mf) * 0.3
+        except:
+            pass
+        edges.append({"factor": "3PT", "value": round(three_score, 1), "detail": f"Home {h3pf:.1f}% vs Away {a3pf:.1f}%"})
+        total_score += three_score
+    except:
+        pass
+
+    # Strength
+    abs_score = abs(total_score)
+    if abs_score >= 8:
+        strength = "🔴 STRONG"
+    elif abs_score >= 4:
+        strength = "🟡 MODERATE"
+    elif abs_score >= 1.5:
+        strength = "🟢 LEAN"
+    else:
+        strength = "⚪ TOSS-UP"
+
+    side = "home" if total_score >= 0 else "away"
+    pick = game.get("home_team") if side == "home" else game.get("away_team")
+
+    return {
+        "edges": edges,
+        "score": round(total_score, 1),
+        "pick": pick,
+        "side": side,
+        "strength": strength,
+        "bpi": bpi_val
+    }
+
+# ── Possession Tracker ──
+def infer_possession(plays, home_abbr, away_abbr, home_name, away_name, home_id="", away_id=""):
+    if not plays:
+        return None, None
+    last_team = None
+    last_side = None
+    for play in reversed(plays[-12:]):
+        text = play.get("text", "").lower()
+        pt = play.get("play_type", "").lower()
+        tid = str(play.get("team_id", ""))
+        acting_side = None
+        acting_name = None
+        if tid and home_id and away_id:
+            if tid == home_id:
+                acting_side = "home"
+                acting_name = home_name
+            elif tid == away_id:
+                acting_side = "away"
+                acting_name = away_name
+        if not acting_side:
+            if home_abbr.lower() in text or home_name.lower() in text:
+                acting_side = "home"
+                acting_name = home_name
+            elif away_abbr.lower() in text or away_name.lower() in text:
+                acting_side = "away"
+                acting_name = away_name
+        if not acting_side:
+            continue
+        other_side = "away" if acting_side == "home" else "home"
+        other_name = away_name if acting_side == "home" else home_name
+        if "steal" in pt or "steal" in text:
+            return acting_name, acting_side
+        if "turnover" in pt or "turnover" in text:
+            continue
+        if "made" in pt or "made" in text or play.get("score_value", 0) > 0:
+            return other_name, other_side
+        if "rebound" in pt or "rebound" in text:
+            return acting_name, acting_side
+        if "foul" in pt or "foul" in text:
+            continue
+        if "miss" in pt or "miss" in text:
+            continue
+        last_team = acting_name
+        last_side = acting_side
+    return last_team, last_side
+
+# ── Spread Sniper ──
+def check_spread_sniper(game, spread_list, kalshi_ml_dict):
+    if game.get("state") != "in":
+        return None
+    game_id = game.get("game_id", "")
+    if game_id in st.session_state.ncaa_alerted_games:
+        return None
+    period = game.get("period", 0)
+    if period < 1:
+        return None
+    threshold = LEAD_BY_HALF.get(period, 12)
+    home_score = game.get("home_score", 0)
+    away_score = game.get("away_score", 0)
+    diff = abs(home_score - away_score)
+    if diff < threshold:
+        return None
+    leading_side = "home" if home_score > away_score else "away"
+    leading_team = game.get(f"{leading_side}_team", "")
+    trailing_side = "away" if leading_side == "home" else "home"
+    trailing_team = game.get(f"{trailing_side}_team", "")
+    spread_markets = find_spread_markets_for_game(
+        game.get("home_abbr", ""), game.get("away_abbr", ""),
+        game.get("home_team", ""), game.get("away_team", ""),
+        spread_list
     )
-    st.markdown(svg, unsafe_allow_html=True)
-    if poss_name:
-        st.markdown("<div style='text-align:center;padding:2px;color:#f1c40f;font-size:13px;font-weight:700'>" + str(poss_name) + " BALL</div>", unsafe_allow_html=True)
+    best = None
+    for sm in spread_markets:
+        if sm.get("no_price", 0) <= MAX_NO_PRICE and sm.get("spread_val", 0) >= MIN_SPREAD_BRACKET:
+            if best is None or sm["spread_val"] > best["spread_val"]:
+                best = sm
+    if not best:
+        return None
+    st.session_state.ncaa_alerted_games.add(game_id)
+    period_label = f"H{period}" if period <= 2 else f"OT{period-2}"
+    alert = {
+        "game_id": game_id,
+        "time": datetime.now(eastern).strftime("%I:%M %p"),
+        "leading_team": leading_team,
+        "trailing_team": trailing_team,
+        "score": f"{away_score}-{home_score}",
+        "diff": diff,
+        "period": period_label,
+        "spread_val": best["spread_val"],
+        "no_price": best["no_price"],
+        "ticker": best["ticker"],
+        "type": "sniper"
+    }
+    st.session_state.ncaa_sniper_alerts.insert(0, alert)
+    return alert
 
-# ══════════════════════════════════════════════════════════════════════
-# MAIN PAGE LAYOUT
-# ══════════════════════════════════════════════════════════════════════
-st.markdown("## BIGSNAPSHOT NCAA EDGE FINDER")
-st.caption("v" + VERSION + " | " + datetime.now(timezone.utc).strftime("%A %b %d, %Y | %H:%M UTC") + " | NCAA Men's Basketball | 9-Factor Edge Model")
+# ── Comeback Tracker ──
+def check_comeback(game, kalshi_ml_dict):
+    if game.get("state") != "in":
+        return None
+    game_id = game.get("game_id", "")
+    home_score = game.get("home_score", 0)
+    away_score = game.get("away_score", 0)
+    diff = abs(home_score - away_score)
+    if diff >= 10:
+        if game_id not in st.session_state.ncaa_comeback_tracking:
+            leading_side = "home" if home_score > away_score else "away"
+            st.session_state.ncaa_comeback_tracking[game_id] = {
+                "leading_side": leading_side,
+                "leading_team": game.get(f"{leading_side}_team", ""),
+                "max_deficit": diff,
+                "trailing_side": "away" if leading_side == "home" else "home"
+            }
+        else:
+            tracked = st.session_state.ncaa_comeback_tracking[game_id]
+            if diff > tracked["max_deficit"]:
+                tracked["max_deficit"] = diff
+        return None
+    if game_id in st.session_state.ncaa_comeback_tracking and game_id not in st.session_state.ncaa_comeback_alerted:
+        tracked = st.session_state.ncaa_comeback_tracking[game_id]
+        if diff <= 2 and tracked["max_deficit"] >= 10:
+            st.session_state.ncaa_comeback_alerted.add(game_id)
+            trailing_side = tracked["trailing_side"]
+            trailing_team = game.get(f"{trailing_side}_team", "")
+            alert = {
+                "game_id": game_id,
+                "time": datetime.now(eastern).strftime("%I:%M %p"),
+                "trailing_team": trailing_team,
+                "leading_team": tracked["leading_team"],
+                "was_down": tracked["max_deficit"],
+                "score": f"{away_score}-{home_score}",
+                "diff": diff,
+                "type": "comeback"
+            }
+            st.session_state.ncaa_comeback_alerts.insert(0, alert)
+            return alert
+    return None
 
-all_games = fetch_espn_games()
-kalshi_ml = fetch_kalshi_ml()
-kalshi_spreads = fetch_kalshi_spreads()
+# ── Mobile CSS ──
+MOBILE_CSS = """
+<style>
+@media(max-width:600px){
+  .sb-score{font-size:36px!important}
+  .sb-team{font-size:20px!important}
+  .sb-period{font-size:16px!important}
+  .alert-box{padding:10px!important;font-size:13px!important}
+  .edge-box{padding:8px!important}
+  table{font-size:13px!important}
+  td{padding:8px!important}
+}
+</style>
+"""
+
+# ── Visual: render_scoreboard ──
+def render_scoreboard(game):
+    away_color = get_team_color(game, "away")
+    home_color = get_team_color(game, "home")
+    state = game.get("state", "pre")
+    away_rank = game.get("away_rank", 99)
+    home_rank = game.get("home_rank", 99)
+    away_prefix = f"<span style='color:#fbbf24;font-weight:700'>#{away_rank}</span> " if away_rank <= 25 else ""
+    home_prefix = f"<span style='color:#fbbf24;font-weight:700'>#{home_rank}</span> " if home_rank <= 25 else ""
+    conf = game.get("conference", "")
+    conf_html = f"<div style='text-align:center;color:#94a3b8;font-size:12px;margin-bottom:6px'>{conf}</div>" if conf else ""
+    if state == "in":
+        period = game.get("period", 1)
+        clock = game.get("clock", "")
+        if period <= 2:
+            period_label = f"H{period}"
+        else:
+            period_label = f"OT{period-2}"
+        mid = f"<span style='color:#f87171;font-weight:700'>{period_label} {clock}</span>"
+    elif state == "post":
+        mid = "<span style='color:#94a3b8'>FINAL</span>"
+    else:
+        bc = game.get("broadcast", "")
+        gt = game.get("game_time", "")
+        mid = f"<span style='color:#94a3b8'>{gt}</span>"
+        if bc:
+            mid += f"<br><span style='color:#64748b;font-size:12px'>{bc}</span>"
+    venue = game.get("venue", "")
+    venue_html = f"<div style='text-align:center;color:#64748b;font-size:11px;margin-top:6px'>{venue}</div>" if venue else ""
+    html = f"""
+    {MOBILE_CSS}
+    <div style="background:#0f172a;border-radius:12px;padding:16px;margin:8px 0;max-width:100%;box-sizing:border-box;overflow-x:hidden;border-left:4px solid {away_color};border-right:4px solid {home_color}">
+    {conf_html}
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div style="flex:1;text-align:center;min-width:100px">
+            <div class="sb-team" style="color:{away_color};font-size:clamp(16px,3.5vw,22px);font-weight:700">{away_prefix}{game.get('away_abbr','')}</div>
+            <div style="color:#94a3b8;font-size:12px">{game.get('away_record','')}</div>
+            <div class="sb-score" style="color:#fff;font-size:clamp(28px,5vw,52px);font-weight:800">{game.get('away_score',0)}</div>
+        </div>
+        <div style="text-align:center;min-width:60px" class="sb-period">
+            <div style="font-size:clamp(13px,2.5vw,18px)">{mid}</div>
+        </div>
+        <div style="flex:1;text-align:center;min-width:100px">
+            <div class="sb-team" style="color:{home_color};font-size:clamp(16px,3.5vw,22px);font-weight:700">{home_prefix}{game.get('home_abbr','')}</div>
+            <div style="color:#94a3b8;font-size:12px">{game.get('home_record','')}</div>
+            <div class="sb-score" style="color:#fff;font-size:clamp(28px,5vw,52px);font-weight:800">{game.get('home_score',0)}</div>
+        </div>
+    </div>
+    {venue_html}
+    </div>
+    """
+    components.html(html, height=200)
+
+# ── Visual: get_play_badge ──
+def get_play_badge(last_play):
+    if not last_play:
+        return ""
+    pt = last_play.get("play_type", "").lower()
+    sv = last_play.get("score_value", 0)
+    text = last_play.get("text", "")[:40]
+    if sv == 3:
+        bg, label = "#22c55e", "THREE!"
+    elif sv == 2:
+        bg, label = "#3b82f6", "BUCKET"
+    elif "dunk" in pt or "dunk" in text.lower():
+        bg, label = "#a855f7", "DUNK!"
+    elif "steal" in pt:
+        bg, label = "#f59e0b", "STEAL"
+    elif "block" in pt:
+        bg, label = "#ef4444", "BLOCK"
+    elif "turnover" in pt:
+        bg, label = "#6b7280", "TO"
+    elif "rebound" in pt:
+        bg, label = "#06b6d4", "REB"
+    elif "foul" in pt:
+        bg, label = "#f97316", "FOUL"
+    elif "free throw" in pt.lower() and sv > 0:
+        bg, label = "#8b5cf6", "FT"
+    else:
+        bg, label = "#475569", "PLAY"
+    svg = f"""
+    <rect x="150" y="5" width="200" height="30" rx="6" fill="{bg}" opacity="0.9"/>
+    <text x="250" y="25" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">{label}: {text}</text>
+    """
+    return svg
+
+# ── Visual: get_play_icon ──
+def get_play_icon(play_type, score_value):
+    pt = str(play_type).lower()
+    if score_value == 3:
+        return ("3", "#22c55e")
+    elif score_value == 2:
+        return ("2", "#3b82f6")
+    elif "steal" in pt:
+        return ("S", "#f59e0b")
+    elif "block" in pt:
+        return ("B", "#ef4444")
+    elif "turnover" in pt:
+        return ("T", "#6b7280")
+    elif "rebound" in pt:
+        return ("R", "#06b6d4")
+    elif "foul" in pt:
+        return ("F", "#f97316")
+    elif score_value == 1:
+        return ("1", "#8b5cf6")
+    else:
+        return ("•", "#475569")
+
+# ── Visual: render_college_court ──
+def render_college_court(game, last_play):
+    away_color = get_team_color(game, "away")
+    home_color = get_team_color(game, "home")
+    period = game.get("period", 0)
+    clock = game.get("clock", "")
+    if period <= 2:
+        period_label = f"H{period}"
+    else:
+        period_label = f"OT{period-2}"
+    play_badge = get_play_badge(last_play)
+    svg = f"""
+    {MOBILE_CSS}
+    <div style="max-width:100%;box-sizing:border-box;overflow-x:hidden;text-align:center">
+    <svg viewBox="0 0 500 280" style="width:100%;max-width:500px;border-radius:10px;background:#1a1a2e">
+        <!-- Court -->
+        <rect x="20" y="20" width="460" height="200" rx="8" fill="#2d4a22" stroke="#fff" stroke-width="2"/>
+        <!-- Half court line -->
+        <line x1="250" y1="20" x2="250" y2="220" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+        <!-- Center circle -->
+        <circle cx="250" cy="120" r="30" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+        <!-- Left key (wider for college) -->
+        <rect x="20" y="65" width="75" height="110" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+        <!-- Right key -->
+        <rect x="405" y="65" width="75" height="110" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.7"/>
+        <!-- Left hoop -->
+        <circle cx="40" cy="120" r="8" fill="none" stroke="#f97316" stroke-width="2"/>
+        <!-- Right hoop -->
+        <circle cx="460" cy="120" r="8" fill="none" stroke="#f97316" stroke-width="2"/>
+        <!-- Period/Clock -->
+        <text x="250" y="14" text-anchor="middle" fill="#f87171" font-size="13" font-weight="700">{period_label} {clock}</text>
+        <!-- Away team box -->
+        <rect x="60" y="235" width="150" height="35" rx="6" fill="{away_color}" opacity="0.85"/>
+        <text x="135" y="257" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">{game.get('away_abbr','')} {game.get('away_score',0)}</text>
+        <!-- Home team box -->
+        <rect x="290" y="235" width="150" height="35" rx="6" fill="{home_color}" opacity="0.85"/>
+        <text x="365" y="257" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">{game.get('home_abbr','')} {game.get('home_score',0)}</text>
+        {play_badge}
+    </svg>
+    </div>
+    """
+    components.html(svg, height=310)
+
+# === END PART A — PASTE PART B BELOW THIS LINE ===
+# ═══════════════════════════════════════════════════════
+# PART B — UI LAYER (paste below Part A)
+# ═══════════════════════════════════════════════════════
+
+# ── 1. Fetch All Data ──
+games = fetch_espn_games()
+kalshi_ml_data = fetch_kalshi_ml()
+kalshi_spreads_parsed, kalshi_spread_list = fetch_kalshi_spreads_raw()
 injuries = fetch_injuries()
 b2b_teams = fetch_yesterday_teams()
 
-live_games = [g for g in all_games if g["state"] == "in"]
-scheduled_games = [g for g in all_games if g["state"] == "pre"]
-final_games = [g for g in all_games if g["state"] == "post"]
+# ── 2. Categorize Games ──
+live_games = [g for g in games if g.get('state') == 'in']
+scheduled_games = [g for g in games if g.get('state') == 'pre']
+final_games = [g for g in games if g.get('state') == 'post']
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Today's Games", len(all_games))
-c2.metric("Live", len(live_games))
-c3.metric("Scheduled", len(scheduled_games))
-c4.metric("Final", len(final_games))
+# ── 3. Run Sniper + Comeback Checks ──
+for g in live_games:
+    sa = check_spread_sniper(g, kalshi_spread_list, kalshi_ml_data)
+    ca = check_comeback(g, kalshi_ml_data)
+
+# ── 4. Header ──
+st.title("BIGSNAPSHOT NCAA EDGE FINDER")
+st.caption(f"v{VERSION} | {now.strftime('%A %B %d, %Y %-I:%M %p ET')} | NCAA Men's Basketball | 9-Factor Edge + Spread Sniper + Comeback Scanner")
+hc1, hc2, hc3, hc4 = st.columns(4)
+hc1.metric("Today's Games", len(games))
+hc2.metric("Live Now", len(live_games))
+hc3.metric("Scheduled", len(scheduled_games))
+hc4.metric("Final", len(final_games))
 st.divider()
 
-# ── VEGAS vs KALSHI MISPRICING ALERT ─────────────────────────────────
-mispricings = []
-for g in all_games:
-    if g["state"] != "pre": continue
-    home_ml = g.get("odds", {}).get("home_ml")
-    if not home_ml: continue
-    try: home_ml = float(home_ml)
-    except (TypeError, ValueError): continue
-    espn_prob = american_to_implied_prob(home_ml)
-    if espn_prob <= 0: continue
-    ha_up = g.get("home_abbr", "").upper()
-    aa_up = g.get("away_abbr", "").upper()
-    # Also check BPI for triple-source comparison
-    summary = fetch_game_summary(g["id"])
-    bpi = parse_predictor(summary) if summary else None
-    bpi_prob = bpi.get("home_win_pct", 0) if bpi else 0
-    for ticker, mk in kalshi_ml.items():
-        t_upper = ticker.upper()
-        if ha_up in t_upper and aa_up in t_upper:
-            yp = mk.get("yes_price", 0) or 0
-            kalshi_prob = yp / 100.0 if yp > 1 else yp
-            diff = abs(espn_prob - kalshi_prob)
-            if diff >= 0.05:
-                mp = {"game": g["shortName"], "espn_prob": espn_prob,
-                    "kalshi_prob": kalshi_prob, "diff": diff, "ticker": ticker,
-                    "home": g["home_team"]}
-                if bpi_prob > 0:
-                    mp["bpi_prob"] = bpi_prob
-                mispricings.append(mp)
-            break
-
-if mispricings:
-    st.markdown("### VEGAS vs KALSHI MISPRICING ALERTS")
-    for mp in sorted(mispricings, key=lambda x: -x["diff"]):
-        diff_pct = mp["diff"] * 100
-        line = ("**" + str(mp["game"]) + "** -- Vegas: " + "{:.0%}".format(mp["espn_prob"]) +
-            " | Kalshi: " + "{:.0%}".format(mp["kalshi_prob"]))
-        if mp.get("bpi_prob"):
-            line += " | ESPN BPI: " + "{:.0%}".format(mp["bpi_prob"])
-        line += " (**" + "{:.1f}".format(diff_pct) + "% gap**) | `" + str(mp["ticker"]) + "`"
-        st.markdown(line)
-    st.divider()
-
-# ── LIVE EDGE MONITOR ────────────────────────────────────────────────
-if live_games:
-    st.markdown("### LIVE EDGE MONITOR")
-    for g in live_games:
-        mins = g.get("minutes_elapsed", 0)
-        total = g["home_score"] + g["away_score"]
-        pace_per_min = total / max(mins, 0.5)
-        projection = calc_projection(g["home_score"], g["away_score"], mins)
-        pace_label = get_pace_label(pace_per_min)
-        pct_done = mins / GAME_MINUTES * 100
-        period = g.get("period", 0)
-        half_str = "H" + str(period) if period <= 2 else "OT" + str(period - 2)
-
-        exp_label = (str(g["away_abbr"]) + " " + str(g["away_score"]) + " @ " +
-            str(g["home_abbr"]) + " " + str(g["home_score"]) + " -- " + half_str + " " + str(g["clock"]))
-        with st.expander(exp_label, expanded=True):
-            render_scoreboard(g)
-            plays = fetch_plays(g["id"])
-
-            # Possession inference from plays using team names
-            poss_name, poss_side = infer_possession(
-                plays, g["home_abbr"], g["away_abbr"],
-                g["home_team"], g["away_team"],
-                g.get("home_id", ""), g.get("away_id", ""))
-
-            lc, rc = st.columns(2)
-            with lc:
-                render_court(g["home_abbr"], g["away_abbr"],
-                    score_home=g["home_score"], score_away=g["away_score"],
-                    poss_name=poss_name, poss_side=poss_side)
-            with rc:
-                st.markdown("**Pace:** " + "{:.2f}".format(pace_per_min) + " pts/min " + pace_label)
-                st.markdown("**Projected Total:** " + str(projection))
-                st.markdown("**Game Progress:** " + "{:.0f}".format(pct_done) + "% (" + "{:.1f}".format(mins) + "/" + str(GAME_MINUTES) + " min)")
-                lead = g["home_score"] - g["away_score"]
-                if lead > 0:
-                    st.markdown("**Lead:** " + str(g["home_team"]) + " +" + str(lead))
-                elif lead < 0:
-                    st.markdown("**Lead:** " + str(g["away_team"]) + " +" + str(abs(lead)))
-                else:
-                    st.markdown("**Lead:** TIE")
-                espn_ou = g.get("odds", {}).get("overUnder")
-                if espn_ou:
-                    try:
-                        ou_val = float(espn_ou)
-                        diff = projection - ou_val
-                        if abs(diff) >= 5:
-                            direction = "OVER" if diff > 0 else "UNDER"
-                            st.markdown("**Totals Edge:** Proj " + str(projection) + " vs Line " + str(ou_val) + " -> **" + direction + " (" + "{:+.1f}".format(diff) + ")**")
-                    except (ValueError, TypeError): pass
-
-            if plays:
-                st.markdown("**Recent Plays:**")
-                tts_on = st.checkbox("Announce plays", key="tts_" + str(g["id"]))
-                for idx_p, p in enumerate(plays[-6:]):
-                    icon = get_play_icon(p.get("type", ""))
-                    hp = "H" + str(p["period"]) if p.get("period", 0) <= 2 else "OT" + str(p["period"] - 2)
-                    st.markdown("<span style='color:#888;font-size:12px'>" + hp + " " + str(p.get("clock", "")) + " " + icon + " " + str(p.get("text", "")) + "</span>", unsafe_allow_html=True)
-                    if idx_p == len(plays[-6:]) - 1 and tts_on and p.get("text"):
-                        speak_play(hp + " " + p.get("clock", "") + ". " + p.get("text", ""))
-
-            today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
-            link = get_kalshi_game_link(today_str, g["away_abbr"], g["home_abbr"])
-            st.markdown("[Trade on Kalshi](" + link + ")")
-    st.divider()
-
-# ══════════════════════════════════════════════════════════════════════
-# PART 3: SCANNERS, TRACKERS, FOOTER
-# ══════════════════════════════════════════════════════════════════════
-
-# ── CUSHION SCANNER (Totals) ─────────────────────────────────────────
-if live_games:
-    st.markdown("### CUSHION SCANNER -- Totals")
-    cs_games = [str(g["away_abbr"]) + " @ " + str(g["home_abbr"]) for g in live_games]
-    cs_sel = st.selectbox("Game", ["ALL GAMES"] + cs_games, key="cs_game")
-    cs_c1, cs_c2 = st.columns(2)
-    cs_min = cs_c1.slider("Min minutes elapsed", 0, 40, 5, key="cs_min")
-    cs_side = cs_c2.selectbox("Side", ["Both", "Over", "Under"], key="cs_side")
-
-    for g in live_games:
-        label = str(g["away_abbr"]) + " @ " + str(g["home_abbr"])
-        if cs_sel != "ALL GAMES" and cs_sel != label: continue
-        mins = g.get("minutes_elapsed", 0)
-        if mins < cs_min: continue
-        total = g["home_score"] + g["away_score"]
-        remaining = GAME_MINUTES - mins
-
-        for thresh in THRESHOLDS:
-            needed_over = thresh - total
-            if cs_side in ["Both", "Over"] and needed_over > 0 and remaining > 0:
-                rate_needed = needed_over / remaining
-                pace_now = total / max(mins, 0.5)
-                cushion = pace_now - rate_needed
-                if cushion > 1.0: safety = "FORTRESS"
-                elif cushion > 0.4: safety = "SAFE"
-                elif cushion > 0.0: safety = "TIGHT"
-                else: safety = "RISKY"
-                if remaining <= 6: safety += " SHARK MODE"
-                st.markdown(
-                    "**" + label + "** OVER " + str(thresh) + " -- Need " + "{:.0f}".format(needed_over) +
-                    " in " + "{:.0f}".format(remaining) + "min (" + "{:.2f}".format(rate_needed) +
-                    "/min) | Pace " + "{:.2f}".format(pace_now) + "/min | **" + safety + "**")
-            if cs_side in ["Both", "Under"] and remaining > 0:
-                projected_final = total + (remaining * (total / max(mins, 0.5)))
-                under_cushion = thresh - projected_final
-                if under_cushion > 10: u_safety = "FORTRESS"
-                elif under_cushion > 4: u_safety = "SAFE"
-                elif under_cushion > 0: u_safety = "TIGHT"
-                else: u_safety = "RISKY"
-                if projected_final < thresh:
-                    if remaining <= 6: u_safety += " SHARK MODE"
-                    st.markdown(
-                        "**" + label + "** UNDER " + str(thresh) + " -- Proj " +
-                        "{:.0f}".format(projected_final) + " vs Line " + str(thresh) + " | **" + u_safety + "**")
-    st.divider()
-
-# ── PACE SCANNER ─────────────────────────────────────────────────────
-if live_games:
-    st.markdown("### PACE SCANNER")
-    for g in live_games:
-        mins = g.get("minutes_elapsed", 0)
-        if mins < 2: continue
-        total = g["home_score"] + g["away_score"]
-        pace = total / max(mins, 0.5)
-        proj = calc_projection(g["home_score"], g["away_score"], mins)
-        plabel = get_pace_label(pace)
-        period = g.get("period", 0)
-        half_str = "H" + str(period) if period <= 2 else "OT" + str(period - 2)
-        pct = mins / GAME_MINUTES * 100
-        col1, col2, col3 = st.columns([2, 1, 1])
-        col1.markdown("**" + str(g["away_abbr"]) + " " + str(g["away_score"]) + " @ " + str(g["home_abbr"]) + " " + str(g["home_score"]) + "** | " + half_str + " " + str(g["clock"]))
-        col2.markdown("Pace: **" + "{:.2f}".format(pace) + "**/min " + plabel)
-        col3.markdown("Proj: **" + str(proj) + "** | " + "{:.0f}".format(pct) + "% done")
-        st.progress(min(pct / 100, 1.0))
-        espn_ou = g.get("odds", {}).get("overUnder")
-        if espn_ou:
-            try:
-                ou_val = float(espn_ou)
-                diff = proj - ou_val
-                if abs(diff) >= 5:
-                    arrow = "OVER" if diff > 0 else "UNDER"
-                    st.markdown("-> Proj " + str(proj) + " vs Line " + str(ou_val) + ": **" + arrow + " (" + "{:+.1f}".format(diff) + ")**")
-            except (ValueError, TypeError): pass
-    st.divider()
-
-# ── PRE-GAME ALIGNMENT (9-Factor Edge Model) ─────────────────────────
-if scheduled_games:
-    st.markdown("### PRE-GAME ALIGNMENT -- Edge Model")
-
-    with st.expander("How Edges Are Rated"):
-        st.markdown(
-            "Our proprietary model analyzes multiple data points for each game "
-            "including team efficiency metrics, situational factors, market pricing, "
-            "and historical performance indicators.\n\n"
-            "**Edge Score** is a composite number where each factor adds or subtracts points. "
-            "Positive = lean HOME, negative = lean AWAY. The higher the absolute value, "
-            "the more factors agree.\n\n"
-            "| Rating | Score | Meaning | Action |\n"
-            "|--------|-------|---------|--------|\n"
-            "| **STRONG** | 8+ | 3-4 factors aligned, high conviction | Best opportunities |\n"
-            "| **MODERATE** | 4-8 | 2-3 factors aligned, solid edge | Worth considering |\n"
-            "| LEAN | 1.5-4 | Slight edge, mixed signals | Filtered out |\n"
-            "| TOSS-UP | <1.5 | No clear edge, coin flip | Filtered out |\n\n"
-            "Only **STRONG** and **MODERATE** games are shown below. "
-            "Weak games are hidden to reduce noise and keep you focused on actionable plays."
-        )
-
-    st.caption("ESPN BPI + Vegas + situational factors | Only showing STRONG + MODERATE edges")
-
-    # Filter to STRONG and MODERATE edges only — no noise
-    edge_games = []
-    for g in scheduled_games:
-        summary = fetch_game_summary(g["id"])
-        edge = calc_advanced_edge(g, b2b_teams, summary=summary, injuries=injuries)
-        if edge.get("strength") in ("STRONG", "MODERATE"):
-            edge_games.append((g, edge))
-
-    if not edge_games:
-        st.info("No STRONG or MODERATE edges found today. All games are LEAN or TOSS-UP.")
+# ── 5. PACE SCANNER ──
+st.subheader("PACE SCANNER")
+pace_data = []
+for g in live_games:
+    me = g.get('minutes_elapsed', 0)
+    if me < 4:
+        continue
+    ts = g.get('total_score', 0)
+    pace = ts / me if me > 0 else 0
+    proj = calc_projection(ts, me)
+    pl, pc = get_pace_label(pace)
+    period = g.get('period', 1)
+    clock = g.get('clock', '')
+    if period <= 2:
+        plabel = f"H{period}"
     else:
-        st.markdown("**" + str(len(edge_games)) + " actionable edges** out of " + str(len(scheduled_games)) + " scheduled games")
+        plabel = f"OT{period-2}"
+    ar = g.get('away_rank', 99)
+    hr = g.get('home_rank', 99)
+    away_badge = f"#{ar} " if ar <= 25 else ""
+    home_badge = f"#{hr} " if hr <= 25 else ""
+    gname = f"{away_badge}{g.get('away_abbr','')} @ {home_badge}{g.get('home_abbr','')}"
+    pace_data.append({"name": gname, "status": f"{plabel} {clock}", "total": ts, "pace": pace, "pace_label": pl, "pace_color": pc, "proj": proj})
 
-        if st.button("ADD ALL EDGE PICKS", key="add_all_pre"):
-            for g, edge in edge_games:
-                ticker = "KXNCAAGAME-" + str(g["away_abbr"]) + str(g["home_abbr"])
-                if ticker not in st.session_state["positions"]:
-                    st.session_state["positions"][ticker] = {
-                        "ticker": ticker, "game": g["shortName"],
-                        "side": edge.get("side", "HOME"), "type": "ML",
-                        "contracts": 1, "price": 50, "edges": edge.get("edges", []),
-                        "game_id": g["id"], "home_abbr": g["home_abbr"], "away_abbr": g["away_abbr"]}
-            st.rerun()
-
-        for idx, (g, edge) in enumerate(edge_games):
-            edge_list = edge.get("edges", [])
-            strength = edge.get("strength", "TOSS-UP")
-            pick = edge.get("pick", "")
-            sc = edge.get("score", 0)
-
-            # Color code by strength
-            if strength == "STRONG": badge_color = "#2ecc71"
-            elif strength == "MODERATE": badge_color = "#f39c12"
-            else: badge_color = "#888"
-
-            hr = "#" + str(g["home_rank"]) + " " if g.get("home_rank", 99) <= 25 else ""
-            ar = "#" + str(g["away_rank"]) + " " if g.get("away_rank", 99) <= 25 else ""
-            spread = g.get("odds", {}).get("spread", "N/A")
-            ou = g.get("odds", {}).get("overUnder", "N/A")
-
-            with st.container():
-                st.markdown(
-                    "<div style='background:#1a1a2e;border-radius:8px;padding:10px;margin:8px 0;"
-                    "border-left:4px solid " + badge_color + "'>"
-                    "<span style='color:" + badge_color + ";font-weight:700;font-size:14px'>" + strength + "</span> "
-                    "<span style='color:white;font-weight:700'>" + ar + str(g["away_team"]) + " @ " + hr + str(g["home_team"]) + "</span>"
-                    "<br><span style='color:#aaa;font-size:12px'>Spread: " + str(spread) + " | O/U: " + str(ou) + " | " + str(g.get("broadcast", "")) + "</span>"
-                    "<br><span style='color:" + badge_color + ";font-size:12px'>PICK: " + str(edge.get("side", "")) + " (" + str(pick) + ") | Score: " + "{:+.1f}".format(sc) + "</span>"
-                    "</div>", unsafe_allow_html=True)
-
-                today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
-                link = get_kalshi_game_link(today_str, g["away_abbr"], g["home_abbr"])
-                st.markdown("[Trade on Kalshi](" + link + ")")
-
-                with st.expander("View Breakdown"):
-                    for e in edge_list:
-                        if "STAR OUT" in e or "INJURY" in e:
-                            st.markdown("<span style='color:#e74c3c;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
-                        elif "3PT EDGE" in e:
-                            st.markdown("<span style='color:#3498db;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
-                        elif "BPI vs VEGAS GAP" in e or "GAP" in e:
-                            st.markdown("<span style='color:#2ecc71;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
-                        elif "FATIGUE" in e:
-                            st.markdown("<span style='color:#e67e22;font-weight:700'>" + e + "</span>", unsafe_allow_html=True)
-                        else:
-                            st.markdown("- " + e)
-                st.markdown("---")
-    st.divider()
-
-# ── INJURY REPORT ────────────────────────────────────────────────────
-if injuries:
-    st.markdown("### INJURY REPORT")
-    today_abbrs = set()
-    for g in all_games:
-        today_abbrs.add(g["home_abbr"].upper())
-        today_abbrs.add(g["away_abbr"].upper())
-    shown = False
-    for abbr, data in injuries.items():
-        if abbr.upper() not in today_abbrs: continue
-        shown = True
-        st.markdown("**" + str(data["team"]) + "**")
-        for p in data["players"]:
-            s = (p["status"] or "").lower()
-            if "out" in s: marker = "[OUT]"
-            elif "day" in s or "doubt" in s: marker = "[DTD]"
-            else: marker = "[ACTIVE]"
-            st.markdown("  " + marker + " " + str(p["name"]) + " (" + str(p["position"]) + ") -- " + str(p["status"]) + ": " + str(p.get("detail", "")))
-    if not shown:
-        st.info("No injuries reported for today's teams.")
-    st.divider()
-
-# ── POSITION TRACKER ─────────────────────────────────────────────────
-st.markdown("### POSITION TRACKER")
-with st.expander("ADD NEW POSITION"):
-    game_opts = [str(g["away_abbr"]) + " @ " + str(g["home_abbr"]) for g in all_games]
-    if game_opts:
-        p_game = st.selectbox("Game", game_opts, key="pt_game")
-        p_c1, p_c2 = st.columns(2)
-        p_type = p_c1.selectbox("Bet Type", ["ML", "Totals", "Spread"], key="pt_type")
-        p_side = p_c2.selectbox("Side", ["HOME", "AWAY", "OVER", "UNDER"], key="pt_side")
-        p_c3, p_c4 = st.columns(2)
-        p_contracts = p_c3.number_input("Contracts", 1, 500, 10, key="pt_contracts")
-        p_price = p_c4.number_input("Price (cents)", 1, 99, 50, key="pt_price")
-        if st.button("ADD POSITION", key="pt_add"):
-            sel_idx = game_opts.index(p_game)
-            g = all_games[sel_idx]
-            ticker = "KXNCAAGAME-" + p_side + "-" + str(g["away_abbr"]) + str(g["home_abbr"])
-            st.session_state["positions"][ticker] = {
-                "ticker": ticker, "game": p_game, "side": p_side,
-                "type": p_type, "contracts": p_contracts, "price": p_price,
-                "game_id": g["id"], "home_abbr": g["home_abbr"], "away_abbr": g["away_abbr"]}
-            st.rerun()
-
-if st.session_state["positions"]:
-    total_cost = 0
-    total_payout = 0
-    for ticker, pos in list(st.session_state["positions"].items()):
-        cost = pos["contracts"] * pos["price"]
-        payout = pos["contracts"] * 100
-        total_cost += cost
-        total_payout += payout
-        live_score = ""
-        for g in all_games:
-            if g.get("home_abbr") == pos.get("home_abbr") and g.get("away_abbr") == pos.get("away_abbr"):
-                if g["state"] == "in": live_score = " | LIVE " + str(g["away_score"]) + "-" + str(g["home_score"])
-                elif g["state"] == "post": live_score = " | FINAL " + str(g["away_score"]) + "-" + str(g["home_score"])
-                break
-        pc1, pc2 = st.columns([4, 1])
-        pc1.markdown(
-            "**" + str(pos["game"]) + "** -- " + str(pos["side"]) + " " + str(pos["type"]) + live_score + "  \n" +
-            str(pos["contracts"]) + "x @ " + str(pos["price"]) + "c = $" + "{:.2f}".format(cost / 100) + " -> $" + "{:.2f}".format(payout / 100))
-        if pc2.button("Delete", key="del_" + str(ticker)):
-            remove_position(ticker)
-            st.rerun()
-    st.markdown("**Portfolio:** $" + "{:.2f}".format(total_cost / 100) + " invested -> $" + "{:.2f}".format(total_payout / 100) + " max payout")
-    if st.button("CLEAR ALL POSITIONS", key="clear_all"):
-        st.session_state["positions"] = {}
-        st.rerun()
+pace_data.sort(key=lambda x: x["pace"])
+if pace_data:
+    for pd_item in pace_data:
+        pc1, pc2, pc3, pc4 = st.columns([3, 2, 2, 2])
+        pc1.markdown(f"**{pd_item['name']}**")
+        pc2.markdown(f"{pd_item['status']} | {pd_item['total']} pts")
+        pc3.markdown(f"<span style='color:{pd_item['pace_color']};font-weight:700'>{pd_item['pace_label']}</span> ({pd_item['pace']:.2f}/min)", unsafe_allow_html=True)
+        pc4.markdown(f"Proj: **{pd_item['proj']:.0f}**")
 else:
-    st.info("No positions tracked. Add one above.")
+    st.info("No live games with 4+ minutes played")
 st.divider()
 
-# ── ALL GAMES TODAY ──────────────────────────────────────────────────
-st.markdown("### ALL GAMES TODAY")
-conf_groups = {}
-for g in all_games:
-    conf = g.get("conference", "") or "Other"
-    conf_groups.setdefault(conf, []).append(g)
+# ── 6. Tabs ──
+tab_edge, tab_spread, tab_live, tab_cushion = st.tabs(["Edge Finder", "Spread Sniper", "Live Monitor", "Cushion Scanner"])
 
-for conf_name in sorted(conf_groups.keys()):
-    games_in_conf = conf_groups[conf_name]
-    if conf_name and conf_name != "Other":
-        st.markdown("**" + conf_name + "**")
-    for g in games_in_conf:
-        hr = "#" + str(g["home_rank"]) + " " if g.get("home_rank", 99) <= 25 else ""
-        ar = "#" + str(g["away_rank"]) + " " if g.get("away_rank", 99) <= 25 else ""
-        h_rec = " (" + g.get("home_record", "") + ")" if g.get("home_record") else ""
-        a_rec = " (" + g.get("away_record", "") + ")" if g.get("away_record") else ""
-        if g["state"] == "in":
-            p = g.get("period", 0)
-            hs = "H" + str(p) if p <= 2 else "OT" + str(p - 2)
-            st.markdown("LIVE **" + ar + str(g["away_team"]) + a_rec + " " + str(g["away_score"]) + "** @ **" + hr + str(g["home_team"]) + h_rec + " " + str(g["home_score"]) + "** -- " + hs + " " + str(g["clock"]))
-        elif g["state"] == "post":
-            st.markdown("FINAL **" + ar + str(g["away_team"]) + a_rec + " " + str(g["away_score"]) + "** @ **" + hr + str(g["home_team"]) + h_rec + " " + str(g["home_score"]) + "**")
+# ═══════════════════════════════════════════════════════
+# TAB 1: EDGE FINDER
+# ═══════════════════════════════════════════════════════
+with tab_edge:
+
+    # Section A: Pre-Game 9-Factor Edge Model
+    st.subheader("PRE-GAME ALIGNMENT — 9-Factor Edge Model")
+    with st.expander("How Edges Are Rated"):
+        st.markdown("""
+**9 factors scored and summed:**
+1. **ESPN BPI** — Power Index win probability vs 50%
+2. **BPI vs Vegas Gap** — When BPI disagrees with moneyline by 3%+
+3. **Home Court** — College HCA is stronger (+4.0 pts)
+4. **Records** — Win percentage comparison
+5. **Ranking Gap** — AP Top 25 ranking advantage (college-specific)
+6. **B2B Fatigue** — Back-to-back game penalty
+7. **PPG** — Scoring average gap
+8. **Injuries** — Star OUT = big swing, DTD = small
+9. **3PT Shooting** — Percentage and volume gap
+
+| Strength | Score |
+|----------|-------|
+| 🔴 STRONG | ≥ 8 |
+| 🟡 MODERATE | ≥ 4 |
+| 🟢 LEAN | ≥ 1.5 |
+| ⚪ TOSS-UP | < 1.5 |
+
+*Only STRONG and MODERATE edges shown. College has 50+ games/day — we filter the noise.*
+""")
+    st.caption("ESPN BPI + Vegas + Rankings + Situational | Only showing STRONG + MODERATE edges")
+
+    edge_results = []
+    for g in scheduled_games:
+        summary = fetch_game_summary(g.get('game_id', ''))
+        result = calc_advanced_edge(g, b2b_teams, summary=summary, injuries=injuries)
+        if result.get('strength', '') in ('🔴 STRONG', '🟡 MODERATE'):
+            edge_results.append({"game": g, "edge": result, "summary": summary})
+
+    edge_results.sort(key=lambda x: (0 if '🔴' in x['edge'].get('strength', '') else 1, -abs(x['edge'].get('score', 0))))
+
+    if not edge_results:
+        st.info("No STRONG or MODERATE edges found in today's scheduled games.")
+    else:
+        st.markdown(f"**{len(edge_results)} actionable edges** out of {len(scheduled_games)} scheduled games")
+
+        if st.button("📋 ADD ALL EDGE PICKS", key="ncaa_add_all_edges"):
+            for er in edge_results:
+                g = er["game"]
+                e = er["edge"]
+                pos = {
+                    "id": str(uuid.uuid4()),
+                    "game": f"{g.get('away_abbr','')} @ {g.get('home_abbr','')}",
+                    "pick": e.get("pick", ""),
+                    "side": e.get("side", ""),
+                    "type": "ML",
+                    "line": "",
+                    "direction": "YES" if e.get("side") == "home" else "NO",
+                    "score": e.get("score", 0),
+                    "strength": e.get("strength", ""),
+                    "time": now.strftime("%I:%M %p")
+                }
+                st.session_state.ncaa_positions.append(pos)
+            st.success(f"Added {len(edge_results)} edge picks!")
+
+        for er in edge_results:
+            g = er["game"]
+            e = er["edge"]
+            strength = e.get("strength", "")
+            border_color = "#22c55e" if "STRONG" in strength else "#f97316"
+            score = e.get("score", 0)
+            pick = e.get("pick", "")
+            side = e.get("side", "")
+            ar = g.get('away_rank', 99)
+            hr = g.get('home_rank', 99)
+            away_badge = f"#{ar} " if ar <= 25 else ""
+            home_badge = f"#{hr} " if hr <= 25 else ""
+            spread = g.get('vegas_odds', {}).get('spread', 'N/A')
+            ou = g.get('vegas_odds', {}).get('overUnder', 'N/A')
+            bc = g.get('broadcast', '')
+            bc_html = f" | 📺 {bc}" if bc else ""
+
+            html = f"""
+            {MOBILE_CSS}
+            <div style="background:#0f172a;border-left:4px solid {border_color};border-radius:8px;padding:clamp(8px,2vw,16px);margin:8px 0;max-width:100%;box-sizing:border-box;overflow-x:hidden">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+                    <span style="background:{border_color};color:#000;padding:2px 10px;border-radius:12px;font-weight:700;font-size:clamp(11px,2.5vw,14px)">{strength}</span>
+                    <span style="color:#94a3b8;font-size:clamp(11px,2.5vw,13px)">{g.get('game_time','')}{bc_html}</span>
+                </div>
+                <div style="color:#fff;font-size:clamp(16px,4vw,22px);font-weight:700;margin:8px 0">
+                    {away_badge}{g.get('away_abbr','')} @ {home_badge}{g.get('home_abbr','')}
+                </div>
+                <div style="color:#94a3b8;font-size:clamp(11px,2.5vw,13px);margin-bottom:6px">
+                    Spread: {spread} | O/U: {ou}
+                </div>
+                <div style="color:#22c55e;font-size:clamp(14px,3.5vw,18px);font-weight:700">
+                    PICK: {pick} ({side.upper()}) → {score:+.1f}
+                </div>
+            </div>
+            """
+            st.markdown(html, unsafe_allow_html=True)
+
+            bc1, bc2 = st.columns(2)
+            with bc1:
+                st.link_button("🔗 Trade on Kalshi", KALSHI_GAME_LINK, use_container_width=True)
+            with bc2:
+                if st.button("📌 Track", key=f"ncaa_track_{g.get('game_id','')}"):
+                    pos = {
+                        "id": str(uuid.uuid4()),
+                        "game": f"{g.get('away_abbr','')} @ {g.get('home_abbr','')}",
+                        "pick": pick,
+                        "side": side,
+                        "type": "ML",
+                        "line": "",
+                        "direction": "YES" if side == "home" else "NO",
+                        "score": score,
+                        "strength": strength,
+                        "time": now.strftime("%I:%M %p")
+                    }
+                    st.session_state.ncaa_positions.append(pos)
+                    st.success(f"Tracking {pick}!")
+
+            with st.expander("View Breakdown"):
+                for edge in e.get("edges", []):
+                    f_name = edge.get("factor", "")
+                    f_val = edge.get("value", 0)
+                    f_detail = edge.get("detail", "")
+                    if "injur" in f_name.lower():
+                        ecolor = "#ef4444"
+                    elif "3pt" in f_name.lower():
+                        ecolor = "#3b82f6"
+                    elif "bpi" in f_name.lower():
+                        ecolor = "#22c55e"
+                    elif "fatigue" in f_name.lower() or "b2b" in f_name.lower():
+                        ecolor = "#f97316"
+                    elif "rank" in f_name.lower():
+                        ecolor = "#fbbf24"
+                    else:
+                        ecolor = "#94a3b8"
+                    sign = "+" if f_val > 0 else ""
+                    st.markdown(f"<span style='color:{ecolor};font-weight:700'>{f_name}: {sign}{f_val:.1f}</span> — {f_detail}", unsafe_allow_html=True)
+
+            st.divider()
+
+    # Section B: Vegas vs Kalshi Mispricing
+    st.subheader("VEGAS vs KALSHI MISPRICING")
+    st.caption("Comparing implied probabilities from Vegas moneylines vs Kalshi contract prices")
+    mispricing_count = 0
+    for g in scheduled_games:
+        hml = g.get('home_ml', 0)
+        aml = g.get('vegas_odds', {}).get('awayML', 0)
+        if not hml or not aml:
+            continue
+        home_vegas_prob = american_to_implied_prob(hml)
+        away_vegas_prob = american_to_implied_prob(aml)
+        if not home_vegas_prob or not away_vegas_prob:
+            continue
+        fav_side = get_favorite_side(g.get('home_record',''), g.get('away_record',''), hml, g.get('home_rank',99), g.get('away_rank',99))
+        kalshi_price, kalshi_ticker = find_ml_price_for_team(g.get('home_abbr',''), g.get('away_abbr',''), fav_side, kalshi_ml_data)
+        if kalshi_price is None:
+            continue
+        vegas_prob = home_vegas_prob * 100 if fav_side == "home" else away_vegas_prob * 100
+        kalshi_prob = kalshi_price
+        edge = vegas_prob - kalshi_prob
+        if abs(edge) < 5:
+            continue
+
+        summary_mp = fetch_game_summary(g.get('game_id', ''))
+        bpi_home, bpi_away = parse_predictor(summary_mp)
+        bpi_pct = (bpi_home * 100 if fav_side == "home" else bpi_away * 100) if bpi_home else None
+        bpi_str = f"{bpi_pct:.0f}%" if bpi_pct else "N/A"
+
+        mispricing_count += 1
+        ar = g.get('away_rank', 99)
+        hr = g.get('home_rank', 99)
+        away_badge = f"#{ar} " if ar <= 25 else ""
+        home_badge = f"#{hr} " if hr <= 25 else ""
+        fav_team = g.get('home_abbr','') if fav_side == "home" else g.get('away_abbr','')
+        action = "BUY YES" if edge > 0 else "BUY NO"
+        action_color = "#22c55e" if edge > 0 else "#ef4444"
+
+        html = f"""
+        {MOBILE_CSS}
+        <div style="background:#0f172a;border-left:4px solid {action_color};border-radius:8px;padding:clamp(8px,2vw,16px);margin:8px 0;max-width:100%;box-sizing:border-box;overflow-x:hidden">
+            <div style="color:#fff;font-size:clamp(14px,3.5vw,18px);font-weight:700;margin-bottom:6px">
+                {away_badge}{g.get('away_abbr','')} @ {home_badge}{g.get('home_abbr','')}
+            </div>
+            <div style="margin-bottom:6px">
+                <span style="background:{action_color};color:#fff;padding:2px 10px;border-radius:12px;font-weight:700;font-size:clamp(11px,2.5vw,14px)">{action} {fav_team}</span>
+            </div>
+            <table style="width:100%;table-layout:fixed;color:#cbd5e1;font-size:clamp(12px,2.5vw,14px);border-collapse:collapse">
+                <tr><td style="padding:4px">Vegas</td><td style="padding:4px;font-weight:700">{vegas_prob:.0f}%</td></tr>
+                <tr><td style="padding:4px">Kalshi</td><td style="padding:4px;font-weight:700">{kalshi_prob:.0f}¢</td></tr>
+                <tr><td style="padding:4px">BPI</td><td style="padding:4px;font-weight:700">{bpi_str}</td></tr>
+                <tr><td style="padding:4px">Edge</td><td style="padding:4px;font-weight:700;color:{action_color}">{abs(edge):.1f}%</td></tr>
+            </table>
+        </div>
+        """
+        st.markdown(html, unsafe_allow_html=True)
+        st.link_button("🔗 Trade on Kalshi", KALSHI_GAME_LINK, use_container_width=True)
+        st.divider()
+
+    if mispricing_count == 0:
+        st.info("No significant mispricings detected (threshold: 5%+ edge).")
+
+    # Section C: Injury Report
+    st.subheader("INJURY REPORT")
+    today_abbrs = set()
+    for g in games:
+        today_abbrs.add(g.get('home_abbr', ''))
+        today_abbrs.add(g.get('away_abbr', ''))
+    inj_shown = 0
+    for abbr in sorted(today_abbrs):
+        if abbr not in injuries:
+            continue
+        team_inj = injuries[abbr]
+        players = team_inj.get("players", [])
+        relevant = [p for p in players if any(kw in p.get("status","").lower() for kw in ("out", "day", "dtd", "doubtful"))]
+        if not relevant:
+            continue
+        inj_shown += 1
+        team_name = team_inj.get("team", abbr)
+        st.markdown(f"**{team_name}**")
+        for p in relevant:
+            stat = p.get("status", "")
+            color = "#ef4444" if "out" in stat.lower() else "#f59e0b"
+            st.markdown(f"<span style='color:{color};font-weight:700'>{stat}</span> — {p.get('name','')} ({p.get('position','')}) — {p.get('detail','')}", unsafe_allow_html=True)
+    if inj_shown == 0:
+        st.info("No relevant injuries found for today's teams.")
+
+    # Section D: Position Tracker
+    st.subheader("POSITION TRACKER")
+    with st.expander("➕ Add Position"):
+        game_options = []
+        for g in games:
+            ar = g.get('away_rank', 99)
+            hr = g.get('home_rank', 99)
+            ab = f"#{ar} " if ar <= 25 else ""
+            hb = f"#{hr} " if hr <= 25 else ""
+            label = f"{ab}{g.get('away_abbr','')} @ {hb}{g.get('home_abbr','')} ({g.get('game_time','')})"
+            game_options.append(label)
+        if game_options:
+            sel_game = st.selectbox("Game", game_options, key="ncaa_pos_game")
+            bet_type = st.selectbox("Bet Type", ["ML", "Totals", "Spread"], key="ncaa_pos_type")
+            direction = st.selectbox("Direction", ["YES", "NO"], key="ncaa_pos_dir")
+            line_val = ""
+            if bet_type == "Totals":
+                line_val = st.selectbox("Line", [str(t) for t in THRESHOLDS], key="ncaa_pos_line")
+            elif bet_type == "Spread":
+                line_val = st.text_input("Spread value", key="ncaa_pos_spread")
+            price = st.number_input("Entry price (¢)", min_value=1, max_value=99, value=50, key="ncaa_pos_price")
+            contracts = st.number_input("Contracts", min_value=1, value=10, key="ncaa_pos_contracts")
+            if st.button("Add Position", key="ncaa_pos_add"):
+                pos = {
+                    "id": str(uuid.uuid4()),
+                    "game": sel_game,
+                    "type": bet_type,
+                    "direction": direction,
+                    "line": line_val,
+                    "price": price,
+                    "contracts": contracts,
+                    "time": now.strftime("%I:%M %p")
+                }
+                st.session_state.ncaa_positions.append(pos)
+                st.success("Position added!")
         else:
-            spread = str(g.get("odds", {}).get("spread", ""))
-            ou = str(g.get("odds", {}).get("overUnder", ""))
-            bcast = str(g.get("broadcast", ""))
-            parts = []
-            if spread: parts.append("Spread: " + spread)
-            if ou: parts.append("O/U: " + ou)
-            if bcast: parts.append(bcast)
-            st.markdown("SCHED **" + ar + str(g["away_team"]) + a_rec + "** @ **" + hr + str(g["home_team"]) + h_rec + "** -- " + " | ".join(parts))
+            st.info("No games available.")
+
+    if st.session_state.ncaa_positions:
+        for p in st.session_state.ncaa_positions:
+            line_str = f" | Line: {p.get('line','')}" if p.get('line') else ""
+            price_str = f" | {p.get('price','')}¢" if p.get('price') else ""
+            contracts_str = f" x{p.get('contracts','')}" if p.get('contracts') else ""
+            st.markdown(f"**{p.get('game','')}** — {p.get('type','')} {p.get('direction','')}{line_str}{price_str}{contracts_str} ({p.get('time','')})")
+            pc1, pc2 = st.columns(2)
+            with pc1:
+                st.link_button("🔗 Kalshi", KALSHI_GAME_LINK, use_container_width=True)
+            with pc2:
+                if st.button("🗑️ Remove", key=f"ncaa_rm_{p.get('id','')}"):
+                    remove_position(p.get('id',''))
+                    st.rerun()
+        if st.button("🗑️ Clear All Positions", key="ncaa_clear_pos"):
+            st.session_state.ncaa_positions = []
+            st.rerun()
+    else:
+        st.info("No positions tracked yet.")
+
+    # Section E: All Games Today
+    st.subheader("ALL GAMES TODAY")
+    conf_groups = {}
+    for g in games:
+        conf = g.get('conference', '') or "Other"
+        if conf not in conf_groups:
+            conf_groups[conf] = []
+        conf_groups[conf].append(g)
+    sorted_confs = sorted([c for c in conf_groups if c != "Other"]) + (["Other"] if "Other" in conf_groups else [])
+    for conf in sorted_confs:
+        st.markdown(f"**{conf}**")
+        for g in conf_groups[conf]:
+            ar = g.get('away_rank', 99)
+            hr = g.get('home_rank', 99)
+            ab = f"#{ar} " if ar <= 25 else ""
+            hb = f"#{hr} " if hr <= 25 else ""
+            state = g.get('state', 'pre')
+            if state == "post":
+                border = "#64748b"
+                detail = f"FINAL: {g.get('away_score',0)}-{g.get('home_score',0)}"
+            elif state == "in":
+                border = "#22c55e"
+                period = g.get('period', 1)
+                clock = g.get('clock', '')
+                plabel = f"H{period}" if period <= 2 else f"OT{period-2}"
+                detail = f"LIVE {plabel} {clock} | {g.get('away_score',0)}-{g.get('home_score',0)}"
+            else:
+                border = "#334155"
+                spread = g.get('vegas_odds', {}).get('spread', '')
+                ou = g.get('vegas_odds', {}).get('overUnder', '')
+                bc = g.get('broadcast', '')
+                parts = []
+                if spread:
+                    parts.append(f"Spread: {spread}")
+                if ou:
+                    parts.append(f"O/U: {ou}")
+                if bc:
+                    parts.append(f"📺 {bc}")
+                detail = " | ".join(parts) if parts else g.get('game_time', '')
+
+            html = f"""
+            <div style="background:#1e293b;border-left:3px solid {border};border-radius:6px;padding:clamp(6px,1.5vw,10px);margin:4px 0;max-width:100%;box-sizing:border-box;overflow-x:hidden">
+                <span style="color:#fff;font-size:clamp(12px,3vw,15px);font-weight:600">{ab}{g.get('away_abbr','')} ({g.get('away_record','')}) @ {hb}{g.get('home_abbr','')} ({g.get('home_record','')})</span>
+                <span style="color:#94a3b8;font-size:clamp(11px,2.5vw,13px);margin-left:8px">{detail}</span>
+            </div>
+            """
+            st.markdown(html, unsafe_allow_html=True)
+        st.markdown("")
+
+# ═══════════════════════════════════════════════════════
+# TAB 2: SPREAD SNIPER
+# ═══════════════════════════════════════════════════════
+with tab_spread:
+
+    st.subheader("SPREAD SNIPER — LIVE ALERTS")
+    with st.expander("How Spread Sniping Works"):
+        st.markdown("""
+**Strategy**: When a team builds a big lead, the market overreacts. Spread contracts for the trailing team become cheap — buy NO on the leading team covering a huge spread.
+
+**Half Thresholds:**
+| Period | Lead Required |
+|--------|--------------|
+| H1 | 8+ points |
+| H2 / OT | 12+ points |
+
+**Rating by NO price:**
+| Rating | Price |
+|--------|-------|
+| 🔥 FIRE | ≤ 40¢ |
+| ✅ GOOD | 41-60¢ |
+| ⚠️ OK | 61-75¢ |
+| 🟡 WARN | 76-85¢ |
+""")
+
+    if st.session_state.ncaa_sniper_alerts:
+        for alert in st.session_state.ncaa_sniper_alerts[:10]:
+            np = alert.get('no_price', 0)
+            if np <= 40:
+                rating, rc = "🔥 FIRE", "#ef4444"
+            elif np <= 60:
+                rating, rc = "✅ GOOD", "#22c55e"
+            elif np <= 75:
+                rating, rc = "⚠️ OK", "#f59e0b"
+            else:
+                rating, rc = "🟡 WARN", "#eab308"
+
+            html = f"""
+            {MOBILE_CSS}
+            <div class="alert-box" style="background:#0f172a;border-left:4px solid {rc};border-radius:8px;padding:clamp(8px,2vw,16px);margin:8px 0;max-width:100%;box-sizing:border-box;overflow-x:hidden">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+                    <span style="background:{rc};color:#000;padding:2px 10px;border-radius:12px;font-weight:700;font-size:clamp(11px,2.5vw,14px)">{rating}</span>
+                    <span style="color:#94a3b8;font-size:clamp(10px,2vw,12px)">{alert.get('time','')}</span>
+                </div>
+                <div style="color:#fff;font-size:clamp(14px,3.5vw,18px);font-weight:700;margin:6px 0">
+                    {alert.get('leading_team','')} leading by {alert.get('diff',0)}
+                </div>
+                <div style="color:#94a3b8;font-size:clamp(11px,2.5vw,13px)">
+                    Score: {alert.get('score','')} | {alert.get('period','')} | Spread: {alert.get('spread_val',0)}+ pts
+                </div>
+                <div style="color:#22c55e;font-size:clamp(13px,3vw,16px);font-weight:700;margin-top:6px">
+                    BUY NO @ {np}¢ on {alert.get('trailing_team','')} spread
+                </div>
+            </div>
+            """
+            st.markdown(html, unsafe_allow_html=True)
+            st.link_button("🔗 Trade Spreads on Kalshi", KALSHI_SPREAD_LINK, use_container_width=True)
+            st.divider()
+    else:
+        st.info("No spread sniper alerts yet. Monitoring live games for big leads...")
+
+    # Comeback Scanner
+    st.subheader("COMEBACK SCANNER")
+    tracking_count = len(st.session_state.ncaa_comeback_tracking)
+    if tracking_count:
+        st.caption(f"Tracking {tracking_count} game(s) with 10+ point deficits")
+        for gid, info in st.session_state.ncaa_comeback_tracking.items():
+            st.markdown(f"🔍 **{info.get('leading_team','')}** was up by {info.get('max_deficit',0)} — watching {info.get('trailing_side','').upper()} team")
+
+    if st.session_state.ncaa_comeback_alerts:
+        for alert in st.session_state.ncaa_comeback_alerts[:10]:
+            html = f"""
+            {MOBILE_CSS}
+            <div class="alert-box" style="background:#0f172a;border-left:4px solid #a855f7;border-radius:8px;padding:clamp(8px,2vw,16px);margin:8px 0;max-width:100%;box-sizing:border-box;overflow-x:hidden">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+                    <span style="background:#a855f7;color:#fff;padding:2px 10px;border-radius:12px;font-weight:700;font-size:clamp(11px,2.5vw,14px)">🔄 COMEBACK</span>
+                    <span style="color:#94a3b8;font-size:clamp(10px,2vw,12px)">{alert.get('time','')}</span>
+                </div>
+                <div style="color:#fff;font-size:clamp(14px,3.5vw,18px);font-weight:700;margin:6px 0">
+                    {alert.get('trailing_team','')} was down {alert.get('was_down',0)} — now within {alert.get('diff',0)}!
+                </div>
+                <div style="color:#94a3b8;font-size:clamp(11px,2.5vw,13px)">
+                    Score: {alert.get('score','')}
+                </div>
+            </div>
+            """
+            st.markdown(html, unsafe_allow_html=True)
+            st.link_button("🔗 Trade on Kalshi", KALSHI_GAME_LINK, use_container_width=True)
+            st.divider()
+    else:
+        if not tracking_count:
+            st.info("No comebacks detected. Monitoring for 10+ point deficits...")
+
+# ═══════════════════════════════════════════════════════
+# TAB 3: LIVE MONITOR
+# ═══════════════════════════════════════════════════════
+with tab_live:
+
+    st.subheader("LIVE EDGE MONITOR")
+    if live_games:
+        for g in live_games:
+            ar = g.get('away_rank', 99)
+            hr = g.get('home_rank', 99)
+            ab = f"#{ar} " if ar <= 25 else ""
+            hb = f"#{hr} " if hr <= 25 else ""
+            st.markdown(f"### {ab}{g.get('away_abbr','')} @ {hb}{g.get('home_abbr','')}")
+            render_scoreboard(g)
+
+            plays = fetch_plays(g.get('game_id', ''))
+            last_play = plays[-1] if plays else None
+
+            lc1, lc2 = st.columns([3, 2])
+            with lc1:
+                render_college_court(g, last_play)
+                poss_team, poss_side = infer_possession(plays, g.get('home_abbr',''), g.get('away_abbr',''), g.get('home_team',''), g.get('away_team',''), g.get('home_id',''), g.get('away_id',''))
+                if poss_team:
+                    poss_color = get_team_color(g, poss_side) if poss_side else "#94a3b8"
+                    st.markdown(f"<div style='text-align:center;color:{poss_color};font-weight:700;font-size:clamp(12px,3vw,16px)'>🏀 {poss_team} ball</div>", unsafe_allow_html=True)
+            with lc2:
+                st.markdown("**LAST 10 PLAYS**")
+                tts_on = st.checkbox("🔊 TTS", key=f"ncaa_tts_{g.get('game_id','')}")
+                if plays:
+                    for p in reversed(plays):
+                        icon_letter, icon_color = get_play_icon(p.get("play_type", ""), p.get("score_value", 0))
+                        period = p.get("period", 0)
+                        plabel = f"H{period}" if period <= 2 else f"OT{period-2}"
+                        st.markdown(f"<span style='color:{icon_color};font-weight:700;font-size:16px'>{icon_letter}</span> <span style='color:#94a3b8;font-size:11px'>{plabel} {p.get('clock','')}</span> {p.get('text','')}", unsafe_allow_html=True)
+                    if tts_on and last_play:
+                        speak_play(last_play.get("text", ""))
+                else:
+                    st.caption("No play data available yet.")
+
+            me = g.get('minutes_elapsed', 0)
+            if me >= 4:
+                ts = g.get('total_score', 0)
+                pace = ts / me if me > 0 else 0
+                proj = calc_projection(ts, me)
+                pl, pc = get_pace_label(pace)
+
+                st.markdown(f"""
+                <div style="background:#1e293b;border-radius:8px;padding:clamp(6px,2vw,12px);margin:8px 0;display:flex;justify-content:space-around;flex-wrap:wrap;gap:8px;max-width:100%;box-sizing:border-box;overflow-x:hidden">
+                    <div style="text-align:center"><span style="color:#94a3b8;font-size:11px">Pace</span><br><span style="color:{pc};font-weight:700;font-size:clamp(14px,3vw,18px)">{pl}</span></div>
+                    <div style="text-align:center"><span style="color:#94a3b8;font-size:11px">PPM</span><br><span style="color:#fff;font-weight:700;font-size:clamp(14px,3vw,18px)">{pace:.2f}</span></div>
+                    <div style="text-align:center"><span style="color:#94a3b8;font-size:11px">Proj</span><br><span style="color:#fff;font-weight:700;font-size:clamp(14px,3vw,18px)">{proj:.0f}</span></div>
+                    <div style="text-align:center"><span style="color:#94a3b8;font-size:11px">Total</span><br><span style="color:#fff;font-weight:700;font-size:clamp(14px,3vw,18px)">{ts}</span></div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Moneyline edge
+                hs = g.get('home_score', 0)
+                aws = g.get('away_score', 0)
+                diff = abs(hs - aws)
+                if diff >= 8:
+                    leading_side = "home" if hs > aws else "away"
+                    leading_team = g.get(f'{leading_side}_abbr', '')
+                    label = "🔥 STRONG" if diff >= 12 else "✅ GOOD"
+                    label_color = "#ef4444" if diff >= 12 else "#22c55e"
+                    st.markdown(f"<div style='background:#0f172a;padding:8px;border-radius:8px;border-left:3px solid {label_color};margin:6px 0;max-width:100%;box-sizing:border-box'><span style='color:{label_color};font-weight:700'>{label} ML</span> — <span style='color:#fff;font-weight:700'>{leading_team}</span> leads by {diff}</div>", unsafe_allow_html=True)
+                    st.link_button(f"🔗 {leading_team} ML on Kalshi", KALSHI_GAME_LINK, use_container_width=True)
+
+                # Totals
+                tc1, tc2 = st.columns(2)
+                with tc1:
+                    st.markdown("**YES (Over)**")
+                    for t in THRESHOLDS:
+                        cushion = proj - t
+                        if cushion >= 6:
+                            if cushion >= 20:
+                                safety = "🏰 FORTRESS"
+                            elif cushion >= 12:
+                                safety = "🟢 SAFE"
+                            else:
+                                safety = "🟡 TIGHT"
+                            st.markdown(f"Over {t}: proj {proj:.0f} | +{cushion:.0f} {safety}")
+                with tc2:
+                    st.markdown("**NO (Under)**")
+                    for t in THRESHOLDS:
+                        cushion = t - proj
+                        if cushion >= 6:
+                            if cushion >= 20:
+                                safety = "🏰 FORTRESS"
+                            elif cushion >= 12:
+                                safety = "🟢 SAFE"
+                            else:
+                                safety = "🟡 TIGHT"
+                            st.markdown(f"Under {t}: proj {proj:.0f} | +{cushion:.0f} {safety}")
+            else:
+                st.caption("⏳ Waiting for 4+ minutes of play data...")
+            st.divider()
+    else:
+        st.info("No live games right now. Check back during game times!")
+
+# ═══════════════════════════════════════════════════════
+# TAB 4: CUSHION SCANNER
+# ═══════════════════════════════════════════════════════
+with tab_cushion:
+
+    st.subheader("CUSHION SCANNER (Totals)")
+    game_filter_options = ["All Live Games"]
+    for g in live_games:
+        ar = g.get('away_rank', 99)
+        hr = g.get('home_rank', 99)
+        ab = f"#{ar} " if ar <= 25 else ""
+        hb = f"#{hr} " if hr <= 25 else ""
+        game_filter_options.append(f"{ab}{g.get('away_abbr','')} @ {hb}{g.get('home_abbr','')} (ID:{g.get('game_id','')})")
+    selected_filter = st.selectbox("Filter", game_filter_options, key="ncaa_cushion_filter")
+    min_minutes = st.selectbox("Min play time", [4, 8, 12, 16, 20], index=1, key="ncaa_cushion_min")
+
+    cushion_data = []
+    target_games = live_games
+    max_show = 10
+    if selected_filter != "All Live Games":
+        gid_match = re.search(r'ID:(\d+)', selected_filter)
+        if gid_match:
+            gid = gid_match.group(1)
+            target_games = [g for g in live_games if g.get('game_id') == gid]
+            max_show = 20
+
+    for g in target_games:
+        me = g.get('minutes_elapsed', 0)
+        if me < min_minutes:
+            continue
+        ts = g.get('total_score', 0)
+        proj = calc_projection(ts, me)
+        ar = g.get('away_rank', 99)
+        hr = g.get('home_rank', 99)
+        ab = f"#{ar} " if ar <= 25 else ""
+        hb = f"#{hr} " if hr <= 25 else ""
+        gname = f"{ab}{g.get('away_abbr','')} @ {hb}{g.get('home_abbr','')}"
+        for t in THRESHOLDS:
+            over_cushion = proj - t
+            under_cushion = t - proj
+            if over_cushion >= 6:
+                if over_cushion >= 20:
+                    safety, sc = "🏰 FORTRESS", "#22c55e"
+                elif over_cushion >= 12:
+                    safety, sc = "🟢 SAFE", "#22c55e"
+                elif over_cushion >= 6:
+                    safety, sc = "🟡 TIGHT", "#eab308"
+                cushion_data.append({"game": gname, "dir": "YES (Over)", "line": t, "proj": proj, "cushion": over_cushion, "safety": safety, "color": sc})
+            if under_cushion >= 6:
+                if under_cushion >= 20:
+                    safety, sc = "🏰 FORTRESS", "#22c55e"
+                elif under_cushion >= 12:
+                    safety, sc = "🟢 SAFE", "#22c55e"
+                elif under_cushion >= 6:
+                    safety, sc = "🟡 TIGHT", "#eab308"
+                cushion_data.append({"game": gname, "dir": "NO (Under)", "line": t, "proj": proj, "cushion": under_cushion, "safety": safety, "color": sc})
+
+    cushion_data.sort(key=lambda x: -x["cushion"])
+    if cushion_data:
+        for item in cushion_data[:max_show]:
+            html = f"""
+            <div style="background:#1e293b;border-left:3px solid {item['color']};border-radius:6px;padding:clamp(6px,2vw,12px);margin:4px 0;max-width:100%;box-sizing:border-box;overflow-x:hidden">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+                    <span style="color:#fff;font-weight:700;font-size:clamp(12px,3vw,15px)">{item['game']}</span>
+                    <span style="color:{item['color']};font-weight:700;font-size:clamp(11px,2.5vw,14px)">{item['safety']}</span>
+                </div>
+                <div style="color:#94a3b8;font-size:clamp(11px,2.5vw,13px);margin-top:4px">
+                    {item['dir']} {item['line']} | Proj: {item['proj']:.0f} | Cushion: +{item['cushion']:.0f}
+                </div>
+            </div>
+            """
+            st.markdown(html, unsafe_allow_html=True)
+        st.link_button("🔗 Trade Totals on Kalshi", KALSHI_GAME_LINK, use_container_width=True)
+    else:
+        st.info(f"No cushion opportunities found with {min_minutes}+ minutes played.")
+
+# ── Footer ──
 st.divider()
-
-# ── Footer ───────────────────────────────────────────────────────────
-st.divider()
-
-with st.expander("How to Use This App", expanded=False):
-    st.markdown("""
-### Pre-Game
-
-1. Check **Pre-Game Alignment** for STRONG and MODERATE edges
-2. Review the breakdown — look for multiple factors aligning
-3. Note injury impacts (star players OUT = major swing)
-4. Check 3PT shooting mismatches for totals plays
-5. Compare ESPN BPI vs Vegas vs Kalshi for mispricing
-
-### In-Game
-
-1. Wait for 5+ minutes of game action
-2. Check **Pace Scanner** for slow/fast games vs the O/U line
-3. Use **Cushion Scanner** for safe totals entries
-4. **Live Edge Monitor** shows real-time projections and possession
-
-### The Scalp
-
-- Buy at mispriced levels
-- Sell at +3c profit or better
-- Repeat
-
-### Understanding Edge Ratings
-
-| Rating | Score | Meaning |
-|--------|-------|---------|
-| **STRONG** | 8+ | Multiple factors aligned, high conviction |
-| **MODERATE** | 4-8 | Solid edge with supporting data |
-| LEAN | 1.5-4 | Slight edge, not shown |
-| TOSS-UP | <1.5 | No edge, not shown |
-
-### Cushion Scanner Labels
-
-| Label | Meaning |
-|-------|---------|
-| **FORTRESS** | Extremely safe, would need collapse to lose |
-| **SAFE** | Comfortable cushion, pace supports it |
-| **TIGHT** | Close, could go either way |
-| **RISKY** | Against current pace, needs reversal |
-| **SHARK MODE** | Under 6 min left, high confidence window |
-
-### Important Notes
-
-- This app is for **educational and informational purposes only**
-- This is **NOT financial advice** and NOT betting advice
-- Edge Score does NOT equal win probability
-- Past performance does **NOT** guarantee future results
-- Prediction markets involve real financial risk
-- **Only trade what you can afford to lose**
-- Always verify data independently before making any decisions
-- The creator assumes no liability for any losses
-- We reserve the right to implement paid subscriptions at any time
-    """)
-
-st.markdown(
-    "<div style='text-align:center;color:#555;font-size:11px;padding:20px'>"
-    "<b>BigSnapshot NCAA Edge Finder v" + VERSION + "</b><br>"
-    "For entertainment and educational purposes only. Not financial advice.<br>"
-    "Past performance does not guarantee future results. Prediction markets involve risk.<br>"
-    "Only wager what you can afford to lose.<br><br>"
-    "<a href='https://bigsnapshot.com' style='color:#888'>bigsnapshot.com</a>"
-    "</div>", unsafe_allow_html=True)
+st.caption(f"v{VERSION} | Educational only | Not financial advice")
+st.caption("Stay small. Stay quiet. Win.")
