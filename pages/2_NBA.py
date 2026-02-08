@@ -509,15 +509,29 @@ def infer_possession(plays, away, home):
     last_play = plays[-1]
     play_text = (last_play.get("text", "") or "").lower()
     team_id = str(last_play.get("team_id", ""))
+
+    # PRIMARY: use team_id from ESPN (most reliable)
     acting_team = None
-    away_code = KALSHI_CODES.get(away, "XXX").lower()
-    home_code = KALSHI_CODES.get(home, "XXX").lower()
-    if away.lower() in play_text or away_code in play_text:
+    away_id = ESPN_TEAM_IDS.get(away, "")
+    home_id = ESPN_TEAM_IDS.get(home, "")
+
+    if team_id and team_id == away_id:
         acting_team = away
-    elif home.lower() in play_text or home_code in play_text:
+    elif team_id and team_id == home_id:
         acting_team = home
+
+    # FALLBACK: text matching
+    if not acting_team:
+        away_code = KALSHI_CODES.get(away, "XXX").lower()
+        home_code = KALSHI_CODES.get(home, "XXX").lower()
+        if away.lower() in play_text or away_code in play_text:
+            acting_team = away
+        elif home.lower() in play_text or home_code in play_text:
+            acting_team = home
+
     if not acting_team: return None, None
     other_team = home if acting_team == away else away
+
     if last_play.get("score_value", 0) > 0 or "makes" in play_text:
         return other_team, "-> " + KALSHI_CODES.get(other_team, other_team[:3].upper())
     if "defensive rebound" in play_text:
