@@ -1047,7 +1047,7 @@ for g in live_games:
 
 # ── 4. Header ──
 st.title("BIGSNAPSHOT NCAA EDGE FINDER")
-st.caption(f"v{VERSION} | {now.strftime('%A %B %d, %Y %-I:%M %p ET')} | NCAA Men's Basketball | 9-Factor Edge + Spread Sniper + Comeback Scanner")
+st.caption(f"v{VERSION} | {now.strftime('%A %B %d, %Y %-I:%M %p ET')} | NCAA Men's Basketball | 9-Factor Edge + Spread Sniper + Comeback Scanner + SHARK")
 hc1, hc2, hc3, hc4 = st.columns(4)
 hc1.metric("Today's Games", len(games))
 hc2.metric("Live Now", len(live_games))
@@ -1091,15 +1091,14 @@ else:
     st.info("No live games with 4+ minutes played")
 st.divider()
 
-# ── 6. Tabs ──
-tab_edge, tab_spread, tab_live, tab_cushion = st.tabs(["Edge Finder", "Spread Sniper", "Live Monitor", "Cushion Scanner"])
+# ── 6. Tabs (5 tabs now) ──
+tab_edge, tab_spread, tab_live, tab_cushion, tab_shark = st.tabs(["Edge Finder", "Spread Sniper", "Live Monitor", "Cushion Scanner", "🦈 SHARK"])
 
 # ═══════════════════════════════════════════════════════
 # TAB 1: EDGE FINDER
 # ═══════════════════════════════════════════════════════
 with tab_edge:
 
-    # Section A: Pre-Game 9-Factor Edge Model
     st.subheader("PRE-GAME ALIGNMENT — 9-Factor Edge Model")
     with st.expander("How Edges Are Rated"):
         st.markdown("""
@@ -1577,7 +1576,6 @@ with tab_live:
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Moneyline edge
                 hs = g.get('home_score', 0)
                 aws = g.get('away_score', 0)
                 diff = abs(hs - aws)
@@ -1589,7 +1587,6 @@ with tab_live:
                     st.markdown(f"<div style='background:#0f172a;padding:8px;border-radius:8px;border-left:3px solid {label_color};margin:6px 0;max-width:100%;box-sizing:border-box'><span style='color:{label_color};font-weight:700'>{label} ML</span> — <span style='color:#fff;font-weight:700'>{leading_team}</span> leads by {diff}</div>", unsafe_allow_html=True)
                     st.link_button(f"🔗 {leading_team} ML on Kalshi", KALSHI_GAME_LINK, use_container_width=True)
 
-                # Totals
                 tc1, tc2 = st.columns(2)
                 with tc1:
                     st.markdown("**YES (Over)**")
@@ -1666,7 +1663,7 @@ with tab_cushion:
                     safety, sc = "🏰 FORTRESS", "#22c55e"
                 elif over_cushion >= 12:
                     safety, sc = "🟢 SAFE", "#22c55e"
-                elif over_cushion >= 6:
+                else:
                     safety, sc = "🟡 TIGHT", "#eab308"
                 cushion_data.append({"game": gname, "dir": "YES (Over)", "line": t, "proj": proj, "cushion": over_cushion, "safety": safety, "color": sc})
             if under_cushion >= 6:
@@ -1674,7 +1671,7 @@ with tab_cushion:
                     safety, sc = "🏰 FORTRESS", "#22c55e"
                 elif under_cushion >= 12:
                     safety, sc = "🟢 SAFE", "#22c55e"
-                elif under_cushion >= 6:
+                else:
                     safety, sc = "🟡 TIGHT", "#eab308"
                 cushion_data.append({"game": gname, "dir": "NO (Under)", "line": t, "proj": proj, "cushion": under_cushion, "safety": safety, "color": sc})
 
@@ -1696,6 +1693,219 @@ with tab_cushion:
         st.link_button("🔗 Trade Totals on Kalshi", KALSHI_GAME_LINK, use_container_width=True)
     else:
         st.info(f"No cushion opportunities found with {min_minutes}+ minutes played.")
+
+# ═══════════════════════════════════════════════════════
+# TAB 5: 🦈 SHARK SCANNER
+# ═══════════════════════════════════════════════════════
+with tab_shark:
+
+    SHARK_MIN_LEAD = 7
+    SHARK_MINUTES_LEFT = 5.0
+
+    st.subheader("🦈 SHARK SCANNER")
+    st.caption("Games with 7+ point lead only | Court + plays in expander | SHARK = under 5 min left")
+
+    with st.expander("How SHARK Works"):
+        st.markdown("""
+### The Strategy
+
+1. **Only games with 7+ point lead** appear — close games are hidden
+2. Look for **FORTRESS SHARK** and **SAFE SHARK** ratings near game end
+3. A team down 7+ with 2-3 min left needs 3+ possessions plus stops
+4. The total is basically locked — high confidence window
+
+### Cushion Labels
+
+| Label | Meaning |
+|-------|---------|
+| **FORTRESS** | Locked in, would need miracle to lose |
+| **SAFE** | Comfortable, pace supports it |
+| **TIGHT** | Close, could swing |
+| **RISKY** | Against pace |
+| **+ SHARK** | Under 5 min left — highest confidence |
+
+### Why 7+ Lead Filter?
+
+Close games (1-6 point leads) = chaos. Skip them. A 7+ lead with under 5 minutes is the sweet spot.
+""")
+
+    shark_games = []
+    for g in live_games:
+        lead = abs(g.get('home_score', 0) - g.get('away_score', 0))
+        if lead >= SHARK_MIN_LEAD:
+            shark_games.append(g)
+
+    sc1, sc2, sc3 = st.columns(3)
+    sc1.metric("Live Games", len(live_games))
+    sc2.metric("7+ Lead (Tradeable)", len(shark_games))
+    sc3.metric("Filtered Out", len(live_games) - len(shark_games))
+
+    if not shark_games:
+        st.info("No live games with 7+ point lead right now. Waiting for games to separate...")
+    else:
+        # ── SHARK Cushion Scanner ──
+        st.markdown("### SHARK CUSHION SCANNER — Totals")
+        st.caption("Only showing games with **7+ point lead** — close games filtered out")
+
+        shark_game_labels = [f"{g.get('away_abbr','')} @ {g.get('home_abbr','')}" for g in shark_games]
+        shark_sel = st.selectbox("Game", ["ALL GAMES"] + shark_game_labels, key="ncaa_shark_game")
+        shark_c1, shark_c2 = st.columns(2)
+        shark_min_slider = shark_c1.slider("Min minutes elapsed", 0, 40, 0, key="ncaa_shark_min")
+        shark_side = shark_c2.selectbox("Side", ["Both", "Over", "Under"], key="ncaa_shark_side")
+
+        shark_found = False
+        for g in shark_games:
+            label = f"{g.get('away_abbr','')} @ {g.get('home_abbr','')}"
+            if shark_sel != "ALL GAMES" and shark_sel != label:
+                continue
+            mins = g.get('minutes_elapsed', 0)
+            if mins < shark_min_slider:
+                continue
+            total = g.get('home_score', 0) + g.get('away_score', 0)
+            period = g.get('period', 1)
+            if period <= 2:
+                total_game_mins = GAME_MINUTES
+            else:
+                total_game_mins = GAME_MINUTES + (period - 2) * 5
+            remaining = total_game_mins - mins
+            pace = total / max(mins, 0.5)
+            is_shark = remaining <= SHARK_MINUTES_LEFT
+            lead = abs(g.get('home_score', 0) - g.get('away_score', 0))
+            leader = g.get('home_abbr', '') if g.get('home_score', 0) > g.get('away_score', 0) else g.get('away_abbr', '')
+
+            for thresh in THRESHOLDS:
+                needed_over = thresh - total
+                if shark_side in ["Both", "Over"] and needed_over > 0 and remaining > 0:
+                    rate_needed = needed_over / remaining
+                    cushion = pace - rate_needed
+                    if cushion > 1.0:
+                        safety = "FORTRESS"
+                    elif cushion > 0.4:
+                        safety = "SAFE"
+                    elif cushion > 0.0:
+                        safety = "TIGHT"
+                    else:
+                        safety = "RISKY"
+                    if is_shark:
+                        safety += " 🦈 SHARK"
+                    shark_found = True
+                    st.markdown(f"**{label}** OVER {thresh} — Need {needed_over:.0f} in {remaining:.0f}min ({rate_needed:.2f}/min) | Pace {pace:.2f}/min | Lead: {leader} +{lead} | **{safety}**")
+
+                if shark_side in ["Both", "Under"] and remaining > 0:
+                    projected_final = total + (remaining * pace)
+                    under_cushion = thresh - projected_final
+                    if projected_final < thresh:
+                        if under_cushion > 10:
+                            u_safety = "FORTRESS"
+                        elif under_cushion > 4:
+                            u_safety = "SAFE"
+                        elif under_cushion > 0:
+                            u_safety = "TIGHT"
+                        else:
+                            u_safety = "RISKY"
+                        if is_shark:
+                            u_safety += " 🦈 SHARK"
+                        shark_found = True
+                        st.markdown(f"**{label}** UNDER {thresh} — Proj {projected_final:.0f} vs Line {thresh} | Cushion {under_cushion:.1f} pts | Lead: {leader} +{lead} | **{u_safety}**")
+
+        if not shark_found:
+            st.info("No SHARK cushion opportunities match the current filter.")
+        st.divider()
+
+        # ── SHARK Pace Scanner + Court + Plays ──
+        st.markdown("### SHARK PACE SCANNER")
+        st.caption("Only games with 7+ point lead | Click game to see court + plays")
+
+        for g in shark_games:
+            mins = g.get('minutes_elapsed', 0)
+            if mins < 2:
+                continue
+            total = g.get('home_score', 0) + g.get('away_score', 0)
+            period = g.get('period', 1)
+            if period <= 2:
+                total_game_mins = GAME_MINUTES
+            else:
+                total_game_mins = GAME_MINUTES + (period - 2) * 5
+            remaining = total_game_mins - mins
+            pace = total / max(mins, 0.5)
+            proj = calc_projection(total, mins)
+            plabel_pace, pcolor_pace = get_pace_label(pace)
+            if period <= 2:
+                hl = f"H{period}"
+            else:
+                hl = f"OT{period-2}"
+            pct = mins / total_game_mins * 100
+            is_shark = remaining <= SHARK_MINUTES_LEFT
+            shark_tag = " 🦈 SHARK" if is_shark else ""
+            lead = abs(g.get('home_score', 0) - g.get('away_score', 0))
+            leader = g.get('home_abbr', '') if g.get('home_score', 0) > g.get('away_score', 0) else g.get('away_abbr', '')
+
+            pcol1, pcol2, pcol3 = st.columns([2, 1, 1])
+            pcol1.markdown(f"**{g.get('away_abbr','')} {g.get('away_score',0)} @ {g.get('home_abbr','')} {g.get('home_score',0)}** | {hl} {g.get('clock','')} | {leader} +{lead}{shark_tag}")
+            pcol2.markdown(f"Pace: **{pace:.2f}**/min <span style='color:{pcolor_pace}'>{plabel_pace}</span>", unsafe_allow_html=True)
+            pcol3.markdown(f"Proj: **{proj:.0f}** | {pct:.0f}% done")
+
+            st.progress(min(pct / 100.0, 1.0))
+
+            ou = g.get('vegas_odds', {}).get('overUnder', None)
+            if ou:
+                try:
+                    ou_f = float(ou)
+                    diff_ou = proj - ou_f
+                    if abs(diff_ou) >= 5:
+                        arrow = "OVER" if diff_ou > 0 else "UNDER"
+                        st.markdown(f"→ Proj {proj:.0f} vs Line {ou_f}: **{arrow} ({diff_ou:+.1f})**")
+                except (ValueError, TypeError):
+                    pass
+
+            st.link_button(f"🔗 Trade on Kalshi", KALSHI_GAME_LINK, use_container_width=True)
+
+            exp_label = f"🏀 {g.get('away_abbr','')} @ {g.get('home_abbr','')} — Court + Plays"
+            with st.expander(exp_label, expanded=False):
+                render_scoreboard(g)
+
+                plays = fetch_plays(g.get('game_id', ''))
+                poss_name, poss_side = infer_possession(
+                    plays, g.get('home_abbr',''), g.get('away_abbr',''),
+                    g.get('home_team',''), g.get('away_team',''),
+                    g.get('home_id',''), g.get('away_id',''))
+
+                shark_lc, shark_rc = st.columns(2)
+                with shark_lc:
+                    render_college_court(g, plays[-1] if plays else None)
+                    if poss_name:
+                        poss_color = get_team_color(g, poss_side) if poss_side else "#94a3b8"
+                        st.markdown(f"<div style='text-align:center;color:{poss_color};font-weight:700;font-size:clamp(12px,3vw,16px)'>🏀 {poss_name} ball</div>", unsafe_allow_html=True)
+                with shark_rc:
+                    st.markdown(f"**Pace:** {pace:.2f} pts/min {plabel_pace}")
+                    st.markdown(f"**Projected Total:** {proj:.0f}")
+                    st.markdown(f"**Remaining:** {remaining:.1f} min" + (" **🦈 SHARK MODE**" if is_shark else ""))
+                    st.markdown(f"**Lead:** {leader} +{lead}")
+
+                if plays:
+                    st.markdown("**Recent Plays:**")
+                    shark_tts = st.checkbox("🔊 Announce plays", key=f"ncaa_shark_tts_{g.get('game_id','')}")
+                    last_8 = plays[-8:]
+                    for idx_p, p in enumerate(last_8):
+                        p_period = p.get("period", 0)
+                        if isinstance(p_period, dict):
+                            p_period = p_period.get("number", 0)
+                        hp = f"H{p_period}" if p_period <= 2 else f"OT{p_period-2}"
+                        p_clock = p.get("clock", "")
+                        if isinstance(p_clock, dict):
+                            p_clock = p_clock.get("displayValue", "")
+                        p_text = p.get("text", "")
+                        p_type = p.get("play_type", p.get("type", ""))
+                        if isinstance(p_type, dict):
+                            p_type = p_type.get("text", "")
+                        icon_l, icon_c = get_play_icon(p_type, p.get("score_value", p.get("score", 0)))
+                        st.markdown(f"<span style='color:{icon_c};font-weight:700;font-size:16px'>{icon_l}</span> <span style='color:#94a3b8;font-size:11px'>{hp} {p_clock}</span> {p_text}", unsafe_allow_html=True)
+                        if idx_p == len(last_8) - 1 and shark_tts and p_text:
+                            speak_play(f"{hp} {p_clock}. {p_text}")
+                else:
+                    st.info("No play-by-play data available yet.")
+
+            st.markdown("---")
 
 # ── Footer ──
 st.divider()
