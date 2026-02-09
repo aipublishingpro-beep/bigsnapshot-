@@ -1090,7 +1090,6 @@ def get_play_icon(play_type, score_value):
 # --- Fetch All Data ---
 games = fetch_espn_games()
 kalshi_ml_data = fetch_kalshi_ml()
-kalshi_spread_data = fetch_kalshi_spreads_raw()
 injuries = fetch_injuries()
 b2b_teams = fetch_yesterday_teams()
 
@@ -1099,9 +1098,8 @@ live_games = [g for g in games if g.get('state') == 'in']
 scheduled_games = [g for g in games if g.get('state') == 'pre']
 final_games = [g for g in games if g.get('state') == 'post']
 
-# --- Run Sniper + Comeback on Live Games ---
+# --- Run Comeback Checks on Live Games ---
 for g in live_games:
-    check_spread_sniper(g, kalshi_spread_data, kalshi_ml_data)
     check_comeback(g, kalshi_ml_data)
 
 # --- Inject CSS ---
@@ -1109,7 +1107,7 @@ st.markdown(MOBILE_CSS, unsafe_allow_html=True)
 
 # --- Header ---
 st.title("BIGSNAPSHOT NCAAW EDGE FINDER")
-st.caption(f"v{VERSION} | {now.strftime('%A %B %d, %Y %I:%M %p ET')} | NCAA Women's Basketball | 9-Factor Edge + Spread Sniper + Comeback Scanner + SHARK")
+st.caption(f"v{VERSION} | {now.strftime('%A %B %d, %Y %I:%M %p ET')} | NCAA Women's Basketball | 9-Factor Edge + Cushion Scanner + SHARK")
 
 mc1, mc2, mc3, mc4 = st.columns(4)
 mc1.metric("Today's Games", len(games))
@@ -1170,9 +1168,9 @@ if live_games:
         st.markdown("")
 
 # ============================================================
-# TABS
+# TABS (4 tabs — no Spread Sniper)
 # ============================================================
-tab_edge, tab_spread, tab_live, tab_cushion, tab_shark = st.tabs(["Edge Finder", "Spread Sniper", "Live Monitor", "Cushion Scanner", "🦈 SHARK"])
+tab_edge, tab_live, tab_cushion, tab_shark = st.tabs(["Edge Finder", "Live Monitor", "Cushion Scanner", "🦈 SHARK"])
 
 # ============================================================
 # TAB 1: EDGE FINDER
@@ -1355,7 +1353,6 @@ with tab_edge:
             sel_side = pt_cols[1].selectbox("Side", ["YES", "NO"], key="ncaaw_pos_side")
             sel_price = pt_cols[2].number_input("Entry ¢", min_value=1, max_value=99, value=50, key="ncaaw_pos_price")
             sel_contracts = pt_cols[3].number_input("Contracts", min_value=1, max_value=1000, value=10, key="ncaaw_pos_contracts")
-            sel_type = st.selectbox("Market Type", ["Moneyline", "Spread", "Total"], key="ncaaw_pos_type")
             if st.button("Add Position", key="ncaaw_pos_add", use_container_width=True):
                 new_pos = {
                     "id": str(uuid.uuid4())[:8],
@@ -1363,7 +1360,7 @@ with tab_edge:
                     "side": sel_side,
                     "price": sel_price,
                     "contracts": sel_contracts,
-                    "type": sel_type,
+                    "type": "Moneyline",
                     "time": now.strftime("%I:%M %p"),
                 }
                 st.session_state.ncaaw_positions.append(new_pos)
@@ -1377,7 +1374,7 @@ with tab_edge:
             <div class="pos-card" style="max-width:100%;box-sizing:border-box;">
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
                     <span style="color:#fff;font-weight:700;font-size:clamp(13px,3vw,16px);">{pos.get('team','')} — {pos.get('side','')} @ {pos.get('price',0)}¢</span>
-                    <span style="color:#aaa;font-size:clamp(10px,2.5vw,12px);">{pos.get('type','')} | {pos.get('contracts',0)} contracts</span>
+                    <span style="color:#aaa;font-size:clamp(10px,2.5vw,12px);">ML | {pos.get('contracts',0)} contracts</span>
                 </div>
                 <div style="color:#aaa;font-size:clamp(10px,2.5vw,12px);margin-top:4px;">
                     Cost: ${cost/100:.2f} | Max Profit: ${max_profit/100:.2f} | Added: {pos.get('time','')}
@@ -1410,15 +1407,12 @@ with tab_edge:
                 badge = "✅ FINAL"
             else:
                 badge = f"🕐 {g.get('detail', 'Scheduled')}"
-            spread_txt = f"Spread: {g.get('spread', 0)}" if g.get("spread") else ""
-            ou_txt = f"O/U: {g.get('over_under', 0)}" if g.get("over_under") else ""
             row_html = f"""
             <div style="max-width:100%;box-sizing:border-box;background:#111;border-radius:8px;padding:8px 12px;margin:4px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
                 <div style="font-size:clamp(12px,3vw,15px);">
                     <span style="color:{away_c};font-weight:700;">{a_rk}{g.get('away_abbr','')}</span>
                     <span style="color:#888;"> @ </span>
                     <span style="color:{home_c};font-weight:700;">{h_rk}{g.get('home_abbr','')}</span>
-                    <span style="color:#666;font-size:clamp(10px,2.2vw,12px);margin-left:8px;">{spread_txt} {ou_txt}</span>
                 </div>
                 <div style="font-size:clamp(11px,2.5vw,13px);">
                     <span style="color:{'#00ff88' if state == 'in' else '#aaa'};">{badge}</span>
@@ -1431,85 +1425,9 @@ with tab_edge:
         st.info("No games scheduled today.")
 
     st.link_button("🔗 Kalshi NCAAW Games", KALSHI_GAME_LINK, use_container_width=True)
-    st.link_button("🔗 Kalshi NCAAW Spreads", KALSHI_SPREAD_LINK, use_container_width=True)
 
 # ============================================================
-# TAB 2: SPREAD SNIPER
-# ============================================================
-with tab_spread:
-    st.markdown("### 🎯 Spread Sniper")
-    st.caption("Detects live blowouts and finds cheap NO contracts on spread brackets. H1 threshold: 8pts, H2+: 12pts.")
-
-    # Sniper Alerts
-    if st.session_state.ncaaw_sniper_alerts:
-        st.markdown("#### 🚨 SNIPER ALERTS")
-        for alert in reversed(st.session_state.ncaaw_sniper_alerts[-10:]):
-            alert_html = f"""
-            <div class="sniper-alert" style="max-width:100%;box-sizing:border-box;">
-                <div style="font-size:clamp(14px,3.5vw,18px);font-weight:700;color:#e74c3c;">🎯 SPREAD SNIPE DETECTED</div>
-                <div style="color:#fff;font-size:clamp(12px,3vw,15px);margin:6px 0;">
-                    {alert.get('leader','')} leads by {alert.get('lead',0)} in H{alert.get('period',0)}
-                </div>
-                <div style="color:#aaa;font-size:clamp(11px,2.5vw,13px);">
-                    Ticker: {alert.get('ticker','')} | NO @ {alert.get('no_price',0)}¢ | Bracket: {alert.get('floor','')}-{alert.get('cap','')}
-                </div>
-                <div style="color:#888;font-size:clamp(10px,2.2vw,12px);margin-top:4px;">
-                    {alert.get('time','')}
-                </div>
-            </div>
-            """
-            st.markdown(alert_html, unsafe_allow_html=True)
-    else:
-        st.info("No spread sniper alerts yet. Monitoring live games for blowout spreads...")
-
-    st.markdown("---")
-
-    # Comeback Alerts
-    st.markdown("#### 🔄 Comeback Scanner")
-    st.caption("Tracks underdog leads and alerts when favorites start closing the gap (6+ point comeback from peak).")
-    if st.session_state.ncaaw_comeback_alerts:
-        for cb in reversed(st.session_state.ncaaw_comeback_alerts[-10:]):
-            cb_html = f"""
-            <div class="comeback-alert" style="max-width:100%;box-sizing:border-box;">
-                <div style="font-size:clamp(14px,3.5vw,18px);font-weight:700;color:#27ae60;">🔄 COMEBACK DETECTED</div>
-                <div style="color:#fff;font-size:clamp(12px,3vw,15px);margin:6px 0;">
-                    {cb.get('trailer','')} closing in! Peak deficit: {cb.get('peak_lead',0)} → Now: {cb.get('current_lead',0)} ({cb.get('comeback_pts',0)} pts recovered)
-                </div>
-                <div style="color:#aaa;font-size:clamp(11px,2.5vw,13px);">
-                    {cb.get('trailer','')} ML NO: {cb.get('no_price',0)}¢ | {cb.get('time','')}
-                </div>
-            </div>
-            """
-            st.markdown(cb_html, unsafe_allow_html=True)
-    else:
-        st.info("No comeback alerts yet. Tracking underdog leads...")
-
-    st.markdown("---")
-
-    # Active Tracking
-    st.markdown("#### 📡 Active Underdog Tracking")
-    if st.session_state.ncaaw_comeback_tracking:
-        for gid, trk in st.session_state.ncaaw_comeback_tracking.items():
-            live_game = None
-            for g in live_games:
-                if g.get("game_id") == gid:
-                    live_game = g
-                    break
-            current_lead = abs(live_game.get("home_score", 0) - live_game.get("away_score", 0)) if live_game else 0
-            trk_html = f"""
-            <div style="max-width:100%;box-sizing:border-box;background:#1a1a2e;border-radius:8px;padding:10px;margin:4px 0;border-left:3px solid #f0c040;">
-                <span style="color:#fff;font-weight:700;font-size:clamp(12px,3vw,14px);">{trk.get('leader','')} leads {trk.get('trailer','')}</span>
-                <span style="color:#aaa;font-size:clamp(10px,2.5vw,12px);"> | Peak: {trk.get('peak_lead',0)} | Now: {current_lead}</span>
-            </div>
-            """
-            st.markdown(trk_html, unsafe_allow_html=True)
-    else:
-        st.info("No underdogs currently holding leads.")
-
-    st.link_button("🔗 Kalshi NCAAW Spreads", KALSHI_SPREAD_LINK, use_container_width=True)
-
-# ============================================================
-# TAB 3: LIVE MONITOR
+# TAB 2: LIVE MONITOR
 # ============================================================
 with tab_live:
     st.markdown("### 📺 Live Game Monitor")
@@ -1582,15 +1500,17 @@ with tab_live:
                                 tag = "CHEAP" if diff > 0 else "EXPENSIVE"
                                 st.markdown(f'<span style="color:{d_color};font-size:clamp(11px,2.5vw,13px);">💰 {abbr}: {tag} on Kalshi (Vegas {vegas_imp:.0%} vs Kalshi {kalshi_imp:.0%})</span>', unsafe_allow_html=True)
 
-                # Totals Bracket Check
-                if mins_el >= 4:
-                    proj_total = calc_projection(total_sc, mins_el)
-                    st.markdown(f"<span style='color:#aaa;font-size:clamp(10px,2.5vw,12px);'>Totals Brackets vs Projection ({proj_total:.0f}):</span>", unsafe_allow_html=True)
-                    for th in THRESHOLDS:
-                        if abs(proj_total - th) < 10:
-                            side_label = "OVER" if proj_total > th else "UNDER"
-                            s_color = "#00ff88" if proj_total > th else "#ff4444"
-                            st.markdown(f'<span style="color:{s_color};font-size:clamp(11px,2.5vw,13px);">  {th}: {side_label} (proj {proj_total:.0f})</span>', unsafe_allow_html=True)
+                # Comeback Tracker
+                if game_id in st.session_state.ncaaw_comeback_tracking:
+                    trk = st.session_state.ncaaw_comeback_tracking[game_id]
+                    current_lead = abs(g.get("home_score", 0) - g.get("away_score", 0))
+                    comeback_amt = trk.get("peak_lead", 0) - current_lead
+                    if comeback_amt > 0:
+                        st.markdown(f"""
+                        <div style="max-width:100%;box-sizing:border-box;background:#0a2e1a;border:1px solid #27ae60;border-radius:8px;padding:8px;margin:4px 0;">
+                            <span style="color:#27ae60;font-weight:700;font-size:clamp(11px,2.5vw,13px);">🔄 COMEBACK: {trk.get('trailer','')} cut {comeback_amt} pts (peak deficit: {trk.get('peak_lead',0)}, now: {current_lead})</span>
+                        </div>
+                        """, unsafe_allow_html=True)
 
             # TTS Toggle
             tts_key = f"ncaaw_tts_{game_id}"
@@ -1620,7 +1540,7 @@ with tab_live:
     st.link_button("🔗 Kalshi NCAAW Games", KALSHI_GAME_LINK, use_container_width=True)
 
 # ============================================================
-# TAB 4: CUSHION SCANNER
+# TAB 3: CUSHION SCANNER
 # ============================================================
 with tab_cushion:
     st.markdown("### 🛡️ Cushion Scanner")
@@ -1677,14 +1597,32 @@ with tab_cushion:
     else:
         st.info(f"No games with a {cush_min}+ point lead right now.")
 
+    # Comeback Alerts
+    if st.session_state.ncaaw_comeback_alerts:
+        st.markdown("---")
+        st.markdown("#### 🔄 Comeback Alerts")
+        for cb in reversed(st.session_state.ncaaw_comeback_alerts[-10:]):
+            cb_html = f"""
+            <div class="comeback-alert" style="max-width:100%;box-sizing:border-box;">
+                <div style="font-size:clamp(14px,3.5vw,18px);font-weight:700;color:#27ae60;">🔄 COMEBACK DETECTED</div>
+                <div style="color:#fff;font-size:clamp(12px,3vw,15px);margin:6px 0;">
+                    {cb.get('trailer','')} closing in! Peak deficit: {cb.get('peak_lead',0)} → Now: {cb.get('current_lead',0)} ({cb.get('comeback_pts',0)} pts recovered)
+                </div>
+                <div style="color:#aaa;font-size:clamp(11px,2.5vw,13px);">
+                    {cb.get('trailer','')} ML NO: {cb.get('no_price',0)}¢ | {cb.get('time','')}
+                </div>
+            </div>
+            """
+            st.markdown(cb_html, unsafe_allow_html=True)
+
     st.link_button("🔗 Kalshi NCAAW Games", KALSHI_GAME_LINK, use_container_width=True)
 
 # ============================================================
-# TAB 5: 🦈 SHARK
+# TAB 4: 🦈 SHARK
 # ============================================================
 with tab_shark:
     st.markdown("### 🦈 SHARK — Smart Hedge & Autolock Recognition Kit")
-    st.caption("Late-game lock detection: Find games where one team has a commanding lead with little time left. Ideal for cheap NO bets on the trailing team.")
+    st.caption("Late-game lock detection: Find games where one team has a commanding lead with little time left. Buy NO on the trailing team's moneyline.")
 
     SHARK_MIN_LEAD = 7
     SHARK_MINUTES_LEFT = 5.0
@@ -1708,8 +1646,8 @@ with tab_shark:
 
     shark_games.sort(key=lambda x: x["lead"], reverse=True)
 
-    # Shark Cushion Scanner
-    st.markdown("#### 🦈 SHARK Cushion Scanner")
+    # Shark Filters
+    st.markdown("#### 🦈 SHARK Scanner")
     shark_side_filter = st.selectbox("Leader Filter", ["All", "Home Leading", "Away Leading"], key="ncaaw_shark_side")
     shark_min_lead = st.slider("Min SHARK Lead", min_value=5, max_value=25, value=SHARK_MIN_LEAD, key="ncaaw_shark_min")
 
@@ -1762,7 +1700,7 @@ with tab_shark:
                     {trailer_abbr} YES: {trailer_yes}¢ | NO: {trailer_no}¢
                 </div>
                 <div style="margin-top:6px;color:#888;font-size:clamp(10px,2.2vw,12px);">
-                    💡 If {leader_abbr} holds, {trailer_abbr} YES → $0. Consider NO on {trailer_abbr} if price is right.
+                    💡 If {leader_abbr} holds, {trailer_abbr} YES → $0. Buy NO on {trailer_abbr} ML if price is right.
                 </div>
             </div>
             """
