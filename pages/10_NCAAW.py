@@ -1646,13 +1646,6 @@ with tab_live:
                                 tag = "CHEAP" if diff > 0 else "EXPENSIVE"
                                 st.markdown(f'<span style="color:{d_color};font-size:clamp(11px,2.5vw,13px);">💰 {abbr}: {tag} on Kalshi (Vegas {vegas_imp:.0%} vs Kalshi {kalshi_imp:.0%})</span>', unsafe_allow_html=True)
 
-                # Tiebreaker Panel (close games ≤5 pts)
-                lead = abs(g.get("home_score", 0) - g.get("away_score", 0))
-                if lead <= 5 and mins_el >= 4:
-                    tb_stats = calc_tiebreaker_stats(plays, g.get("home_abbr", ""), g.get("away_abbr", ""))
-                    tb_html = render_tiebreaker_panel(tb_stats, g.get("home_abbr", ""), g.get("away_abbr", ""))
-                    st.markdown(tb_html, unsafe_allow_html=True)
-
                 # Comeback Tracker
                 if game_id in st.session_state.ncaaw_comeback_tracking:
                     trk = st.session_state.ncaaw_comeback_tracking[game_id]
@@ -1664,6 +1657,14 @@ with tab_live:
                             <span style="color:#27ae60;font-weight:700;font-size:clamp(11px,2.5vw,13px);">🔄 COMEBACK: {trk.get('trailer','')} cut {comeback_amt} pts (peak deficit: {trk.get('peak_lead',0)}, now: {current_lead})</span>
                         </div>
                         """, unsafe_allow_html=True)
+
+            # Tiebreaker Panel — full width, below columns (close games ≤5 pts)
+            lead = abs(g.get("home_score", 0) - g.get("away_score", 0))
+            mins_el_tb = calc_minutes_elapsed(g.get("period", 0), g.get("clock", "0:00"))
+            if lead <= 5 and mins_el_tb >= 4:
+                tb_stats = calc_tiebreaker_stats(plays, g.get("home_abbr", ""), g.get("away_abbr", ""))
+                tb_html = render_tiebreaker_panel(tb_stats, g.get("home_abbr", ""), g.get("away_abbr", ""))
+                st.markdown(tb_html, unsafe_allow_html=True)
 
             # TTS Toggle
             tts_key = f"ncaaw_tts_{game_id}"
