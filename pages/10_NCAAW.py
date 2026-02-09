@@ -208,9 +208,10 @@ def fetch_espn_games():
                 rank = 99
                 if t.get("curatedRank", {}).get("current", 99) < 99:
                     rank = t["curatedRank"]["current"]
-                return abbr, name, short, logo, color, score, record, rank
-            h_abbr, h_name, h_short, h_logo, h_color, h_score, h_record, h_rank = extract_team(home_team)
-            a_abbr, a_name, a_short, a_logo, a_color, a_score, a_record, a_rank = extract_team(away_team)
+                team_id = str(team_data.get("id", ""))
+                return abbr, name, short, logo, color, score, record, rank, team_id
+            h_abbr, h_name, h_short, h_logo, h_color, h_score, h_record, h_rank, h_id = extract_team(home_team)
+            a_abbr, a_name, a_short, a_logo, a_color, a_score, a_record, a_rank, a_id = extract_team(away_team)
             odds_data = comp.get("odds", [{}])
             home_ml = 0
             away_ml = 0
@@ -257,6 +258,8 @@ def fetch_espn_games():
                 "over_under": ou_val,
                 "linescores_home": linescores_home,
                 "linescores_away": linescores_away,
+                "home_id": h_id,
+                "away_id": a_id,
             }
             games.append(game)
         except:
@@ -1085,7 +1088,7 @@ def get_play_icon(play_type, score_value):
 # ============================================================
 # TIEBREAKER PANEL — Parse plays for turnovers per team/half
 # ============================================================
-def calc_tiebreaker_stats(plays, home_abbr, away_abbr):
+def calc_tiebreaker_stats(plays, home_abbr, away_abbr, home_name="", away_name="", home_id="", away_id=""):
     stats = {
         "home": {"name": home_abbr, "turnovers": 0, "steals": 0, "made_fg": 0, "missed_fg": 0, "rebounds": 0, "assists": 0, "by_half": {}},
         "away": {"name": away_abbr, "turnovers": 0, "steals": 0, "made_fg": 0, "missed_fg": 0, "rebounds": 0, "assists": 0, "by_half": {}},
@@ -1095,61 +1098,73 @@ def calc_tiebreaker_stats(plays, home_abbr, away_abbr):
     for p in plays:
         if not isinstance(p, dict):
             continue
-        text = p.get("text", "").lower()
+        text = p.get("text", "")
+        text_lower = text.lower()
         period = p.get("period", {}).get("number", 0) if isinstance(p.get("period"), dict) else 0
         if period == 0:
             period = p.get("period", 0) if isinstance(p.get("period"), (int, float)) else 0
+        if period <= 0:
+            period = 1
         if period <= 2:
             half_key = f"H{period}"
-        elif period > 2:
-            half_key = f"OT{period - 2}"
         else:
-            half_key = "H1"
-        team_id = ""
-        if isinstance(p.get("team"), dict):
-            team_id = p["team"].get("id", "")
-        home_lower = home_abbr.lower()
-        away_lower = away_abbr.lower()
-        is_home = home_lower in text
-        is_away = away_lower in text
-        if not is_home and not is_away:
-            continue
-        side = "home" if is_home and not is_away else "away" if is_away and not is_home else None
+            half_key = f"OT{period - 2}"
+        side = None
+        # Method 1: Match by team ID from play object
+        team_obj = p.get("team", {})
+        if isinstance(team_obj, dict):
+            play_team_id = str(team_obj.get("id", ""))
+            if play_team_id and home_id and play_team_id == str(home_id):
+                side = "home"
+            elif play_team_id and away_id and play_team_id == str(away_id):
+                side = "away"
+        # Method 2: Match by homeAway field if present
         if side is None:
-            if "turnover" in text:
-                words = text.split()
-                for i, w in enumerate(words):
-                    if "turnover" in w:
-                        before = " ".join(words[:i]).lower()
-                        if home_lower in before:
-                            side = "home"
-                        elif away_lower in before:
-                            side = "away"
-                        break
-            if side is None:
-                continue
+            home_away = p.get("homeAway", "")
+            if home_away == "home":
+                side = "home"
+            elif home_away == "away":
+                side = "away"
+        # Method 3: Text matching as fallback
+        if side is None:
+            home_matches = [home_abbr.lower()]
+            away_matches = [away_abbr.lower()]
+            if home_name:
+                home_matches.append(home_name.lower())
+                for part in home_name.lower().split():
+                    if len(part) > 3:
+                        home_matches.append(part)
+            if away_name:
+                away_matches.append(away_name.lower())
+                for part in away_name.lower().split():
+                    if len(part) > 3:
+                        away_matches.append(part)
+            is_home = any(m in text_lower for m in home_matches)
+            is_away = any(m in text_lower for m in away_matches)
+            if is_home and not is_away:
+                side = "home"
+            elif is_away and not is_home:
+                side = "away"
+        if side is None:
+            continue
         if half_key not in stats[side]["by_half"]:
-            stats[side]["by_half"][half_key] = {"turnovers": 0, "steals": 0, "made_fg": 0, "missed_fg": 0, "rebounds": 0, "assists": 0}
+            stats[side]["by_half"][half_key] = {"turnovers": 0, "steals": 0, "rebounds": 0, "assists": 0}
         h = stats[side]["by_half"][half_key]
-        if "turnover" in text:
+        if "turnover" in text_lower:
             stats[side]["turnovers"] += 1
             h["turnovers"] += 1
-        if "steal" in text:
+        if "steal" in text_lower:
             other = "away" if side == "home" else "home"
             stats[other]["steals"] += 1
             if half_key not in stats[other]["by_half"]:
-                stats[other]["by_half"][half_key] = {"turnovers": 0, "steals": 0, "made_fg": 0, "missed_fg": 0, "rebounds": 0, "assists": 0}
+                stats[other]["by_half"][half_key] = {"turnovers": 0, "steals": 0, "rebounds": 0, "assists": 0}
             stats[other]["by_half"][half_key]["steals"] += 1
-        if "made" in text and ("three" in text or "jumper" in text or "layup" in text or "dunk" in text or "hook" in text or "tip" in text or "shot" in text or "pointer" in text or "free throw" in text):
+        if "made" in text_lower:
             stats[side]["made_fg"] += 1
-            h["made_fg"] += 1
-        if "missed" in text or "miss" in text:
-            stats[side]["missed_fg"] += 1
-            h["missed_fg"] += 1
-        if "rebound" in text:
+        if "rebound" in text_lower:
             stats[side]["rebounds"] += 1
             h["rebounds"] += 1
-        if "assist" in text:
+        if "assist" in text_lower:
             stats[side]["assists"] += 1
             h["assists"] += 1
     return stats
@@ -1656,7 +1671,7 @@ with tab_live:
             lead = abs(g.get("home_score", 0) - g.get("away_score", 0))
             mins_el_tb = calc_minutes_elapsed(g.get("period", 0), g.get("clock", "0:00"))
             if lead <= 5 and mins_el_tb >= 4:
-                tb_stats = calc_tiebreaker_stats(plays, g.get("home_abbr", ""), g.get("away_abbr", ""))
+                tb_stats = calc_tiebreaker_stats(plays, g.get("home_abbr", ""), g.get("away_abbr", ""), g.get("home_name", ""), g.get("away_name", ""), g.get("home_id", ""), g.get("away_id", ""))
                 tb_html = render_tiebreaker_panel(tb_stats, g.get("home_abbr", ""), g.get("away_abbr", ""))
                 st.markdown(tb_html, unsafe_allow_html=True)
 
