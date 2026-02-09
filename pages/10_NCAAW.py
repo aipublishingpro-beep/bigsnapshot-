@@ -1182,50 +1182,44 @@ def render_tiebreaker_panel(stats, home_abbr, away_abbr):
         h_color = "#00ff88" if h_edge else "#ff4444" if a_edge else "#888"
         edge_marker_a = " ✅" if a_edge else ""
         edge_marker_h = " ✅" if h_edge else ""
-        rows_html += f"""
-        <tr style="border-bottom:1px solid #333;">
-            <td style="padding:4px 8px;color:#aaa;font-size:clamp(11px,2.5vw,13px);">{cat_name}</td>
-            <td style="padding:4px 8px;text-align:center;color:{a_color};font-weight:700;font-size:clamp(12px,2.8vw,14px);">{a_val}{edge_marker_a}</td>
-            <td style="padding:4px 8px;text-align:center;color:{h_color};font-weight:700;font-size:clamp(12px,2.8vw,14px);">{h_val}{edge_marker_h}</td>
-        </tr>
-        """
+        rows_html += '<tr style="border-bottom:1px solid #333;">'
+        rows_html += f'<td style="padding:4px 8px;color:#aaa;font-size:clamp(11px,2.5vw,13px);">{cat_name}</td>'
+        rows_html += f'<td style="padding:4px 8px;text-align:center;color:{a_color};font-weight:700;font-size:clamp(12px,2.8vw,14px);">{a_val}{edge_marker_a}</td>'
+        rows_html += f'<td style="padding:4px 8px;text-align:center;color:{h_color};font-weight:700;font-size:clamp(12px,2.8vw,14px);">{h_val}{edge_marker_h}</td>'
+        rows_html += '</tr>'
     half_rows = ""
     for hk in all_halves:
         a_to = away.get("by_half", {}).get(hk, {}).get("turnovers", 0)
         h_to = home.get("by_half", {}).get(hk, {}).get("turnovers", 0)
         a_c = "#00ff88" if a_to < h_to else "#ff4444" if a_to > h_to else "#888"
         h_c = "#00ff88" if h_to < a_to else "#ff4444" if h_to > a_to else "#888"
-        half_rows += f"""
-        <tr style="border-bottom:1px solid #222;">
-            <td style="padding:3px 8px;color:#666;font-size:clamp(10px,2.2vw,12px);">  TO in {hk}</td>
-            <td style="padding:3px 8px;text-align:center;color:{a_c};font-size:clamp(10px,2.2vw,12px);">{a_to}</td>
-            <td style="padding:3px 8px;text-align:center;color:{h_c};font-size:clamp(10px,2.2vw,12px);">{h_to}</td>
-        </tr>
-        """
+        half_rows += '<tr style="border-bottom:1px solid #222;">'
+        half_rows += f'<td style="padding:3px 8px;color:#666;font-size:clamp(10px,2.2vw,12px);">TO in {hk}</td>'
+        half_rows += f'<td style="padding:3px 8px;text-align:center;color:{a_c};font-size:clamp(10px,2.2vw,12px);">{a_to}</td>'
+        half_rows += f'<td style="padding:3px 8px;text-align:center;color:{h_c};font-size:clamp(10px,2.2vw,12px);">{h_to}</td>'
+        half_rows += '</tr>'
     if away_wins > home_wins:
-        verdict = f"📊 Lean {away_abbr} ({away_wins}-{home_wins} on tiebreakers)"
+        verdict = f"Lean {away_abbr} ({away_wins}-{home_wins} on tiebreakers)"
         v_color = "#00ff88"
     elif home_wins > away_wins:
-        verdict = f"📊 Lean {home_abbr} ({home_wins}-{away_wins} on tiebreakers)"
+        verdict = f"Lean {home_abbr} ({home_wins}-{away_wins} on tiebreakers)"
         v_color = "#00ff88"
     else:
-        verdict = f"📊 Even {away_wins}-{home_wins} — true coin flip"
+        verdict = f"Even {away_wins}-{home_wins} — true coin flip"
         v_color = "#f0c040"
-    html = f"""
-    <div style="max-width:100%;box-sizing:border-box;background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:10px;padding:12px;margin:8px 0;border:1px solid #f0c040;">
-        <div style="color:#f0c040;font-weight:700;font-size:clamp(13px,3vw,16px);margin-bottom:8px;">⚖️ TIEBREAKER PANEL (game within 5 pts)</div>
-        <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
-            <tr style="border-bottom:1px solid #444;">
-                <th style="text-align:left;padding:4px 8px;color:#888;font-size:clamp(10px,2.5vw,12px);width:35%;">Stat</th>
-                <th style="text-align:center;padding:4px 8px;color:#888;font-size:clamp(10px,2.5vw,12px);">{away_abbr}</th>
-                <th style="text-align:center;padding:4px 8px;color:#888;font-size:clamp(10px,2.5vw,12px);">{home_abbr}</th>
-            </tr>
-            {rows_html}
-            {half_rows}
-        </table>
-        <div style="margin-top:8px;color:{v_color};font-weight:700;font-size:clamp(12px,3vw,15px);">{verdict}</div>
-    </div>
-    """
+    html = '<div style="max-width:100%;box-sizing:border-box;background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:10px;padding:12px;margin:8px 0;border:1px solid #f0c040;">'
+    html += '<div style="color:#f0c040;font-weight:700;font-size:clamp(13px,3vw,16px);margin-bottom:8px;">⚖️ TIEBREAKER PANEL (game within 5 pts)</div>'
+    html += '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">'
+    html += '<tr style="border-bottom:1px solid #444;">'
+    html += f'<th style="text-align:left;padding:4px 8px;color:#888;font-size:clamp(10px,2.5vw,12px);width:35%;">Stat</th>'
+    html += f'<th style="text-align:center;padding:4px 8px;color:#888;font-size:clamp(10px,2.5vw,12px);">{away_abbr}</th>'
+    html += f'<th style="text-align:center;padding:4px 8px;color:#888;font-size:clamp(10px,2.5vw,12px);">{home_abbr}</th>'
+    html += '</tr>'
+    html += rows_html
+    html += half_rows
+    html += '</table>'
+    html += f'<div style="margin-top:8px;color:{v_color};font-weight:700;font-size:clamp(12px,3vw,15px);">{verdict}</div>'
+    html += '</div>'
     return html
 
 # === END PART A — PASTE PART B BELOW THIS LINE ===
