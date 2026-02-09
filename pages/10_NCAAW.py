@@ -36,7 +36,7 @@ MIN_UNDERDOG_LEAD = 8
 MIN_SPREAD_BRACKET = 8
 MAX_NO_PRICE = 85
 MIN_WP_EDGE = 8
-LEAD_BY_HALF = {1: 8, 2: 12}
+LEAD_BY_HALF = {1: 7, 2: 7, 3: 10, 4: 12}
 KALSHI_GAME_LINK = "https://kalshi.com/sports/basketball/college-basketball-w/games"
 KALSHI_SPREAD_LINK = "https://kalshi.com/sports/basketball/college-basketball-w/spreads"
 
@@ -95,10 +95,10 @@ def calc_minutes_elapsed(period, clock_str):
             mins_left = 0
             secs_left = 0
         time_left = mins_left + secs_left / 60.0
-        if period <= 2:
-            elapsed = (period - 1) * HALF_MINUTES + (HALF_MINUTES - time_left)
+        if period <= 4:
+            elapsed = (period - 1) * 10 + (10 - time_left)
         else:
-            ot_period = period - 2
+            ot_period = period - 4
             elapsed = GAME_MINUTES + (ot_period - 1) * 5 + (5 - time_left)
         return max(0, elapsed)
     except:
@@ -982,7 +982,7 @@ def render_scoreboard(game):
     half_scores_away = ""
     if ls_home:
         for i in range(len(ls_home)):
-            label = f"H{i+1}" if i < 2 else f"OT{i-1}"
+            label = f"Q{i+1}" if i < 4 else f"OT{i-3}"
             half_headers += f'<th style="padding:2px 8px;color:#888;font-size:0.75rem;">{label}</th>'
             half_scores_home += f'<td style="padding:2px 8px;color:#ccc;font-size:0.8rem;text-align:center;">{ls_home[i]}</td>'
         for i in range(len(ls_away)):
@@ -1105,10 +1105,10 @@ def calc_tiebreaker_stats(plays, home_abbr, away_abbr, home_name="", away_name="
             period = p.get("period", 0) if isinstance(p.get("period"), (int, float)) else 0
         if period <= 0:
             period = 1
-        if period <= 2:
-            half_key = f"H{period}"
+        if period <= 4:
+            half_key = f"Q{period}"
         else:
-            half_key = f"OT{period - 2}"
+            half_key = f"OT{period - 4}"
         side = None
         # Method 1: Match by team ID from play object
         team_obj = p.get("team", {})
@@ -1733,7 +1733,7 @@ with tab_cushion:
             trailer_c = get_team_color(g, "away" if home_leading else "home")
             period = g.get("period", 0)
             clock = g.get("clock", "0:00")
-            p_label = f"H{period}" if period <= 2 else f"OT{period - 2}"
+            p_label = f"Q{period}" if period <= 4 else f"OT{period - 4}"
 
             trailer_ml = find_ml_price_for_team(kalshi_ml_data, trailer, g.get("away_name" if home_leading else "home_name", ""))
             trailer_yes = trailer_ml.get("yes_ask", 0) if trailer_ml else 0
@@ -1836,7 +1836,7 @@ with tab_shark:
             trailer_c = get_team_color(g, "away" if home_leading else "home")
             period = g.get("period", 0)
             clock = g.get("clock", "0:00")
-            p_label = f"H{period}" if period <= 2 else f"OT{period - 2}"
+            p_label = f"Q{period}" if period <= 4 else f"OT{period - 4}"
 
             trailer_ml = find_ml_price_for_team(kalshi_ml_data, trailer_abbr, g.get("away_name" if home_leading else "home_name", ""))
             trailer_yes = trailer_ml.get("yes_ask", 0) if trailer_ml else 0
