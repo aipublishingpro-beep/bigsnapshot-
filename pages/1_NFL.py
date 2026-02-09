@@ -335,7 +335,8 @@ def render_football_field(ball_yard, down, distance, possession_team, away_team,
             x_pct = max(ball_pct - 15, 15)
         x_html = '<div style="position:absolute;left:' + str(x_pct) + '%;top:50%;transform:translate(-50%,-50%);color:#ff4444;font-size:22px;font-weight:bold;text-shadow:0 0 6px #000">✕</div>'
 
-    h = '<div style="background:#1a1a1a;padding:15px;border-radius:10px;margin:10px 0">'
+    h = '<style>@media(max-width:768px){.nfl-field-wrap{padding:8px!important}.nfl-score-header span{font-size:0.9em!important}.nfl-plays-item{font-size:0.75em!important}}</style>'
+    h += '<div class="nfl-field-wrap" style="background:#1a1a1a;padding:15px;border-radius:10px;margin:10px 0">'
     h += '<div style="text-align:center;margin-bottom:10px;font-size:1.1em">'
     h += '<span style="color:#00ff00;font-weight:bold">' + poss_display + '</span>'
     h += '<span style="color:#ff4444">' + red_zone_note + '</span></div>'
@@ -891,10 +892,13 @@ if live_games:
 
         period_display = "HALF" if g.get('is_halftime') else "Q" + str(g['period'])
 
-        # SCOREBOARD
-        st.markdown('<div style="background:linear-gradient(135deg,#1e1e2e 0%,#2a2a3e 100%);border-radius:12px;padding:16px;margin-bottom:4px;border:1px solid #444"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="color:#fff;font-size:1.1em;font-weight:600">' + str(g.get('away','')) + ' @ ' + str(g.get('home','')) + '</span><span style="color:#ff6b6b;font-size:0.9em">' + period_display + ' ' + str(g.get('clock','')) + '</span></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="color:#fff;font-size:1.4em;font-weight:700">' + str(g.get('away_score',0)) + ' - ' + str(g.get('home_score',0)) + '</span><span style="color:' + status_color + ';font-weight:600">' + status_label + '</span></div><div style="color:#aaa;font-size:0.9em">Edge: <strong style="color:#fff">' + leader + '</strong> (' + lead_display + ') ' + str(edge.get('pace_label','')) + '</div></div>', unsafe_allow_html=True)
+        # SCOREBOARD (mobile responsive)
+        st.markdown('<style>@media(max-width:640px){.nfl-score-header{padding:10px!important}.nfl-score-header span{font-size:0.85em!important}}</style>', unsafe_allow_html=True)
+        st.markdown('<div class="nfl-score-header" style="background:linear-gradient(135deg,#1e1e2e 0%,#2a2a3e 100%);border-radius:12px;padding:16px;margin-bottom:4px;border:1px solid #444"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span style="color:#fff;font-size:1.1em;font-weight:600">' + str(g.get('away','')) + ' @ ' + str(g.get('home','')) + '</span><span style="color:#ff6b6b;font-size:0.9em">' + period_display + ' ' + str(g.get('clock','')) + '</span></div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:10px"><span style="color:#fff;font-size:1.4em;font-weight:700">' + str(g.get('away_score',0)) + ' - ' + str(g.get('home_score',0)) + '</span><span style="color:' + status_color + ';font-weight:600">' + status_label + '</span></div><div style="color:#aaa;font-size:0.9em">Edge: <strong style="color:#fff">' + leader + '</strong> (' + lead_display + ') ' + str(edge.get('pace_label','')) + '</div></div>', unsafe_allow_html=True)
 
-        # FOOTBALL FIELD + PLAY-BY-PLAY (two columns)
+        # FOOTBALL FIELD + PLAY-BY-PLAY
+        # On mobile, columns stack automatically — but we also inject CSS for smaller text
+        st.markdown('<style>@media(max-width:640px){[data-testid="column"]{width:100%!important;flex:100%!important}}</style>', unsafe_allow_html=True)
         col_field, col_plays = st.columns([3, 2])
 
         with col_field:
