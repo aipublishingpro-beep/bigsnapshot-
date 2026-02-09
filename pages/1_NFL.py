@@ -33,6 +33,13 @@ import json
 import os
 from datetime import datetime, timedelta
 import pytz
+import streamlit.components.v1 as components
+
+def speak_play(text):
+    """Browser text-to-speech for play-by-play"""
+    clean = text.replace("'", "").replace('"', '').replace('\n', ' ')[:120]
+    js = '<script>if(!window.lastSpoken||window.lastSpoken!=="' + clean + '"){window.lastSpoken="' + clean + '";var u=new SpeechSynthesisUtterance("' + clean + '");u.rate=1.1;window.speechSynthesis.speak(u);}</script>'
+    components.html(js, height=0)
 
 eastern = pytz.timezone("US/Eastern")
 now = datetime.now(eastern)
@@ -916,14 +923,18 @@ if live_games:
 
         with col_plays:
             st.markdown("**📋 Last 10 Plays**")
+            tts_on = st.checkbox("🔊 Announce plays", key="tts_" + game_key)
             plays = fetch_play_by_play(g.get('event_id'))
             if plays:
-                for play in reversed(plays):
+                for idx, play in enumerate(reversed(plays)):
                     icon, color = get_play_icon(play.get('text', ''))
                     p_text = play.get('text', '')[:100]
                     p_time = "Q" + str(play.get('period', '')) + " " + str(play.get('clock', ''))
                     scoring_badge = ' <span style="color:#ffd700;font-weight:bold">★</span>' if play.get('scoring') else ''
                     st.markdown('<div style="background:#0f0f1a;padding:6px 8px;border-radius:4px;margin-bottom:3px;border-left:3px solid ' + color + '"><span style="font-size:0.8em"><span style="color:' + color + '">' + icon + '</span> <span style="color:#666">' + p_time + '</span> <span style="color:#ccc">' + p_text + '</span>' + scoring_badge + '</span></div>', unsafe_allow_html=True)
+                    # Announce newest play only
+                    if idx == 0 and tts_on and play.get('text'):
+                        speak_play(p_time + ". " + play.get('text', '')[:100])
             else:
                 st.caption("No play data yet")
 
