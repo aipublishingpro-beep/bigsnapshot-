@@ -1082,6 +1082,152 @@ def get_play_icon(play_type, score_value):
         return "⏸️", "#ffffff"
     return "", ""
 
+# ============================================================
+# TIEBREAKER PANEL — Parse plays for turnovers per team/half
+# ============================================================
+def calc_tiebreaker_stats(plays, home_abbr, away_abbr):
+    stats = {
+        "home": {"name": home_abbr, "turnovers": 0, "steals": 0, "made_fg": 0, "missed_fg": 0, "rebounds": 0, "assists": 0, "by_half": {}},
+        "away": {"name": away_abbr, "turnovers": 0, "steals": 0, "made_fg": 0, "missed_fg": 0, "rebounds": 0, "assists": 0, "by_half": {}},
+    }
+    if not plays:
+        return stats
+    for p in plays:
+        if not isinstance(p, dict):
+            continue
+        text = p.get("text", "").lower()
+        period = p.get("period", {}).get("number", 0) if isinstance(p.get("period"), dict) else 0
+        if period == 0:
+            period = p.get("period", 0) if isinstance(p.get("period"), (int, float)) else 0
+        if period <= 2:
+            half_key = f"H{period}"
+        elif period > 2:
+            half_key = f"OT{period - 2}"
+        else:
+            half_key = "H1"
+        team_id = ""
+        if isinstance(p.get("team"), dict):
+            team_id = p["team"].get("id", "")
+        home_lower = home_abbr.lower()
+        away_lower = away_abbr.lower()
+        is_home = home_lower in text
+        is_away = away_lower in text
+        if not is_home and not is_away:
+            continue
+        side = "home" if is_home and not is_away else "away" if is_away and not is_home else None
+        if side is None:
+            if "turnover" in text:
+                words = text.split()
+                for i, w in enumerate(words):
+                    if "turnover" in w:
+                        before = " ".join(words[:i]).lower()
+                        if home_lower in before:
+                            side = "home"
+                        elif away_lower in before:
+                            side = "away"
+                        break
+            if side is None:
+                continue
+        if half_key not in stats[side]["by_half"]:
+            stats[side]["by_half"][half_key] = {"turnovers": 0, "steals": 0, "made_fg": 0, "missed_fg": 0, "rebounds": 0, "assists": 0}
+        h = stats[side]["by_half"][half_key]
+        if "turnover" in text:
+            stats[side]["turnovers"] += 1
+            h["turnovers"] += 1
+        if "steal" in text:
+            other = "away" if side == "home" else "home"
+            stats[other]["steals"] += 1
+            if half_key not in stats[other]["by_half"]:
+                stats[other]["by_half"][half_key] = {"turnovers": 0, "steals": 0, "made_fg": 0, "missed_fg": 0, "rebounds": 0, "assists": 0}
+            stats[other]["by_half"][half_key]["steals"] += 1
+        if "made" in text and ("three" in text or "jumper" in text or "layup" in text or "dunk" in text or "hook" in text or "tip" in text or "shot" in text or "pointer" in text or "free throw" in text):
+            stats[side]["made_fg"] += 1
+            h["made_fg"] += 1
+        if "missed" in text or "miss" in text:
+            stats[side]["missed_fg"] += 1
+            h["missed_fg"] += 1
+        if "rebound" in text:
+            stats[side]["rebounds"] += 1
+            h["rebounds"] += 1
+        if "assist" in text:
+            stats[side]["assists"] += 1
+            h["assists"] += 1
+    return stats
+
+def render_tiebreaker_panel(stats, home_abbr, away_abbr):
+    home = stats["home"]
+    away = stats["away"]
+    categories = [
+        ("Turnovers", away["turnovers"], home["turnovers"], True),
+        ("Steals", away["steals"], home["steals"], False),
+        ("Rebounds", away["rebounds"], home["rebounds"], False),
+        ("Assists", away["assists"], home["assists"], False),
+    ]
+    away_wins = 0
+    home_wins = 0
+    rows_html = ""
+    all_halves = sorted(set(list(home.get("by_half", {}).keys()) + list(away.get("by_half", {}).keys())))
+    for cat_name, a_val, h_val, lower_better in categories:
+        if lower_better:
+            a_edge = a_val < h_val
+            h_edge = h_val < a_val
+        else:
+            a_edge = a_val > h_val
+            h_edge = h_val > a_val
+        if a_edge:
+            away_wins += 1
+        elif h_edge:
+            home_wins += 1
+        a_color = "#00ff88" if a_edge else "#ff4444" if h_edge else "#888"
+        h_color = "#00ff88" if h_edge else "#ff4444" if a_edge else "#888"
+        edge_marker_a = " ✅" if a_edge else ""
+        edge_marker_h = " ✅" if h_edge else ""
+        rows_html += f"""
+        <tr style="border-bottom:1px solid #333;">
+            <td style="padding:4px 8px;color:#aaa;font-size:clamp(11px,2.5vw,13px);">{cat_name}</td>
+            <td style="padding:4px 8px;text-align:center;color:{a_color};font-weight:700;font-size:clamp(12px,2.8vw,14px);">{a_val}{edge_marker_a}</td>
+            <td style="padding:4px 8px;text-align:center;color:{h_color};font-weight:700;font-size:clamp(12px,2.8vw,14px);">{h_val}{edge_marker_h}</td>
+        </tr>
+        """
+    half_rows = ""
+    for hk in all_halves:
+        a_to = away.get("by_half", {}).get(hk, {}).get("turnovers", 0)
+        h_to = home.get("by_half", {}).get(hk, {}).get("turnovers", 0)
+        a_c = "#00ff88" if a_to < h_to else "#ff4444" if a_to > h_to else "#888"
+        h_c = "#00ff88" if h_to < a_to else "#ff4444" if h_to > a_to else "#888"
+        half_rows += f"""
+        <tr style="border-bottom:1px solid #222;">
+            <td style="padding:3px 8px;color:#666;font-size:clamp(10px,2.2vw,12px);">  TO in {hk}</td>
+            <td style="padding:3px 8px;text-align:center;color:{a_c};font-size:clamp(10px,2.2vw,12px);">{a_to}</td>
+            <td style="padding:3px 8px;text-align:center;color:{h_c};font-size:clamp(10px,2.2vw,12px);">{h_to}</td>
+        </tr>
+        """
+    if away_wins > home_wins:
+        verdict = f"📊 Lean {away_abbr} ({away_wins}-{home_wins} on tiebreakers)"
+        v_color = "#00ff88"
+    elif home_wins > away_wins:
+        verdict = f"📊 Lean {home_abbr} ({home_wins}-{away_wins} on tiebreakers)"
+        v_color = "#00ff88"
+    else:
+        verdict = f"📊 Even {away_wins}-{home_wins} — true coin flip"
+        v_color = "#f0c040"
+    html = f"""
+    <div style="max-width:100%;box-sizing:border-box;background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:10px;padding:12px;margin:8px 0;border:1px solid #f0c040;">
+        <div style="color:#f0c040;font-weight:700;font-size:clamp(13px,3vw,16px);margin-bottom:8px;">⚖️ TIEBREAKER PANEL (game within 5 pts)</div>
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
+            <tr style="border-bottom:1px solid #444;">
+                <th style="text-align:left;padding:4px 8px;color:#888;font-size:clamp(10px,2.5vw,12px);width:35%;">Stat</th>
+                <th style="text-align:center;padding:4px 8px;color:#888;font-size:clamp(10px,2.5vw,12px);">{away_abbr}</th>
+                <th style="text-align:center;padding:4px 8px;color:#888;font-size:clamp(10px,2.5vw,12px);">{home_abbr}</th>
+            </tr>
+            {rows_html}
+            {half_rows}
+        </table>
+        <div style="margin-top:8px;color:{v_color};font-weight:700;font-size:clamp(12px,3vw,15px);">{verdict}</div>
+    </div>
+    """
+    return html
+
 # === END PART A — PASTE PART B BELOW THIS LINE ===
 # ============================================================
 # PART B — UI LAYER (paste below Part A)
@@ -1499,6 +1645,13 @@ with tab_live:
                                 d_color = "#00ff88" if diff > 0 else "#ff4444"
                                 tag = "CHEAP" if diff > 0 else "EXPENSIVE"
                                 st.markdown(f'<span style="color:{d_color};font-size:clamp(11px,2.5vw,13px);">💰 {abbr}: {tag} on Kalshi (Vegas {vegas_imp:.0%} vs Kalshi {kalshi_imp:.0%})</span>', unsafe_allow_html=True)
+
+                # Tiebreaker Panel (close games ≤5 pts)
+                lead = abs(g.get("home_score", 0) - g.get("away_score", 0))
+                if lead <= 5 and mins_el >= 4:
+                    tb_stats = calc_tiebreaker_stats(plays, g.get("home_abbr", ""), g.get("away_abbr", ""))
+                    tb_html = render_tiebreaker_panel(tb_stats, g.get("home_abbr", ""), g.get("away_abbr", ""))
+                    st.markdown(tb_html, unsafe_allow_html=True)
 
                 # Comeback Tracker
                 if game_id in st.session_state.ncaaw_comeback_tracking:
