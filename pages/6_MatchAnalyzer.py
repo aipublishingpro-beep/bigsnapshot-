@@ -1,6 +1,7 @@
 """
-🔬 MATCH ANALYZER v30
+🔬 MATCH ANALYZER v31
 Win Probability Engine + Kalshi Edge Finder + One-Click Trading
+Basketball Only (NBA, NCAA Men, NCAA Women)
 BigSnapshot.com
 """
 import streamlit as st
@@ -8,7 +9,6 @@ import requests
 import math
 import time
 import base64
-import json
 from datetime import datetime
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -17,7 +17,7 @@ from cryptography.hazmat.backends import default_backend
 st.set_page_config(page_title="Match Analyzer", page_icon="🔬", layout="wide")
 
 # ============================================================
-# OWNER-ONLY ACCESS — bookmark: yoursite.com/MatchAnalyzer?key=shark
+# OWNER-ONLY ACCESS — bookmark: bigsnapshot.streamlit.app/MatchAnalyzer?key=shark
 # ============================================================
 if st.query_params.get("key") != "shark":
     st.error("🔒 Access denied")
@@ -106,7 +106,7 @@ def place_kalshi_order(ticker, side, price_cents, count):
 
 
 # ============================================================
-# LEAGUE CONFIG
+# LEAGUE CONFIG — BASKETBALL ONLY
 # ============================================================
 LEAGUES = {
     "NBA": {"pace": 0.034, "minutes": 48, "periods": 4, "pmin": 12,
@@ -296,11 +296,11 @@ def build_chart(data, xl, yl, xdom, dx=None, dy=None, kl=None):
     W = 500
     H = 240
     pl = 50
-    pt = 18
+    pt_top = 18
     pr = 25
     pb = 46
     cw = W - pl - pr
-    ch = H - pt - pb
+    ch = H - pt_top - pb
     xmn = xdom[0]
     xmx = xdom[1]
 
@@ -308,7 +308,7 @@ def build_chart(data, xl, yl, xdom, dx=None, dy=None, kl=None):
         return pl + ((v - xmn) / (xmx - xmn)) * cw
 
     def sy(v):
-        return pt + ch - (v / 100) * ch
+        return pt_top + ch - (v / 100) * ch
 
     s = ""
     s += '<svg viewBox="0 0 500 240" style="width:100%;display:block;background:#0a0a1a;border-radius:10px">'
@@ -335,9 +335,9 @@ def build_chart(data, xl, yl, xdom, dx=None, dy=None, kl=None):
         sgn = "+" if ed > 0 else ""
         s += '<line x1="' + str(round(dxp, 1)) + '" x2="' + str(round(dxp, 1)) + '" y1="' + str(round(dyp, 1)) + '" y2="' + str(round(kyp, 1)) + '" stroke="' + kc + '" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>'
         mc = (dyp + kyp) / 2
-        s += '<text x="' + str(round(dxp + 10, 1)) + '" y="' + str(round(mc + 4, 1)) + '" fill="' + kc + '" font-size="10" font-weight="bold">' + sgn + str(round(ed)) + '¢</text>'
+        s += '<text x="' + str(round(dxp + 10, 1)) + '" y="' + str(round(mc + 4, 1)) + '" fill="' + kc + '" font-size="10" font-weight="bold">' + sgn + str(round(ed)) + '&#162;</text>'
         s += '<circle cx="' + str(round(dxp, 1)) + '" cy="' + str(round(kyp, 1)) + '" r="6" fill="' + kc + '" stroke="#000" stroke-width="1.5"/>'
-        s += '<text x="' + str(round(dxp + 10, 1)) + '" y="' + str(round(kyp + 4, 1)) + '" fill="' + kc + '" font-size="9">Kalshi ' + str(kl) + '¢</text>'
+        s += '<text x="' + str(round(dxp + 10, 1)) + '" y="' + str(round(kyp + 4, 1)) + '" fill="' + kc + '" font-size="9">Kalshi ' + str(kl) + '&#162;</text>'
     if dx is not None and dy is not None:
         dxp = sx(dx)
         dyp = sy(dy)
@@ -369,7 +369,7 @@ api_ok = bal is not None
 if api_ok:
     st.success("🟢 Kalshi API Connected — Balance: $" + str(round(bal, 2)))
 else:
-    st.warning("🔴 Kalshi API not connected — add KALSHI_API_KEY + KALSHI_PRIVATE_KEY to secrets")
+    st.warning("🔴 Kalshi API not connected — add keys to secrets")
 
 # LEAGUE TABS
 lkeys = list(LEAGUES.keys())
@@ -395,8 +395,8 @@ fin_g = [g for g in all_games if g["state"] == "post"]
 
 st.markdown("---")
 
+
 def game_btn(g, pfx):
-    is_sel = st.session_state.sel_game_id == g["id"]
     lab = ""
     if g["state"] != "pre":
         lab = g["aAbbr"] + " " + str(g["aScore"]) + " @ " + g["hAbbr"] + " " + str(g["hScore"])
@@ -404,16 +404,18 @@ def game_btn(g, pfx):
         lab = g["aAbbr"] + " @ " + g["hAbbr"]
     kp, _ = find_kalshi_price(g, sel_league)
     if kp:
-        lab += " | " + str(kp) + "¢"
+        lab += " | " + str(kp) + "c"
     if g["spread"]:
         lab += " | " + g["spread"]
     lab += " — " + g["statusText"]
     if g["state"] == "in":
         lab = "🔴 " + lab
+    is_sel = st.session_state.sel_game_id == g["id"]
     bt = "primary" if is_sel else "secondary"
     if st.button(lab, key=pfx + "_" + g["id"], use_container_width=True, type=bt):
         st.session_state.sel_game_id = g["id"]
         st.rerun()
+
 
 if live_g:
     st.markdown("**🔴 LIVE (" + str(len(live_g)) + ")**")
@@ -444,7 +446,6 @@ away_team = sel_game["away"] if sel_game else "Away"
 g_margin = sel_game["margin"] if sel_game else 0
 g_period = sel_game.get("period", 1) if sel_game else 1
 g_clock = sel_game.get("clock", "0:00") if sel_game else "0:00"
-is_live = sel_game and sel_game["state"] == "in"
 is_pre = sel_game and sel_game["state"] == "pre"
 mode = "pregame" if is_pre else "ingame"
 
@@ -541,7 +542,7 @@ st.markdown(html, unsafe_allow_html=True)
 # EDGE FINDER
 st.markdown('<div style="text-align:center;color:#f0c040;font-weight:700;font-size:16px;margin:10px 0">💰 KALSHI EDGE FINDER</div>', unsafe_allow_html=True)
 kpv = int(k_price) if k_price else 0
-kpo = st.number_input("Home ML Price (¢)", min_value=0, max_value=99, value=kpv, key="kpi", help="Auto-filled. Override if needed.")
+kpo = st.number_input("Home ML Price (cents)", min_value=0, max_value=99, value=kpv, key="kpi", help="Auto-filled. Override if needed.")
 if kpo > 0:
     kpv = kpo
 
@@ -571,12 +572,13 @@ if kpv > 0 and kpv <= 100:
         sig = "⚪ NO EDGE"
     ec = "#10b981" if he > 8 else "#f59e0b" if he > 3 else "#ef4444" if he < -8 else "#f59e0b" if he < -3 else "#64748b"
     esgn = "+" if he > 0 else ""
+
     html = '<div style="display:flex;justify-content:center;gap:20px;margin:8px 0">'
     html += '<div style="text-align:center"><div style="color:#64748b;font-size:10px">Model</div><div style="color:' + wpc + ';font-size:20px;font-weight:800">' + str(round(wp, 1)) + '%</div></div>'
     html += '<div style="text-align:center"><div style="color:#64748b;font-size:10px">vs</div><div style="color:#64748b;font-size:20px">→</div></div>'
-    html += '<div style="text-align:center"><div style="color:#64748b;font-size:10px">Kalshi</div><div style="color:#38bdf8;font-size:20px;font-weight:800">' + str(kpv) + '¢</div></div>'
+    html += '<div style="text-align:center"><div style="color:#64748b;font-size:10px">Kalshi</div><div style="color:#38bdf8;font-size:20px;font-weight:800">' + str(kpv) + 'c</div></div>'
     html += '<div style="text-align:center"><div style="color:#64748b;font-size:10px">=</div><div style="color:#64748b;font-size:20px">=</div></div>'
-    html += '<div style="text-align:center"><div style="color:#64748b;font-size:10px">Edge</div><div style="color:' + ec + ';font-size:20px;font-weight:800">' + esgn + str(round(he, 1)) + '¢</div></div>'
+    html += '<div style="text-align:center"><div style="color:#64748b;font-size:10px">Edge</div><div style="color:' + ec + ';font-size:20px;font-weight:800">' + esgn + str(round(he, 1)) + 'c</div></div>'
     html += '</div>'
     html += '<div style="text-align:center;padding:8px;border-radius:8px;background:#020617;border:1px solid ' + ec + ';margin-bottom:10px">'
     html += '<div style="color:' + ec + ';font-size:16px;font-weight:800">' + sig + '</div></div>'
@@ -592,12 +594,14 @@ if kpv > 0 and kpv <= 100:
     evc = "#10b981" if ev > 0 else "#ef4444"
     evs = "+" if ev > 0 else ""
     ros = "+" if roi > 0 else ""
+
     html = '<div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin:8px 0">'
-    html += '<div style="background:#0f172a;border-radius:6px;padding:6px 12px;text-align:center;min-width:80px;border:1px solid #1e293b"><div style="color:#64748b;font-size:9px">BEST SIDE</div><div style="color:#f0c040;font-size:13px;font-weight:700">' + sn + '</div><div style="color:#64748b;font-size:10px">@ ' + str(bp) + '¢ ' + bside.upper() + '</div></div>'
+    html += '<div style="background:#0f172a;border-radius:6px;padding:6px 12px;text-align:center;min-width:80px;border:1px solid #1e293b"><div style="color:#64748b;font-size:9px">BEST SIDE</div><div style="color:#f0c040;font-size:13px;font-weight:700">' + sn + '</div><div style="color:#64748b;font-size:10px">@ ' + str(bp) + 'c ' + bside.upper() + '</div></div>'
     html += '<div style="background:#0f172a;border-radius:6px;padding:6px 12px;text-align:center;min-width:80px;border:1px solid #1e293b"><div style="color:#64748b;font-size:9px">COST</div><div style="color:#e2e8f0;font-size:13px;font-weight:700">$' + str(round(cost, 2)) + '</div></div>'
     html += '<div style="background:#0f172a;border-radius:6px;padding:6px 12px;text-align:center;min-width:80px;border:1px solid #1e293b"><div style="color:#64748b;font-size:9px">IF WIN</div><div style="color:#10b981;font-size:13px;font-weight:700">+$' + str(round(pw, 2)) + '</div></div>'
     html += '<div style="background:#0f172a;border-radius:6px;padding:6px 12px;text-align:center;min-width:80px;border:1px solid #1e293b"><div style="color:#64748b;font-size:9px">IF LOSE</div><div style="color:#ef4444;font-size:13px;font-weight:700">-$' + str(round(ll, 2)) + '</div></div>'
     html += '</div>'
+
     html += '<div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin:8px 0">'
     html += '<div style="background:#0f172a;border-radius:6px;padding:6px 12px;text-align:center;min-width:90px;border:1px solid ' + evc + '"><div style="color:#64748b;font-size:9px">EV</div><div style="color:' + evc + ';font-size:15px;font-weight:800">' + evs + '$' + str(round(ev, 2)) + '</div></div>'
     html += '<div style="background:#0f172a;border-radius:6px;padding:6px 12px;text-align:center;min-width:90px;border:1px solid #1e293b"><div style="color:#64748b;font-size:9px">ROI</div><div style="color:' + evc + ';font-size:15px;font-weight:800">' + ros + str(round(roi, 1)) + '%</div></div>'
@@ -608,11 +612,11 @@ if kpv > 0 and kpv <= 100:
 
     # BUY BUTTON
     if api_ok and k_ticker and ae >= 2:
-        blab = "🚀 BUY " + str(contracts) + "x " + sn + " " + bside.upper() + " @ " + str(int(bp)) + "¢"
+        blab = "🚀 BUY " + str(contracts) + "x " + sn + " " + bside.upper() + " @ " + str(int(bp)) + "c"
         if st.button(blab, key="buy", use_container_width=True, type="primary"):
             ok, msg, oid = place_kalshi_order(k_ticker, bside, int(bp), contracts)
             if ok:
-                st.success("✅ Order placed! " + str(contracts) + "x " + sn + " " + bside.upper() + " @ " + str(bp) + "¢ — ID: " + oid)
+                st.success("✅ Order placed! " + str(contracts) + "x " + sn + " " + bside.upper() + " @ " + str(bp) + "c — ID: " + oid)
             else:
                 st.error("❌ Order failed: " + msg)
             st.session_state.order_log.append({
@@ -629,7 +633,7 @@ if kpv > 0 and kpv <= 100:
     # CHECKLIST
     checks = []
     checks.append({"l": "Game Selected", "p": sel_game is not None})
-    checks.append({"l": "Edge >= 5¢ (" + str(round(ae, 1)) + "¢)", "p": ae >= 5})
+    checks.append({"l": "Edge >= 5c (" + str(round(ae, 1)) + "c)", "p": ae >= 5})
     checks.append({"l": "EV +EV ($" + str(round(ev, 2)) + ")", "p": ev > 0})
     checks.append({"l": "Breakeven < 80% (" + str(bp) + "%)", "p": bp < 80})
     checks.append({"l": "Risk:Reward < 4:1 (" + str(round(rr, 1)) + ":1)", "p": rr < 4})
@@ -656,10 +660,10 @@ for i in range(81):
     md.append((m, calc_wp(m, tf_use, cfg["pace"])))
 td = []
 for i in range(101):
-    s = (i / 100) * tsec
-    tfr = max(0, (tsec - s) / tsec)
+    s_val = (i / 100) * tsec
+    tfr = max(0, (tsec - s_val) / tsec)
     mv = pe if mode == "pregame" else margin
-    td.append((s, calc_wp(mv, tfr, cfg["pace"])))
+    td.append((s_val, calc_wp(mv, tfr, cfg["pace"])))
 kl_chart = kpv if kpv > 0 else None
 ch1, ch2 = st.columns(2)
 with ch1:
@@ -680,13 +684,16 @@ if st.session_state.order_log:
         ic = "✅" if o["ok"] else "❌"
         cl = "#10b981" if o["ok"] else "#ef4444"
         bg = "#0a1f0a" if o["ok"] else "#1f0a0a"
-        st.markdown('<div style="display:flex;justify-content:space-between;padding:4px 8px;border-radius:4px;background:' + bg + ';margin-bottom:2px"><span style="color:#94a3b8;font-size:11px">' + o["time"] + '</span><span style="color:#e2e8f0;font-size:11px;font-weight:600">' + str(o["contracts"]) + 'x ' + o["team"] + ' ' + o["side"] + ' @ ' + str(o["price"]) + '¢</span><span style="color:' + cl + ';font-size:11px;font-weight:700">' + ic + ' ' + o["msg"] + '</span></div>', unsafe_allow_html=True)
+        st.markdown('<div style="display:flex;justify-content:space-between;padding:4px 8px;border-radius:4px;background:' + bg + ';margin-bottom:2px"><span style="color:#94a3b8;font-size:11px">' + o["time"] + '</span><span style="color:#e2e8f0;font-size:11px;font-weight:600">' + str(o["contracts"]) + 'x ' + o["team"] + ' ' + o["side"] + ' @ ' + str(o["price"]) + 'c</span><span style="color:' + cl + ';font-size:11px;font-weight:700">' + ic + ' ' + o["msg"] + '</span></div>', unsafe_allow_html=True)
 
-# AUTO REFRESH
+# REFRESH BUTTON
 st.markdown("---")
-auto = st.checkbox("🔄 Auto-refresh (30s)", value=True, key="aref")
-if auto:
-    time.sleep(30)
-    st.rerun()
+col_r1, col_r2 = st.columns([1, 3])
+with col_r1:
+    if st.button("🔄 Refresh", key="refbtn", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+with col_r2:
+    st.caption("Scores + Kalshi prices cached 30s. Click to force refresh.")
 
-st.caption("⚠️ Educational only. Not financial advice. v30")
+st.caption("⚠️ Educational only. Not financial advice. v31")
