@@ -487,6 +487,9 @@ st.markdown('<div style="text-align:center;padding:8px 0"><span style="font-size
 
 bal = get_kalshi_balance()
 api_ok = bal is not None
+is_owner = st.query_params.get("key") == "shark"
+if is_owner and api_ok:
+    st.success("🟢 Kalshi API Connected — Balance: $" + str(round(bal, 2)))
 
 # LEAGUE TABS
 lkeys = list(LEAGUES.keys())
