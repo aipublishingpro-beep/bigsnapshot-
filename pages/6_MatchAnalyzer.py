@@ -487,10 +487,6 @@ st.markdown('<div style="text-align:center;padding:8px 0"><span style="font-size
 
 bal = get_kalshi_balance()
 api_ok = bal is not None
-if api_ok:
-    st.success("🟢 Kalshi API Connected — Balance: $" + str(round(bal, 2)))
-else:
-    st.warning("🔴 Kalshi API not connected — add keys to secrets")
 
 # LEAGUE TABS
 lkeys = list(LEAGUES.keys())
