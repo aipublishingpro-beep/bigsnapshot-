@@ -117,10 +117,6 @@ LEAGUES = {
     "NCAAW": {"pace": 0.022, "minutes": 40, "periods": 4, "pmin": 10,
               "label": "NCAA Women", "espn": "basketball/womens-college-basketball",
               "kalshi": "KXNCAAWBGAME", "plbl": "Q"},
-    "NHL": {"pace": 0.025, "minutes": 60, "periods": 3, "pmin": 20,
-            "label": "NHL", "espn": "hockey/nhl", "kalshi": "KXNHLGAME", "plbl": "P"},
-    "NFL": {"pace": 0.018, "minutes": 60, "periods": 4, "pmin": 15,
-            "label": "NFL", "espn": "football/nfl", "kalshi": "KXNFLGAME", "plbl": "Q"},
 }
 
 FACTORS = [
