@@ -451,4 +451,17 @@ st.markdown("""
 """)
 
 st.markdown("---")
-st.markdown(f"<p style='color:#484f58; font-size:11px; text-align:center'>Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Data: Yahoo Finance | Auto-refreshes every 5 min</p>", unsafe_allow_html=True)
+st.markdown("""
+<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; margin-top:16px">
+<p style="color:#f0b90b; font-size:13px; font-weight:bold; margin-bottom:8px">⚠️ DISCLAIMER</p>
+<p style="color:#8b949e; font-size:11px; line-height:1.7">
+This tool is for <strong>research and educational purposes only</strong>. It is NOT financial advice. 
+Fibonacci retracement levels are technical analysis indicators based on historical price patterns — they do NOT predict future price movements. 
+Past performance does not guarantee future results. All trading involves risk and you can lose your entire investment. 
+The golden ratio pick is a mathematical calculation, not a recommendation to buy or sell. 
+Always do your own research and never trade more than you can afford to lose. 
+This tool has no affiliation with Kalshi, Yahoo Finance, or any exchange.
+</p>
+</div>
+""", unsafe_allow_html=True)
+st.markdown(f"<p style='color:#484f58; font-size:11px; text-align:center; margin-top:12px'>Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Data: Yahoo Finance | Auto-refreshes every 5 min</p>", unsafe_allow_html=True)
