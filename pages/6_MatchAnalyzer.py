@@ -16,10 +16,6 @@ from cryptography.hazmat.backends import default_backend
 
 st.set_page_config(page_title="Match Analyzer", page_icon="🔬", layout="wide")
 
-if st.query_params.get("key") != "shark":
-    st.error("🔒 Access denied")
-    st.stop()
-
 # ============================================================
 # KALSHI AUTH
 # ============================================================
