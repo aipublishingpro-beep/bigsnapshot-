@@ -13,6 +13,7 @@ MARKETS = {
         "ticker": "^GSPC",
         "kalshi_series": "kxinxu",
         "kalshi_slug": "sp-500-abovebelow",
+        "kalshi_url": "https://kalshi.com/markets/kxinxu/sp-500-abovebelow",
         "bracket_step": 25,
         "bracket_min": 5000,
         "bracket_max": 8000,
@@ -21,8 +22,9 @@ MARKETS = {
     },
     "Nasdaq 100": {
         "ticker": "^NDX",
-        "kalshi_series": "kxnqu",
-        "kalshi_slug": "nasdaq-100-abovebelow",
+        "kalshi_series": "kxnasdaq100u",
+        "kalshi_slug": "nasdaq-abovebelow",
+        "kalshi_url": "https://kalshi.com/markets/kxnasdaq100u/nasdaq-abovebelow",
         "bracket_step": 50,
         "bracket_min": 15000,
         "bracket_max": 25000,
@@ -33,9 +35,10 @@ MARKETS = {
         "ticker": "^DJI",
         "kalshi_series": "kxdjiu",
         "kalshi_slug": "dow-jones-abovebelow",
+        "kalshi_url": "https://kalshi.com/category/financials",
         "bracket_step": 100,
         "bracket_min": 35000,
-        "bracket_max": 50000,
+        "bracket_max": 55000,
         "icon": "🏛️",
         "category": "🟢 Equity Index",
     },
@@ -43,6 +46,7 @@ MARKETS = {
         "ticker": "^RUT",
         "kalshi_series": "kxrutu",
         "kalshi_slug": "russell-2000-abovebelow",
+        "kalshi_url": "https://kalshi.com/category/financials",
         "bracket_step": 10,
         "bracket_min": 1500,
         "bracket_max": 3000,
@@ -53,9 +57,10 @@ MARKETS = {
         "ticker": "GC=F",
         "kalshi_series": "kxgoldu",
         "kalshi_slug": "gold-abovebelow",
+        "kalshi_url": "https://kalshi.com/category/financials",
         "bracket_step": 25,
         "bracket_min": 1500,
-        "bracket_max": 3500,
+        "bracket_max": 5000,
         "icon": "🥇",
         "category": "🟢 Commodity",
     },
@@ -63,18 +68,20 @@ MARKETS = {
         "ticker": "SI=F",
         "kalshi_series": "kxsilveru",
         "kalshi_slug": "silver-abovebelow",
+        "kalshi_url": "https://kalshi.com/category/financials",
         "bracket_step": 0.5,
         "bracket_min": 20,
-        "bracket_max": 60,
+        "bracket_max": 70,
         "icon": "🥈",
         "category": "🟢 Commodity",
     },
     "Oil (WTI)": {
         "ticker": "CL=F",
-        "kalshi_series": "kxoilu",
-        "kalshi_slug": "oil-abovebelow",
+        "kalshi_series": "wti",
+        "kalshi_slug": "wti-oil-daily-range",
+        "kalshi_url": "https://kalshi.com/markets/wti/wti-oil-daily-range",
         "bracket_step": 1,
-        "bracket_min": 50,
+        "bracket_min": 40,
         "bracket_max": 120,
         "icon": "🛢️",
         "category": "🟢 Commodity",
@@ -83,6 +90,7 @@ MARKETS = {
         "ticker": "NG=F",
         "kalshi_series": "kxngu",
         "kalshi_slug": "natural-gas-abovebelow",
+        "kalshi_url": "https://kalshi.com/category/financials",
         "bracket_step": 0.25,
         "bracket_min": 1,
         "bracket_max": 10,
@@ -93,9 +101,10 @@ MARKETS = {
         "ticker": "BTC-USD",
         "kalshi_series": "kxbtcu",
         "kalshi_slug": "bitcoin-abovebelow",
+        "kalshi_url": "https://kalshi.com/category/crypto",
         "bracket_step": 500,
-        "bracket_min": 50000,
-        "bracket_max": 150000,
+        "bracket_min": 30000,
+        "bracket_max": 200000,
         "icon": "₿",
         "category": "🟡 Crypto",
     },
@@ -103,8 +112,9 @@ MARKETS = {
         "ticker": "ETH-USD",
         "kalshi_series": "kxethu",
         "kalshi_slug": "ethereum-abovebelow",
+        "kalshi_url": "https://kalshi.com/category/crypto",
         "bracket_step": 50,
-        "bracket_min": 1000,
+        "bracket_min": 500,
         "bracket_max": 8000,
         "icon": "⟠",
         "category": "🟡 Crypto",
@@ -113,6 +123,7 @@ MARKETS = {
         "ticker": "EURUSD=X",
         "kalshi_series": "kxeuru",
         "kalshi_slug": "eurusd-abovebelow",
+        "kalshi_url": "https://kalshi.com/category/financials",
         "bracket_step": 0.005,
         "bracket_min": 0.9,
         "bracket_max": 1.3,
@@ -123,6 +134,7 @@ MARKETS = {
         "ticker": "JPY=X",
         "kalshi_series": "kxjpyu",
         "kalshi_slug": "usdjpy-abovebelow",
+        "kalshi_url": "https://kalshi.com/category/financials",
         "bracket_step": 0.5,
         "bracket_min": 120,
         "bracket_max": 170,
@@ -173,8 +185,11 @@ def ticker_date(d):
     return f"{str(d.year)[2:]}{months[d.month-1]}{d.day:02d}"
 
 def kalshi_url(cfg, d):
+    # Use confirmed direct URL if available, otherwise construct it
+    base = cfg.get("kalshi_url", "")
     td = ticker_date(d)
-    return f"https://kalshi.com/markets/{cfg['kalshi_series']}/{cfg['kalshi_slug']}/{cfg['kalshi_series']}-{td}h1600"
+    constructed = f"https://kalshi.com/markets/{cfg['kalshi_series']}/{cfg['kalshi_slug']}/{cfg['kalshi_series']}-{td}h1600"
+    return constructed, base
 
 def fmt_price(val, cfg):
     step = cfg["bracket_step"]
@@ -319,7 +334,7 @@ pick = golden["bracket"]
 cushion = round(close - pick, 4)
 cushion_pct = round((cushion / close) * 100, 2) if close != 0 else 0
 nd = next_trading_day()
-kurl = kalshi_url(cfg, nd)
+kurl_direct, kurl_browse = kalshi_url(cfg, nd)
 
 # ============================================================
 # MARKET DATA BAR
@@ -352,8 +367,9 @@ st.markdown(f"""
     <br>
     <div style="color:#8b949e; font-size:13px">Market: {nd.strftime('%A %b %d, %Y')} at 4pm EST</div>
     <br>
-    <a href="{kurl}" target="_blank" style="display:inline-block; background:#f0b90b; color:#000; padding:12px 32px; border-radius:8px; font-weight:bold; font-size:16px; text-decoration:none; font-family:monospace">🎯 OPEN ON KALSHI →</a>
-    <div style="color:#484f58; font-size:10px; margin-top:6px">{kurl}</div>
+    <a href="{kurl_direct}" target="_blank" style="display:inline-block; background:#f0b90b; color:#000; padding:12px 32px; border-radius:8px; font-weight:bold; font-size:16px; text-decoration:none; font-family:monospace">🎯 OPEN ON KALSHI →</a>
+    <div style="color:#484f58; font-size:10px; margin-top:6px">{kurl_direct}</div>
+    <div style="margin-top:8px"><a href="{kurl_browse}" target="_blank" style="color:#58a6ff; font-size:12px; text-decoration:none">📂 Browse all {selected_name} brackets →</a></div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -405,7 +421,7 @@ rows = [header, sep]
 for l in levels:
     g = "**" if l["pct"] == 0.618 else ""
     dc = "🟢" if l["dist"] >= 0 else "🔴"
-    link = f"[Open →]({kurl})"
+    link = f"[Open →]({kurl_browse})"
     rows.append(f"| {g}{l['label']}{g} | {fp(l['price'])} | {g}{fp(l['bracket'])}{g} | {dc} {fp(l['dist'])} ({l['dist_pct']}%) | {link} |")
 st.markdown("\n".join(rows))
 
