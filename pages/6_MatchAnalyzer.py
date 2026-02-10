@@ -703,7 +703,7 @@ with c1:
     margin = st.slider("Margin (Home-Away)", -40, 40, g_margin, key="msl")
 with c2:
     mxp = cfg["periods"] + 1
-    period = st.selectbox("Period", range(1, mxp + 1), index=min(g_period - 1, mxp - 1), key="psl")
+    period = st.selectbox("Period", range(1, mxp + 1), index=max(0, min(g_period - 1, mxp - 1)), key="psl")
 with c3:
     clock_val = st.text_input("Clock", value=g_clock, key="cin")
 
