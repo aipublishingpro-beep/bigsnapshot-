@@ -17,41 +17,17 @@ from cryptography.hazmat.backends import default_backend
 st.set_page_config(page_title="Match Analyzer", page_icon="🔬", layout="wide")
 
 # ============================================================
+# OWNER-ONLY ACCESS — bookmark: yoursite.com/MatchAnalyzer?key=shark
+# ============================================================
+if st.query_params.get("key") != "shark":
+    st.error("🔒 Access denied")
+    st.stop()
+
+# ============================================================
 # KALSHI AUTH
 # ============================================================
 API_KEY = st.secrets.get("KALSHI_API_KEY", "")
 PRIVATE_KEY = st.secrets.get("KALSHI_PRIVATE_KEY", "")
-
-API_KEY = "e7fbec52-153c-4a21-9517-c7cf6cee4281"
-
-PRIVATE_KEY = """-----BEGIN RSA PRIVATE KEY-----
-MIIEogIBAAKCAQEAuhqMDNsJslDK0/nf0cS37ri7roE3Yj58JIOBElIyM6HDJpxQ
-ejcCW3niMqM23AFPYJdpDgnArwY+WPciSU/NHjoi8HO3v1dshUQB5mYmkc+umBJp
-42HeRWQ45Z3KZfjyhHRXWp1ynkPTViRGmgSFbL74W6DZkWolMQtoJbNqf8vWsZDN
-EO23XgNNJu0jAtgk+7OZGKaYIRJFM9LHanuKv+v0zXC+SGWdowWE1aDMZ8QtFz9r
-0JOuFWr7FpmoEqnkFKtII9vcOYi9lFFfim9sLqg4lBZkR5xJ3xmuuCOh91PYjMV2
-Q+Fg/7sMZH4SDJN9nhWjYK3LiW/7+iCYFmSIEwIDAQABAoIBAEwGcUUFK/pkx979
-mmHyt2L1o3IfxlTDiupNsGogGvL9t5+rxrKOi098RJwEEfKhNGCUqe16rXSym8Cz
-QJXrXDNnc4N/+kXXvHTaed45x7LUQRJNn2Usw2TckuO2aIrsvoG+lzrkzAB8W7a6
-ff8ILstkXkfsN0UQtB3Ld6HDIBQRKbW/bkGY+nDbpSVo2wx+0I0vJl5JAIEAY4df
-eTd4jU6e9aIPEDQjWqjo1b9nvoS8GmAWBeAPMw8OrvPBivD2V9rbaA2uXsDqqc3v
-4o/V2S8xxeOXfQ3anSgQwkudeJ4tt7SiqfWugC3FpS7iiUH3syliybsKCv8AV006
-e8WJwSUCgYEA8KTXJWbWDljPR+0GFuvzQecasD3ZfM7bLU0yDmIm/j/sn4XuXsGi
-XJNz0Y5kGOEh30+25dHgbyDjDngPNWGwYOwdNWI+GXHgt8vootq7tm2lwUO/4EiN
-HpL1JBq7/2HvKrnUUoQbjalrX9In1Qs7I6j1MGf51uo0hqr0fgB8G50CgYEAxfq8
-1szfRIZVRbxsrCjaWWWBMfi2aI7/VjWhJIUkIi2KkYjPuQyXteMuoZTWiA/TCSfS
-+VJwamXeHJtmVIwBSvXYTK6wXBNyKYeU1lWdLn0fz6sgQlcK+KZ7JDnCzCX7jNYZ
-Qtdy4rmDr/OXI6zjgu9T7hlRBX5qtz0rQqvnG28CgYAbBIbbPiZ+Sd5L1wK+BBO1
-rHrEms0WRCs7dNVP5Bk4pnismF7g6KCQAEYamwAGAxDIf6yrNNsb3vdfIn+ioKsq
-1peY7MTIGo7+U7h0wFYe70SS5EZgqgSeECXRveapj5dIlsCN2yM0znattWyfcLld
-EZUlsCbOyFDJZdw5YViNyQKBgF8JckUaq8LVSXHkdbZfFhH76/z1C3s9ycy0idpi
-H2pYukAKkMygAuPJXsUqEaHXFtM6TshojpZEuE67OnAzlRtK0L5ezUImA5N0Bjqt
-dnqujeq+lwnBhv69zDcjkyM0yIBe9llj2z6DF3gLUu5JPB3KjVuqw34DpW646l9i
-7dn5AoGAVFs0cQg2e5Z8bwfwhYVcgVc6v1A5ld3r7retSAbFxofL2OA4u70/ebpz
-+fwsnf7GRsAlaSvtrwfBfl6+NShGpFBvc4/jc1aqLYJzgv6RHZ8qNGlwePPziqv/
-h1qzvenc8+noJ9AnklLcWoCtZqrShNoPe++mscLUzKbBs3+V3fE=
------END RSA PRIVATE KEY-----"""
-
 KALSHI_BASE = "https://api.elections.kalshi.com"
 
 
