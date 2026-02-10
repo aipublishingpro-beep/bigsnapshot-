@@ -1,6 +1,6 @@
 """
-🔬 MATCH ANALYZER v31
-Win Probability Engine + Kalshi Edge Finder + One-Click Trading
+🔬 MATCH ANALYZER v33
+ESPN Win Probability Timeline + Kalshi Edge Overlay + One-Click Trading
 Basketball Only (NBA, NCAA Men, NCAA Women)
 BigSnapshot.com
 """
@@ -16,9 +16,6 @@ from cryptography.hazmat.backends import default_backend
 
 st.set_page_config(page_title="Match Analyzer", page_icon="🔬", layout="wide")
 
-# ============================================================
-# OWNER-ONLY ACCESS — bookmark: bigsnapshot.streamlit.app/MatchAnalyzer?key=shark
-# ============================================================
 if st.query_params.get("key") != "shark":
     st.error("🔒 Access denied")
     st.stop()
@@ -110,13 +107,16 @@ def place_kalshi_order(ticker, side, price_cents, count):
 # ============================================================
 LEAGUES = {
     "NBA": {"pace": 0.034, "minutes": 48, "periods": 4, "pmin": 12,
-            "label": "NBA", "espn": "basketball/nba", "kalshi": "KXNBAGAME", "plbl": "Q"},
+            "label": "NBA", "espn": "basketball/nba", "kalshi": "KXNBAGAME", "plbl": "Q",
+            "wp_sport": "basketball", "wp_league": "nba"},
     "NCAAM": {"pace": 0.028, "minutes": 40, "periods": 2, "pmin": 20,
               "label": "NCAA Men", "espn": "basketball/mens-college-basketball",
-              "kalshi": "KXNCAAMBGAME", "plbl": "H"},
+              "kalshi": "KXNCAAMBGAME", "plbl": "H",
+              "wp_sport": "basketball", "wp_league": "mens-college-basketball"},
     "NCAAW": {"pace": 0.022, "minutes": 40, "periods": 4, "pmin": 10,
               "label": "NCAA Women", "espn": "basketball/womens-college-basketball",
-              "kalshi": "KXNCAAWBGAME", "plbl": "Q"},
+              "kalshi": "KXNCAAWBGAME", "plbl": "Q",
+              "wp_sport": "basketball", "wp_league": "womens-college-basketball"},
 }
 
 FACTORS = [
@@ -131,7 +131,7 @@ FACTORS = [
 
 
 # ============================================================
-# ESPN FETCH
+# ESPN FETCH — SCOREBOARD
 # ============================================================
 @st.cache_data(ttl=30)
 def fetch_espn_games(league_key):
@@ -178,12 +178,12 @@ def fetch_espn_games(league_key):
         a_abbr = a_tm.get("abbreviation", "")
         h_rec = ""
         a_rec = ""
-        hr = ht.get("records", [])
-        ar = at.get("records", [])
-        if hr:
-            h_rec = hr[0].get("summary", "")
-        if ar:
-            a_rec = ar[0].get("summary", "")
+        hr_list = ht.get("records", [])
+        ar_list = at.get("records", [])
+        if hr_list:
+            h_rec = hr_list[0].get("summary", "")
+        if ar_list:
+            a_rec = ar_list[0].get("summary", "")
         stxt = ""
         if state == "in":
             stxt = cfg["plbl"] + str(per) + " " + clk
@@ -199,6 +199,19 @@ def fetch_espn_games(league_key):
         co = comp.get("odds", [])
         if co:
             odds = co[0]
+        # Try to get ESPN WP from situation
+        espn_wp = None
+        sit = comp.get("situation", {})
+        if sit:
+            lp = sit.get("lastPlay", {})
+            prob = lp.get("probability", {})
+            val = prob.get("homeWinPercentage")
+            if val is not None:
+                espn_wp = float(val) * 100
+            elif "probability" in sit:
+                val2 = sit["probability"].get("homeWinPercentage")
+                if val2 is not None:
+                    espn_wp = float(val2) * 100
         games.append({
             "id": ev.get("id", ""),
             "home": h_name, "away": a_name,
@@ -210,14 +223,80 @@ def fetch_espn_games(league_key):
             "margin": h_score - a_score,
             "spread": odds.get("details", ""),
             "ou": odds.get("overUnder", ""),
+            "espn_wp": espn_wp,
         })
     return games
 
 
 # ============================================================
-# WIN PROBABILITY MODEL
+# ESPN WIN PROBABILITY — DEDICATED ENDPOINT
 # ============================================================
-def calc_wp(mg, tf, pace):
+@st.cache_data(ttl=20)
+def fetch_espn_wp(game_id, sport, league_name):
+    url = "https://site.api.espn.com/apis/site/v2/sports/" + sport + "/" + league_name + "/summary?event=" + str(game_id)
+    try:
+        r = requests.get(url, timeout=8)
+        if r.status_code != 200:
+            return None
+        d = r.json()
+        # Try winprobability array (most accurate, last entry)
+        wp_data = d.get("winprobability", [])
+        if wp_data:
+            last = wp_data[-1]
+            val = last.get("homeWinPercentage", None)
+            if val is not None:
+                return float(val) * 100
+        # Try predictor
+        pred = d.get("predictor", {})
+        if pred:
+            ht = pred.get("homeTeam", {})
+            val = ht.get("gameProjection", None)
+            if val is not None:
+                return float(val)
+        return None
+    except Exception:
+        return None
+
+
+# ============================================================
+# ESPN WP TIMELINE — FULL GAME HISTORY
+# ============================================================
+@st.cache_data(ttl=20)
+def fetch_espn_wp_timeline(game_id, sport, league_name):
+    """Fetch full WP timeline from ESPN for chart overlay."""
+    url = "https://site.api.espn.com/apis/site/v2/sports/"
+    url += sport + "/" + league_name
+    url += "/summary?event=" + str(game_id)
+    try:
+        r = requests.get(url, timeout=10)
+        if r.status_code != 200:
+            return None
+        d = r.json()
+        wp_arr = d.get("winprobability", [])
+        if not wp_arr or len(wp_arr) < 2:
+            return None
+        timeline = []
+        for pt in wp_arr:
+            pct = pt.get("homeWinPercentage", None)
+            play_id = pt.get("playId", "")
+            sec_left = pt.get("secondsLeft", None)
+            if pct is not None:
+                timeline.append({
+                    "wp": float(pct) * 100,
+                    "sec": float(sec_left) if sec_left is not None else 0,
+                    "play": play_id,
+                })
+        if len(timeline) < 2:
+            return None
+        return timeline
+    except Exception:
+        return None
+
+
+# ============================================================
+# SIGMOID FALLBACK MODEL
+# ============================================================
+def calc_wp_sigmoid(mg, tf, pace):
     if tf <= 0:
         if mg > 0:
             return 99.9
@@ -290,7 +369,7 @@ def find_kalshi_price(game, lk):
 
 
 # ============================================================
-# SVG CHART BUILDER
+# SVG CHART — SIGMOID FALLBACK
 # ============================================================
 def build_chart(data, xl, yl, xdom, dx=None, dy=None, kl=None):
     W = 500
@@ -335,9 +414,9 @@ def build_chart(data, xl, yl, xdom, dx=None, dy=None, kl=None):
         sgn = "+" if ed > 0 else ""
         s += '<line x1="' + str(round(dxp, 1)) + '" x2="' + str(round(dxp, 1)) + '" y1="' + str(round(dyp, 1)) + '" y2="' + str(round(kyp, 1)) + '" stroke="' + kc + '" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>'
         mc = (dyp + kyp) / 2
-        s += '<text x="' + str(round(dxp + 10, 1)) + '" y="' + str(round(mc + 4, 1)) + '" fill="' + kc + '" font-size="10" font-weight="bold">' + sgn + str(round(ed)) + '&#162;</text>'
+        s += '<text x="' + str(round(dxp + 10, 1)) + '" y="' + str(round(mc + 4, 1)) + '" fill="' + kc + '" font-size="10" font-weight="bold">' + sgn + str(round(ed)) + 'c</text>'
         s += '<circle cx="' + str(round(dxp, 1)) + '" cy="' + str(round(kyp, 1)) + '" r="6" fill="' + kc + '" stroke="#000" stroke-width="1.5"/>'
-        s += '<text x="' + str(round(dxp + 10, 1)) + '" y="' + str(round(kyp + 4, 1)) + '" fill="' + kc + '" font-size="9">Kalshi ' + str(kl) + '&#162;</text>'
+        s += '<text x="' + str(round(dxp + 10, 1)) + '" y="' + str(round(kyp + 4, 1)) + '" fill="' + kc + '" font-size="9">Kalshi ' + str(kl) + 'c</text>'
     if dx is not None and dy is not None:
         dxp = sx(dx)
         dyp = sy(dy)
@@ -346,6 +425,136 @@ def build_chart(data, xl, yl, xdom, dx=None, dy=None, kl=None):
     s += '<text x="12" y="120" fill="#94a3b8" font-size="11" text-anchor="middle" transform="rotate(-90,12,120)">' + yl + '</text>'
     s += '</svg>'
     return s
+
+
+# ============================================================
+# ESPN WP TIMELINE CHART — with Kalshi overlay
+# ============================================================
+def build_espn_wp_chart(timeline, total_sec, kalshi_price=None, current_wp=None, home_team="Home", away_team="Away"):
+    """Build SVG chart showing ESPN WP timeline with Kalshi price overlay."""
+    W = 700
+    H = 300
+    pl = 50
+    pt_top = 30
+    pr = 25
+    pb = 46
+    cw = W - pl - pr
+    ch = H - pt_top - pb
+
+    def sx(sec_left):
+        elapsed = total_sec - sec_left
+        if total_sec <= 0:
+            return pl
+        return pl + (elapsed / total_sec) * cw
+
+    def sy(v):
+        return pt_top + ch - (v / 100) * ch
+
+    s = ""
+    s += '<svg viewBox="0 0 ' + str(W) + ' ' + str(H) + '" style="width:100%;display:block;background:#0a0a1a;border-radius:12px;border:1px solid #1e293b">'
+
+    # Background
+    s += '<rect x="' + str(pl) + '" y="' + str(pt_top) + '" width="' + str(cw) + '" height="' + str(ch) + '" fill="#0f172a" rx="4"/>'
+
+    # Fill zones: green above 50, red below 50
+    mid_y = sy(50)
+    s += '<rect x="' + str(pl) + '" y="' + str(pt_top) + '" width="' + str(cw) + '" height="' + str(round(mid_y - pt_top)) + '" fill="#10b98108" rx="4"/>'
+    s += '<rect x="' + str(pl) + '" y="' + str(round(mid_y)) + '" width="' + str(cw) + '" height="' + str(round(pt_top + ch - mid_y)) + '" fill="#ef444408" rx="4"/>'
+
+    # Y grid lines + labels
+    for yv in [0, 25, 50, 75, 100]:
+        yp = sy(yv)
+        stroke_c = "#334155" if yv == 50 else "#1e293b"
+        stroke_w = "1" if yv == 50 else "0.5"
+        s += '<line x1="' + str(pl) + '" x2="' + str(pl + cw) + '" y1="' + str(round(yp, 1)) + '" y2="' + str(round(yp, 1)) + '" stroke="' + stroke_c + '" stroke-width="' + stroke_w + '"/>'
+        s += '<text x="' + str(pl - 6) + '" y="' + str(round(yp + 4, 1)) + '" fill="#64748b" font-size="10" text-anchor="end">' + str(yv) + '%</text>'
+
+    # X axis labels (quarter/half markers)
+    for frac in [0, 0.25, 0.5, 0.75, 1.0]:
+        xp = pl + frac * cw
+        s += '<line x1="' + str(round(xp, 1)) + '" x2="' + str(round(xp, 1)) + '" y1="' + str(pt_top) + '" y2="' + str(pt_top + ch) + '" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="2,4"/>'
+
+    # Team labels at top
+    s += '<text x="' + str(pl + 5) + '" y="' + str(pt_top - 8) + '" fill="#10b981" font-size="11" font-weight="bold">' + home_team + ' ↑</text>'
+    s += '<text x="' + str(pl + 5) + '" y="' + str(pt_top + ch + 36) + '" fill="#ef4444" font-size="11" font-weight="bold">' + away_team + ' ↑</text>'
+    s += '<text x="' + str(pl + cw - 5) + '" y="' + str(pt_top - 8) + '" fill="#64748b" font-size="10" text-anchor="end">Game Timeline →</text>'
+
+    # Sort timeline by seconds left descending (game start first)
+    sorted_tl = sorted(timeline, key=lambda x: x["sec"], reverse=True)
+
+    # Kalshi horizontal line
+    has_k = kalshi_price is not None and kalshi_price > 0 and kalshi_price <= 100
+    if has_k:
+        ky = sy(kalshi_price)
+        s += '<line x1="' + str(pl) + '" x2="' + str(pl + cw) + '" y1="' + str(round(ky, 1)) + '" y2="' + str(round(ky, 1)) + '" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6,4"/>'
+        s += '<text x="' + str(pl + cw - 4) + '" y="' + str(round(ky - 5, 1)) + '" fill="#38bdf8" font-size="10" text-anchor="end" font-weight="bold">Kalshi ' + str(kalshi_price) + 'c</text>'
+
+    # WP line path
+    pd = ""
+    prev_y = None
+    big_swings = []
+    for i, pt in enumerate(sorted_tl):
+        xp = sx(pt["sec"])
+        yp = sy(pt["wp"])
+        pd += ("M" if i == 0 else "L") + str(round(xp, 1)) + "," + str(round(yp, 1))
+        # Detect big swings (WP change > 8% between consecutive points)
+        if prev_y is not None:
+            diff = abs(pt["wp"] - prev_y)
+            if diff > 8:
+                big_swings.append({"x": xp, "y": yp, "wp": pt["wp"]})
+        prev_y = pt["wp"]
+
+    # Draw shaded area between WP line and Kalshi line
+    if has_k and len(sorted_tl) > 1:
+        fill_path = ""
+        for i, pt in enumerate(sorted_tl):
+            xp = sx(pt["sec"])
+            yp = sy(pt["wp"])
+            fill_path += ("M" if i == 0 else "L") + str(round(xp, 1)) + "," + str(round(yp, 1))
+        # Close back along Kalshi line
+        for i in range(len(sorted_tl) - 1, -1, -1):
+            xp = sx(sorted_tl[i]["sec"])
+            fill_path += "L" + str(round(xp, 1)) + "," + str(round(ky, 1))
+        fill_path += "Z"
+        s += '<path d="' + fill_path + '" fill="#10b98115" stroke="none"/>'
+
+    # Main WP line
+    s += '<path d="' + pd + '" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linejoin="round"/>'
+
+    # Big swing markers
+    for sw in big_swings:
+        s += '<circle cx="' + str(round(sw["x"], 1)) + '" cy="' + str(round(sw["y"], 1)) + '" r="3" fill="#f59e0b" stroke="#000" stroke-width="0.5" opacity="0.7"/>'
+
+    # Current position dot (latest WP)
+    if current_wp is not None and len(sorted_tl) > 0:
+        last_pt = sorted_tl[-1]
+        cx = sx(last_pt["sec"])
+        cy = sy(current_wp)
+        s += '<circle cx="' + str(round(cx, 1)) + '" cy="' + str(round(cy, 1)) + '" r="7" fill="#f59e0b" stroke="#000" stroke-width="2"/>'
+        s += '<text x="' + str(round(cx - 12, 1)) + '" y="' + str(round(cy - 12, 1)) + '" fill="#f59e0b" font-size="11" font-weight="bold">' + str(round(current_wp, 1)) + '%</text>'
+        # Edge label
+        if has_k:
+            edge = current_wp - kalshi_price
+            esgn = "+" if edge > 0 else ""
+            ec = "#10b981" if edge > 5 else "#ef4444" if edge < -5 else "#f59e0b"
+            s += '<text x="' + str(round(cx + 12, 1)) + '" y="' + str(round(cy + 4, 1)) + '" fill="' + ec + '" font-size="12" font-weight="bold">' + esgn + str(round(edge, 1)) + 'c EDGE</text>'
+
+    # 50% label
+    s += '<text x="' + str(pl + cw + 4) + '" y="' + str(round(mid_y + 4, 1)) + '" fill="#475569" font-size="9">50%</text>'
+
+    s += '</svg>'
+
+    # Legend below chart
+    legend = '<div style="display:flex;justify-content:center;gap:16px;margin-top:6px;flex-wrap:wrap">'
+    legend += '<span style="font-size:10px;color:#10b981">● ESPN WP</span>'
+    if has_k:
+        legend += '<span style="font-size:10px;color:#38bdf8">- - Kalshi Price</span>'
+    legend += '<span style="font-size:10px;color:#f59e0b">● Current / Swings</span>'
+    if has_k:
+        legend += '<span style="font-size:10px;color:#10b981">░ Edge Zone</span>'
+    legend += '</div>'
+
+    return s + legend
 
 
 # ============================================================
@@ -361,9 +570,8 @@ if "sel_league" not in st.session_state:
 # ============================================================
 # HEADER
 # ============================================================
-st.markdown('<div style="text-align:center;padding:8px 0"><span style="font-size:24px;color:#f0c040;font-weight:800">🔬 MATCH ANALYZER</span><br><span style="color:#64748b;font-size:13px">Win Probability Engine + Kalshi Edge Finder + One-Click Trading</span></div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;padding:8px 0"><span style="font-size:24px;color:#f0c040;font-weight:800">🔬 MATCH ANALYZER</span><br><span style="color:#64748b;font-size:13px">ESPN Win Probability + Kalshi Edge Finder + One-Click Trading</span></div>', unsafe_allow_html=True)
 
-# API STATUS
 bal = get_kalshi_balance()
 api_ok = bal is not None
 if api_ok:
@@ -500,7 +708,7 @@ with c3:
     clock_val = st.text_input("Clock", value=g_clock, key="cin")
 
 # FACTORS
-with st.expander("⚙️ Factor Adjustments"):
+with st.expander("⚙️ Factor Adjustments (optional — only affects sigmoid fallback)"):
     fvals = {}
     fc = st.columns(2)
     for i, f in enumerate(FACTORS):
@@ -508,7 +716,9 @@ with st.expander("⚙️ Factor Adjustments"):
             v = st.slider(f["label"], f["lo"], f["hi"], 0.0, step=f["step"], key="f_" + f["id"])
             fvals[f["id"]] = v
 
-# WP CALC
+# ============================================================
+# WIN PROBABILITY — ESPN FIRST, SIGMOID FALLBACK
+# ============================================================
 pe = sum(fvals.values())
 tf, tsec = get_time_frac(period, clock_val, cfg)
 if mode == "pregame":
@@ -517,17 +727,40 @@ if mode == "pregame":
 else:
     em = margin + pe * tf
     tf_use = tf
-wp = calc_wp(em, tf_use, cfg["pace"])
+
+# Try ESPN WP first
+espn_wp_val = None
+wp_source = "SIGMOID"
+
+if sel_game and sel_game["state"] == "in":
+    # First check scoreboard situation data
+    espn_wp_val = sel_game.get("espn_wp")
+    # If not there, try dedicated endpoint
+    if espn_wp_val is None:
+        espn_wp_val = fetch_espn_wp(sel_game["id"], cfg["wp_sport"], cfg["wp_league"])
+    if espn_wp_val is not None:
+        wp_source = "ESPN"
+
+if espn_wp_val is not None:
+    wp = espn_wp_val
+else:
+    wp = calc_wp_sigmoid(em, tf_use, cfg["pace"])
+
 kv = cfg["pace"] / math.sqrt(max(tf_use, 0.001))
 
 wpc = "#10b981" if wp >= 65 else "#f59e0b" if wp >= 55 else "#ef4444" if wp <= 35 else "#f59e0b" if wp <= 45 else "#94a3b8"
 wpl = "STRONG" if wp >= 70 else "LEAN" if wp >= 60 else "SLIGHT" if wp >= 55 else "STRONG (Away)" if wp <= 30 else "LEAN (Away)" if wp <= 40 else "SLIGHT (Away)" if wp <= 45 else "TOSS-UP"
 
+# WP source badge
+src_color = "#10b981" if wp_source == "ESPN" else "#f59e0b"
+src_label = "📡 ESPN LIVE" if wp_source == "ESPN" else "📐 SIGMOID FALLBACK"
+
 html = '<div style="background:linear-gradient(135deg,#0f172a,#020617);border-radius:12px;padding:16px;border:2px solid ' + wpc + ';text-align:center;margin-bottom:14px">'
 html += '<div style="font-size:12px;color:#94a3b8">' + home_team + ' Win Probability</div>'
 html += '<div style="font-size:48px;font-weight:800;color:' + wpc + ';font-family:monospace">' + str(round(wp, 1)) + '%</div>'
 html += '<div style="font-size:14px;color:' + wpc + ';font-weight:700">' + wpl + '</div>'
-if mode == "ingame":
+html += '<div style="margin-top:6px"><span style="background:' + src_color + '22;color:' + src_color + ';padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700;border:1px solid ' + src_color + '">' + src_label + '</span></div>'
+if mode == "ingame" and wp_source == "SIGMOID":
     sgn = "+" if em > 0 else ""
     html += '<div style="font-size:11px;color:#64748b;margin-top:6px">Margin: ' + sgn + str(round(em, 1)) + ' | Time: ' + str(round(tf * 100, 1)) + '% | k = ' + str(round(kv, 4)) + '</div>'
 awp = 100 - wp
@@ -601,7 +834,6 @@ if kpv > 0 and kpv <= 100:
     html += '<div style="background:#0f172a;border-radius:6px;padding:6px 12px;text-align:center;min-width:80px;border:1px solid #1e293b"><div style="color:#64748b;font-size:9px">IF WIN</div><div style="color:#10b981;font-size:13px;font-weight:700">+$' + str(round(pw, 2)) + '</div></div>'
     html += '<div style="background:#0f172a;border-radius:6px;padding:6px 12px;text-align:center;min-width:80px;border:1px solid #1e293b"><div style="color:#64748b;font-size:9px">IF LOSE</div><div style="color:#ef4444;font-size:13px;font-weight:700">-$' + str(round(ll, 2)) + '</div></div>'
     html += '</div>'
-
     html += '<div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin:8px 0">'
     html += '<div style="background:#0f172a;border-radius:6px;padding:6px 12px;text-align:center;min-width:90px;border:1px solid ' + evc + '"><div style="color:#64748b;font-size:9px">EV</div><div style="color:' + evc + ';font-size:15px;font-weight:800">' + evs + '$' + str(round(ev, 2)) + '</div></div>'
     html += '<div style="background:#0f172a;border-radius:6px;padding:6px 12px;text-align:center;min-width:90px;border:1px solid #1e293b"><div style="color:#64748b;font-size:9px">ROI</div><div style="color:' + evc + ';font-size:15px;font-weight:800">' + ros + str(round(roi, 1)) + '%</div></div>'
@@ -638,6 +870,7 @@ if kpv > 0 and kpv <= 100:
     checks.append({"l": "Breakeven < 80% (" + str(bp) + "%)", "p": bp < 80})
     checks.append({"l": "Risk:Reward < 4:1 (" + str(round(rr, 1)) + ":1)", "p": rr < 4})
     checks.append({"l": "Not blowout (margin " + str(abs(margin)) + ")", "p": abs(margin) < 25})
+    checks.append({"l": "WP Source: " + wp_source, "p": wp_source == "ESPN"})
     pc = sum(1 for c in checks if c["p"])
     tc = len(checks)
     vc = "#10b981" if pc == tc else "#f59e0b" if pc >= 4 else "#ef4444"
@@ -652,29 +885,57 @@ if kpv > 0 and kpv <= 100:
 else:
     st.info("Select a game — Kalshi price auto-fills")
 
-# CHARTS
+# ============================================================
+# CHARTS — ESPN TIMELINE (primary) or SIGMOID (fallback)
+# ============================================================
 st.markdown("---")
-md = []
-for i in range(81):
-    m = i - 40
-    md.append((m, calc_wp(m, tf_use, cfg["pace"])))
-td = []
-for i in range(101):
-    s_val = (i / 100) * tsec
-    tfr = max(0, (tsec - s_val) / tsec)
-    mv = pe if mode == "pregame" else margin
-    td.append((s_val, calc_wp(mv, tfr, cfg["pace"])))
-kl_chart = kpv if kpv > 0 else None
-ch1, ch2 = st.columns(2)
-with ch1:
-    sv1 = build_chart(md, "Score Margin", "Win Prob", [-40, 40], dx=em, dy=wp, kl=kl_chart)
-    st.markdown(sv1, unsafe_allow_html=True)
-    st.caption("Yellow above green = BUY")
-with ch2:
-    dtx = tf_use * tsec
-    sv2 = build_chart(td, "Seconds Remaining (" + str(tsec) + ")", "Win Prob", [0, tsec], dx=dtx, dy=wp, kl=kl_chart)
-    st.markdown(sv2, unsafe_allow_html=True)
-    st.caption("Dot pulling away = edge growing")
+
+espn_timeline = None
+if sel_game and sel_game["state"] in ["in", "post"]:
+    espn_timeline = fetch_espn_wp_timeline(
+        sel_game["id"], cfg["wp_sport"], cfg["wp_league"]
+    )
+
+if espn_timeline and len(espn_timeline) >= 2:
+    # ESPN WP Timeline Chart with Kalshi overlay
+    st.markdown('<div style="text-align:center;color:#10b981;font-weight:700;font-size:14px;margin-bottom:6px">📡 LIVE WIN PROBABILITY TIMELINE</div>', unsafe_allow_html=True)
+    kl_val = kpv if kpv > 0 else None
+    chart_svg = build_espn_wp_chart(
+        espn_timeline, tsec, kalshi_price=kl_val,
+        current_wp=wp, home_team=home_team, away_team=away_team
+    )
+    st.markdown(chart_svg, unsafe_allow_html=True)
+    if kl_val:
+        edge_now = wp - kl_val
+        esgn = "+" if edge_now > 0 else ""
+        ec = "#10b981" if edge_now > 5 else "#ef4444" if edge_now < -5 else "#f59e0b"
+        st.markdown('<div style="text-align:center;margin-top:4px"><span style="color:' + ec + ';font-size:13px;font-weight:700">Gap = ' + esgn + str(round(edge_now, 1)) + 'c — ' + ('Green line above blue = BUY HOME' if edge_now > 0 else 'Green line below blue = BUY AWAY') + '</span></div>', unsafe_allow_html=True)
+    else:
+        st.caption("Add Kalshi price to see edge overlay")
+else:
+    # Fallback: sigmoid charts
+    st.markdown('<div style="text-align:center;color:#f59e0b;font-weight:700;font-size:12px;margin-bottom:6px">📐 SIGMOID MODEL CHARTS (ESPN timeline not available)</div>', unsafe_allow_html=True)
+    md = []
+    for i in range(81):
+        m = i - 40
+        md.append((m, calc_wp_sigmoid(m, tf_use, cfg["pace"])))
+    td = []
+    for i in range(101):
+        s_val = (i / 100) * tsec
+        tfr = max(0, (tsec - s_val) / tsec)
+        mv = pe if mode == "pregame" else margin
+        td.append((s_val, calc_wp_sigmoid(mv, tfr, cfg["pace"])))
+    kl_chart = kpv if kpv > 0 else None
+    ch1, ch2 = st.columns(2)
+    with ch1:
+        sv1 = build_chart(md, "Score Margin", "Win Prob", [-40, 40], dx=em, dy=wp, kl=kl_chart)
+        st.markdown(sv1, unsafe_allow_html=True)
+        st.caption("Yellow above green = BUY")
+    with ch2:
+        dtx = tf_use * tsec
+        sv2 = build_chart(td, "Seconds Remaining (" + str(tsec) + ")", "Win Prob", [0, tsec], dx=dtx, dy=wp, kl=kl_chart)
+        st.markdown(sv2, unsafe_allow_html=True)
+        st.caption("Dot pulling away = edge growing")
 
 # ORDER LOG
 if st.session_state.order_log:
@@ -686,7 +947,7 @@ if st.session_state.order_log:
         bg = "#0a1f0a" if o["ok"] else "#1f0a0a"
         st.markdown('<div style="display:flex;justify-content:space-between;padding:4px 8px;border-radius:4px;background:' + bg + ';margin-bottom:2px"><span style="color:#94a3b8;font-size:11px">' + o["time"] + '</span><span style="color:#e2e8f0;font-size:11px;font-weight:600">' + str(o["contracts"]) + 'x ' + o["team"] + ' ' + o["side"] + ' @ ' + str(o["price"]) + 'c</span><span style="color:' + cl + ';font-size:11px;font-weight:700">' + ic + ' ' + o["msg"] + '</span></div>', unsafe_allow_html=True)
 
-# REFRESH BUTTON
+# REFRESH
 st.markdown("---")
 col_r1, col_r2 = st.columns([1, 3])
 with col_r1:
@@ -696,4 +957,4 @@ with col_r1:
 with col_r2:
     st.caption("Scores + Kalshi prices cached 30s. Click to force refresh.")
 
-st.caption("⚠️ Educational only. Not financial advice. v31")
+st.caption("⚠️ Educational only. Not financial advice. v33")
