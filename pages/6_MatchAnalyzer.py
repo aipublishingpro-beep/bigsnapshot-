@@ -9,7 +9,7 @@ import streamlit as st
 import requests
 import time
 import base64
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
@@ -182,7 +182,8 @@ def fetch_espn_games(league_key):
         else:
             try:
                 dt = datetime.fromisoformat(ev.get("date", "").replace("Z", "+00:00"))
-                stxt = dt.strftime("%-I:%M %p")
+                et = dt.astimezone(timezone(timedelta(hours=-5)))
+                stxt = et.strftime("%-I:%M %p") + " ET"
             except Exception:
                 stxt = "TBD"
         odds = {}
