@@ -47,12 +47,13 @@ def kalshi_headers(method, path):
 # ============================================================
 # SCORE WEIGHTS & FIBO LEVELS
 # ============================================================
+# === PRECISION FIX: Updated weights — mispricing now dominant ===
 SCORE_WEIGHTS = {
-    "location": 0.25,
+    "location": 0.20,
     "volatility": 0.20,
     "momentum": 0.20,
     "flow": 0.15,
-    "mispricing": 0.20,
+    "mispricing": 0.25,
 }
 
 FIBO_LEVELS = [
@@ -663,38 +664,31 @@ def score_flow(df):
 # ============================================================
 def score_mispricing(df, bracket_price, kalshi_markets):
     """Compare model probability vs Kalshi implied probability.
-    Model: fit normal distribution to recent daily returns, estimate P(close > bracket).
+    === PRECISION FIX: Empirical probability model replaces Gaussian ===
     Returns (score 0-10, model_prob, market_prob, edge_pct)."""
     closes = df["Close"].values.astype(float)
     if len(closes) < 10:
-        return 5.0, 50.0, 50.0, 0.0
-    # Compute daily returns
+        return 3.0, 50.0, None, 0.0
+    # Compute daily returns (up to 60)
     returns = []
     for i in range(1, len(closes)):
         if closes[i - 1] != 0:
             returns.append((closes[i] - closes[i - 1]) / closes[i - 1])
     if len(returns) < 5:
-        return 5.0, 50.0, 50.0, 0.0
-    mean_ret = float(np.mean(returns))
-    std_ret = float(np.std(returns))
-    if std_ret == 0:
-        std_ret = 0.001
-    # Expected price tomorrow
-    current = closes[-1]
-    expected = current * (1 + mean_ret)
-    # Z-score for bracket
+        return 3.0, 50.0, None, 0.0
+    current = float(closes[-1])
     if current == 0:
-        return 5.0, 50.0, 50.0, 0.0
-    bracket_return = (bracket_price - current) / current
-    z = (bracket_return - mean_ret) / std_ret
-    # P(close > bracket) using normal CDF approximation
-    # Using error function approximation
-    def norm_cdf(x):
-        return 0.5 * (1 + math.erf(x / math.sqrt(2)))
-    model_prob = (1 - norm_cdf(z)) * 100  # probability of closing above bracket
+        return 3.0, 50.0, None, 0.0
+    # === PRECISION FIX: Empirical model — project each historical return ===
+    above_count = 0
+    for r in returns:
+        projected = current * (1 + r)
+        if projected > bracket_price:
+            above_count += 1
+    model_prob = (above_count / len(returns)) * 100
     model_prob = round(max(1, min(99, model_prob)), 1)
-    # Find market implied probability from Kalshi data
-    market_prob = 50.0  # default if no Kalshi data
+    # === PRECISION FIX: Default to None instead of 50% if no Kalshi data ===
+    market_prob = None
     if kalshi_markets:
         # Find the bracket market closest to our bracket_price
         best_match = None
@@ -719,7 +713,12 @@ def score_mispricing(df, bracket_price, kalshi_markets):
                     except ValueError:
                         continue
         if best_match:
-            market_prob = float(best_match.get("implied_prob", 50))
+            market_prob = float(best_match.get("implied_prob", 0))
+            if market_prob == 0:
+                market_prob = None
+    # === PRECISION FIX: If no market data, score conservatively ===
+    if market_prob is None:
+        return 3.0, model_prob, None, 0.0
     edge_pct = round(model_prob - market_prob, 1)
     # Score: bigger positive edge = higher score
     if edge_pct > 10:
@@ -857,8 +856,9 @@ scores = {
     "flow": flow_score_val,
     "mispricing": mis_score,
 }
-composite = compute_composite(scores)
-suggestion, suggestion_color = trade_suggestion(composite)
+# === PRECISION FIX: Pass vol_regime and vol_ratio to composite, edge_pct to suggestion ===
+composite = compute_composite(scores, vol_regime, vol_ratio)
+suggestion, suggestion_color = trade_suggestion(composite, edge_pct)
 
 # ============================================================
 # MARKET DATA BAR
@@ -993,12 +993,18 @@ with st.expander("📊 Indicator Details"):
         st.markdown("---")
         st.markdown("**Mispricing**")
         st.markdown("Model Probability: **" + str(model_prob) + "%**")
-        st.markdown("Market Implied: **" + str(market_prob) + "%**")
-        edge_color = "green" if edge_pct > 0 else "red"
-        edge_sign = "+" if edge_pct > 0 else ""
-        st.markdown("Edge: **:" + edge_color + "[" + edge_sign + str(edge_pct) + "%]**")
-        tradeable = "YES ✅" if edge_pct > 6 else "MARGINAL ⚠️" if edge_pct > 3 else "NO ❌"
-        st.markdown("Tradeable Edge: **" + tradeable + "**")
+        # === PRECISION FIX: Show N/A if no market data ===
+        mp_display = str(market_prob) + "%" if market_prob is not None else "N/A"
+        st.markdown("Market Implied: **" + mp_display + "**")
+        if market_prob is not None:
+            edge_color = "green" if edge_pct > 0 else "red"
+            edge_sign = "+" if edge_pct > 0 else ""
+            st.markdown("Edge: **:" + edge_color + "[" + edge_sign + str(edge_pct) + "%]**")
+            tradeable = "YES ✅" if edge_pct > 6 else "MARGINAL ⚠️" if edge_pct > 3 else "NO ❌"
+            st.markdown("Tradeable Edge: **" + tradeable + "**")
+        else:
+            st.markdown("Edge: **N/A** (no market data)")
+            st.markdown("Tradeable Edge: **N/A**")
 
 # ============================================================
 # THE PICK
@@ -1017,25 +1023,27 @@ html += '</div>'
 html += '<br>'
 # Model vs Market probability bar
 mp_color = "#3fb950" if edge_pct > 3 else "#f85149" if edge_pct < -3 else "#d29922"
+# === PRECISION FIX: Handle None market_prob in UI ===
+mp_display = str(market_prob) + "%" if market_prob is not None else "N/A"
+edge_display = ("+" if edge_pct > 0 else "") + str(edge_pct) + "%" if market_prob is not None else "N/A"
 html += '<div style="display:flex; justify-content:center; gap:30px; margin-bottom:12px">'
 html += '<div style="text-align:center"><div style="color:#58a6ff; font-size:24px; font-weight:bold">' + str(model_prob) + '%</div><div style="color:#8b949e; font-size:11px">Model Prob</div></div>'
 html += '<div style="text-align:center; color:#484f58; font-size:20px; padding-top:4px">vs</div>'
-html += '<div style="text-align:center"><div style="color:#f0b90b; font-size:24px; font-weight:bold">' + str(market_prob) + '%</div><div style="color:#8b949e; font-size:11px">Market Implied</div></div>'
+html += '<div style="text-align:center"><div style="color:#f0b90b; font-size:24px; font-weight:bold">' + mp_display + '</div><div style="color:#8b949e; font-size:11px">Market Implied</div></div>'
 html += '<div style="text-align:center"><div style="color:' + mp_color + '; font-size:24px; font-weight:bold">'
-edge_sign_html = "+" if edge_pct > 0 else ""
-html += edge_sign_html + str(edge_pct) + '%</div><div style="color:#8b949e; font-size:11px">Edge</div></div>'
+html += edge_display + '</div><div style="color:#8b949e; font-size:11px">Edge</div></div>'
 html += '</div>'
 # Trade suggestion
 html += '<div style="color:' + suggestion_color + '; font-size:18px; font-weight:bold; margin-bottom:12px">' + suggestion + '</div>'
-# Kelly fraction (simplified)
-if edge_pct > 0 and market_prob > 0 and market_prob < 100:
+# === PRECISION FIX: Kelly cap 15%, hide if composite < 65 ===
+if edge_pct > 0 and market_prob is not None and market_prob > 0 and market_prob < 100 and composite >= 65:
     mp_dec = market_prob / 100.0
     odds = (1.0 / mp_dec) - 1.0 if mp_dec > 0 else 0
     model_dec = model_prob / 100.0
     kelly = 0.0
     if odds > 0:
         kelly = ((model_dec * odds) - (1 - model_dec)) / odds
-        kelly = max(0, min(0.25, kelly))  # cap at 25%
+        kelly = max(0, min(0.15, kelly))  # cap at 15%
     kelly_pct = round(kelly * 100, 1)
     html += '<div style="color:#8b949e; font-size:12px">Kelly Fraction: ' + str(kelly_pct) + '% of bankroll</div>'
 html += '<br>'
@@ -1047,142 +1055,139 @@ html += '<div style="margin-top:8px"><a href="' + kurl_browse + '" target="_blan
 html += '</div>'
 st.markdown(html, unsafe_allow_html=True)
 # ============================================================
-# ALL MARKETS SCORED SCAN
+# SCORE BREAKDOWN
+# ============================================================
+st.markdown("### 🎯 Score Breakdown")
+
+sc1, sc2, sc3, sc4, sc5 = st.columns(5)
+
+with sc1:
+    lc = "#3fb950" if loc_score >= 7 else "#d29922" if loc_score >= 4 else "#f85149"
+    html = '<div class="metric-card">'
+    html += '<div class="metric-label">Location</div>'
+    html += '<div class="metric-val" style="color:' + lc + '">' + str(loc_score) + '</div>'
+    html += '<div style="color:#484f58; font-size:10px">Weight: 25%</div>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+with sc2:
+    vc = "#3fb950" if vol_score >= 7 else "#d29922" if vol_score >= 4 else "#f85149"
+    html = '<div class="metric-card">'
+    html += '<div class="metric-label">Volatility</div>'
+    html += '<div class="metric-val" style="color:' + vc + '">' + str(vol_score) + '</div>'
+    html += '<div style="color:#484f58; font-size:10px">Weight: 20%</div>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+with sc3:
+    mc = "#3fb950" if mom_score >= 7 else "#d29922" if mom_score >= 4 else "#f85149"
+    html = '<div class="metric-card">'
+    html += '<div class="metric-label">Momentum</div>'
+    html += '<div class="metric-val" style="color:' + mc + '">' + str(mom_score) + '</div>'
+    html += '<div style="color:#484f58; font-size:10px">Weight: 20%</div>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+with sc4:
+    fc = "#3fb950" if flow_score_val >= 7 else "#d29922" if flow_score_val >= 4 else "#f85149"
+    html = '<div class="metric-card">'
+    html += '<div class="metric-label">Flow</div>'
+    html += '<div class="metric-val" style="color:' + fc + '">' + str(flow_score_val) + '</div>'
+    html += '<div style="color:#484f58; font-size:10px">Weight: 15%</div>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+with sc5:
+    ec = "#3fb950" if mis_score >= 7 else "#d29922" if mis_score >= 4 else "#f85149"
+    html = '<div class="metric-card">'
+    html += '<div class="metric-label">Mispricing</div>'
+    html += '<div class="metric-val" style="color:' + ec + '">' + str(mis_score) + '</div>'
+    html += '<div style="color:#484f58; font-size:10px">Weight: 20%</div>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+# ============================================================
+# INDICATOR DETAILS (expandable)
+# ============================================================
+with st.expander("📊 Indicator Details"):
+    d1, d2 = st.columns(2)
+    with d1:
+        st.markdown("**Volatility Regime**")
+        st.markdown("ATR5/ATR20 Ratio: **" + str(vol_ratio) + "**")
+        st.markdown("Bollinger Width %ile: **" + str(bb_pct) + "%**")
+        st.markdown("Regime: **" + vol_regime + "**")
+        st.markdown("---")
+        st.markdown("**Momentum**")
+        st.markdown("RSI(14): **" + str(rsi_val) + "**")
+        st.markdown("MACD Hist Slope: **" + str(macd_slope) + "**")
+        st.markdown("ROC(3): **" + str(roc_val) + "%**")
+    with d2:
+        st.markdown("**Order Flow Proxy**")
+        st.markdown("Volume Ratio (vs 20d avg): **" + str(vol_ratio_flow) + "x**")
+        st.markdown("VWAP Distance: **" + str(vwap_dist) + "%**")
+        st.markdown("---")
+        st.markdown("**Mispricing**")
+        st.markdown("Model Probability: **" + str(model_prob) + "%**")
+        # === PRECISION FIX: Show N/A if no market data ===
+        mp_display = str(market_prob) + "%" if market_prob is not None else "N/A"
+        st.markdown("Market Implied: **" + mp_display + "**")
+        if market_prob is not None:
+            edge_color = "green" if edge_pct > 0 else "red"
+            edge_sign = "+" if edge_pct > 0 else ""
+            st.markdown("Edge: **:" + edge_color + "[" + edge_sign + str(edge_pct) + "%]**")
+            tradeable = "YES ✅" if edge_pct > 6 else "MARGINAL ⚠️" if edge_pct > 3 else "NO ❌"
+            st.markdown("Tradeable Edge: **" + tradeable + "**")
+        else:
+            st.markdown("Edge: **N/A** (no market data)")
+            st.markdown("Tradeable Edge: **N/A**")
+
+# ============================================================
+# THE PICK
 # ============================================================
 st.markdown("---")
-st.markdown("### 🔍 All Markets — Reaction Scores")
-st.markdown("<p style='color:#8b949e; font-size:12px'>Composite scores across all 12 markets</p>", unsafe_allow_html=True)
 
-scan_results = []
-for mname, mcfg in MARKETS.items():
-    try:
-        mdf = fetch_full_data(mcfg.get("ticker", ""), lookback)
-        if mdf is None or len(mdf) < 2:
-            continue
-        mh, ml, mc = extract_hlc(mdf, lookback)
-        if mh is None:
-            continue
-        mrng = mh - ml
-        mb = make_brackets(mcfg)
-        gprice = ml + mrng * 0.618
-        gpick = nearest_bracket_below(gprice, mb)
-        mcush = mc - gpick
-        mcush_pct = round((mcush / mc) * 100, 2) if mc != 0 else 0
-        # Quick scores
-        m_loc = score_location(mc, gprice, mrng)
-        m_vol, m_regime, _, _ = score_volatility(mdf)
-        m_mom, _, _, _ = score_momentum(mdf)
-        m_flow, _, _ = score_flow(mdf)
-        m_mis = 5.0  # Skip Kalshi fetch for scan speed
-        m_scores = {"location": m_loc, "volatility": m_vol, "momentum": m_mom, "flow": m_flow, "mispricing": m_mis}
-        m_comp = compute_composite(m_scores)
-        m_sug, m_sug_color = trade_suggestion(m_comp)
-        scan_results.append({
-            "name": mname,
-            "icon": mcfg.get("icon", ""),
-            "close": mc,
-            "pick": gpick,
-            "cushion_pct": mcush_pct,
-            "composite": m_comp,
-            "suggestion": m_sug,
-            "color": m_sug_color,
-            "regime": m_regime,
-            "cfg": mcfg,
-        })
-    except Exception:
-        continue
-
-# Sort by composite score descending
-scan_results.sort(key=lambda x: x.get("composite", 0), reverse=True)
-
-# Display as table
-if scan_results:
-    header = "| Market | Close | Pick | Cushion | Score | Signal | Regime |"
-    sep = "|:-------|------:|-----:|--------:|------:|:------:|:------:|"
-    rows = [header, sep]
-    for sr in scan_results:
-        mfp = lambda v, c=sr["cfg"]: fmt_price(v, c)
-        cush_str = str(sr.get("cushion_pct", 0)) + "%"
-        cush_icon = "🟢" if sr.get("cushion_pct", 0) >= 0 else "🔴"
-        score_str = str(sr.get("composite", 0))
-        row = "| " + sr.get("icon", "") + " " + sr.get("name", "")
-        row += " | " + mfp(sr.get("close", 0))
-        row += " | " + mfp(sr.get("pick", 0))
-        row += " | " + cush_icon + " " + cush_str
-        row += " | **" + score_str + "**"
-        row += " | " + sr.get("suggestion", "")
-        row += " | " + sr.get("regime", "")
-        row += " |"
-        rows.append(row)
-    st.markdown("\n".join(rows))
-else:
-    st.warning("No market data available for scan.")
-
-# ============================================================
-# FIBO TABLE
-# ============================================================
-st.markdown("---")
-st.markdown("### " + cfg.get("icon", "") + " " + selected_name + " — All Fibonacci Levels")
-
-header = "| Level | Price | Bracket | Cushion | Trade |"
-sep = "|:------|------:|--------:|--------:|:-----:|"
-rows = [header, sep]
-for l in levels:
-    g = "**" if l.get("pct", 0) == 0.618 else ""
-    dc = "🟢" if l.get("dist", 0) >= 0 else "🔴"
-    link = "[Open →](" + kurl_browse + ")"
-    row = "| " + g + l.get("label", "") + g
-    row += " | " + fp(l.get("price", 0))
-    row += " | " + g + fp(l.get("bracket", 0)) + g
-    row += " | " + dc + " " + fp(l.get("dist", 0)) + " (" + str(l.get("dist_pct", 0)) + "%)"
-    row += " | " + link + " |"
-    rows.append(row)
-st.markdown("\n".join(rows))
-
-# ============================================================
-# FORMULA
-# ============================================================
-st.markdown("### 📐 The Formula — " + selected_name)
-st.markdown("1. Get " + str(lookback) + "-day swing high & low for **" + selected_name + "** (" + cfg.get("ticker", "") + ")")
-st.markdown("2. Range = " + fp(high) + " − " + fp(low) + " = **" + fp(rng) + "**")
-st.markdown("3. Golden = Low + (Range × 0.618) = " + fp(low) + " + (" + fp(rng) + " × 0.618) = **" + fp(golden.get("price", 0)) + "**")
-st.markdown("4. Nearest bracket ≤ golden = **" + fp(pick) + "**")
-st.markdown("5. Score composite across 5 layers → **" + str(composite) + "/100**")
-st.markdown("6. **" + suggestion + "**")
-
-# ============================================================
-# MARKET FIT GUIDE
-# ============================================================
-st.markdown("---")
-st.markdown("### 📋 Market Fit Guide")
-st.markdown("""
-| Rating | Markets | Notes |
-|:-------|:--------|:------|
-| 🟢 **Best** | S&P 500, Nasdaq, Dow, Russell, Gold, Oil | Clear swing levels, mean-reversion, well-defined brackets |
-| 🟡 **Good** | Natural Gas, Bitcoin, Ethereum, EUR/USD, USD/JPY | More volatile, use shorter lookback, expect false breaks |
-| 🔴 **Skip** | Temperature, Weather | Not price-driven, use SHARK instead |
-""")
-
-# ============================================================
-# DISCLAIMER + FOOTER
-# ============================================================
-st.markdown("---")
-html = '<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; margin-top:16px">'
-html += '<p style="color:#f0b90b; font-size:13px; font-weight:bold; margin-bottom:8px">⚠️ DISCLAIMER</p>'
-html += '<p style="color:#8b949e; font-size:11px; line-height:1.7">'
-html += 'This tool is for <strong>research and educational purposes only</strong>. It is NOT financial advice. '
-html += 'Fibonacci retracement levels are technical analysis indicators based on historical price patterns — they do NOT predict future price movements. '
-html += 'Past performance does not guarantee future results. All trading involves risk and you can lose your entire investment. '
-html += 'The composite score is a mathematical calculation, not a recommendation to buy or sell. '
-html += 'Always do your own research and never trade more than you can afford to lose. '
-html += 'This tool has no affiliation with Kalshi, Yahoo Finance, or any exchange.'
-html += '</p></div>'
-st.markdown(html, unsafe_allow_html=True)
-
-now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-html = '<p style="color:#484f58; font-size:11px; text-align:center; margin-top:12px">'
-html += 'Last updated: ' + now_str + ' | Data: Yahoo Finance + Kalshi API | Auto-refreshes every 5 min'
-html += '</p>'
+html = '<div class="big-pick">'
+html += '<div class="pick-title">★ ' + cfg.get("icon", "") + ' ' + selected_name + ' — Reaction Engine Pick ★</div>'
+html += '<div class="pick-main">BUY YES — ' + fp(pick) + ' or above</div>'
+html += '<div class="pick-sub">61.8% Fibo = ' + fp(golden["price"]) + ' → Nearest bracket: ' + fp(pick) + '</div>'
+html += '<br>'
+html += '<div style="display:flex; justify-content:center; gap:40px">'
+html += '<div><div class="cushion-num">' + fp(cushion) + ' pts</div><div class="cushion-label">Cushion from close</div></div>'
+html += '<div><div class="cushion-num">' + str(cushion_pct) + '%</div><div class="cushion-label">Drop needed to lose</div></div>'
+html += '</div>'
+html += '<br>'
+# Model vs Market probability bar
+mp_color = "#3fb950" if edge_pct > 3 else "#f85149" if edge_pct < -3 else "#d29922"
+# === PRECISION FIX: Handle None market_prob in UI ===
+mp_display = str(market_prob) + "%" if market_prob is not None else "N/A"
+edge_display = ("+" if edge_pct > 0 else "") + str(edge_pct) + "%" if market_prob is not None else "N/A"
+html += '<div style="display:flex; justify-content:center; gap:30px; margin-bottom:12px">'
+html += '<div style="text-align:center"><div style="color:#58a6ff; font-size:24px; font-weight:bold">' + str(model_prob) + '%</div><div style="color:#8b949e; font-size:11px">Model Prob</div></div>'
+html += '<div style="text-align:center; color:#484f58; font-size:20px; padding-top:4px">vs</div>'
+html += '<div style="text-align:center"><div style="color:#f0b90b; font-size:24px; font-weight:bold">' + mp_display + '</div><div style="color:#8b949e; font-size:11px">Market Implied</div></div>'
+html += '<div style="text-align:center"><div style="color:' + mp_color + '; font-size:24px; font-weight:bold">'
+html += edge_display + '</div><div style="color:#8b949e; font-size:11px">Edge</div></div>'
+html += '</div>'
+# Trade suggestion
+html += '<div style="color:' + suggestion_color + '; font-size:18px; font-weight:bold; margin-bottom:12px">' + suggestion + '</div>'
+# === PRECISION FIX: Kelly cap 15%, hide if composite < 65 ===
+if edge_pct > 0 and market_prob is not None and market_prob > 0 and market_prob < 100 and composite >= 65:
+    mp_dec = market_prob / 100.0
+    odds = (1.0 / mp_dec) - 1.0 if mp_dec > 0 else 0
+    model_dec = model_prob / 100.0
+    kelly = 0.0
+    if odds > 0:
+        kelly = ((model_dec * odds) - (1 - model_dec)) / odds
+        kelly = max(0, min(0.15, kelly))  # cap at 15%
+    kelly_pct = round(kelly * 100, 1)
+    html += '<div style="color:#8b949e; font-size:12px">Kelly Fraction: ' + str(kelly_pct) + '% of bankroll</div>'
+html += '<br>'
+html += '<div style="color:#8b949e; font-size:13px">Market: ' + nd.strftime("%A %b %d, %Y") + ' at 4pm EST</div>'
+html += '<br>'
+html += '<a href="' + kurl_direct + '" target="_blank" style="display:inline-block; background:#f0b90b; color:#000; padding:12px 32px; border-radius:8px; font-weight:bold; font-size:16px; text-decoration:none; font-family:monospace">🎯 OPEN ON KALSHI →</a>'
+html += '<div style="color:#484f58; font-size:10px; margin-top:6px">' + kurl_direct + '</div>'
+html += '<div style="margin-top:8px"><a href="' + kurl_browse + '" target="_blank" style="color:#58a6ff; font-size:12px; text-decoration:none">📂 Browse all ' + selected_name + ' brackets →</a></div>'
+html += '</div>'
 st.markdown(html, unsafe_allow_html=True)
 # ============================================================
 # HOW TO USE THIS APP
