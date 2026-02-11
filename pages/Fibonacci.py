@@ -761,6 +761,11 @@ has_kalshi = False
 all_kalshi_mkts = []
 if API_KEY and PRIVATE_KEY:
     all_kalshi_mkts = discover_all_kalshi_markets()
+    st.warning(f"DEBUG: Discovered {len(all_kalshi_mkts)} total Kalshi markets")
+    if all_kalshi_mkts:
+        st.code(str([m.get("title","")[:60] for m in all_kalshi_mkts[:10]]))
+    else:
+        st.error("DEBUG: API returned 0 markets. Check auth or endpoint.")
     kalshi_data = find_kalshi_markets_for(selected_name, all_kalshi_mkts)
     if kalshi_data:
         has_kalshi = True
