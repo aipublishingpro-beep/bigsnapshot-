@@ -606,152 +606,163 @@ def score_momentum(df):
 # LAYER 4: ORDER FLOW PROXY (0-10)
 # ============================================================
 def score_flow(df):
-    """Flow proxy score using volume spike + VWAP distance.
+    """Order flow proxy using volume ratio and VWAP distance.
     Returns (score 0-10, vol_ratio, vwap_dist_pct)."""
-    if len(df) < 5:
+    if "Volume" not in df.columns or len(df) < 21:
         return 5.0, 1.0, 0.0
-    volumes = df["Volume"].values.astype(float)
-    closes = df["Close"].values.astype(float)
-    highs = df["High"].values.astype(float)
-    lows = df["Low"].values.astype(float)
-    avg_vol = float(np.mean(volumes[-20:])) if len(volumes) >= 20 else float(np.mean(volumes))
+    volumes = df["Volume"].values
+    closes = df["Close"].values
+    highs = df["High"].values
+    lows = df["Low"].values
     current_vol = float(volumes[-1])
-    vol_ratio = current_vol / avg_vol if avg_vol > 0 else 1.0
-    recent_c = closes[-5:]
-    recent_v = volumes[-5:]
-    pv_sum = sum(float(recent_c[i]) * float(recent_v[i]) for i in range(len(recent_c)))
-    v_sum = sum(float(v) for v in recent_v)
-    vwap = pv_sum / v_sum if v_sum > 0 else float(closes[-1])
-    current_price = float(closes[-1])
-    vwap_dist = abs(current_price - vwap)
-    vwap_dist_pct = (vwap_dist / current_price) * 100 if current_price > 0 else 0
+    avg_vol_20 = float(np.mean(volumes[-21:-1])) if len(volumes) >= 21 else float(np.mean(volumes[:-1]))
+    if avg_vol_20 == 0:
+        vol_ratio = 1.0
+    else:
+        vol_ratio = current_vol / avg_vol_20
+    # VWAP approximation using typical price * volume
+    typical = [(float(highs[i]) + float(lows[i]) + float(closes[i])) / 3.0 for i in range(len(df))]
+    vols = [float(volumes[i]) for i in range(len(df))]
+    cum_tv = 0.0
+    cum_v = 0.0
+    for i in range(len(df)):
+        cum_tv += typical[i] * vols[i]
+        cum_v += vols[i]
+    vwap = cum_tv / cum_v if cum_v > 0 else float(closes[-1])
+    current_close = float(closes[-1])
+    vwap_dist = round(((current_close - vwap) / vwap) * 100, 2) if vwap != 0 else 0.0
+    # Score volume ratio
     if vol_ratio > 2.0:
         vol_score = 9
     elif vol_ratio > 1.5:
         vol_score = 7
     elif vol_ratio > 1.0:
         vol_score = 5
-    else:
+    elif vol_ratio > 0.5:
         vol_score = 3
-    if vwap_dist_pct < 0.3:
-        vwap_score = 9
-    elif vwap_dist_pct < 0.7:
-        vwap_score = 7
-    elif vwap_dist_pct < 1.5:
-        vwap_score = 5
     else:
+        vol_score = 1
+    # Score VWAP distance (closer to VWAP = better for mean reversion)
+    abs_vwap = abs(vwap_dist)
+    if abs_vwap < 0.3:
+        vwap_score = 9
+    elif abs_vwap < 0.7:
+        vwap_score = 7
+    elif abs_vwap < 1.5:
+        vwap_score = 5
+    elif abs_vwap < 3.0:
         vwap_score = 3
+    else:
+        vwap_score = 1
     combined = (vol_score * 0.5) + (vwap_score * 0.5)
-    return round(float(combined), 1), round(float(vol_ratio), 2), round(float(vwap_dist_pct), 2)
+    return round(float(combined), 1), round(float(vol_ratio), 2), round(float(vwap_dist), 2)
 
 # ============================================================
-# LAYER 5: MISPRICING ENGINE (0-10)
-# EMPIRICAL PROBABILITY MODEL — not Gaussian
-# market_prob = None when no Kalshi data (not 50%)
+# LAYER 5: MISPRICING SCORE (0-10)
 # ============================================================
-def score_mispricing(df, bracket_price, kalshi_markets):
-    """Compare empirical model probability vs Kalshi implied probability.
-    Projects each historical daily return forward to estimate P(close > bracket).
+def score_mispricing(df, pick_bracket, kalshi_data):
+    """Mispricing score using empirical probability (last 60 returns) vs market implied.
     Returns (score 0-10, model_prob, market_prob_or_None, edge_pct)."""
-    closes = df["Close"].values.astype(float)
-    if len(closes) < 10:
-        return 3.0, 50.0, None, 0.0
-    returns = []
-    for i in range(1, len(closes)):
-        if closes[i - 1] != 0:
-            returns.append((float(closes[i]) - float(closes[i - 1])) / float(closes[i - 1]))
-    if len(returns) < 5:
-        return 3.0, 50.0, None, 0.0
+    closes = df["Close"].values
     current = float(closes[-1])
-    if current == 0:
-        return 3.0, 50.0, None, 0.0
-    # Empirical probability: project each return forward
+    # Empirical probability: what % of last 60 daily returns would keep price above pick?
+    n_returns = min(60, len(closes) - 1)
+    if n_returns < 5:
+        return 5.0, 50.0, None, 0.0
+    returns = []
+    for i in range(len(closes) - n_returns, len(closes)):
+        if i > 0:
+            prev = float(closes[i - 1])
+            curr = float(closes[i])
+            if prev != 0:
+                returns.append((curr - prev) / prev)
+    if len(returns) < 5:
+        return 5.0, 50.0, None, 0.0
+    # Project: how many of these returns would land above pick_bracket?
     above_count = 0
     for r in returns:
-        projected = current * (1.0 + r)
-        if projected > bracket_price:
+        projected = current * (1 + r)
+        if projected >= pick_bracket:
             above_count += 1
-    model_prob = (above_count / len(returns)) * 100.0
-    model_prob = round(max(1.0, min(99.0, model_prob)), 1)
-    # Find market implied probability from Kalshi data
+    model_prob = round((above_count / len(returns)) * 100, 1)
+    # Find market implied from Kalshi data
     market_prob = None
-    if kalshi_markets:
+    if kalshi_data:
         best_match = None
-        best_dist = float('inf')
-        for tk, mdata in kalshi_markets.items():
+        for ticker, mdata in kalshi_data.items():
+            subtitle = str(mdata.get("subtitle", "")).lower()
             floor = mdata.get("floor", None)
+            # Try to match by floor strike
             if floor is not None:
-                dist = abs(float(floor) - bracket_price)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_match = mdata
-            else:
-                sub = mdata.get("subtitle", "")
-                for word in sub.replace(",", "").split():
-                    try:
-                        num = float(word)
-                        dist = abs(num - bracket_price)
-                        if dist < best_dist:
-                            best_dist = dist
-                            best_match = mdata
-                    except ValueError:
-                        continue
+                try:
+                    if abs(float(floor) - pick_bracket) < 0.01:
+                        best_match = mdata
+                        break
+                except (ValueError, TypeError):
+                    pass
+            # Try subtitle match
+            pick_str = str(int(pick_bracket)) if pick_bracket == int(pick_bracket) else str(pick_bracket)
+            if pick_str in subtitle:
+                best_match = mdata
+                break
         if best_match:
-            mp = float(best_match.get("implied_prob", 0))
-            if mp > 0:
-                market_prob = mp
-    # If no market data, return conservative score
-    if market_prob is None:
-        return 3.0, model_prob, None, 0.0
-    edge_pct = round(model_prob - market_prob, 1)
-    if edge_pct > 10:
-        mis_score = 10
-    elif edge_pct > 6:
-        mis_score = 8
-    elif edge_pct > 3:
-        mis_score = 6
-    elif edge_pct > 0:
-        mis_score = 4
-    elif edge_pct > -3:
-        mis_score = 3
+            yb = best_match.get("yes_bid", 0)
+            if yb and yb > 0:
+                market_prob = round(float(yb), 1)
+    # Compute edge
+    if market_prob is not None and market_prob > 0:
+        edge_pct = round(model_prob - market_prob, 1)
     else:
-        mis_score = 1
-    return float(mis_score), model_prob, market_prob, edge_pct
+        edge_pct = 0.0
+    # Score
+    abs_edge = abs(edge_pct)
+    if market_prob is not None:
+        if abs_edge > 15:
+            score = 10
+        elif abs_edge > 10:
+            score = 8
+        elif abs_edge > 6:
+            score = 7
+        elif abs_edge > 3:
+            score = 5
+        else:
+            score = 3
+        # Bonus if edge is positive (model says underpriced)
+        if edge_pct > 6:
+            score = min(10, score + 1)
+    else:
+        score = 5.0  # neutral when no market data
+    return round(float(score), 1), round(float(model_prob), 1), market_prob, round(float(edge_pct), 1)
 
 # ============================================================
-# MASTER COMPOSITE
-# Takes vol_regime (str) and vol_ratio (float) as params
-# Location suppressed in EXPANSION, kill switch if ratio > 1.5
+# COMPOSITE SCORE & TRADE SUGGESTION
 # ============================================================
-def compute_composite(scores, vol_regime, vol_ratio):
-    """Weighted composite score 0-100."""
-    adjusted = dict(scores)
-    if vol_regime == "EXPANSION":
-        adjusted["location"] = adjusted.get("location", 5.0) * 0.7
-    total = 0.0
+def compute_composite(scores, regime, vol_ratio):
+    """Weighted composite score 0-100 with regime adjustment."""
+    raw = 0.0
     for key, weight in SCORE_WEIGHTS.items():
-        val = float(adjusted.get(key, 5.0))
-        total += val * weight
-    composite = round(total * 10.0, 1)
-    if float(vol_ratio) > 1.5:
-        composite = min(composite, 49.0)
-    return composite
+        raw += scores.get(key, 5.0) * weight
+    # Scale to 0-100
+    base = round(raw * 10, 1)
+    # Regime bonus/penalty
+    if regime == "COMPRESSION":
+        base = min(100, base + 5)
+    elif regime == "EXPANSION":
+        base = max(0, base - 5)
+    return round(float(base), 1)
 
-# ============================================================
-# TRADE SUGGESTION — takes edge_pct as param for edge filter
-# ============================================================
 def trade_suggestion(composite, edge_pct):
-    """Return trade suggestion based on composite score + edge filter."""
-    composite = float(composite)
-    edge_pct = float(edge_pct)
-    if composite >= 80 and edge_pct > 3:
-        return "🟢 AGGRESSIVE", "#3fb950"
-    elif composite >= 65 and edge_pct > 3:
+    """Trade suggestion based on composite score.
+    Returns (suggestion_text, color)."""
+    if composite >= 80:
+        return "🟢 AGGRESSIVE SIZE", "#3fb950"
+    elif composite >= 65:
         return "🟡 MEDIUM SIZE", "#d29922"
-    elif composite >= 65 and edge_pct <= 3:
-        return "🟠 TECHNICAL SETUP — NO EDGE", "#f0883e"
     elif composite >= 50:
-        return "🟠 SMALL SIZE", "#f0883e"
+        if edge_pct > 0:
+            return "🟠 SMALL SIZE", "#f09000"
+        else:
+            return "🔴 NO TRADE — Negative Edge", "#f85149"
     else:
         return "🔴 NO TRADE", "#f85149"
         # ============================================================
@@ -1167,10 +1178,10 @@ st.markdown("\n".join(rows))
 # ============================================================
 st.markdown("### 📐 The Formula — " + selected_name)
 st.markdown("1. Get " + str(lookback) + "-day swing high & low for **" + selected_name + "** (" + cfg.get("ticker", "") + ")")
-st.markdown("2. Range = " + fp(high) + " − " + fp(low) + " = **" + fp(rng) + "**")
-st.markdown("3. Golden = Low + (Range × 0.618) = " + fp(low) + " + (" + fp(rng) + " × 0.618) = **" + fp(golden.get("price", 0)) + "**")
-st.markdown("4. Nearest bracket ≤ golden = **" + fp(pick) + "**")
-st.markdown("5. Score composite across 5 layers → **" + str(composite) + "/100**")
+st.markdown("2. Range = " + fp(high) + " - " + fp(low) + " = **" + fp(rng) + "**")
+st.markdown("3. Golden = Low + (Range x 0.618) = " + fp(low) + " + (" + fp(rng) + " x 0.618) = **" + fp(golden.get("price", 0)) + "**")
+st.markdown("4. Nearest bracket <= golden = **" + fp(pick) + "**")
+st.markdown("5. Score composite across 5 layers -> **" + str(composite) + "/100**")
 st.markdown("6. **" + suggestion + "**")
 
 # ============================================================
