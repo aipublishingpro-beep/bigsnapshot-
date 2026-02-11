@@ -141,8 +141,7 @@ def _parse_win_pct(rs):
 
 def remove_position(pid):
     st.session_state.positions = [p for p in st.session_state.positions if p.get('id') != pid]
-
-@st.cache_data(ttl=30)
+    @st.cache_data(ttl=30)
 def fetch_espn_games_wnba():
     try:
         today = datetime.now(eastern).strftime("%Y%m%d")
@@ -554,7 +553,8 @@ def check_comeback(g, kalshi_ml_data):
         'fav_margin': fav_margin, 'max_deficit': max_deficit,
         'fav_price': fav_price, 'fav_wp': fav_wp,
     }
-    def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
+
+def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
     edges, total = [], 0.0
     home, away = game["home"], game["away"]
     home_rec, away_rec = game.get("home_record", "0-0"), game.get("away_record", "0-0")
@@ -647,8 +647,7 @@ def check_comeback(g, kalshi_ml_data):
     else: strength = "⚪ TOSS-UP"
     side = "home" if total >= 0 else "away"
     return {"edges": edges, "score": round(total, 1), "pick": home if side == "home" else away, "side": side, "strength": strength, "bpi": bpi_home}
-
-def infer_possession(plays, away, home):
+    def infer_possession(plays, away, home):
     if not plays: return None, None
     last = plays[-1]
     text = (last.get("text", "") or "").lower()
@@ -869,7 +868,6 @@ def render_tiebreaker_panel(stats, home, away):
     o += '</div>'
     return o
 
-# ── Data Fetch Calls ──
 games = fetch_espn_games_wnba()
 kalshi_ml_data = fetch_kalshi_ml_wnba()
 kalshi_spreads_parsed, kalshi_spread_list = fetch_kalshi_spreads_raw_wnba()
@@ -920,9 +918,6 @@ st.divider()
 
 tab_edge, tab_spread, tab_live, tab_cushion = st.tabs(["Edge Finder", "Spread Sniper", "Live Monitor", "Cushion Scanner"])
 
-# ════════════════════════════════════════════════
-# TAB 1: EDGE FINDER
-# ════════════════════════════════════════════════
 with tab_edge:
     st.subheader("PRE-GAME ALIGNMENT — 9-Factor Edge Model")
     with st.expander("How Edges Are Rated"):
@@ -1013,7 +1008,6 @@ Only STRONG and MODERATE edges are shown below.
                     st.markdown("<span style='color:" + color + "'>" + prefix + fname + ": " + ("+" if val >= 0 else "") + str(val) + " — " + detail + "</span>", unsafe_allow_html=True)
             st.divider()
 
-    # Section B: Vegas vs Kalshi Mispricing Alert
     st.subheader("VEGAS vs KALSHI MISPRICING ALERT")
     st.caption("Comparing Vegas implied probabilities to Kalshi prices — edges ≥5% shown")
     mispricing_list = []
@@ -1092,7 +1086,6 @@ Only STRONG and MODERATE edges are shown below.
             link = get_kalshi_game_link(g.get('away', ''), g.get('home', ''))
             st.link_button("Trade " + mp.get('team', '') + " on Kalshi", link, use_container_width=True)
 
-    # Section C: Injury Report
     st.subheader("INJURY REPORT")
     today_teams = set()
     for g in games:
@@ -1110,7 +1103,6 @@ Only STRONG and MODERATE edges are shown below.
             for p in dtd_players: st.markdown("**" + team + "** [DTD] " + p.get('name', '') + " — " + p.get('status', ''))
     if not has_injuries: st.info("No significant injuries reported for today's games.")
 
-    # Section D: Position Tracker
     st.subheader("POSITION TRACKER")
     with st.expander("ADD NEW POSITION", expanded=False):
         game_options = [g.get('away', '') + " @ " + g.get('home', '') for g in games]
@@ -1176,7 +1168,6 @@ Only STRONG and MODERATE edges are shown below.
             st.rerun()
     else: st.caption("No positions tracked yet.")
 
-    # Section E: All Games Today
     st.subheader("ALL GAMES TODAY")
     for g in games:
         if g.get('status') in ['STATUS_FINAL', 'STATUS_FULL_TIME']:
@@ -1194,9 +1185,6 @@ Only STRONG and MODERATE edges are shown below.
         h += '<span style="color:#94a3b8;font-size:clamp(11px,2.5vw,14px);margin-left:8px">' + info_str + '</span></div>'
         st.markdown(h, unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════
-# TAB 2: SPREAD SNIPER
-# ════════════════════════════════════════════════
 with tab_spread:
     st.subheader("SPREAD SNIPER — LIVE ALERTS")
     with st.expander("How Spread Sniping Works"):
@@ -1231,6 +1219,11 @@ with tab_spread:
             h += '<div style="color:#fbbf24;font-size:clamp(12px,3vw,16px);margin-top:4px">' + alert.get('dog_name', '') + ' (' + alert.get('dog_abbrev', '') + ') leads by ' + str(alert.get('dog_lead', 0)) + ' | Record: ' + alert.get('dog_record', '') + '</div>'
             h += '<div style="color:#94a3b8;font-size:clamp(11px,2.5vw,14px)">Favorite: ' + alert.get('fav_name', '') + ' (' + alert.get('fav_abbrev', '') + ') | Record: ' + alert.get('fav_record', '') + '</div></div>'
             st.markdown(h, unsafe_allow_html=True)
+            if alert.get('fav_wp'):
+                wp = alert['fav_wp']
+                wp_edge = alert.get('wp_edge', 0)
+                wp_color = "#22c55e" if wp_edge >= MIN_WP_EDGE else "#eab308"
+                st.markdown("<span style='color:" + wp_color + "'>ESPN WP: " + str(round(wp)) + "% | WP Edge: " + ("+" if wp_edge >= 0 else "") + str(round(wp_edge)) + "%</span>", unsafe_allow_html=True)
             if alert.get('no_markets'): st.warning("No spread markets found — check Kalshi manually")
             elif not alert.get('spreads'): st.info("All bracket NO prices exceed " + str(MAX_NO_PRICE) + "¢ ceiling")
             else:
@@ -1258,7 +1251,6 @@ with tab_spread:
             st.divider()
     else: st.info("No spread sniper alerts yet — scanning every 24 seconds...")
 
-    # Section B: Comeback Scanner
     st.subheader("COMEBACK SCANNER")
     st.caption("Tracking favorites who fall behind by 10+ points — fires when they close within 2")
     if st.session_state.comeback_tracking:
@@ -1308,12 +1300,6 @@ with tab_spread:
             st.divider()
     elif not st.session_state.comeback_tracking:
         st.info("Monitoring for favorite deficits of 10+ points...")
-('fav_wp'):
-                wp = alert['fav_wp']
-                wp_edge = alert.get('wp_edge', 0)
-                wp_color = "#22c55e" if wp_edge >= MIN_WP_EDGE else "#eab308"
-                st.markdown("<span style='color:" + wp_color + "'>ESPN WP: " + str(round(wp)) + "% | WP Edge: " + ("+" if wp_edge >= 0 else "") + str(round(wp_edge)) + "%</span>", unsafe_allow_html=True)
-            if alert.get
 with tab_live:
     st.subheader("LIVE EDGE MONITOR")
     if live_games:
@@ -1413,9 +1399,6 @@ with tab_live:
             st.divider()
     else: st.info("No live games right now — check back during game time!")
 
-# ════════════════════════════════════════════════
-# TAB 4: CUSHION SCANNER
-# ════════════════════════════════════════════════
 with tab_cushion:
     st.subheader("CUSHION SCANNER (Totals)")
     cs1, cs2, cs3 = st.columns(3)
@@ -1433,7 +1416,7 @@ with tab_cushion:
         mp = g.get('minutes_played', 0)
         proj = LEAGUE_AVG_TOTAL
         has_pace = False
-        if mp >= 6:
+        if mp >= 8:
             proj = calc_projection(g.get('total_score', 0), mp)
             has_pace = True
         elif g.get('vegas_odds', {}).get('overUnder'):
@@ -1484,7 +1467,6 @@ with tab_cushion:
         else: st.caption("YES bets: go LOW for safety — smaller number = more cushion")
     else: st.info("No cushion opportunities found with current filters.")
 
-# ── Footer ──
 st.divider()
 st.caption("v" + VERSION + " | Educational only | Not financial advice")
 st.caption("Stay small. Stay quiet. Win.")
