@@ -1188,16 +1188,16 @@ st.markdown(html, unsafe_allow_html=True)
 # HOW TO USE THIS APP
 # ============================================================
 st.markdown("---")
-st.markdown("### 🛠️ How to Use This App")
-html = '<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin:12px 0">'
-html += '<p style="color:#e6edf3; font-size:13px; line-height:1.8; margin:0">'
-html += '<strong style="color:#f0b90b">1. Pick a market</strong> — Select any of the 12 markets from the dropdown. S&P 500, Nasdaq, Dow, Russell, Gold, and Oil give the cleanest signals.<br><br>'
-html += '<strong style="color:#f0b90b">2. Set your lookback</strong> — 5 days is the default sweet spot. Use 3 days for fast-moving crypto/FX, 10-20 days for broader swing levels.<br><br>'
-html += '<strong style="color:#f0b90b">3. Read the Reaction Score</strong> — The big number (0-100) is your composite edge score across 5 layers: Location, Volatility, Momentum, Flow, and Mispricing. Higher = stronger setup.<br><br>'
-html += '<strong style="color:#f0b90b">4. Check the signal</strong> — 🔴 NO TRADE (below 50) means skip it. 🟠 SMALL (50-65), 🟡 MEDIUM (65-80), 🟢 AGGRESSIVE (80+) tell you how much to size.<br><br>'
-html += '<strong style="color:#f0b90b">5. Look at the pick</strong> — The golden ratio (61.8%) bracket is your trade. Check the cushion — that is how far price has to drop before you lose. Bigger cushion = safer.<br><br>'
-html += '<strong style="color:#f0b90b">6. Model vs Market</strong> — If Model Prob is higher than Market Implied, the market is underpricing your bracket. Positive edge = good. The Kelly Fraction tells you optimal bankroll sizing.<br><br>'
-html += '<strong style="color:#f0b90b">7. Scan all markets</strong> — Scroll down to the All Markets table to find the highest-scoring setups across all 12 markets at once. Sorted by score, best on top.<br><br>'
-html += '<strong style="color:#f0b90b">8. Execute on Kalshi</strong> — Hit the yellow OPEN ON KALSHI button to go directly to the bracket. Buy YES on the pick bracket for the next trading day at 4pm EST settlement.'
-html += '</p></div>'
-st.markdown(html, unsafe_allow_html=True)
+with st.expander("🛠️ How to Use This App"):
+    html = '<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin:12px 0">'
+    html += '<p style="color:#e6edf3; font-size:13px; line-height:1.8; margin:0">'
+    html += '<strong style="color:#f0b90b">1. Pick a market</strong> — Select any of the 12 markets from the dropdown. S&P 500, Nasdaq, Dow, Russell, Gold, and Oil give the cleanest signals.<br><br>'
+    html += '<strong style="color:#f0b90b">2. Set your lookback</strong> — 5 days is the default sweet spot. Use 3 days for fast-moving crypto/FX, 10-20 days for broader swing levels.<br><br>'
+    html += '<strong style="color:#f0b90b">3. Read the Reaction Score</strong> — The big number (0-100) is your composite edge score across 5 layers: Location, Volatility, Momentum, Flow, and Mispricing. Higher = stronger setup.<br><br>'
+    html += '<strong style="color:#f0b90b">4. Check the signal</strong> — 🔴 NO TRADE (below 50) means skip it. 🟠 SMALL (50-65), 🟡 MEDIUM (65-80), 🟢 AGGRESSIVE (80+) tell you how much to size.<br><br>'
+    html += '<strong style="color:#f0b90b">5. Look at the pick</strong> — The golden ratio (61.8%) bracket is your trade. Check the cushion — that is how far price has to drop before you lose. Bigger cushion = safer.<br><br>'
+    html += '<strong style="color:#f0b90b">6. Model vs Market</strong> — If Model Prob is higher than Market Implied, the market is underpricing your bracket. Positive edge = good. The Kelly Fraction tells you optimal bankroll sizing.<br><br>'
+    html += '<strong style="color:#f0b90b">7. Scan all markets</strong> — Scroll down to the All Markets table to find the highest-scoring setups across all 12 markets at once. Sorted by score, best on top.<br><br>'
+    html += '<strong style="color:#f0b90b">8. Execute on Kalshi</strong> — Hit the yellow OPEN ON KALSHI button to go directly to the bracket. Buy YES on the pick bracket for the next trading day at 4pm EST settlement.'
+    html += '</p></div>'
+    st.markdown(html, unsafe_allow_html=True)
