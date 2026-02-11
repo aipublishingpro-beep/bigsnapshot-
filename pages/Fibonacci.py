@@ -762,10 +762,15 @@ all_kalshi_mkts = []
 if API_KEY and PRIVATE_KEY:
     all_kalshi_mkts = discover_all_kalshi_markets()
     st.warning(f"DEBUG: Discovered {len(all_kalshi_mkts)} total Kalshi markets")
-    if all_kalshi_mkts:
-        st.code(str([m.get("title","")[:60] for m in all_kalshi_mkts[:10]]))
-    else:
-        st.error("DEBUG: API returned 0 markets. Check auth or endpoint.")
+    # Find what matches gold/sp500/bitcoin in titles
+    for search_word in ["gold", "s&p", "sp500", "bitcoin", "nasdaq"]:
+        found = [m for m in all_kalshi_mkts if search_word in (m.get("title","") + " " + m.get("subtitle","") + " " + m.get("ticker","") + " " + m.get("series_ticker","")).lower()]
+        if found:
+            st.success(f"'{search_word}': {len(found)} matches")
+            for fm in found[:3]:
+                st.code(f"ticker={fm.get('ticker','')} | series={fm.get('series_ticker','')} | floor={fm.get('floor_strike')} | title={fm.get('title','')[:80]} | sub={fm.get('subtitle','')[:80]}")
+        else:
+            st.error(f"'{search_word}': 0 matches in {len(all_kalshi_mkts)} markets")
     kalshi_data = find_kalshi_markets_for(selected_name, all_kalshi_mkts)
     if kalshi_data:
         has_kalshi = True
