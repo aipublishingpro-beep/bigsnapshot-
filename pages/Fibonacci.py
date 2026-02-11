@@ -762,15 +762,44 @@ all_kalshi_mkts = []
 if API_KEY and PRIVATE_KEY:
     all_kalshi_mkts = discover_all_kalshi_markets()
     st.warning(f"DEBUG: Discovered {len(all_kalshi_mkts)} total Kalshi markets")
-    # Find what matches gold/sp500/bitcoin in titles
-    for search_word in ["gold", "s&p", "sp500", "bitcoin", "nasdaq"]:
-        found = [m for m in all_kalshi_mkts if search_word in (m.get("title","") + " " + m.get("subtitle","") + " " + m.get("ticker","") + " " + m.get("series_ticker","")).lower()]
-        if found:
-            st.success(f"'{search_word}': {len(found)} matches")
-            for fm in found[:3]:
-                st.code(f"ticker={fm.get('ticker','')} | series={fm.get('series_ticker','')} | floor={fm.get('floor_strike')} | title={fm.get('title','')[:80]} | sub={fm.get('subtitle','')[:80]}")
-        else:
-            st.error(f"'{search_word}': 0 matches in {len(all_kalshi_mkts)} markets")
+    # Try different status values and endpoints to find financial markets
+    for status in ["active", "open", "settled", "unopened"]:
+        path = f"/trade-api/v2/markets?status={status}&limit=5&ticker=KXINX"
+        try:
+            r = requests.get(KALSHI_BASE + path, headers=kalshi_headers("GET", path), timeout=10)
+            data = r.json()
+            mkts = data.get("markets", [])
+            st.info(f"status={status} ticker=KXINX: {r.status_code}, {len(mkts)} markets")
+            for m in mkts[:2]:
+                st.code(f"{m.get('ticker','')} | {m.get('title','')[:60]}")
+        except Exception as e:
+            st.error(f"{status}: {e}")
+    # Try series endpoint directly
+    for series in ["KXINX", "kxinx", "KXINXU", "kxinxu", "INXU", "INX"]:
+        path = f"/trade-api/v2/markets?series_ticker={series}&limit=5"
+        try:
+            r = requests.get(KALSHI_BASE + path, headers=kalshi_headers("GET", path), timeout=10)
+            data = r.json()
+            mkts = data.get("markets", [])
+            if mkts:
+                st.success(f"series={series}: {len(mkts)} found!")
+                for m in mkts[:2]:
+                    st.code(f"{m.get('ticker','')} | floor={m.get('floor_strike')} | {m.get('title','')[:60]}")
+        except Exception:
+            pass
+    # Try events endpoint
+    for prefix in ["KXINX", "kxinxu", "INXD"]:
+        path = f"/trade-api/v2/events?status=open&limit=5&series_ticker={prefix}"
+        try:
+            r = requests.get(KALSHI_BASE + path, headers=kalshi_headers("GET", path), timeout=10)
+            data = r.json()
+            evts = data.get("events", [])
+            if evts:
+                st.success(f"events series={prefix}: {len(evts)} found!")
+                for e in evts[:2]:
+                    st.code(f"{e.get('event_ticker','')} | {e.get('title','')[:60]}")
+        except Exception:
+            pass
     kalshi_data = find_kalshi_markets_for(selected_name, all_kalshi_mkts)
     if kalshi_data:
         has_kalshi = True
