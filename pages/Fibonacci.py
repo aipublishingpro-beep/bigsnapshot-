@@ -261,7 +261,6 @@ st.markdown("""
 # ============================================================
 @st.cache_data(ttl=300)
 def fetch_full_data(ticker, days):
-    """Returns full DataFrame with OHLCV for technical analysis."""
     end = datetime.now()
     start = end - timedelta(days=days * 2 + 10)
     df = yf.download(ticker, start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"), progress=False)
@@ -272,7 +271,6 @@ def fetch_full_data(ticker, days):
     return df.tail(days + 20)
 
 def extract_hlc(df, days):
-    """Extract high, low, close from last N days of DataFrame."""
     if df is None or len(df) < 1:
         return None, None, None
     recent = df.tail(days)
@@ -320,7 +318,6 @@ def kalshi_url(cfg, d):
     base = cfg.get("kalshi_url", "")
     series = cfg.get("kalshi_series", "")
     slug = cfg.get("kalshi_slug", "")
-    # Best working URL: series browse page
     browse = "https://kalshi.com/markets/" + series + "/" + slug if series and slug else base
     return browse, base
 
@@ -338,7 +335,6 @@ def fmt_price(val, cfg):
 # ============================================================
 @st.cache_data(ttl=120)
 def fetch_kalshi_event_markets(series, slug, date_obj):
-    """Fetch live Kalshi bracket prices for an event."""
     td = ticker_date(date_obj)
     event_ticker = series + "-" + td + "h1600"
     path = "/trade-api/v2/events/" + event_ticker
@@ -377,7 +373,6 @@ def fetch_kalshi_event_markets(series, slug, date_obj):
 
 @st.cache_data(ttl=120)
 def fetch_kalshi_series_markets(series):
-    """Fetch all active markets in a Kalshi series."""
     path = "/trade-api/v2/markets"
     params = "?series_ticker=" + series + "&status=open&limit=50"
     full_path = path + params
@@ -427,7 +422,6 @@ def get_kalshi_balance():
 # LAYER 1: LOCATION SCORE (0-10)
 # ============================================================
 def score_location(close, golden_price, rng):
-    """Score based on distance from price to 61.8% fib level."""
     if rng == 0:
         return 5.0
     dist = abs(close - golden_price)
@@ -439,7 +433,6 @@ def score_location(close, golden_price, rng):
 # LAYER 2: VOLATILITY REGIME (0-10)
 # ============================================================
 def compute_atr(df, period):
-    """Average True Range for N periods."""
     if len(df) < period + 1:
         return 0.0
     highs = df["High"].values
@@ -457,7 +450,6 @@ def compute_atr(df, period):
     return sum(trs[-period:]) / period
 
 def compute_bollinger_width_percentile(df, period=20, lookback=30):
-    """Bollinger Band width percentile over lookback days."""
     closes = df["Close"].values
     if len(closes) < period + lookback:
         return 50.0
@@ -479,9 +471,6 @@ def compute_bollinger_width_percentile(df, period=20, lookback=30):
     return round(pct, 1)
 
 def score_volatility(df):
-    """Volatility regime score. Compression = higher score.
-    Returns (score 0-10, regime_label, atr_ratio, bb_percentile).
-    ALL RETURN VALUES ARE PLAIN PYTHON TYPES (float, str)."""
     atr5 = compute_atr(df, 5)
     atr20 = compute_atr(df, 20)
     if atr20 == 0:
@@ -522,7 +511,6 @@ def score_volatility(df):
 # LAYER 3: MOMENTUM EXHAUSTION (0-10)
 # ============================================================
 def compute_rsi(df, period=14):
-    """RSI calculation."""
     closes = df["Close"].values
     if len(closes) < period + 1:
         return 50.0
@@ -543,7 +531,6 @@ def compute_rsi(df, period=14):
     return round(rsi, 1)
 
 def compute_macd_hist_slope(df):
-    """MACD histogram slope (last 3 bars)."""
     closes = df["Close"].values.astype(float)
     if len(closes) < 26:
         return 0.0
@@ -564,7 +551,6 @@ def compute_macd_hist_slope(df):
     return round(slope, 4)
 
 def compute_roc(df, period=3):
-    """Rate of Change over N periods."""
     closes = df["Close"].values
     if len(closes) < period + 1:
         return 0.0
@@ -575,8 +561,6 @@ def compute_roc(df, period=3):
     return round(((current - past) / past) * 100, 2)
 
 def score_momentum(df):
-    """Momentum exhaustion score.
-    Returns (score 0-10, rsi, macd_slope, roc)."""
     rsi = compute_rsi(df)
     macd_slope = compute_macd_hist_slope(df)
     roc = compute_roc(df)
@@ -611,8 +595,6 @@ def score_momentum(df):
 # LAYER 4: ORDER FLOW PROXY (0-10)
 # ============================================================
 def score_flow(df):
-    """Order flow proxy using volume ratio and VWAP distance.
-    Returns (score 0-10, vol_ratio, vwap_dist_pct)."""
     if "Volume" not in df.columns or len(df) < 21:
         return 5.0, 1.0, 0.0
     volumes = df["Volume"].values
@@ -625,7 +607,6 @@ def score_flow(df):
         vol_ratio = 1.0
     else:
         vol_ratio = current_vol / avg_vol_20
-    # VWAP approximation using typical price * volume
     typical = [(float(highs[i]) + float(lows[i]) + float(closes[i])) / 3.0 for i in range(len(df))]
     vols = [float(volumes[i]) for i in range(len(df))]
     cum_tv = 0.0
@@ -636,7 +617,6 @@ def score_flow(df):
     vwap = cum_tv / cum_v if cum_v > 0 else float(closes[-1])
     current_close = float(closes[-1])
     vwap_dist = round(((current_close - vwap) / vwap) * 100, 2) if vwap != 0 else 0.0
-    # Score volume ratio
     if vol_ratio > 2.0:
         vol_score = 9
     elif vol_ratio > 1.5:
@@ -647,7 +627,6 @@ def score_flow(df):
         vol_score = 3
     else:
         vol_score = 1
-    # Score VWAP distance (closer to VWAP = better for mean reversion)
     abs_vwap = abs(vwap_dist)
     if abs_vwap < 0.3:
         vwap_score = 9
@@ -666,11 +645,8 @@ def score_flow(df):
 # LAYER 5: MISPRICING SCORE (0-10)
 # ============================================================
 def score_mispricing(df, pick_bracket, kalshi_data):
-    """Mispricing score using empirical probability (last 60 returns) vs market implied.
-    Returns (score 0-10, model_prob, market_prob_or_None, edge_pct)."""
     closes = df["Close"].values
     current = float(closes[-1])
-    # Empirical probability: what % of last 60 daily returns would keep price above pick?
     n_returns = min(60, len(closes) - 1)
     if n_returns < 5:
         return 5.0, 50.0, None, 0.0
@@ -683,21 +659,18 @@ def score_mispricing(df, pick_bracket, kalshi_data):
                 returns.append((curr - prev) / prev)
     if len(returns) < 5:
         return 5.0, 50.0, None, 0.0
-    # Project: how many of these returns would land above pick_bracket?
     above_count = 0
     for r in returns:
         projected = current * (1 + r)
         if projected >= pick_bracket:
             above_count += 1
     model_prob = round((above_count / len(returns)) * 100, 1)
-    # Find market implied from Kalshi data
     market_prob = None
     if kalshi_data:
         best_match = None
         for ticker, mdata in kalshi_data.items():
             subtitle = str(mdata.get("subtitle", "")).lower()
             floor = mdata.get("floor", None)
-            # Try to match by floor strike
             if floor is not None:
                 try:
                     if abs(float(floor) - pick_bracket) < 0.01:
@@ -705,7 +678,6 @@ def score_mispricing(df, pick_bracket, kalshi_data):
                         break
                 except (ValueError, TypeError):
                     pass
-            # Try subtitle match
             pick_str = str(int(pick_bracket)) if pick_bracket == int(pick_bracket) else str(pick_bracket)
             if pick_str in subtitle:
                 best_match = mdata
@@ -714,12 +686,10 @@ def score_mispricing(df, pick_bracket, kalshi_data):
             yb = best_match.get("yes_bid", 0)
             if yb and yb > 0:
                 market_prob = round(float(yb), 1)
-    # Compute edge
     if market_prob is not None and market_prob > 0:
         edge_pct = round(model_prob - market_prob, 1)
     else:
         edge_pct = 0.0
-    # Score
     abs_edge = abs(edge_pct)
     if market_prob is not None:
         if abs_edge > 15:
@@ -732,24 +702,20 @@ def score_mispricing(df, pick_bracket, kalshi_data):
             score = 5
         else:
             score = 3
-        # Bonus if edge is positive (model says underpriced)
         if edge_pct > 6:
             score = min(10, score + 1)
     else:
-        score = 5.0  # neutral when no market data
+        score = 5.0
     return round(float(score), 1), round(float(model_prob), 1), market_prob, round(float(edge_pct), 1)
 
 # ============================================================
 # COMPOSITE SCORE & TRADE SUGGESTION
 # ============================================================
 def compute_composite(scores, regime, vol_ratio):
-    """Weighted composite score 0-100 with regime adjustment."""
     raw = 0.0
     for key, weight in SCORE_WEIGHTS.items():
         raw += scores.get(key, 5.0) * weight
-    # Scale to 0-100
     base = round(raw * 10, 1)
-    # Regime bonus/penalty
     if regime == "COMPRESSION":
         base = min(100, base + 5)
     elif regime == "EXPANSION":
@@ -757,8 +723,6 @@ def compute_composite(scores, regime, vol_ratio):
     return round(float(base), 1)
 
 def trade_suggestion(composite, edge_pct):
-    """Trade suggestion based on composite score.
-    Returns (suggestion_text, color)."""
     if composite >= 80:
         return "🟢 AGGRESSIVE SIZE", "#3fb950"
     elif composite >= 65:
@@ -819,7 +783,6 @@ if high is None:
 rng = round(high - low, 4)
 brackets = make_brackets(cfg)
 
-# Compute fib levels
 levels = []
 for pct, label in FIBO_LEVELS:
     price = low + rng * pct
@@ -855,7 +818,6 @@ if API_KEY and PRIVATE_KEY:
 
 # ============================================================
 # COMPUTE ALL 5 SCORES
-# ALL values cast to plain Python float/str to prevent numpy TypeErrors
 # ============================================================
 loc_score = float(score_location(close, golden["price"], rng))
 vol_score, vol_regime, vol_ratio, bb_pct = score_volatility(df)
@@ -875,7 +837,6 @@ vwap_dist = float(vwap_dist)
 mis_score, model_prob, market_prob, edge_pct = score_mispricing(df, pick, kalshi_data)
 mis_score = float(mis_score)
 model_prob = float(model_prob)
-# market_prob can be None — do NOT cast if None
 if market_prob is not None:
     market_prob = float(market_prob)
 edge_pct = float(edge_pct)
@@ -922,7 +883,8 @@ with c4:
 
 # ============================================================
 # COMPOSITE HEAT METER
-# ============================================================
+# ==============================================
+==============
 st.markdown("---")
 gauge_color = suggestion_color
 html = '<div class="score-gauge">'
@@ -1049,7 +1011,6 @@ html += '<div><div class="cushion-num">' + fp(cushion) + ' pts</div><div class="
 html += '<div><div class="cushion-num">' + str(cushion_pct) + '%</div><div class="cushion-label">Drop needed to lose</div></div>'
 html += '</div>'
 html += '<br>'
-# Model vs Market — handles None market_prob
 mp_color = "#d29922"
 if market_prob is not None:
     mp_color = "#3fb950" if edge_pct > 3 else "#f85149" if edge_pct < -3 else "#d29922"
@@ -1062,9 +1023,7 @@ html += '<div style="text-align:center"><div style="color:#f0b90b; font-size:24p
 html += '<div style="text-align:center"><div style="color:' + mp_color + '; font-size:24px; font-weight:bold">'
 html += edge_display + '</div><div style="color:#8b949e; font-size:11px">Edge</div></div>'
 html += '</div>'
-# Trade suggestion
 html += '<div style="color:' + suggestion_color + '; font-size:18px; font-weight:bold; margin-bottom:12px">' + suggestion + '</div>'
-# Kelly — capped 15%, hidden below composite 65
 if edge_pct > 0 and market_prob is not None and market_prob > 0 and market_prob < 100 and composite >= 65:
     mp_dec = market_prob / 100.0
     odds = (1.0 / mp_dec) - 1.0 if mp_dec > 0 else 0
@@ -1183,4 +1142,69 @@ st.markdown("\n".join(rows))
 # ============================================================
 st.markdown("### 📐 The Formula — " + selected_name)
 st.markdown("1. Get " + str(lookback) + "-day swing high & low for **" + selected_name + "** (" + cfg.get("ticker", "") + ")")
-st.markdown("2. Range = " + fp(high) + " − " + fp(low) + " =
+st.markdown("2. Range = " + fp(high) + " - " + fp(low) + " = **" + fp(rng) + "**")
+st.markdown("3. Golden = Low + (Range x 0.618) = " + fp(low) + " + (" + fp(rng) + " x 0.618) = **" + fp(golden.get("price", 0)) + "**")
+st.markdown("4. Nearest bracket <= golden = **" + fp(pick) + "**")
+st.markdown("5. Score composite across 5 layers -> **" + str(composite) + "/100**")
+st.markdown("6. **" + suggestion + "**")
+
+# ============================================================
+# MARKET FIT GUIDE
+# ============================================================
+st.markdown("---")
+st.markdown("### 📋 Market Fit Guide")
+st.markdown("""
+| Rating | Markets | Notes |
+|:-------|:--------|:------|
+| 🟢 **Best** | S&P 500, Nasdaq, Dow, Russell, Gold, Oil | Clear swing levels, mean-reversion, well-defined brackets |
+| 🟡 **Good** | Natural Gas, Bitcoin, Ethereum, EUR/USD, USD/JPY | More volatile, use shorter lookback, expect false breaks |
+| 🔴 **Skip** | Temperature, Weather | Not price-driven, use SHARK instead |
+""")
+
+# ============================================================
+# HOW TO USE THIS APP (collapsed)
+# ============================================================
+st.markdown("---")
+with st.expander("🛠️ How to Use This App"):
+    howto = '<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin:12px 0">'
+    howto += '<p style="color:#e6edf3; font-size:13px; line-height:1.8; margin:0">'
+    howto += '<strong style="color:#f0b90b">1. Pick a market</strong> — Select any of the 12 markets from the dropdown. '
+    howto += 'S&P 500, Nasdaq, Dow, Russell, Gold, and Oil give the cleanest signals.<br><br>'
+    howto += '<strong style="color:#f0b90b">2. Set your lookback</strong> — 5 days is the default sweet spot. '
+    howto += 'Use 3 days for fast-moving crypto/FX, 10-20 days for broader swing levels.<br><br>'
+    howto += '<strong style="color:#f0b90b">3. Read the Reaction Score</strong> — The big number (0-100) is your composite edge score '
+    howto += 'across 5 layers: Location, Volatility, Momentum, Flow, and Mispricing. Higher = stronger setup.<br><br>'
+    howto += '<strong style="color:#f0b90b">4. Check the signal</strong> — '
+    howto += 'NO TRADE (below 50) means skip it. SMALL (50-65), MEDIUM (65-80), AGGRESSIVE (80+) tell you how much to size.<br><br>'
+    howto += '<strong style="color:#f0b90b">5. Look at the pick</strong> — The golden ratio (61.8%) bracket is your trade. '
+    howto += 'Check the cushion — that is how far price has to drop before you lose. Bigger cushion = safer.<br><br>'
+    howto += '<strong style="color:#f0b90b">6. Model vs Market</strong> — If Model Prob is higher than Market Implied, '
+    howto += 'the market is underpricing your bracket. Positive edge = good. The Kelly Fraction tells you optimal bankroll sizing.<br><br>'
+    howto += '<strong style="color:#f0b90b">7. Scan all markets</strong> — Scroll down to the All Markets table to find the '
+    howto += 'highest-scoring setups across all 12 markets at once. Sorted by score, best on top.<br><br>'
+    howto += '<strong style="color:#f0b90b">8. Execute on Kalshi</strong> — Hit the yellow OPEN ON KALSHI button to go directly to the bracket. '
+    howto += 'Buy YES on the pick bracket for the next trading day at 4pm EST settlement.'
+    howto += '</p></div>'
+    st.markdown(howto, unsafe_allow_html=True)
+
+# ============================================================
+# DISCLAIMER + FOOTER
+# ============================================================
+st.markdown("---")
+disc = '<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; margin-top:16px">'
+disc += '<p style="color:#f0b90b; font-size:13px; font-weight:bold; margin-bottom:8px">⚠️ DISCLAIMER</p>'
+disc += '<p style="color:#8b949e; font-size:11px; line-height:1.7">'
+disc += 'This tool is for <strong>research and educational purposes only</strong>. It is NOT financial advice. '
+disc += 'Fibonacci retracement levels are technical analysis indicators based on historical price patterns — they do NOT predict future price movements. '
+disc += 'Past performance does not guarantee future results. All trading involves risk and you can lose your entire investment. '
+disc += 'The composite score is a mathematical calculation, not a recommendation to buy or sell. '
+disc += 'Always do your own research and never trade more than you can afford to lose. '
+disc += 'This tool has no affiliation with Kalshi, Yahoo Finance, or any exchange.'
+disc += '</p></div>'
+st.markdown(disc, unsafe_allow_html=True)
+
+now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+foot = '<p style="color:#484f58; font-size:11px; text-align:center; margin-top:12px">'
+foot += 'Last updated: ' + now_str + ' | Data: Yahoo Finance + Kalshi API | Auto-refreshes every 5 min'
+foot += '</p>'
+st.markdown(foot, unsafe_allow_html=True)
