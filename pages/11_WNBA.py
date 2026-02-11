@@ -554,11 +554,7 @@ def check_comeback(g, kalshi_ml_data):
         'fav_margin': fav_margin, 'max_deficit': max_deficit,
         'fav_price': fav_price, 'fav_wp': fav_wp,
     }
-
-# === END PART A ===
-# ── PART B: EDGE MODEL + RENDERING + DATA FETCH + TABS 1-2 ──
-
-def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
+    def calc_advanced_edge(game, b2b_teams, summary=None, injuries=None):
     edges, total = [], 0.0
     home, away = game["home"], game["away"]
     home_rec, away_rec = game.get("home_record", "0-0"), game.get("away_record", "0-0")
@@ -1312,15 +1308,12 @@ with tab_spread:
             st.divider()
     elif not st.session_state.comeback_tracking:
         st.info("Monitoring for favorite deficits of 10+ points...")
-
-# === END PART B ===('fav_wp'):
+('fav_wp'):
                 wp = alert['fav_wp']
                 wp_edge = alert.get('wp_edge', 0)
                 wp_color = "#22c55e" if wp_edge >= MIN_WP_EDGE else "#eab308"
                 st.markdown("<span style='color:" + wp_color + "'>ESPN WP: " + str(round(wp)) + "% | WP Edge: " + ("+" if wp_edge >= 0 else "") + str(round(wp_edge)) + "%</span>", unsafe_allow_html=True)
             if alert.get
-      # ── PART C: TAB 3 (LIVE MONITOR) + TAB 4 (CUSHION SCANNER) + FOOTER ──
-
 with tab_live:
     st.subheader("LIVE EDGE MONITOR")
     if live_games:
