@@ -69,8 +69,6 @@ FIBO_LEVELS = [
 MARKETS = {
     "S&P 500": {
         "ticker": "^GSPC",
-        "kalshi_series": "kxinxu",
-        "kalshi_slug": "sp-500-abovebelow",
         "bracket_step": 25,
         "bracket_min": 5000,
         "bracket_max": 8000,
@@ -79,8 +77,6 @@ MARKETS = {
     },
     "Nasdaq 100": {
         "ticker": "^NDX",
-        "kalshi_series": "kxnasdaq100u",
-        "kalshi_slug": "nasdaq-abovebelow",
         "bracket_step": 50,
         "bracket_min": 15000,
         "bracket_max": 25000,
@@ -89,8 +85,6 @@ MARKETS = {
     },
     "Dow Jones": {
         "ticker": "^DJI",
-        "kalshi_series": "kxdjiu",
-        "kalshi_slug": "dow-jones-abovebelow",
         "bracket_step": 100,
         "bracket_min": 35000,
         "bracket_max": 55000,
@@ -99,8 +93,6 @@ MARKETS = {
     },
     "Russell 2000": {
         "ticker": "^RUT",
-        "kalshi_series": "kxrutu",
-        "kalshi_slug": "russell-2000-abovebelow",
         "bracket_step": 10,
         "bracket_min": 1500,
         "bracket_max": 3000,
@@ -109,8 +101,6 @@ MARKETS = {
     },
     "Gold": {
         "ticker": "GC=F",
-        "kalshi_series": "kxgoldu",
-        "kalshi_slug": "gold-abovebelow",
         "bracket_step": 25,
         "bracket_min": 1500,
         "bracket_max": 5000,
@@ -119,8 +109,6 @@ MARKETS = {
     },
     "Silver": {
         "ticker": "SI=F",
-        "kalshi_series": "kxsilveru",
-        "kalshi_slug": "silver-abovebelow",
         "bracket_step": 0.5,
         "bracket_min": 20,
         "bracket_max": 70,
@@ -129,8 +117,6 @@ MARKETS = {
     },
     "Oil (WTI)": {
         "ticker": "CL=F",
-        "kalshi_series": "wti",
-        "kalshi_slug": "wti-oil-daily-range",
         "bracket_step": 1,
         "bracket_min": 40,
         "bracket_max": 120,
@@ -139,8 +125,6 @@ MARKETS = {
     },
     "Natural Gas": {
         "ticker": "NG=F",
-        "kalshi_series": "",
-        "kalshi_slug": "",
         "bracket_step": 0.25,
         "bracket_min": 1,
         "bracket_max": 10,
@@ -149,8 +133,6 @@ MARKETS = {
     },
     "Bitcoin": {
         "ticker": "BTC-USD",
-        "kalshi_series": "kxbtcu",
-        "kalshi_slug": "bitcoin-abovebelow",
         "bracket_step": 500,
         "bracket_min": 30000,
         "bracket_max": 200000,
@@ -159,8 +141,6 @@ MARKETS = {
     },
     "Ethereum": {
         "ticker": "ETH-USD",
-        "kalshi_series": "kxethu",
-        "kalshi_slug": "ethereum-abovebelow",
         "bracket_step": 50,
         "bracket_min": 500,
         "bracket_max": 8000,
@@ -169,8 +149,6 @@ MARKETS = {
     },
     "EUR/USD": {
         "ticker": "EURUSD=X",
-        "kalshi_series": "kxeuru",
-        "kalshi_slug": "eurusd-abovebelow",
         "bracket_step": 0.005,
         "bracket_min": 0.9,
         "bracket_max": 1.3,
@@ -179,8 +157,6 @@ MARKETS = {
     },
     "USD/JPY": {
         "ticker": "JPY=X",
-        "kalshi_series": "kxjpyu",
-        "kalshi_slug": "usdjpy-abovebelow",
         "bracket_step": 0.5,
         "bracket_min": 120,
         "bracket_max": 170,
@@ -262,6 +238,7 @@ st.markdown("""
     .yellow {color: #d29922}
 </style>
 """, unsafe_allow_html=True)
+
 # ============================================================
 # DATA FETCHING
 # ============================================================
@@ -312,10 +289,6 @@ def next_trading_day():
         d += timedelta(days=1)
     return d
 
-def ticker_date(d):
-    months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"]
-    return f"{str(d.year)[2:]}{months[d.month-1]}{d.day:02d}"
-
 def fmt_price(val, cfg):
     step = cfg.get("bracket_step", 1)
     if step >= 1:
@@ -326,88 +299,90 @@ def fmt_price(val, cfg):
         return f"{val:,.4f}"
 
 # ============================================================
-# KALSHI LIVE DATA (API only — no web links)
+# KALSHI AUTO-DISCOVERY
 # ============================================================
-@st.cache_data(ttl=120)
-def fetch_kalshi_event_markets(series, slug, date_obj):
-    if not series:
-        return {}
-    td = ticker_date(date_obj)
-    event_ticker = series + "-" + td + "h1600"
-    path = "/trade-api/v2/events/" + event_ticker
-    try:
-        r = requests.get(
-            KALSHI_BASE + path,
-            headers=kalshi_headers("GET", path),
-            timeout=10
-        )
-        if r.status_code != 200:
-            return {}
-        data = r.json()
-        markets = data.get("markets", [])
-        if not markets:
-            event_data = data.get("event", {})
-            markets = event_data.get("markets", [])
-        result = {}
-        for m in markets:
-            ticker = m.get("ticker", "")
-            subtitle = m.get("subtitle", m.get("title", ""))
-            yes_bid = m.get("yes_bid", 0)
-            yes_ask = m.get("yes_ask", 0)
-            no_bid = m.get("no_bid", 0)
-            volume = m.get("volume", 0)
-            floor_strike = m.get("floor_strike", None)
-            cap_strike = m.get("cap_strike", None)
-            result[ticker] = {
-                "subtitle": subtitle,
-                "yes_bid": yes_bid,
-                "yes_ask": yes_ask,
-                "no_bid": no_bid,
-                "volume": volume,
-                "floor": floor_strike,
-                "cap": cap_strike,
-                "implied_prob": yes_bid,
-            }
-        return result
-    except Exception:
-        return {}
+KALSHI_KEYWORDS = {
+    "S&P 500": ["s&p 500", "sp 500", "s&p500", "sp500", "spx", "inx"],
+    "Nasdaq 100": ["nasdaq", "ndx", "nas100", "nasdaq 100", "nasdaq-100"],
+    "Dow Jones": ["dow jones", "dow", "djia", "dji"],
+    "Russell 2000": ["russell", "rut", "russell 2000"],
+    "Gold": ["gold", "xau"],
+    "Silver": ["silver", "xag"],
+    "Oil (WTI)": ["wti", "crude oil", "oil"],
+    "Natural Gas": ["natural gas", "natgas"],
+    "Bitcoin": ["bitcoin", "btc"],
+    "Ethereum": ["ethereum", "eth"],
+    "EUR/USD": ["eur/usd", "eurusd", "eur"],
+    "USD/JPY": ["usd/jpy", "usdjpy", "jpy"],
+}
 
-@st.cache_data(ttl=120)
-def fetch_kalshi_series_markets(series):
-    if not series:
-        return {}
-    path = "/trade-api/v2/markets"
-    params = "?series_ticker=" + series + "&status=open&limit=200"
-    full_path = path + params
-    try:
-        r = requests.get(
-            KALSHI_BASE + full_path,
-            headers=kalshi_headers("GET", full_path),
-            timeout=10
-        )
-        if r.status_code != 200:
-            return {}
-        data = r.json()
-        markets = data.get("markets", [])
-        result = {}
-        for m in markets:
-            ticker = m.get("ticker", "")
-            subtitle = m.get("subtitle", m.get("title", ""))
-            yes_bid = m.get("yes_bid", 0)
-            yes_ask = m.get("yes_ask", 0)
-            floor = m.get("floor_strike", None)
-            cap = m.get("cap_strike", None)
-            result[ticker] = {
-                "subtitle": subtitle,
-                "yes_bid": yes_bid,
-                "yes_ask": yes_ask,
-                "floor": floor,
-                "cap": cap,
-                "implied_prob": yes_bid,
-            }
-        return result
-    except Exception:
-        return {}
+@st.cache_data(ttl=600)
+def discover_all_kalshi_markets():
+    """
+    Fetches ALL open markets from Kalshi in one shot.
+    Paginates through everything. Cached 10 min.
+    Returns flat list of market dicts.
+    """
+    all_mkts = []
+    cursor = ""
+    for _ in range(20):
+        path = "/trade-api/v2/markets?status=open&limit=200"
+        if cursor:
+            path += "&cursor=" + cursor
+        try:
+            r = requests.get(
+                KALSHI_BASE + path,
+                headers=kalshi_headers("GET", path),
+                timeout=15
+            )
+            if r.status_code != 200:
+                break
+            data = r.json()
+            batch = data.get("markets", [])
+            if not batch:
+                break
+            all_mkts += batch
+            cursor = data.get("cursor", "")
+            if not cursor:
+                break
+        except Exception:
+            break
+    return all_mkts
+
+def find_kalshi_markets_for(market_name, all_mkts):
+    """
+    Given a market name, find matching Kalshi bracket markets
+    from the full list. Matches on title keywords.
+    Only returns markets that have floor_strike (bracket markets).
+    """
+    keywords = KALSHI_KEYWORDS.get(market_name, [market_name.lower()])
+    matched = {}
+    for m in all_mkts:
+        title = (m.get("title", "") + " " + m.get("subtitle", "")).lower()
+        ticker = m.get("ticker", "").lower()
+        series = m.get("series_ticker", "").lower()
+        searchable = title + " " + ticker + " " + series
+        floor_strike = m.get("floor_strike", None)
+        if floor_strike is None:
+            continue
+        yes_bid = m.get("yes_bid", 0)
+        if not yes_bid or yes_bid <= 0:
+            continue
+        for kw in keywords:
+            if kw in searchable:
+                tk = m.get("ticker", "")
+                matched[tk] = {
+                    "subtitle": m.get("subtitle", m.get("title", "")),
+                    "yes_bid": yes_bid,
+                    "yes_ask": m.get("yes_ask", 0),
+                    "no_bid": m.get("no_bid", 0),
+                    "volume": m.get("volume", 0),
+                    "floor": floor_strike,
+                    "cap": m.get("cap_strike", None),
+                    "implied_prob": yes_bid,
+                }
+                break
+    return matched
 
 def get_kalshi_balance():
     path = "/trade-api/v2/portfolio/balance"
@@ -421,16 +396,11 @@ def get_kalshi_balance():
         return d.get("balance", 0) / 100.0
     except Exception:
         return 0.0
-        # ============================================================
-# EDGE ENGINE: Model Probabilities for ALL brackets
+
+# ============================================================
+# EDGE ENGINE
 # ============================================================
 def compute_model_probs_all_brackets(df, kalshi_data):
-    """
-    For each Kalshi bracket, compute the model probability that
-    the asset closes at or above the bracket's floor_strike.
-    Uses historical daily returns to project next-day outcomes.
-    Returns dict: {ticker: {floor, model_prob, market_prob, edge, subtitle, yes_bid, yes_ask}}
-    """
     if not kalshi_data:
         return {}
     closes = df["Close"].values
@@ -481,12 +451,6 @@ def compute_model_probs_all_brackets(df, kalshi_data):
     return result
 
 def find_top_edges(bracket_probs, close, top_n=3):
-    """
-    From all brackets with model probs, find the top N with biggest positive edge.
-    Also calculates cushion (how far price must fall to lose).
-    Returns list of dicts sorted by edge descending, max top_n items.
-    Only includes brackets with positive edge.
-    """
     candidates = []
     for ticker, bp in bracket_probs.items():
         if bp.get("edge", 0) <= 0:
@@ -511,10 +475,6 @@ def find_top_edges(bracket_probs, close, top_n=3):
     return candidates[:top_n]
 
 def score_edge(top_edges):
-    """
-    Score 0-10 based on the best edge found.
-    No edges found = 0. Edge > 20 = 10.
-    """
     if not top_edges:
         return 0.0, 0.0
     best_edge = top_edges[0].get("edge", 0)
@@ -537,7 +497,8 @@ def score_edge(top_edges):
     else:
         score = 2
     return round(float(score), 1), round(float(best_edge), 1)
-    # ============================================================
+
+# ============================================================
 # VOLATILITY REGIME (0-10)
 # ============================================================
 def compute_atr(df, period):
@@ -723,7 +684,8 @@ def trade_suggestion(composite, best_edge):
         return "🟠 SMALL SIZE", "#f09000"
     else:
         return "🔴 NO TRADE", "#f85149"
-        # ============================================================
+
+# ============================================================
 # HEADER
 # ============================================================
 st.markdown("<h1 style='text-align:center; color:#f0b90b; border-bottom:2px solid #f0b90b; padding-bottom:10px'>📐 FIBONACCI REACTION ENGINE v3</h1>", unsafe_allow_html=True)
@@ -792,44 +754,19 @@ for pct, label in FIBO_LEVELS:
     })
 
 # ============================================================
-# FETCH KALSHI LIVE PRICES (API only, no links)
+# FETCH KALSHI (auto-discovery)
 # ============================================================
 kalshi_data = {}
 has_kalshi = False
+all_kalshi_mkts = []
 if API_KEY and PRIVATE_KEY:
-    series = cfg.get("kalshi_series", "")
-    slug = cfg.get("kalshi_slug", "")
-    if series:
-        kalshi_data = fetch_kalshi_event_markets(series, slug, nd)
-        if not kalshi_data:
-            kalshi_data = fetch_kalshi_series_markets(series)
-        if kalshi_data:
-            has_kalshi = True
-       # DEBUG — remove after testing
-if not has_kalshi:
-    series = cfg.get("kalshi_series", "")
-    slug = cfg.get("kalshi_slug", "")
-    td = ticker_date(nd)
-    event_ticker = series + "-" + td + "h1600"
-    st.warning(f"DEBUG: Tried event ticker: {event_ticker} | Series: {series} | Has API keys: {bool(API_KEY and PRIVATE_KEY)}")
-    
-    # Try event endpoint raw
-    path1 = "/trade-api/v2/events/" + event_ticker
-    try:
-        r1 = requests.get(KALSHI_BASE + path1, headers=kalshi_headers("GET", path1), timeout=10)
-        st.info(f"Event API: status={r1.status_code} | body={r1.text[:500]}")
-    except Exception as e:
-        st.error(f"Event API error: {e}")
-    
-    # Try series endpoint raw
-    path2 = "/trade-api/v2/markets?series_ticker=" + series + "&status=open&limit=5"
-    try:
-        r2 = requests.get(KALSHI_BASE + path2, headers=kalshi_headers("GET", path2), timeout=10)
-        st.info(f"Series API: status={r2.status_code} | body={r2.text[:500]}")
-    except Exception as e:
-        st.error(f"Series API error: {e}")
+    all_kalshi_mkts = discover_all_kalshi_markets()
+    kalshi_data = find_kalshi_markets_for(selected_name, all_kalshi_mkts)
+    if kalshi_data:
+        has_kalshi = True
+
 # ============================================================
-# COMPUTE EDGE (the core new logic)
+# COMPUTE EDGE
 # ============================================================
 bracket_probs = {}
 top_edges = []
@@ -941,14 +878,14 @@ else:
     html += '</div>'
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
-    # ============================================================
+
+# ============================================================
 # TOP 3 EDGE PICKS
 # ============================================================
 if has_kalshi and top_edges:
     st.markdown("### 🎯 Top Edge Brackets — " + cfg.get("icon", "") + " " + selected_name)
     st.markdown("<p style='color:#8b949e; font-size:12px'>Ranked by model edge (Model Prob - Market Implied)</p>", unsafe_allow_html=True)
 
-    # === PICK #1 (the main pick) ===
     pick1 = top_edges[0]
     p1_floor = pick1.get("floor", 0)
     p1_model = pick1.get("model_prob", 0)
@@ -956,8 +893,6 @@ if has_kalshi and top_edges:
     p1_edge = pick1.get("edge", 0)
     p1_cushion = pick1.get("cushion", 0)
     p1_cushion_pct = pick1.get("cushion_pct", 0)
-
-    mp_color = "#3fb950" if p1_edge > 5 else "#d29922" if p1_edge > 0 else "#f85149"
 
     html = '<div class="big-pick">'
     html += '<div class="pick-title">★ #1 BEST EDGE ★</div>'
@@ -976,7 +911,6 @@ if has_kalshi and top_edges:
     html += '<div style="text-align:center"><div class="edge-pos">+' + str(p1_edge) + '%</div><div style="color:#8b949e; font-size:11px">Edge</div></div>'
     html += '</div>'
     html += '<div style="color:' + suggestion_color + '; font-size:18px; font-weight:bold; margin-bottom:12px">' + suggestion + '</div>'
-    # Kelly fraction
     if p1_edge > 0 and p1_market > 0 and p1_market < 100 and composite >= 45:
         mp_dec = p1_market / 100.0
         odds = (1.0 / mp_dec) - 1.0 if mp_dec > 0 else 0
@@ -992,7 +926,6 @@ if has_kalshi and top_edges:
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
 
-    # === PICKS #2 and #3 (runners up) ===
     if len(top_edges) > 1:
         runner_cols = st.columns(min(len(top_edges) - 1, 2))
         for idx in range(1, min(len(top_edges), 3)):
@@ -1018,9 +951,6 @@ if has_kalshi and top_edges:
                 html += '</div>'
                 st.markdown(html, unsafe_allow_html=True)
 
-    # ============================================================
-    # ALL BRACKETS TABLE (expandable)
-    # ============================================================
     with st.expander("📋 All Scanned Brackets (" + str(len(bracket_probs)) + " total)"):
         sorted_brackets = sorted(bracket_probs.values(), key=lambda x: x.get("edge", 0), reverse=True)
         header = "| Bracket | Model % | Market % | Edge | Volume |"
@@ -1075,9 +1005,6 @@ if has_kalshi and top_edges:
         html += '</div>'
         st.markdown(html, unsafe_allow_html=True)
 
-    # ============================================================
-    # INDICATOR DETAILS (expandable)
-    # ============================================================
     with st.expander("🔬 Indicator Details"):
         d1, d2 = st.columns(2)
         with d1:
@@ -1092,7 +1019,7 @@ if has_kalshi and top_edges:
             st.markdown("ROC(3): **" + str(roc_val) + "%**")
 
 # ============================================================
-# FIBO REFERENCE TABLE (always shown)
+# FIBO REFERENCE TABLE
 # ============================================================
 st.markdown("---")
 st.markdown("### 📐 " + cfg.get("icon", "") + " " + selected_name + " — Fibonacci Reference Levels")
@@ -1111,6 +1038,7 @@ for l in fibo_levels:
     row += " |"
     rows.append(row)
 st.markdown("\n".join(rows))
+
 # ============================================================
 # ALL MARKETS EDGE SCAN
 # ============================================================
@@ -1121,23 +1049,15 @@ st.markdown("<p style='color:#8b949e; font-size:12px'>Scans all 12 markets for b
 scan_results = []
 for mname, mcfg in MARKETS.items():
     try:
-        mseries = mcfg.get("kalshi_series", "")
-        if not mseries:
-            continue
         mdf = fetch_full_data(mcfg.get("ticker", ""), lookback)
         if mdf is None or len(mdf) < 2:
             continue
         mh, ml, mc = extract_hlc(mdf, lookback)
         if mh is None:
             continue
-        # Fetch Kalshi data for this market
-        mslug = mcfg.get("kalshi_slug", "")
-        mk_data = fetch_kalshi_event_markets(mseries, mslug, nd)
-        if not mk_data:
-            mk_data = fetch_kalshi_series_markets(mseries)
+        mk_data = find_kalshi_markets_for(mname, all_kalshi_mkts)
         if not mk_data:
             continue
-        # Compute edge
         m_bracket_probs = compute_model_probs_all_brackets(mdf, mk_data)
         m_top = find_top_edges(m_bracket_probs, mc, top_n=1)
         if not m_top:
@@ -1224,7 +1144,7 @@ st.markdown("""
 """)
 
 # ============================================================
-# HOW TO USE THIS APP (collapsed)
+# HOW TO USE THIS APP
 # ============================================================
 st.markdown("---")
 with st.expander("🛠️ How to Use This App"):
