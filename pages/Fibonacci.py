@@ -313,11 +313,16 @@ def ticker_date(d):
     return f"{str(d.year)[2:]}{months[d.month-1]}{d.day:02d}"
 
 def kalshi_url(cfg, d):
+    """Returns (direct_url, browse_url).
+    Kalshi web URLs don't support deep-linking to specific event tickers,
+    so direct_url points to the series browse page.
+    The API event ticker is only used for API calls, not web URLs."""
     base = cfg.get("kalshi_url", "")
-    td = ticker_date(d)
     series = cfg.get("kalshi_series", "")
-    constructed = "https://kalshi.com/markets/" + series + "/" + cfg.get("kalshi_slug", "") + "/" + series + "-" + td + "h1600"
-    return constructed, base
+    slug = cfg.get("kalshi_slug", "")
+    # Best working URL: series browse page
+    browse = "https://kalshi.com/markets/" + series + "/" + slug if series and slug else base
+    return browse, base
 
 def fmt_price(val, cfg):
     step = cfg.get("bracket_step", 1)
@@ -1178,61 +1183,4 @@ st.markdown("\n".join(rows))
 # ============================================================
 st.markdown("### 📐 The Formula — " + selected_name)
 st.markdown("1. Get " + str(lookback) + "-day swing high & low for **" + selected_name + "** (" + cfg.get("ticker", "") + ")")
-st.markdown("2. Range = " + fp(high) + " - " + fp(low) + " = **" + fp(rng) + "**")
-st.markdown("3. Golden = Low + (Range x 0.618) = " + fp(low) + " + (" + fp(rng) + " x 0.618) = **" + fp(golden.get("price", 0)) + "**")
-st.markdown("4. Nearest bracket <= golden = **" + fp(pick) + "**")
-st.markdown("5. Score composite across 5 layers -> **" + str(composite) + "/100**")
-st.markdown("6. **" + suggestion + "**")
-
-# ============================================================
-# MARKET FIT GUIDE
-# ============================================================
-st.markdown("---")
-st.markdown("### 📋 Market Fit Guide")
-st.markdown("""
-| Rating | Markets | Notes |
-|:-------|:--------|:------|
-| 🟢 **Best** | S&P 500, Nasdaq, Dow, Russell, Gold, Oil | Clear swing levels, mean-reversion, well-defined brackets |
-| 🟡 **Good** | Natural Gas, Bitcoin, Ethereum, EUR/USD, USD/JPY | More volatile, use shorter lookback, expect false breaks |
-| 🔴 **Skip** | Temperature, Weather | Not price-driven, use SHARK instead |
-""")
-
-# ============================================================
-# HOW TO USE THIS APP (collapsed)
-# ============================================================
-st.markdown("---")
-with st.expander("🛠️ How to Use This App"):
-    html = '<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin:12px 0">'
-    html += '<p style="color:#e6edf3; font-size:13px; line-height:1.8; margin:0">'
-    html += '<strong style="color:#f0b90b">1. Pick a market</strong> — Select any of the 12 markets from the dropdown. S&P 500, Nasdaq, Dow, Russell, Gold, and Oil give the cleanest signals.<br><br>'
-    html += '<strong style="color:#f0b90b">2. Set your lookback</strong> — 5 days is the default sweet spot. Use 3 days for fast-moving crypto/FX, 10-20 days for broader swing levels.<br><br>'
-    html += '<strong style="color:#f0b90b">3. Read the Reaction Score</strong> — The big number (0-100) is your composite edge score across 5 layers: Location, Volatility, Momentum, Flow, and Mispricing. Higher = stronger setup.<br><br>'
-    html += '<strong style="color:#f0b90b">4. Check the signal</strong> — 🔴 NO TRADE (below 50) means skip it. 🟠 SMALL (50-65), 🟡 MEDIUM (65-80), 🟢 AGGRESSIVE (80+) tell you how much to size.<br><br>'
-    html += '<strong style="color:#f0b90b">5. Look at the pick</strong> — The golden ratio (61.8%) bracket is your trade. Check the cushion — that is how far price has to drop before you lose. Bigger cushion = safer.<br><br>'
-    html += '<strong style="color:#f0b90b">6. Model vs Market</strong> — If Model Prob is higher than Market Implied, the market is underpricing your bracket. Positive edge = good. The Kelly Fraction tells you optimal bankroll sizing.<br><br>'
-    html += '<strong style="color:#f0b90b">7. Scan all markets</strong> — Scroll down to the All Markets table to find the highest-scoring setups across all 12 markets at once. Sorted by score, best on top.<br><br>'
-    html += '<strong style="color:#f0b90b">8. Execute on Kalshi</strong> — Hit the yellow OPEN ON KALSHI button to go directly to the bracket. Buy YES on the pick bracket for the next trading day at 4pm EST settlement.'
-    html += '</p></div>'
-    st.markdown(html, unsafe_allow_html=True)
-
-# ============================================================
-# DISCLAIMER + FOOTER
-# ============================================================
-st.markdown("---")
-html = '<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; margin-top:16px">'
-html += '<p style="color:#f0b90b; font-size:13px; font-weight:bold; margin-bottom:8px">⚠️ DISCLAIMER</p>'
-html += '<p style="color:#8b949e; font-size:11px; line-height:1.7">'
-html += 'This tool is for <strong>research and educational purposes only</strong>. It is NOT financial advice. '
-html += 'Fibonacci retracement levels are technical analysis indicators based on historical price patterns — they do NOT predict future price movements. '
-html += 'Past performance does not guarantee future results. All trading involves risk and you can lose your entire investment. '
-html += 'The composite score is a mathematical calculation, not a recommendation to buy or sell. '
-html += 'Always do your own research and never trade more than you can afford to lose. '
-html += 'This tool has no affiliation with Kalshi, Yahoo Finance, or any exchange.'
-html += '</p></div>'
-st.markdown(html, unsafe_allow_html=True)
-
-now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-html = '<p style="color:#484f58; font-size:11px; text-align:center; margin-top:12px">'
-html += 'Last updated: ' + now_str + ' | Data: Yahoo Finance + Kalshi API | Auto-refreshes every 5 min'
-html += '</p>'
-st.markdown(html, unsafe_allow_html=True)
+st.markdown("2. Range = " + fp(high) + " − " + fp(low) + " =
