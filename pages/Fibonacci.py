@@ -73,7 +73,6 @@ MARKETS = {
         "ticker": "^GSPC",
         "kalshi_series": "kxinxu",
         "kalshi_slug": "sp-500-abovebelow",
-        "kalshi_url": "https://kalshi.com/markets/kxinxu/sp-500-abovebelow",
         "bracket_step": 25,
         "bracket_min": 5000,
         "bracket_max": 8000,
@@ -84,7 +83,6 @@ MARKETS = {
         "ticker": "^NDX",
         "kalshi_series": "kxnasdaq100u",
         "kalshi_slug": "nasdaq-abovebelow",
-        "kalshi_url": "https://kalshi.com/markets/kxnasdaq100u/nasdaq-abovebelow",
         "bracket_step": 50,
         "bracket_min": 15000,
         "bracket_max": 25000,
@@ -95,7 +93,6 @@ MARKETS = {
         "ticker": "^DJI",
         "kalshi_series": "kxdjiu",
         "kalshi_slug": "dow-jones-abovebelow",
-        "kalshi_url": "https://kalshi.com/category/financials/daily",
         "bracket_step": 100,
         "bracket_min": 35000,
         "bracket_max": 55000,
@@ -106,7 +103,6 @@ MARKETS = {
         "ticker": "^RUT",
         "kalshi_series": "kxrutu",
         "kalshi_slug": "russell-2000-abovebelow",
-        "kalshi_url": "https://kalshi.com/category/financials/daily",
         "bracket_step": 10,
         "bracket_min": 1500,
         "bracket_max": 3000,
@@ -117,7 +113,6 @@ MARKETS = {
         "ticker": "GC=F",
         "kalshi_series": "kxgoldu",
         "kalshi_slug": "gold-abovebelow",
-        "kalshi_url": "https://kalshi.com/category/financials/daily",
         "bracket_step": 25,
         "bracket_min": 1500,
         "bracket_max": 5000,
@@ -128,7 +123,6 @@ MARKETS = {
         "ticker": "SI=F",
         "kalshi_series": "kxsilveru",
         "kalshi_slug": "silver-abovebelow",
-        "kalshi_url": "https://kalshi.com/category/financials/daily",
         "bracket_step": 0.5,
         "bracket_min": 20,
         "bracket_max": 70,
@@ -139,7 +133,6 @@ MARKETS = {
         "ticker": "CL=F",
         "kalshi_series": "wti",
         "kalshi_slug": "wti-oil-daily-range",
-        "kalshi_url": "https://kalshi.com/markets/wti/wti-oil-daily-range",
         "bracket_step": 1,
         "bracket_min": 40,
         "bracket_max": 120,
@@ -150,7 +143,6 @@ MARKETS = {
         "ticker": "NG=F",
         "kalshi_series": "",
         "kalshi_slug": "",
-        "kalshi_url": "https://kalshi.com/search?q=natural+gas",
         "bracket_step": 0.25,
         "bracket_min": 1,
         "bracket_max": 10,
@@ -161,7 +153,6 @@ MARKETS = {
         "ticker": "BTC-USD",
         "kalshi_series": "kxbtcu",
         "kalshi_slug": "bitcoin-abovebelow",
-        "kalshi_url": "https://kalshi.com/markets/kxbtcu/bitcoin-abovebelow",
         "bracket_step": 500,
         "bracket_min": 30000,
         "bracket_max": 200000,
@@ -172,7 +163,6 @@ MARKETS = {
         "ticker": "ETH-USD",
         "kalshi_series": "kxethu",
         "kalshi_slug": "ethereum-abovebelow",
-        "kalshi_url": "https://kalshi.com/markets/kxethu/ethereum-abovebelow",
         "bracket_step": 50,
         "bracket_min": 500,
         "bracket_max": 8000,
@@ -183,7 +173,6 @@ MARKETS = {
         "ticker": "EURUSD=X",
         "kalshi_series": "kxeuru",
         "kalshi_slug": "eurusd-abovebelow",
-        "kalshi_url": "https://kalshi.com/markets/kxeuru/eurusd-abovebelow",
         "bracket_step": 0.005,
         "bracket_min": 0.9,
         "bracket_max": 1.3,
@@ -194,7 +183,6 @@ MARKETS = {
         "ticker": "JPY=X",
         "kalshi_series": "kxjpyu",
         "kalshi_slug": "usdjpy-abovebelow",
-        "kalshi_url": "https://kalshi.com/markets/kxjpyu/usdjpy-abovebelow",
         "bracket_step": 0.5,
         "bracket_min": 120,
         "bracket_max": 170,
@@ -310,17 +298,6 @@ def ticker_date(d):
     months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"]
     return f"{str(d.year)[2:]}{months[d.month-1]}{d.day:02d}"
 
-def kalshi_url(cfg, d):
-    """Returns (direct_url, browse_url).
-    Kalshi web URLs don't support deep-linking to specific event tickers,
-    so direct_url points to the series browse page.
-    The API event ticker is only used for API calls, not web URLs."""
-    base = cfg.get("kalshi_url", "")
-    series = cfg.get("kalshi_series", "")
-    slug = cfg.get("kalshi_slug", "")
-    browse = "https://kalshi.com/markets/" + series + "/" + slug if series and slug else base
-    return browse, base
-
 def fmt_price(val, cfg):
     step = cfg.get("bracket_step", 1)
     if step >= 1:
@@ -331,10 +308,12 @@ def fmt_price(val, cfg):
         return f"{val:,.4f}"
 
 # ============================================================
-# KALSHI LIVE DATA
+# KALSHI LIVE DATA (API only — no web links)
 # ============================================================
 @st.cache_data(ttl=120)
 def fetch_kalshi_event_markets(series, slug, date_obj):
+    if not series:
+        return {}
     td = ticker_date(date_obj)
     event_ticker = series + "-" + td + "h1600"
     path = "/trade-api/v2/events/" + event_ticker
@@ -373,6 +352,8 @@ def fetch_kalshi_event_markets(series, slug, date_obj):
 
 @st.cache_data(ttl=120)
 def fetch_kalshi_series_markets(series):
+    if not series:
+        return {}
     path = "/trade-api/v2/markets"
     params = "?series_ticker=" + series + "&status=open&limit=50"
     full_path = path + params
@@ -803,18 +784,18 @@ pick = golden["bracket"]
 cushion = round(close - pick, 4)
 cushion_pct = round((cushion / close) * 100, 2) if close != 0 else 0
 nd = next_trading_day()
-kurl_direct, kurl_browse = kalshi_url(cfg, nd)
 
 # ============================================================
-# FETCH KALSHI LIVE PRICES
+# FETCH KALSHI LIVE PRICES (API only, no links)
 # ============================================================
 kalshi_data = {}
 if API_KEY and PRIVATE_KEY:
     series = cfg.get("kalshi_series", "")
     slug = cfg.get("kalshi_slug", "")
-    kalshi_data = fetch_kalshi_event_markets(series, slug, nd)
-    if not kalshi_data:
-        kalshi_data = fetch_kalshi_series_markets(series)
+    if series:
+        kalshi_data = fetch_kalshi_event_markets(series, slug, nd)
+        if not kalshi_data:
+            kalshi_data = fetch_kalshi_series_markets(series)
 
 # ============================================================
 # COMPUTE ALL 5 SCORES
@@ -996,7 +977,7 @@ with st.expander("📊 Indicator Details"):
             st.markdown("Tradeable Edge: **N/A**")
 
 # ============================================================
-# THE PICK
+# THE PICK (info only — no Kalshi links)
 # ============================================================
 st.markdown("---")
 
@@ -1036,9 +1017,7 @@ if edge_pct > 0 and market_prob is not None and market_prob > 0 and market_prob 
 html += '<br>'
 html += '<div style="color:#8b949e; font-size:13px">Market: ' + nd.strftime("%A %b %d, %Y") + ' at 4pm EST</div>'
 html += '<br>'
-html += '<a href="' + kurl_direct + '" target="_blank" style="display:inline-block; background:#f0b90b; color:#000; padding:12px 32px; border-radius:8px; font-weight:bold; font-size:16px; text-decoration:none; font-family:monospace">🎯 OPEN ON KALSHI →</a>'
-html += '<div style="color:#484f58; font-size:10px; margin-top:6px">' + kurl_direct + '</div>'
-html += '<div style="margin-top:8px"><a href="' + kurl_browse + '" target="_blank" style="color:#58a6ff; font-size:12px; text-decoration:none">📂 Browse all ' + selected_name + ' brackets →</a></div>'
+html += '<div style="color:#58a6ff; font-size:14px">Search for "' + selected_name + '" on Kalshi to find this bracket</div>'
 html += '</div>'
 st.markdown(html, unsafe_allow_html=True)
 # ============================================================
@@ -1116,23 +1095,22 @@ else:
     st.warning("No market data available for scan.")
 
 # ============================================================
-# FIBO TABLE
+# FIBO TABLE (no Kalshi links)
 # ============================================================
 st.markdown("---")
 st.markdown("### " + cfg.get("icon", "") + " " + selected_name + " — All Fibonacci Levels")
 
-header = "| Level | Price | Bracket | Cushion | Trade |"
-sep = "|:------|------:|--------:|--------:|:-----:|"
+header = "| Level | Price | Bracket | Cushion |"
+sep = "|:------|------:|--------:|--------:|"
 rows = [header, sep]
 for l in levels:
     g = "**" if l.get("pct", 0) == 0.618 else ""
     dc = "🟢" if l.get("dist", 0) >= 0 else "🔴"
-    link = "[Open →](" + kurl_browse + ")"
     row = "| " + g + l.get("label", "") + g
     row += " | " + fp(l.get("price", 0))
     row += " | " + g + fp(l.get("bracket", 0)) + g
     row += " | " + dc + " " + fp(l.get("dist", 0)) + " (" + str(l.get("dist_pct", 0)) + "%)"
-    row += " | " + link + " |"
+    row += " |"
     rows.append(row)
 st.markdown("\n".join(rows))
 
@@ -1155,9 +1133,9 @@ st.markdown("### 📋 Market Fit Guide")
 st.markdown("""
 | Rating | Markets | Notes |
 |:-------|:--------|:------|
-| 🟢 **Best** | S&P 500, Nasdaq, Dow, Russell, Gold, Oil | Clear swing levels, mean-reversion, well-defined brackets |
-| 🟡 **Good** | Natural Gas, Bitcoin, Ethereum, EUR/USD, USD/JPY | More volatile, use shorter lookback, expect false breaks |
-| 🔴 **Skip** | Temperature, Weather | Not price-driven, use SHARK instead |
+| 🟢 **Best** | S&P 500, Nasdaq, Oil, Bitcoin, EUR/USD, USD/JPY | Confirmed daily Kalshi brackets, clean signals |
+| 🟡 **Good** | Dow, Russell, Gold, Silver, Ethereum | Daily brackets unconfirmed, Fibo analysis still works |
+| 🔴 **Skip** | Natural Gas, Temperature, Weather | No daily above/below market on Kalshi |
 """)
 
 # ============================================================
@@ -1168,20 +1146,20 @@ with st.expander("🛠️ How to Use This App"):
     howto = '<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin:12px 0">'
     howto += '<p style="color:#e6edf3; font-size:13px; line-height:1.8; margin:0">'
     howto += '<strong style="color:#f0b90b">1. Pick a market</strong> — Select any of the 12 markets from the dropdown. '
-    howto += 'S&P 500, Nasdaq, Dow, Russell, Gold, and Oil give the cleanest signals.<br><br>'
+    howto += 'S&P 500, Nasdaq, Oil, Bitcoin, EUR/USD, and USD/JPY have confirmed daily Kalshi brackets.<br><br>'
     howto += '<strong style="color:#f0b90b">2. Set your lookback</strong> — 5 days is the default sweet spot. '
     howto += 'Use 3 days for fast-moving crypto/FX, 10-20 days for broader swing levels.<br><br>'
     howto += '<strong style="color:#f0b90b">3. Read the Reaction Score</strong> — The big number (0-100) is your composite edge score '
     howto += 'across 5 layers: Location, Volatility, Momentum, Flow, and Mispricing. Higher = stronger setup.<br><br>'
     howto += '<strong style="color:#f0b90b">4. Check the signal</strong> — '
-    howto += 'NO TRADE (below 50) means skip it. SMALL (50-65), MEDIUM (65-80), AGGRESSIVE (80+) tell you how much to size.<br><br>'
+    howto += 'NO TRADE (below 50) means skip. SMALL (50-65), MEDIUM (65-80), AGGRESSIVE (80+) tell you sizing.<br><br>'
     howto += '<strong style="color:#f0b90b">5. Look at the pick</strong> — The golden ratio (61.8%) bracket is your trade. '
-    howto += 'Check the cushion — that is how far price has to drop before you lose. Bigger cushion = safer.<br><br>'
-    howto += '<strong style="color:#f0b90b">6. Model vs Market</strong> — If Model Prob is higher than Market Implied, '
-    howto += 'the market is underpricing your bracket. Positive edge = good. The Kelly Fraction tells you optimal bankroll sizing.<br><br>'
+    howto += 'Check the cushion — how far price must drop before you lose. Bigger cushion = safer.<br><br>'
+    howto += '<strong style="color:#f0b90b">6. Model vs Market</strong> — If Model Prob > Market Implied, '
+    howto += 'the market is underpricing your bracket. Positive edge = good. Kelly Fraction = optimal sizing.<br><br>'
     howto += '<strong style="color:#f0b90b">7. Scan all markets</strong> — Scroll down to the All Markets table to find the '
     howto += 'highest-scoring setups across all 12 markets at once. Sorted by score, best on top.<br><br>'
-    howto += '<strong style="color:#f0b90b">8. Execute on Kalshi</strong> — Hit the yellow OPEN ON KALSHI button to go directly to the bracket. '
+    howto += '<strong style="color:#f0b90b">8. Execute on Kalshi</strong> — Search for the market name on Kalshi and find the matching bracket. '
     howto += 'Buy YES on the pick bracket for the next trading day at 4pm EST settlement.'
     howto += '</p></div>'
     st.markdown(howto, unsafe_allow_html=True)
