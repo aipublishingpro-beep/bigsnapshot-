@@ -805,6 +805,13 @@ if API_KEY and PRIVATE_KEY:
             kalshi_data = fetch_kalshi_series_markets(series)
         if kalshi_data:
             has_kalshi = True
+            # DEBUG — remove after testing
+if not has_kalshi:
+    series = cfg.get("kalshi_series", "")
+    slug = cfg.get("kalshi_slug", "")
+    td = ticker_date(nd)
+    event_ticker = series + "-" + td + "h1600"
+    st.warning(f"DEBUG: Tried event ticker: {event_ticker} | Series: {series} | Has API keys: {bool(API_KEY and PRIVATE_KEY)}")
 
 # ============================================================
 # COMPUTE EDGE (the core new logic)
