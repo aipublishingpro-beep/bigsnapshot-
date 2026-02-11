@@ -762,44 +762,21 @@ all_kalshi_mkts = []
 if API_KEY and PRIVATE_KEY:
     all_kalshi_mkts = discover_all_kalshi_markets()
     st.warning(f"DEBUG: Discovered {len(all_kalshi_mkts)} total Kalshi markets")
-    # Try different status values and endpoints to find financial markets
-    for status in ["active", "open", "settled", "unopened"]:
-        path = f"/trade-api/v2/markets?status={status}&limit=5&ticker=KXINX"
-        try:
-            r = requests.get(KALSHI_BASE + path, headers=kalshi_headers("GET", path), timeout=10)
-            data = r.json()
-            mkts = data.get("markets", [])
-            st.info(f"status={status} ticker=KXINX: {r.status_code}, {len(mkts)} markets")
-            for m in mkts[:2]:
-                st.code(f"{m.get('ticker','')} | {m.get('title','')[:60]}")
-        except Exception as e:
-            st.error(f"{status}: {e}")
-    # Try series endpoint directly
-    for series in ["KXINX", "kxinx", "KXINXU", "kxinxu", "INXU", "INX"]:
-        path = f"/trade-api/v2/markets?series_ticker={series}&limit=5"
-        try:
-            r = requests.get(KALSHI_BASE + path, headers=kalshi_headers("GET", path), timeout=10)
-            data = r.json()
-            mkts = data.get("markets", [])
-            if mkts:
-                st.success(f"series={series}: {len(mkts)} found!")
-                for m in mkts[:2]:
-                    st.code(f"{m.get('ticker','')} | floor={m.get('floor_strike')} | {m.get('title','')[:60]}")
-        except Exception:
-            pass
-    # Try events endpoint
-    for prefix in ["KXINX", "kxinxu", "INXD"]:
-        path = f"/trade-api/v2/events?status=open&limit=5&series_ticker={prefix}"
-        try:
-            r = requests.get(KALSHI_BASE + path, headers=kalshi_headers("GET", path), timeout=10)
-            data = r.json()
-            evts = data.get("events", [])
-            if evts:
-                st.success(f"events series={prefix}: {len(evts)} found!")
-                for e in evts[:2]:
-                    st.code(f"{e.get('event_ticker','')} | {e.get('title','')[:60]}")
-        except Exception:
-            pass
+    # Count how many have floor_strike (bracket markets)
+    with_floor = [m for m in all_kalshi_mkts if m.get("floor_strike") is not None]
+    st.info(f"Markets with floor_strike: {len(with_floor)} out of {len(all_kalshi_mkts)}")
+    for m in with_floor[:10]:
+        st.code(f"ticker={m.get('ticker','')} | series={m.get('series_ticker','')} | floor={m.get('floor_strike')} | title={m.get('title','')[:80]}")
+    if not with_floor:
+        # Show unique categories/types to understand what's available
+        types = {}
+        for m in all_kalshi_mkts[:500]:
+            cat = m.get("category", "none")
+            if cat not in types:
+                types[cat] = m.get("title", "")[:60]
+        st.info(f"Categories found: {len(types)}")
+        for cat, sample in list(types.items())[:15]:
+            st.code(f"{cat}: {sample}")
     kalshi_data = find_kalshi_markets_for(selected_name, all_kalshi_mkts)
     if kalshi_data:
         has_kalshi = True
