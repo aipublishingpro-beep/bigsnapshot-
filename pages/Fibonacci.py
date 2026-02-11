@@ -805,13 +805,29 @@ if API_KEY and PRIVATE_KEY:
             kalshi_data = fetch_kalshi_series_markets(series)
         if kalshi_data:
             has_kalshi = True
-        # DEBUG — remove after testing
+       # DEBUG — remove after testing
 if not has_kalshi:
     series = cfg.get("kalshi_series", "")
     slug = cfg.get("kalshi_slug", "")
     td = ticker_date(nd)
     event_ticker = series + "-" + td + "h1600"
     st.warning(f"DEBUG: Tried event ticker: {event_ticker} | Series: {series} | Has API keys: {bool(API_KEY and PRIVATE_KEY)}")
+    
+    # Try event endpoint raw
+    path1 = "/trade-api/v2/events/" + event_ticker
+    try:
+        r1 = requests.get(KALSHI_BASE + path1, headers=kalshi_headers("GET", path1), timeout=10)
+        st.info(f"Event API: status={r1.status_code} | body={r1.text[:500]}")
+    except Exception as e:
+        st.error(f"Event API error: {e}")
+    
+    # Try series endpoint raw
+    path2 = "/trade-api/v2/markets?series_ticker=" + series + "&status=open&limit=5"
+    try:
+        r2 = requests.get(KALSHI_BASE + path2, headers=kalshi_headers("GET", path2), timeout=10)
+        st.info(f"Series API: status={r2.status_code} | body={r2.text[:500]}")
+    except Exception as e:
+        st.error(f"Series API error: {e}")
 # ============================================================
 # COMPUTE EDGE (the core new logic)
 # ============================================================
